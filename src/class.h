@@ -1,4 +1,4 @@
-// $Id: class.h,v 1.14 1999/11/03 00:46:30 shields Exp $
+// $Id: class.h,v 1.18 2000/07/25 11:32:31 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,12 +10,16 @@
 #ifndef class_INCLUDED
 #define class_INCLUDED
 
-#include "config.h"
-#include <stdio.h>
+#include "platform.h"
 #include "semantic.h"
 #include "access.h"
 #include "tuple.h"
 #include "op.h"
+
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 
 class cp_info
@@ -43,7 +47,7 @@ public:
          assert("trying to put unsupported attribute kind" == NULL);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *>& constant_pool)
     {
         Coutput << (int) tag;
@@ -79,7 +83,7 @@ public:
         output_buffer.PutB2(name_index);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *>& constant_pool)
     {
         Coutput << "CONSTANT_Class_info: name_index " << (unsigned) name_index << "\n";
@@ -118,7 +122,7 @@ public:
         output_buffer.PutB4(low_bytes);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "CONSTANT_Double_info: bytes " << BaseLong(high_bytes, low_bytes).DoubleView() << "\n";
@@ -157,7 +161,7 @@ public:
          output_buffer.PutB2(name_and_type_index);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "CONSTANT_Fieldref_info: class_index: "
@@ -199,7 +203,7 @@ public:
         output_buffer.PutB4(bytes);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "CONSTANT_Float_info: bytes " << (float) bytes << "\n";
@@ -235,7 +239,7 @@ public:
         output_buffer.PutB4(bytes);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         int val = ((bytes >> 24) & 0xff) << 24 | ((bytes >> 16) & 0xff) << 16 | ((bytes >> 8) & 0xff) << 8 | (bytes & 0xff);
@@ -277,7 +281,7 @@ public:
         output_buffer.PutB2(name_and_type_index);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "CONSTANT_InterfaceMethodref_info: class_index: "
@@ -322,7 +326,7 @@ public:
         output_buffer.PutB4(low_bytes);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "CONSTANT_Long_info: bytes \n";
@@ -361,7 +365,7 @@ public:
         output_buffer.PutB2(name_and_type_index);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "CONSTANT_Methodref_info: class_index: "
@@ -406,7 +410,7 @@ public:
         output_buffer.PutB2(descriptor_index);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "CONSTANT_NameAndType_info: name_index: "
@@ -447,7 +451,7 @@ public:
         output_buffer.PutB2(string_index);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "CONSTANT_String_info: string_index: "
@@ -499,7 +503,7 @@ public:
             output_buffer.PutB1(bytes[i]);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "CONSTANT_Utf8_info: length: "
@@ -570,7 +574,7 @@ public:
 
     virtual void Put(OutputBuffer &output_buffer) { assert(false); } // abstract method: should not be invoked.
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "print for attribute info tag "
@@ -728,7 +732,7 @@ public:
         return;
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void  Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "Code_attribute attribute_name_index "
@@ -803,7 +807,7 @@ public:
         output_buffer.PutB2(constantvalue_index);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "ConstantValue_attribute attribute_name_index "
@@ -865,7 +869,7 @@ public:
             output_buffer.PutB2(exception_index_table[i]);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "Exceptions_attribute attribute_name_index "
@@ -948,7 +952,7 @@ public:
         }
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "InnerClasses_attribute attribute_name_index "
@@ -1041,7 +1045,7 @@ public:
         }
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
      {
         Coutput << "LineNumberTable_attribute attribute_name_index "
@@ -1147,7 +1151,7 @@ end = end;
         }
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "LocalVariableTable_attribute attribute_name_index "
@@ -1209,7 +1213,7 @@ public:
         output_buffer.PutB2(sourcefile_index);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "SourceFile_attribute attribute_name_index "
@@ -1250,7 +1254,7 @@ public:
         output_buffer.PutB4(AttributeLength());
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "Synthetic_attribute attribute_name_index "
@@ -1289,7 +1293,7 @@ public:
         output_buffer.PutB4(AttributeLength());
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "Deprecated_attribute attribute_name_index "
@@ -1342,7 +1346,7 @@ public:
             attributes[ai] -> Put(output_buffer);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     void Print(Tuple<cp_info *> &constant_pool)
     {
         Coutput << "field_info  name_index "
@@ -1401,7 +1405,7 @@ public:
             attributes[i] -> Put(output_buffer);
     }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
      void Print(Tuple<cp_info *> &constant_pool)
      {
         Coutput << "method_info  name_index "
@@ -1563,4 +1567,10 @@ protected:
     TypeSymbol *unit_type;
     OutputBuffer output_buffer;
 };
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif
+

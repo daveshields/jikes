@@ -1,4 +1,4 @@
-// $Id: definite.cpp,v 1.14 1999/10/17 01:58:40 shields Exp $
+// $Id: definite.cpp,v 1.17 2000/07/25 11:32:32 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,10 +7,12 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <assert.h>
-#include <stdio.h>
+#include "platform.h"
 #include "semantic.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 DefiniteAssignmentSet *Semantic::DefiniteExpression(AstExpression *expr, BitSet &set)
 {

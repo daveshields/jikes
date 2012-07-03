@@ -1,0 +1,382 @@
+# $Id: configure.in,v 1.11 2000/07/25 11:32:30 mdejong Exp $
+dnl	This file is an input file used by the GNU "autoconf" program to
+dnl	generate the file "configure", which is run to configure the
+dnl	Makefile in this directory.
+
+AC_INIT(ChangeLog)
+AM_INIT_AUTOMAKE(jikes, 1.12)
+AC_DEFINE(JIKES_VERSION_STRING, "Version 1.12 8/1/2000",
+    [A string to indicate the release of jikes: Version 1.11 1/10/2000])
+
+AC_PREREQ(2.14)
+
+dnl AC_CACHE_LOAD
+
+AM_CONFIG_HEADER(src/config.h)
+
+dnl	Do not autoupdate if configure.in and friends are changed
+dnl	unless the --enable-maintaier-mode flag is used.
+AM_MAINTAINER_MODE
+
+dnl	Set up host checks using config.sub and config.guess.
+AC_CANONICAL_HOST
+AC_CANONICAL_BUILD
+
+dnl	Tell the system that we are going to use the C++ language
+AC_LANG_CPLUSPLUS
+
+dnl	Have the system search for and test out the C++ compiler
+dnl	We expect AC_PROG_CXX to automatically find a cross compiler
+AC_PROG_CXX
+
+dnl	Do cygwin and migwin checks (gnu on win32)
+AC_CYGWIN
+
+dnl	Find the object file extension (like .o or .obj) and subst it
+AC_OBJEXT
+
+dnl	Find the executable file extension (like .exe or "") and subst it
+AC_EXEEXT
+
+dnl	See if this host uses DOS style path names
+ACX_CHECK_PATHNAME_STYLE_DOS
+
+
+dnl FIXME: This is a quick hack to define UNIX_FILE_SYSTEM
+dnl or WIN32_FILE_SYSTEM, we need to go back and fix this
+dnl to do a feature test in each place this symbol is used
+if test "$acx_cv_pathname_style_dos" = "yes"; then
+  AC_DEFINE(WIN32_FILE_SYSTEM,,[quick hack to use Win32 file system, fixme])
+else
+  AC_DEFINE(UNIX_FILE_SYSTEM,,[quick hack to use UNIX file system, fixme])
+fi
+
+
+dnl	Disable namespace support for now, feature needs more testing.
+dnl	If you really want to use namespaces, set HAVE_NAMESPACES env var.
+if test "x$HAVE_NAMESPACES" = "x" ; then
+  ac_cv_cxx_namespaces=no
+fi
+
+dnl	Check for standard c and c++ headers and libraries
+AC_HEADER_STDC
+AC_CXX_HAVE_STD
+
+dnl	Don't check for libstdc++, we should not need to do this.
+dnl AC_CHECK_LIB(stdc++, main)
+
+AC_CHECK_HEADERS(stdio.h iostream.h assert.h limits.h ctype.h time.h float.h)
+
+dnl	Check for some headers which are not present on all supported platforms
+AC_CHECK_HEADERS(iconv.h windows.h direct.h dirent.h sys/cygwin.h)
+
+dnl	see if "bool" is a builtin type
+AC_CXX_BOOL
+
+dnl	Check for math.h and see if we need to link to the math library
+AC_CHECK_MATHLIB
+
+dnl	Check for <new> include the set_new_handler function implementation.
+AC_CXX_CHECK_SET_NEW_HANDLER
+
+dnl	Check for wide string functions
+AC_CHECK_WCS_FUNCS
+
+dnl	Check if "IBM Classes for UNICODE library" is present
+AC_CHECK_LIB(icu-uc, u_getVersion)
+
+dnl	Check if iconv library is present
+AC_CHECK_LIB(iconv, iconv_open)
+
+dnl	Check for cygwin path conversion functions
+AC_CHECK_FUNCS(cygwin_win32_to_posix_path_list)
+
+dnl	Check for the strip utility, we use it to remove debugging info
+AC_CHECK_TOOL(STRIP, strip, :)
+
+
+#FIXME : do we need to add the -funsigned-char option when compiling with
+# g++? If we always use the u1 type (see platform.h), then I think not.
+
+# It might also be better to use the following macro for these tests!
+#AC_CHECK_SIZEOF (TYPE, [CROSS-SIZE], [INCLUDES])
+
+
+AC_CACHE_CHECK(correct value for UINT_MAX,
+    jikes_cv_uint_max,
+    AC_TRY_COMPILE([
+#include <limits.h>
+#if ! (UINT_MAX == 0xFFFFFFFF)
+# error "UINT_MAX"
+#endif
+],[return 0;],
+    jikes_cv_uint_max=yes,
+    AC_MSG_ERROR([unsigned int does not store values in the range
+    0..4294967295 on this system])))
+
+AC_CACHE_CHECK(correct value for INT_MAX,
+    jikes_cv_int_max,
+    AC_TRY_COMPILE([
+#include <limits.h>
+#if ! ((INT_MAX == 2147483647) && (INT_MIN + 1 == -INT_MAX))
+# error "INT_MAX"
+#endif
+],[return 0;],
+    jikes_cv_int_max=yes,
+    AC_MSG_ERROR([int does not store values in the range
+    -2147483648..+2147483647 on this system])))
+
+dnl   Check for broken USHRT_MAX (under Mingwin and maybe some other systems)
+AC_CACHE_CHECK(for broken USHRT_MAX, jikes_cv_ushrt_max_is_broken,
+    AC_TRY_COMPILE([
+#include <limits.h>
+#if ! (USHRT_MAX == 0xFFFF)
+int hi=0;
+#endif
+],[return 0;], jikes_cv_ushrt_max_is_broken=no ,
+               jikes_cv_ushrt_max_is_broken=yes)
+)
+if test "$jikes_cv_ushrt_max_is_broken" = "yes" ; then
+    AC_DEFINE(HAVE_BROKEN_USHRT_MAX, , [known to be broken on mingwin beta 20])
+fi
+
+AC_CACHE_CHECK(correct value for USHRT_MAX,
+    jikes_cv_ushrt_max,
+    AC_TRY_COMPILE([
+#include <limits.h>
+#if ! (USHRT_MAX == 0xFFFF)
+# error "USHRT_MAX"
+#endif
+],[return 0;],
+    jikes_cv_ushrt_max=yes,
+    AC_MSG_ERROR([unsigned short does not store values in the range
+    0..65535 on this system])))
+
+AC_CACHE_CHECK(correct value for SHRT_MAX,
+    jikes_cv_shrt_max,
+    AC_TRY_COMPILE([
+#include <limits.h>
+#if ! ((SHRT_MAX == 32767) && (SHRT_MIN + 1 == -SHRT_MAX))
+# error "SHRT_MAX"
+#endif
+],[return 0;],
+    jikes_cv_shrt_max=yes,
+    AC_MSG_ERROR([short does not store values in the range
+    -32767..+32768 on this system])))
+
+AC_CACHE_CHECK(correct value for UCHAR_MAX,
+    jikes_cv_uchar_max,
+    AC_TRY_COMPILE([
+#include <limits.h>
+#if ! (UCHAR_MAX == 0xFF)
+# error "UCHAR_MAX"
+#endif
+],[return 0;],
+    jikes_cv_uchar_max=yes,
+    AC_MSG_ERROR([unsigned char does not store values in the range
+    0..255 on this system])))
+
+AC_CACHE_CHECK(correct value for SCHAR_MAX,
+    jikes_cv_schar_max,
+    AC_TRY_COMPILE([
+#include <limits.h>
+#if ! ((SCHAR_MAX == 127) && (SCHAR_MIN + 1 == -SCHAR_MAX))
+# error "SCHAR_MAX"
+#endif
+],[return 0;],
+    jikes_cv_schar_max=yes,
+    AC_MSG_ERROR([char does not store values in the range
+    -128..+127 on this system])))
+
+
+dnl Check for broken compilers that do not support the long long type!
+AC_CHECK_TYPE(unsigned long long)
+
+#FIXME: we might also want to check for the __int64 type
+#which seems to be defined on some windows systems.
+
+# FIXME: What about the u_int64_t type, would that work too?
+
+if test "$ac_cv_type_unsigned_long_long" != "yes" ; then
+  dnl GROAN!! need to "support" systems that do not define
+  dnl a 64 bit long long type (some folks refuse to use gcc).
+
+  dnl   Check for endianness
+  AC_C_BIGENDIAN
+else
+  AC_DEFINE(HAVE_UNSIGNED_LONG_LONG, ,
+    [Defined when the compiler supports the unsigned long long type])
+fi
+
+
+# FIXME : we would need to readdress this when porting to new systems
+AC_DEFINE(HAVE_32BIT_TYPES, ,
+    [Defined when bit sizes are int = 32, short = 16, char = 8])
+
+
+
+dnl	Check the stat() system call to find out how many
+dnl	underscores are needed in front of S_IFDIR
+
+AC_CACHE_CHECK(for __S_IFDIR symbol,
+    jikes_cv_stat_ifdir_2underscore,
+    AC_TRY_COMPILE([
+#include <sys/stat.h>
+],[int i = __S_IFDIR;],
+    jikes_cv_stat_ifdir_2underscore=yes,
+    jikes_cv_stat_ifdir_2underscore=no))
+
+AC_CACHE_CHECK(for _S_IFDIR symbol,
+    jikes_cv_stat_ifdir_1underscore,
+    AC_TRY_COMPILE([
+#include <sys/stat.h>
+],[int i = _S_IFDIR;],
+    jikes_cv_stat_ifdir_1underscore=yes,
+    jikes_cv_stat_ifdir_1underscore=no))
+
+AC_CACHE_CHECK(for S_IFDIR symbol,
+    jikes_cv_stat_ifdir_0underscore,
+    AC_TRY_COMPILE([
+#include <sys/stat.h>
+],[int i = S_IFDIR;],
+    jikes_cv_stat_ifdir_0underscore=yes,
+    jikes_cv_stat_ifdir_0underscore=no))
+
+if test "$jikes_cv_stat_ifdir_2underscore" = "yes"; then
+    AC_DEFINE(JIKES_STAT_S_IFDIR, __S_IFDIR,
+    [Used to test results of stat call to see if it is a directory])
+elif test "$jikes_cv_stat_ifdir_1underscore" = "yes"; then
+    AC_DEFINE(JIKES_STAT_S_IFDIR, _S_IFDIR,
+    [Used to test results of stat call to see if it is a directory])
+elif test "$jikes_cv_stat_ifdir_0underscore" = "yes"; then
+    AC_DEFINE(JIKES_STAT_S_IFDIR, S_IFDIR,
+    [Used to test results of stat call to see if it is a directory])
+else
+    AC_MSG_ERROR([Could not find stat S_IFDIR symbol])
+fi
+
+
+
+
+
+
+dnl We need to do some nasty checks here to make sure that
+dnl we know what version of mkdir() to call.
+
+dnl First, we just make sure mkdir() actually exists
+AC_CHECK_FUNCS(mkdir, , AC_MSG_ERROR([No mkdir() function found]))
+
+AC_CACHE_CHECK(for mac style mkdir, jikes_cv_mac_mkdir,
+    AC_TRY_LINK([
+#include <sys/stat.h>
+#include <stat.mac.h>
+], [mkdir("foo.dir", 0);
+], jikes_cv_mac_mkdir=yes,
+   jikes_cv_mac_mkdir=no)
+)
+
+AC_CACHE_CHECK(for glibc style mkdir, jikes_cv_glibc_mkdir,
+    AC_TRY_LINK([
+#include <sys/stat.h>
+#include <unistd.h>
+], [mkdir("foo.dir", S_IRWXU | S_IRWXG | S_IRWXO);
+], jikes_cv_glibc_mkdir=yes,
+   jikes_cv_glibc_mkdir=no)
+)
+
+AC_CACHE_CHECK(for libc5 style mkdir, jikes_cv_libc5_mkdir,
+    AC_TRY_LINK([
+#include <sys/stat.h>
+#include <unistd.h>
+], [mkdir("foo.dir", S_IRWXU);
+], jikes_cv_libc5_mkdir=yes,
+   jikes_cv_libc5_mkdir=no)
+)
+
+AC_CACHE_CHECK(for win32 style mkdir, jikes_cv_win32_mkdir,
+    AC_TRY_LINK([
+#include <direct.h>
+], [mkdir("foo.dir");
+], jikes_cv_win32_mkdir=yes,
+   jikes_cv_win32_mkdir=no)
+)
+
+if test "$jikes_cv_glibc_mkdir" = "yes" ; then
+    AC_DEFINE(HAVE_GLIBC_MKDIR, ,
+        [use unix style mkdir(str, S_IRWXU | S_IRWXG | S_IRWXO)])
+elif test "$jikes_cv_libc5_mkdir" = "yes" ; then
+    AC_DEFINE(HAVE_LIBC5_MKDIR, ,
+        [use unix style mkdir(str, S_IRWXU)])
+elif test "$jikes_cv_win32_mkdir" = "yes" ; then
+    AC_DEFINE(HAVE_WIN32_MKDIR, ,
+        [use win32 style mkdir(str) from <direct.h>])
+elif test "$jikes_cv_mac_mkdir" = "yes" ; then
+    AC_DEFINE(HAVE_MAC_MKDIR, ,
+        [use mac style mkdir(str,0) from <stat.mac.h>])
+else
+    AC_MSG_ERROR([Could not locate a working mkdir() implementation])
+fi
+
+
+dnl xlC (AIX), ICC (Win*, OS/2) and vacpp (all) are all compilers from
+dnl IBM, they are related in that there is a common code base. On the
+dnl x86 platform when compiling with ICC we need to set control registers
+dnl on the math co-proc inorder to work around floating point oddities.
+
+dnl FIXME: need to limit to x86 architecture.
+dnl FIXME: case sensitive string compare to compiler name is BAD.
+dnl FIXME: need a better test than "does it compile"...
+dnl        need to acutally USE it. Ask Dave.
+
+dnl old logic within the ICC/xlC shared config block (added by cabbey@home.net
+dnl because it was setting this flag on PowerRS based AIX boxen)
+dnl To really fix this, we need to find out what ${host_os} is set
+dnl to when compiling on windows or OS2.
+
+dnl Something like this ???
+dnl case "${host_os}" in                                                       
+dnl        *86)
+dnl            jikes_cv_icc_fp_bugs=yes
+dnl            ;;
+dnl esac
+
+AC_CACHE_CHECK(floating point bug workaround for ICC compiler, jikes_cv_icc_fp_bugs,
+    AC_TRY_COMPILE([#include <float.h>],
+[ _control87(EM_UNDERFLOW, EM_UNDERFLOW); ],
+[  if "$CXX" = "ICC" || test "$CXX" = "vacpp" ; then
+       jikes_cv_icc_fp_bugs=yes
+   else
+       jikes_cv_icc_fp_bugs=no
+   fi
+],
+    jikes_cv_icc_fp_bugs=no)
+)
+if test "$jikes_cv_icc_fp_bugs" = "yes" ; then
+    AC_DEFINE(HAVE_ICC_FP_BUGS, , [known to be broken on Win and OS2 when compiled with ICC])
+fi
+
+
+
+
+dnl	see if jikespg location is given on the command line
+
+AC_ARG_WITH(jikespg, [  --with-jikespg=PROG     location of jikes parser generator (optional)],
+    JIKESPG=$withval, JIKESPG=NONE)
+
+if test "$JIKESPG" != "NONE"; then
+    if test ! -f "$JIKESPG" || test ! -x "$JIKESPG"; then
+        AC_MSG_ERROR([jikespg argument '$JIKESPG' is not a file or is not executable])
+    fi
+else
+    JIKESPG=jikespg
+fi
+AC_SUBST(JIKESPG)
+
+
+
+
+# Subst variables into Makefile.in to produce the Makefile
+
+dnl AC_CACHE_SAVE
+
+AC_OUTPUT([Makefile doc/Makefile src/Makefile])

@@ -1,4 +1,4 @@
-// $Id: system.cpp,v 1.23 1999/11/18 03:37:23 shields Exp $
+// $Id: system.cpp,v 1.30 2000/07/27 20:27:07 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,11 +7,14 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <sys/stat.h>
+#include "platform.h"
 #include "control.h"
 #include "semantic.h"
 #include "zip.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 //
 // Convert the null terminated Unicode string source into its Utf8
@@ -57,7 +60,7 @@ int Control::ConvertUnicodeToUtf8(wchar_t *source, char *target)
 // to have been allocated and to be large enough (at least len + 1) to accomodate
 // the conversion.
 //
-int Control::ConvertUtf8ToUnicode(wchar_t *target, char *source, int len)
+int Control::ConvertUtf8ToUnicode(wchar_t *target, const char *source, int len)
 {
     wchar_t *ptr = target;
     for (int i = 0; i < len; i++, ptr++)
@@ -443,7 +446,8 @@ void Control::ProcessPath()
 
     system_table = new SystemTable();
     struct stat status;
-    if ((::SystemStat(dot_name_symbol -> Utf8Name(), &status) == 0) && (status.st_mode & STAT_S_IFDIR))
+    //FIXME: need to check for stat errors
+    if ((::SystemStat(dot_name_symbol -> Utf8Name(), &status) == 0) && (status.st_mode & JIKES_STAT_S_IFDIR))
         system_table -> InsertDirectorySymbol(status.st_dev, status.st_ino, default_directory);
 
 #elif defined(WIN32_FILE_SYSTEM)
@@ -665,11 +669,14 @@ DirectorySymbol *Control::GetOutputDirectory(FileSymbol *file_symbol)
 {
     DirectorySymbol *directory_symbol;
 
-    Control &control = file_symbol -> semantic -> control;
-    if (control.option.directory == NULL)
+    // A FileSymbol for a .class file has a NULL semantic    
+    if (file_symbol -> semantic == NULL ||
+        (file_symbol -> semantic -> control).option.directory == NULL) {
         directory_symbol = file_symbol -> directory_symbol;
+    }
     else
     {
+        Control &control = file_symbol -> semantic -> control;
         char *directory_prefix = control.option.directory;
         int directory_prefix_length = strlen(directory_prefix),
             utf8_name_length = file_symbol -> package -> PackageNameLength() * 3,
@@ -717,6 +724,7 @@ DirectorySymbol *Control::GetOutputDirectory(FileSymbol *file_symbol)
 
         directory_symbol = control.ProcessSubdirectories(name, length);
 
+        delete [] name;
         delete [] directory_name;
     }
 
@@ -768,9 +776,9 @@ FileSymbol *Control::GetJavaFile(PackageSymbol *package, NameSymbol *name_symbol
 
 FileSymbol *Control::GetFile(Control &control, PackageSymbol *package, NameSymbol *name_symbol)
 {
-    return control.option.classpath_search_order
-            ?    GetFileBoth(control, package, name_symbol)
-            :    GetFileFirst(control, package, name_symbol);
+    return control.option.old_classpath_search_order                           
+            ?    GetFileFirst(control, package, name_symbol)                   
+            :    GetFileBoth(control, package, name_symbol);     
 }
 
 FileSymbol *Control::GetFileBoth(Control &control, PackageSymbol *package, NameSymbol *name_symbol)

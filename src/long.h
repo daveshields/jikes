@@ -1,4 +1,4 @@
-// $Id: long.h,v 1.7 2000/01/06 06:46:47 lord Exp $
+// $Id: long.h,v 1.11 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,8 +10,11 @@
 #ifndef Long_INCLUDED
 #define Long_INCLUDED
 
-#include "config.h"
-#include <math.h>
+#include "platform.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class IEEEdouble;
 class IEEEfloat;
@@ -25,25 +28,72 @@ protected:
     union
     {
         double double_words;
+#ifndef HAVE_UNSIGNED_LONG_LONG
         u4 word[2];
+#else
+        u8 words;
+#endif // HAVE_UNSIGNED_LONG_LONG
     } value;
 
-#ifdef WORDS_BIGENDIAN
-    u4 &High() { return value.word[0]; }
-    u4 &Low()  { return value.word[1]; }
+    // Set the high word only. Does not modify the low word!
+    inline void setHighWord(u4 high) {
+#ifndef HAVE_UNSIGNED_LONG_LONG
+# ifndef WORDS_BIGENDIAN
+        value.word[1] = high;
+# else
+        value.word[0] = high;
+# endif
 #else
-    u4 &Low()  { return value.word[0]; }
-    u4 &High() { return value.word[1]; }
-#endif
+        setHighAndLowWords(high, LowWord());
+#endif // HAVE_UNSIGNED_LONG_LONG
+    }
+
+    // Set the low word only. Does not modify the high word!
+    inline void setLowWord(u4 low) {
+#ifndef HAVE_UNSIGNED_LONG_LONG
+# ifndef WORDS_BIGENDIAN
+        value.word[0] = low;
+# else
+        value.word[1] = low;
+# endif
+#else
+        setHighAndLowWords(HighWord(), low);
+#endif // HAVE_UNSIGNED_LONG_LONG
+    }
+    
+    // Set the value for both words.
+    inline void setHighAndLowWords(u4 high, u4 low) {
+#ifndef HAVE_UNSIGNED_LONG_LONG
+# ifndef WORDS_BIGENDIAN
+        value.word[1] = high;
+        value.word[0] = low;
+# else
+        value.word[0] = high;
+        value.word[1] = low;
+# endif
+#else
+        value.words = (((u8) high) << 32) | low;
+#endif // HAVE_UNSIGNED_LONG_LONG
+    }
 
 public:
 
-    u4 HighWord() { return High(); }
-    u4 LowWord()  { return Low(); }
+#ifndef HAVE_UNSIGNED_LONG_LONG
+# ifndef WORDS_BIGENDIAN
+    inline u4 HighWord() { return value.word[1]; }
+    inline u4 LowWord()  { return value.word[0]; }
+# else
+    inline u4 HighWord() { return value.word[0]; }
+    inline u4 LowWord()  { return value.word[1]; }
+# endif
+#else
+    inline u4 HighWord() { return ((u4) (value.words >> 32)); }
+    inline u4 LowWord()  { return ((u4) value.words); }
+#endif // HAVE_UNSIGNED_LONG_LONG
 
     double DoubleView() { return value.double_words; }
 
-    BaseLong(u4 a, u4 b);
+    BaseLong(u4 high, u4 low);
     BaseLong(u4 a);
     BaseLong(i4 a);
     inline BaseLong (void) {}
@@ -143,5 +193,9 @@ public:
     double Double();      // convert LongInt value to a double value
 };
 
-
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif // Long_INCLUDED
+

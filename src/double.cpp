@@ -1,4 +1,4 @@
-// $Id: double.cpp,v 1.9 2000/01/06 07:47:24 lord Exp $
+// $Id: double.cpp,v 1.13 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,10 +7,13 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <iostream.h>
+
 #include "double.h"
 #include "long.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 IEEEfloat::IEEEfloat(float d)
 {
@@ -178,10 +181,9 @@ IEEEdouble::IEEEdouble(double d)
     value.double_value = d;
 }
 
-IEEEdouble::IEEEdouble(u4 a, u4 b)
+IEEEdouble::IEEEdouble(u4 high, u4 low)
 {
-    High() = a;
-    Low() = b;
+    setHighAndLowWords(high, low);
 }
 
 IEEEdouble::IEEEdouble(IEEEfloat a)
@@ -191,13 +193,14 @@ IEEEdouble::IEEEdouble(IEEEfloat a)
 
 IEEEdouble::IEEEdouble(i4 a)
 {
+    // FIXME: this does not seem right. Why not use the sign carry code
+    // from long.cpp's BaseLong(i4) ?
     value.double_value = a;
 }
 
 IEEEdouble::IEEEdouble(u4 a)
 {
-    High() = 0;
-    Low() = a;
+    setHighAndLowWords(0, a);
 }
 
 IEEEdouble::IEEEdouble(char *name)

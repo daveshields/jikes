@@ -1,4 +1,4 @@
-// $Id: lookup.h,v 1.15 2000/01/06 06:46:47 lord Exp $
+// $Id: lookup.h,v 1.20 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,16 +10,22 @@
 #ifndef lookup_INCLUDED
 #define lookup_INCLUDED
 
-#include "config.h"
-#ifdef HAVE_WCHAR_H
-# include <wchar.h>
-#endif
-#include <string.h>
-#include <sys/stat.h>
-#include <time.h>
+#include "platform.h"
 #include "tuple.h"
 #include "long.h"
 #include "double.h"
+
+#ifdef HAVE_TIME_H
+#include <time.h>
+#endif
+
+#ifdef HAVE_WCHAR_H
+# include <wchar.h>
+#endif
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class Control;
 class Symbol;
@@ -80,10 +86,10 @@ public:
     //
     // Same as above function for a regular "char" string.
     //
-    inline static unsigned Function(char *head, int len)
+    inline static unsigned Function(const char *head, int len)
     {
         unsigned long hash_value = head[len >> 1]; // start with center (or unique) letter
-        char *tail = &head[len - 1];
+        const char *tail = &head[len - 1];
 
         for (int i = 0; i < 5 && head < tail; i++)
         {
@@ -254,7 +260,7 @@ private:
     static int primes[];
     int prime_index;
 
-    inline static unsigned Hash(char *head, int len) { return Hash::Function(head, len); }
+    inline static unsigned Hash(const char *head, int len) { return Hash::Function(head, len); }
 
     void Rehash();
 };
@@ -393,7 +399,7 @@ public:
         delete [] value;
     }
 
-    void Initialize(char *value_, int length_, unsigned hash_address_, int index_)
+    void Initialize(const char *value_, int length_, unsigned hash_address_, int index_)
     {
         length = length_;
         value = new char[length + 1];
@@ -494,7 +500,7 @@ public:
     TypeLookupTable(int estimate = 16384);
     ~TypeLookupTable();
 
-    TypeSymbol *FindType(char *, int);
+    TypeSymbol *FindType(const char *, int);
     void InsertType(TypeSymbol *);
     void SetEmpty();
 
@@ -513,7 +519,7 @@ private:
     static int primes[];
     int prime_index;
 
-    inline static unsigned Hash(char *head, int len) { return Hash::Function(head, len); }
+    inline static unsigned Hash(const char *head, int len) { return Hash::Function(head, len); }
 
     void Rehash();
 };
@@ -611,7 +617,7 @@ public:
     IntLiteralValue *FindOrInsert(int);
     IntLiteralValue *Find(int);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     //
     // To prevent arithmentic conversion to allow illegal calls inadvertently.
     // Since the return type is wrong, compilation will fail !
@@ -657,7 +663,7 @@ public:
 
     LongLiteralValue *FindOrInsert(LongInt);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     //
     // To prevent arithmentic conversion to allow illegal calls inadvertently.
     //
@@ -700,7 +706,7 @@ public:
 
     FloatLiteralValue *FindOrInsert(IEEEfloat);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     //
     // To prevent arithmentic conversion to allow illegal calls inadvertently.
     //
@@ -743,7 +749,7 @@ public:
 
     DoubleLiteralValue *FindOrInsert(IEEEdouble);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     //
     // To prevent arithmentic conversion to allow illegal calls inadvertently.
     //
@@ -784,7 +790,7 @@ public:
 
     LiteralValue *FindOrInsertString(LiteralSymbol *);
 
-    Utf8LiteralValue *FindOrInsert(char *, int);
+    Utf8LiteralValue *FindOrInsert(const char *, int);
     Utf8LiteralValue *FindOrInsert(wchar_t);
 
     void CheckStringConstant(AstExpression *expr);
@@ -809,8 +815,13 @@ private:
 
     LiteralValue *bad_value;
 
-    inline static unsigned Hash(char *head, int len) { return Hash::Function(head, len); }
+    inline static unsigned Hash(const char *head, int len) { return Hash::Function(head, len); }
 
     void Rehash();
 };
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif

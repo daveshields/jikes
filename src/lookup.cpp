@@ -1,4 +1,4 @@
-// $Id: lookup.cpp,v 1.21 1999/11/18 03:37:23 shields Exp $
+// $Id: lookup.cpp,v 1.27 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,14 +7,16 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <iostream.h>
-#include "control.h"
 #include "lookup.h"
+#include "control.h"
 #include "symbol.h"
 #include "code.h"
 #include "ast.h"
 #include "case.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 int SystemTable::primes[] = {DEFAULT_HASH_SIZE, 101, 401, MAX_HASH_SIZE};
 
@@ -37,6 +39,8 @@ SystemTable::~SystemTable()
 {
     for (int i = 0; i < directories.Length(); i++)
         delete directories[i];
+
+    delete [] base;
 }
 
 void SystemTable::Rehash()
@@ -135,7 +139,7 @@ Coutput << "    slot " << n << " contains " << num << " element(s)\n";
 if (hash_size < total)
     total = total;
 */
-#ifdef TEST
+#ifdef JIKES_DEBUG
     for (int i = 0; i < entry_pool.Length(); i++)
         delete entry_pool[i];
     delete [] base;
@@ -275,7 +279,7 @@ time_t DirectoryEntry::Mtime()
         strcat(file_name, this -> name);
 
         struct stat status;
-        if (::SystemStat(file_name, &status) == 0)
+        if (JikesAPI::getInstance()->stat(file_name, &status) == 0)
              mtime_ = status.st_mtime;
         else assert(false && "Cannot compute system time stamp\n");
 
@@ -329,7 +333,7 @@ Coutput << "    slot " << n << " contains " << num << " element(s)\n";
 if (hash_size < total)
     total = total;
 */
-#ifdef TEST
+#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -433,7 +437,7 @@ if (hash_size < total)
     total = total;
 */
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     delete [] base;
 #endif
 }
@@ -458,7 +462,7 @@ void TypeLookupTable::Rehash()
 }
 
 
-TypeSymbol *TypeLookupTable::FindType(char *str, int len)
+TypeSymbol *TypeLookupTable::FindType(const char *str, int len)
 {
     unsigned hash_address = Hash(str, len);
     int k = hash_address % hash_size;
@@ -483,7 +487,7 @@ void TypeLookupTable::InsertType(TypeSymbol *type)
     unsigned hash_address = Hash(type -> fully_qualified_name -> value, type -> fully_qualified_name -> length);
     int k = hash_address % hash_size;
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     for (TypeSymbol *t = base[k]; t; t = t -> next_type)
         assert (type != t && "Type was already entered in type table");
 #endif
@@ -564,7 +568,7 @@ if (hash_size < total)
     total = total;
 */
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -878,7 +882,7 @@ if (hash_size < total)
     total = total;
 */
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -1128,7 +1132,7 @@ if (hash_size < total)
     total = total;
 */
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -1251,7 +1255,7 @@ Coutput << "    slot " << n << " contains " << num << " element(s)\n";
 if (hash_size < total)
     total = total;
 */
-#ifdef TEST
+#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -1544,7 +1548,7 @@ Coutput << "    slot " << n << " contains " << num << " element(s)\n";
 if (hash_size < total)
     total = total;
 */
-#ifdef TEST
+#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -1552,7 +1556,7 @@ if (hash_size < total)
 }
 
 
-Utf8LiteralValue *Utf8LiteralTable::FindOrInsert(char *str, int len)
+Utf8LiteralValue *Utf8LiteralTable::FindOrInsert(const char *str, int len)
 {
     unsigned hash_address = Hash(str, len);
     int k = hash_address % hash_size;
@@ -1718,7 +1722,7 @@ Coutput << "    slot " << n << " contains " << num << " element(s)\n";
 if (hash_size < total)
     total = total;
 */
-#ifdef TEST
+#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;

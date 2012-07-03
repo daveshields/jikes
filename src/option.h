@@ -1,4 +1,4 @@
-// $Id: option.h,v 1.18 2000/01/07 21:23:58 lord Exp $
+// $Id: option.h,v 1.25 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,15 +11,22 @@
 #ifndef option_INCLUDED
 #define option_INCLUDED
 
-#include "config.h"
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
+#include "platform.h"
 #include "code.h"
 #include "tuple.h"
+#include "jikesapi.h"
 
-#ifdef HAVE_LIB_ICU_UC
-# include <ucnv.h>
+//FIXME: include stuff
+//#include <ctype.h>
+
+#if defined(HAVE_LIB_ICU_UC)
+# include <unicode/ucnv.h>
+#elif defined(HAVE_ICONV_H)
+# include <iconv.h>
+#endif
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 class ArgumentExpander
@@ -73,28 +80,24 @@ public:
     ~OptionError() { delete [] name; }
 };
 
-
 class Ostream;
 
-class Option
-{
+class Option: public JikesOption
+ {
+
 #ifdef WIN32_FILE_SYSTEM
-    char main_disk,
-         *current_directory[128];
+
+    char main_disk, *current_directory[128];
 
 public:
+
     bool BadMainDisk() { return main_disk == 0; }
-
-    bool IsMainDisk(char c) { return c != 0 && current_directory[c] == current_directory[main_disk]; }
-
-    void SaveCurrentDirectoryOnDisk(char);
 
     void ResetCurrentDirectoryOnDisk(char d)
     {
         if (d != 0)
         {
             assert(current_directory[d]);
-
             SetCurrentDirectory(current_directory[d]);
         }
     }
@@ -102,35 +105,27 @@ public:
     {
         SetCurrentDirectory(current_directory[main_disk]);
     }
+    
     char *GetMainCurrentDirectory()
     {
         return current_directory[main_disk];
     }
+
+    void SaveCurrentDirectoryOnDisk(char c);
+
 #endif
 
 public:
-    char *default_path,
-         *classpath,
-         *directory,
-         *dependence_report_name,
-         *encoding;
 
-#ifdef HAVE_LIB_ICU_UC
+#if defined(HAVE_LIB_ICU_UC)
          UConverter *converter;
+#elif defined(HAVE_ICONV_H)
+         iconv_t converter;
 #endif
          
     Tuple<KeywordMap> keyword_map;
     Tuple<OptionError *> bad_options;
 
-    bool nowrite,
-         deprecation,
-         O,
-         g,
-         verbose,
-         depend,
-         nowarn,
-         classpath_search_order,
-         zero_defect;
     int first_file_index;
 
     int debug_trap_op;
@@ -152,9 +147,16 @@ public:
          comments,
          pedantic;
 
+    char *dependence_report_name;
+
     Option(ArgumentExpander &);
 
     ~Option();
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif /* option_INCLUDED */
+

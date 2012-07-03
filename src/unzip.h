@@ -1,8 +1,12 @@
-// $Id: unzip.h,v 1.3 1999/08/26 15:34:10 shields Exp $
+// $Id: unzip.h,v 1.6 2000/07/25 11:32:34 mdejong Exp $
 #ifndef unzip_INCLUDED
 #define unzip_INCLUDED
 
-#include "config.h"
+#include "platform.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 //
 // NOTE: Jikes incorporates compression code from the Info-ZIP
@@ -37,9 +41,10 @@
 //
 
 #define DFUNZIP /* needed for unzip compilation*/
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+//FIXME: need to move to platform.h
+//#include <stdio.h>
+//#include <stdlib.h>
+//#include <string.h>
 
 //
 // inflate.c -- put in the public domain by Mark Adler
@@ -370,4 +375,9 @@ public:
 #endif
 }; // end class unzip
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif /* unzip_INCLUDED */
+

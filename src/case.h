@@ -1,4 +1,4 @@
-// $Id: case.h,v 1.6 2000/01/06 06:46:47 lord Exp $
+// $Id: case.h,v 1.9 2000/07/25 11:32:31 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,9 +11,17 @@
 #ifndef case_INCLUDED
 #define case_INCLUDED
 
-#include "config.h"
+#include "platform.h"
+
+/*
+//FIXME: need to readdress this include stuff
 #ifdef HAVE_WCHAR_H
 # include <wchar.h>
+#endif
+*/
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 //
@@ -173,4 +181,9 @@ public:
 //  }
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif /* case_INCLUDED */
+

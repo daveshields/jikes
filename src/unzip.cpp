@@ -1,4 +1,4 @@
-// $Id: unzip.cpp,v 1.3 1999/08/26 15:34:10 shields Exp $
+// $Id: unzip.cpp,v 1.6 2000/07/25 11:32:34 mdejong Exp $
 
 //
 // NOTE: Jikes incorporates compression code from the Info-ZIP
@@ -31,8 +31,12 @@
 //  ...
 //  c16  20 Apr 97  J. Altman       added memzero(v[]) in huft_build()
 //
-#include "config.h"
+
 #include "unzip.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 unsigned long Unzip::global_bb;                         /* bit buffer */
 unsigned Unzip::global_bk;                    /* bits in bit buffer */

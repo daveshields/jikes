@@ -1,4 +1,4 @@
-// $Id: stream.cpp,v 1.20 1999/12/14 17:31:53 lord Exp $
+// $Id: stream.cpp,v 1.40 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,8 +7,7 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <ctype.h>
+
 #include "stream.h"
 #include "code.h"
 #include "zip.h"
@@ -16,9 +15,279 @@
 #include "control.h"
 #include "semantic.h"
 
-#ifdef HAVE_LIB_ICU_UC
-# include <ucnv.h>
+#ifdef HAVE_CTYPE_H
+#include <ctype.h>
 #endif
+
+#if defined(HAVE_LIB_ICU_UC)
+# include <unicode/ucnv.h>
+#elif defined(HAVE_ICONV_H)
+# include <iconv.h>
+# include <errno.h>
+#endif
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
+
+JikesError::JikesErrorSeverity StreamError::getSeverity        () 
+{ 
+    //All Lexical errors are ERRORs.
+    return JikesError::JIKES_ERROR; 
+}
+
+int StreamError::getLeftLineNo      () { return left_line_no    ; }
+int StreamError::getLeftColumnNo    () { return left_column_no  ; }
+int StreamError::getRightLineNo     () { return right_line_no   ; }
+int StreamError::getRightColumnNo   () { return right_column_no ; }
+
+const char *StreamError::getFileName() 
+{ 
+    assert(lex_stream);
+    return lex_stream -> FileName();   
+}
+
+const wchar_t *StreamError::getErrorMessage() 
+{
+    switch(kind)
+    {
+    case StreamError::BAD_TOKEN:
+        return L"Illegal token\n";
+        break;
+    case StreamError::BAD_OCTAL_CONSTANT:
+        return L"Octal constant contains invalid digit\n";
+        break;
+    case StreamError::EMPTY_CHARACTER_CONSTANT:
+        return L"Empty character constant\n";
+        break;
+    case StreamError::UNTERMINATED_CHARACTER_CONSTANT:
+        return L"Character constant not properly terminated\n";
+        break;
+    case StreamError::UNTERMINATED_COMMENT:
+        return L"Comment not properly terminated\n";
+        break;
+    case StreamError::UNTERMINATED_STRING_CONSTANT:
+        return L"String constant not properly terminated\n";
+        break;
+    case StreamError::INVALID_HEX_CONSTANT:
+        return L"The prefix 0x must be followed by at least one hex digit\n";
+        break;
+    case StreamError::INVALID_FLOATING_CONSTANT_EXPONENT:
+        return L"floating-constant exponent has no digit\n";
+        break;
+    case StreamError::INVALID_UNICODE_ESCAPE:
+        return L"Invalid unicode escape character\n";
+        break;
+    default:
+        assert(false);
+    }
+
+    return L"Unknown Error\n";
+}
+
+bool StreamError::emacs_style_report=false;
+
+const wchar_t *StreamError::getErrorReport() 
+{
+    /*
+     * We need to use this lazy initialization,
+     * because we can't to it in Initialize() method. Reason
+     * is that Find* methods are unusalble until
+     * LexStream::CompressSpace is called, which
+     * is not happend until later after scanning is done
+     * and all errors are reported.
+     * (lord)
+     */
+    if(!initialized)
+    {
+        left_line_no    = lex_stream->FindLine   ( start_location );
+        left_column_no  = lex_stream->FindColumn ( start_location );
+        right_line_no   = lex_stream->FindLine   ( end_location   );
+        right_column_no = lex_stream->FindColumn ( end_location   );
+        initialized     = true;
+    }
+
+    return emacs_style_report?emacsErrorString():regularErrorString();
+}
+
+wchar_t *StreamError::emacsErrorString()
+{
+    ErrorString s;
+
+    s << getFileName()
+      << ':' << left_line_no  << ':' << left_column_no
+      << ':' << right_line_no << ':' << right_column_no
+      << ": Lexical: " << getErrorMessage();
+    
+    return s.Array();    
+}
+
+
+wchar_t *StreamError::regularErrorString() 
+{
+    ErrorString s;
+
+    assert(lex_stream);
+    if(left_line_no == right_line_no)
+        PrintSmallSource(s);
+    else 
+        PrintLargeSource(s);
+    
+    s << "\n*** Lexical Error: "
+      << getErrorMessage();
+        
+    return s.Array();
+}
+
+//
+// This procedure is invoked to print a small message that may
+// only span a single line. The parameter k points to the error
+// message in the error structure.
+//
+void StreamError::PrintSmallSource(ErrorString &s)
+{
+    s << "\n\n";
+    s.width(6);
+    s << left_line_no;
+    s << ". ";
+    for (int i = lex_stream->LineStart(left_line_no); i <= lex_stream->LineEnd(left_line_no); i++)
+        s << lex_stream->InputBuffer()[i];
+
+    s.width(left_column_no + 7);
+    s << "";
+    if (left_column_no == right_column_no)
+        s << '^';
+    else
+    {
+        int offset = 0;
+        for (size_t i = start_location; i <= end_location; i++)
+        {
+            if (lex_stream->InputBuffer()[i] > 0xff)
+                offset += 5;
+        }
+
+        s << '<';
+        s.width(right_column_no - left_column_no + offset);
+        s.fill('-');
+        s << ">";
+        s.fill(' ');
+    }
+}
+
+
+//
+// This procedure is invoked to print a large message that may
+// span more than one line. The parameter message points to the
+// starting line. The parameter k points to the error message in
+// the error structure.
+//
+void StreamError::PrintLargeSource(ErrorString &s)
+{
+    if (left_line_no == right_line_no)
+    {
+        if (left_line_no == 0)
+            s << "\n";
+        else
+        {
+            s << "\n\n";
+            s.width(6);
+            s << left_line_no << ". ";
+            for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
+                s << lex_stream -> InputBuffer()[i];
+
+            int offset = 0;
+            for (size_t j = start_location; j <= end_location; j++)
+            {
+                if (lex_stream -> InputBuffer()[j] > 0xff)
+                    offset += 5;
+            }
+
+            s.width(left_column_no + 8);
+            s << "<";
+            s.width(right_column_no - left_column_no + offset);
+            s.fill('-');
+            s << ">";
+            s.fill(' ');
+        }
+    }
+    else
+    {
+        s << "\n\n";
+        s.width(left_column_no + 8);
+        s << "<";
+        
+        int segment_size = Tab::Wcslen(lex_stream->input_buffer, start_location,
+                                       lex_stream->LineEnd(lex_stream->FindLine(start_location)));
+        s.width(segment_size - 1);
+        s.fill('-');
+        s << "\n";
+        s.fill(' ');
+
+        s.width(6);
+        s << left_line_no << ". ";
+        for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
+            s << lex_stream -> InputBuffer()[i];
+
+        if (right_line_no > left_line_no + 1)
+        {
+            s.width(left_column_no + 7);
+            s << " ";
+            s << ". . .\n";
+        }
+
+        s.width(6);
+        s << right_line_no << ". ";
+
+        int offset = 0;
+        for (int j = lex_stream -> LineStart(right_line_no); j <= lex_stream -> LineEnd(right_line_no); j++)
+        {
+            wchar_t c = lex_stream -> InputBuffer()[j];
+            if (c > 0xff)
+                offset += 5;
+            s << c;
+        }
+
+        s.width(8);
+        s << "";
+        s.width(right_column_no - 1 + offset);
+        s.fill('-');
+        s << ">";
+        s.fill(' ');
+    }
+}
+
+void StreamError::Initialize(StreamErrorKind kind_, unsigned start_location_, unsigned end_location_, LexStream *l)
+{
+    kind           = kind_           ;
+    start_location = start_location_ ;
+    end_location   = end_location_   ;
+    lex_stream     = l               ;
+}
+
+StreamError::StreamError():initialized(false)
+{
+}
+
+
+LexStream::LexStream(Control &control_, FileSymbol *file_symbol_) : file_symbol(file_symbol_),
+#ifdef JIKES_DEBUG
+    file_read(0),
+#endif
+    tokens(NULL),
+    columns(NULL),
+    token_stream(12, 16),
+    comments(NULL),
+    comment_stream(10, 8),
+    locations(NULL),
+    line_location(12, 8),
+    initial_reading_of_input(true),
+    input_buffer(NULL),
+    input_buffer_length(0),
+    comment_buffer(NULL),
+    control(control_)
+{
+    StreamError::emacs_style_report=!control_.option.errors;
+}
 
 wchar_t *LexStream::KeywordName(int kind)
 {
@@ -133,7 +402,7 @@ wchar_t *LexStream::KeywordName(int kind)
 
 LexStream::~LexStream()
 {
-#ifdef TEST
+#ifdef JIKES_DEBUG
     control.line_count += (file_read * (line_location.Length() - 3));
 #endif
 
@@ -210,13 +479,14 @@ void LexStream::InitializeColumns()
 //
 void LexStream::CompressSpace()
 {
-    tokens = token_stream.Array();
-    if (control.option.dump_errors)
+    tokens    = token_stream   .Array();
+    comments  = comment_stream .Array();
+    locations = line_location  .Array();
+    types     = type_index     .Array();
+    
+    if(control.option.dump_errors)
         InitializeColumns();
-    comments = comment_stream.Array();
-    locations = line_location.Array();
-    types = type_index.Array();
-
+    
     return;
 }
 
@@ -259,7 +529,8 @@ unsigned LexStream::FindLine(unsigned location)
     int lo = 0,
         hi = line_location.Length() - 1;
 
-assert(locations);
+    assert(locations);
+
     //
     // we can place the exit test at the bottom of the loop
     // since the line_location array will always contain at least
@@ -304,40 +575,18 @@ void LexStream::ReadInput()
     else
     {
         struct stat status;
-        ::SystemStat(FileName(), &status);
+        JikesAPI::getInstance()->stat(FileName(), &status);
 
         file_symbol -> mtime = status.st_mtime; // actual time stamp of file read
         file_symbol -> lex_stream = this;
 
-#ifdef UNIX_FILE_SYSTEM
-        FILE *srcfile = ::SystemFopen(FileName(), "r");
-        if (srcfile != NULL)
-        {
-            char *buffer = new char[status.st_size];
-            size_t file_size = ::SystemFread(buffer, sizeof(char), status.st_size, srcfile);
-            fclose(srcfile);
-            ProcessInput(buffer, file_size);
-            delete [] buffer;
-        }
-#elif defined(WIN32_FILE_SYSTEM)
-#include <windows.h>
-        HANDLE srcfile = CreateFile(FileName(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
-        if (srcfile != INVALID_HANDLE_VALUE)
-        {
-            HANDLE mapfile = CreateFileMapping(srcfile, NULL, PAGE_READONLY, 0, 0, NULL);
-            if (mapfile != INVALID_HANDLE_VALUE)
-            {
-                char *buffer = (char *) MapViewOfFile(mapfile, FILE_MAP_READ, 0, 0, 0);
-                DWORD file_size = GetFileSize(srcfile, NULL);
-                ProcessInput(buffer, file_size);
-                if (buffer)
-                    UnmapViewOfFile(buffer);
-                CloseHandle(mapfile);
-            }
 
-            CloseHandle(srcfile);
+        JikesAPI::FileReader  *file = JikesAPI::getInstance()->read(FileName());
+        if (file)
+        {
+            ProcessInput(file->getBuffer(),file->getBufferSize());
+            delete file;
         }
-#endif
     }
 
     initial_reading_of_input = false;
@@ -349,7 +598,7 @@ void LexStream::RereadInput()
 {
     if (input_buffer) // if input already available, do nothing
         ;
-#ifdef TEST
+#ifdef JIKES_DEBUG
     else if (file_symbol -> buffer)
     {
       fprintf(stderr, "chaos: Don\'t know how to RereadInput a buffer\n");
@@ -371,39 +620,16 @@ void LexStream::RereadInput()
     else
     {
         struct stat status;
-        ::SystemStat(FileName(), &status);
+        JikesAPI::getInstance()->stat(FileName(), &status);
 
         if (status.st_mtime == file_symbol -> mtime)
         {
-#ifdef UNIX_FILE_SYSTEM
-            FILE *srcfile = ::SystemFopen(FileName(), "r");
-            if (srcfile != NULL)
-            {
-                char *buffer = new char[status.st_size];
-                size_t file_size = ::SystemFread(buffer, sizeof(char), status.st_size, srcfile);
-                fclose(srcfile);
-                ProcessInput(buffer, file_size);
-                delete [] buffer;
-            }
-#elif defined(WIN32_FILE_SYSTEM)
-            HANDLE srcfile = CreateFile(FileName(), GENERIC_READ, FILE_SHARE_READ,
-                                        NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
-            if (srcfile != INVALID_HANDLE_VALUE)
-            {
-                HANDLE mapfile = CreateFileMapping(srcfile, NULL, PAGE_READONLY, 0, 0, NULL);
-                if (mapfile != INVALID_HANDLE_VALUE)
-                {
-                    char *buffer = (char *) MapViewOfFile(mapfile, FILE_MAP_READ, 0, 0, 0);
-                    DWORD file_size = GetFileSize(srcfile, NULL);
-                    ProcessInput(buffer, file_size);
-                    if (buffer)
-                        UnmapViewOfFile(buffer);
-                    CloseHandle(mapfile);
-                }
-
-                CloseHandle(srcfile);
-            }
-#endif
+           JikesAPI::FileReader  *file = JikesAPI::getInstance()->read(FileName());
+           if (file)
+           {
+               ProcessInput(file->getBuffer(),file->getBufferSize());
+               delete file;
+           }
         }
         else
         {
@@ -440,9 +666,9 @@ int LexStream::hexvalue(wchar_t ch)
 // Read filesize  characters from srcfile, convert them to unicode, and
 // store them in input_buffer.
 //
-void LexStream::ProcessInput(char *buffer, long filesize)
+void LexStream::ProcessInput(const char *buffer, long filesize)
 {
-#ifdef HAVE_LIB_ICU_UC
+#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
     LexStream::ProcessInputUnicode(buffer,filesize);
 #else
     LexStream::ProcessInputAscii(buffer, filesize);
@@ -453,9 +679,9 @@ void LexStream::ProcessInput(char *buffer, long filesize)
 // Read file_size Ascii characters from srcfile, convert them to unicode and
 // store them in input_buffer.
 //
-void LexStream::ProcessInputAscii(char *buffer, long filesize)
+void LexStream::ProcessInputAscii(const char *buffer, long filesize)
 {
-#ifdef TEST
+#ifdef JIKES_DEBUG
     file_read++;
 #endif
 
@@ -465,7 +691,7 @@ void LexStream::ProcessInputAscii(char *buffer, long filesize)
 
     if (buffer)
     {
-        char *source_ptr = buffer,
+        const char *source_ptr = buffer,
              *source_tail = &(buffer[filesize - 1]); // point to last character read from the file.
 
         while(source_ptr <= source_tail)
@@ -484,7 +710,7 @@ void LexStream::ProcessInputAscii(char *buffer, long filesize)
                     *(++input_ptr) = *source_ptr++;
                 else if (*source_ptr == U_u)
                 {
-                    char *u_ptr = source_ptr;
+                    const char *u_ptr = source_ptr;
 
                     for (source_ptr++; source_ptr <= source_tail && *source_ptr == U_u; source_ptr++)
                         ;
@@ -494,7 +720,7 @@ void LexStream::ProcessInputAscii(char *buffer, long filesize)
                     {
                         int multiplier[4] = {4096, 256, 16, 1};
 
-                        char ch = *source_ptr++;
+                        const char ch = *source_ptr++;
                         switch(ch)
                         {
                             case U_a: case U_A:
@@ -525,7 +751,7 @@ void LexStream::ProcessInputAscii(char *buffer, long filesize)
                         if (initial_reading_of_input)
                             bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
                                                          (unsigned) (input_ptr - input_buffer),
-                                                         (unsigned) (input_ptr - input_buffer) + (source_ptr - u_ptr));
+                                                         (unsigned) (input_ptr - input_buffer) + (source_ptr - u_ptr), this);
 
                         source_ptr = u_ptr;
                         *input_ptr = U_BACKSLASH;
@@ -575,45 +801,41 @@ void LexStream::ProcessInputAscii(char *buffer, long filesize)
     return;
 }
 
-#ifdef HAVE_LIB_ICU_UC
+#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
 //
 // Read file_size Ascii characters from srcfile, convert them to unicode, and
 // store them in input_buffer.
 //
-void LexStream::ProcessInputUnicode(char *buffer, long filesize)
+void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
 {
-#ifdef TEST
+    //fprintf(stderr,"LexStream::ProcessInputUnicode called.\n");
+#ifdef JIKES_DEBUG
     file_read++;
 #endif
 
-#ifdef HAVE_LIB_ICU_UC
-    input_buffer       = new wchar_t[filesize + 4 + 2];
+    input_buffer       = new wchar_t[filesize + 4];
     wchar_t *input_tail = input_buffer + filesize;
-#else
-    input_buffer = new wchar_t[filesize + 4];
-#endif
     
     wchar_t *input_ptr = input_buffer;
     *input_ptr = U_LINE_FEED; // add an initial '\n';
-    
+
     if(buffer)
     {
         int      escape_value;
         wchar_t *escape_ptr;
-        const char *source_ptr = buffer,
-            *source_tail = &(buffer[filesize - 1]); // point to last character read from the file.
-        
-        UnicodeLexerState saved_state;
-        UnicodeLexerState state=RAW;
-        bool oncemore=false;
 
+        const char *source_ptr  = buffer;
+        const char *source_tail = buffer + filesize - 1; // point to last character read from the file.
+
+        UnicodeLexerState saved_state = START;
+        UnicodeLexerState state = START;
 #ifdef HAVE_LIB_ICU_UC
         UErrorCode err = U_ZERO_ERROR;
 #endif
+        bool oncemore = false;
 
         while((source_ptr <= source_tail) || oncemore)
         {
-#ifdef HAVE_LIB_ICU_UC
             // On each iteration we advance input_ptr maximun 2 postions.
             // Here we check if we are close to the end of input_buffer
             if(input_ptr>=input_tail)
@@ -627,37 +849,82 @@ void LexStream::ProcessInputUnicode(char *buffer, long filesize)
                 // If such reallocation will be required, it will indeed
                 // slow down compilation a bit.
                 size_t cursize = input_ptr-input_buffer;
-                size_t newsize = cursize+cursize/10; // add 10%
+                size_t newsize = cursize+cursize/10+4; // add 10%
                 wchar_t *tmp   = new wchar_t[newsize]; 
-                memcpy(tmp, input_buffer, newsize*sizeof(wchar_t));
+                memcpy (tmp, input_buffer, cursize*sizeof(wchar_t));
                 delete input_buffer;
                 input_buffer = tmp;
-                input_tail = input_buffer + newsize;
-                input_ptr  = input_buffer+cursize;
+                input_tail = input_buffer + newsize - 1;
+                input_ptr  = input_buffer + cursize;
             }
-#endif
             
             wchar_t ch;
             
             if(!oncemore)
             {
-#ifdef HAVE_LIB_ICU_UC
                 if(control.option.converter)
+                {
+                    const char *before = source_ptr;
+
+#ifdef HAVE_LIB_ICU_UC
                     ch=ucnv_getNextUChar (control.option.converter,
                                           &source_ptr,
-                                          source_tail,
+                                          source_tail+1,
                                           &err);
-                else
-                    ch=*source_ptr++;
-                if(err!=U_ZERO_ERROR)
-                    break;
+
+                   
+                    if(U_FAILURE(err))
+                    {
+                        fprintf(stderr,"Conversion error: %s at byte %d\n", 
+                                u_errorName(err),
+                                int(before-buffer)
+                        );
+                        break;
+                    }
 #else
-                ch=*source_ptr++;
+#   ifdef HAVE_ICONV_H
+                    u1 chd[2], uni_high, uni_low;
+                    u1 *chp  = chd;
+                    // Point to 2 bytes with 16 bit type
+                    wchar_t* wchp = (wchar_t *) chp;
+                    size_t   chl  = 2;
+                    size_t   srcl = 1;
+                    size_t n = iconv(control.option.converter,
+                                     &source_ptr, &srcl,
+                                     (char **)&chp, &chl
+                    );
+
+                    if(n == (size_t) -1)
+                    {
+                        fprintf(stderr,"Charset conversion error at offset %d: ", int(before-buffer));
+                        perror("");
+                        break;
+                    }
+
+                    // FIXME: This seems like a hack, someone should reread the docs
+                    // and clean this nasty code up -> http://www.netppl.fi/~pp/glibc21/libc_6.html#SEC91
+
+                    // Operate on chd buffer in endian independent fashion
+                    uni_high = (u1) (*wchp);
+                    uni_low = (u1) ((*wchp) >> 8);
+                    ch = uni_low + (uni_high * 256);
+#   endif
 #endif
+                    if(before==source_ptr)
+                    {
+                        //End of conversion
+                        break;
+                    }
+                }
+                else
+                {
+                    ch=*source_ptr++;
+                }
             } else oncemore = false;
       
             switch(state)
             {
+
             case QUOTE:
                 if(ch==U_BACKSLASH)
                 {
@@ -675,6 +942,7 @@ void LexStream::ProcessInputUnicode(char *buffer, long filesize)
                     oncemore       = true;
                 }
                 break;
+
             case UNICODE_ESCAPE:
                 if(isxdigit(ch))
                 {
@@ -685,9 +953,10 @@ void LexStream::ProcessInputUnicode(char *buffer, long filesize)
                     if(initial_reading_of_input)
                         bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
                                                      (unsigned) (escape_ptr - input_buffer),
-                                                     (unsigned) (input_ptr - input_buffer));
+                                                     (unsigned) (input_ptr - input_buffer), this);
                 }
                 break;
+
             case UNICODE_ESCAPE_DIGIT_0:
                 if(isxdigit(ch))
                 {
@@ -698,9 +967,10 @@ void LexStream::ProcessInputUnicode(char *buffer, long filesize)
                     if(initial_reading_of_input)
                         bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
                                                      (unsigned) (escape_ptr - input_buffer),
-                                                     (unsigned) (input_ptr - input_buffer));
+                                                     (unsigned) (input_ptr - input_buffer), this);
                 }
                 break;
+
             case UNICODE_ESCAPE_DIGIT_1:
                 if(isxdigit(ch))
                 {
@@ -711,9 +981,10 @@ void LexStream::ProcessInputUnicode(char *buffer, long filesize)
                     if(initial_reading_of_input)
                         bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
                                                      (unsigned) (escape_ptr - input_buffer),
-                                                     (unsigned) (input_ptr - input_buffer));
+                                                     (unsigned) (input_ptr - input_buffer), this);
                 }
                 break;
+
             case UNICODE_ESCAPE_DIGIT_2:
                 if(isxdigit(ch))
                 {
@@ -726,14 +997,22 @@ void LexStream::ProcessInputUnicode(char *buffer, long filesize)
                     if(initial_reading_of_input)
                         bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
                                                      (unsigned) (escape_ptr - input_buffer),
-                                                     (unsigned) (input_ptr - input_buffer));
+                                                     (unsigned) (input_ptr - input_buffer), this);
                 }
                 break;
+
             case CR:
-                if(ch==U_LINE_FEED)
+                if (ch == U_LINE_FEED)
                 {
+                    // skip line feed if it comes right after a CR.
                     state = RAW;
-                } else if(ch==U_BACKSLASH && saved_state != UNICODE_ESCAPE_DIGIT_2)
+                } else if (ch == U_CARRIAGE_RETURN)
+                {
+                    // but if CR follows CR then the second CR is a
+                    // line feed too (and note that state=CR still, afterwards,
+                    // so that CR-CR-LF will be handled correctly). [CSA]
+                    *(++input_ptr) = U_LINE_FEED;
+                } else if (ch == U_BACKSLASH && saved_state != UNICODE_ESCAPE_DIGIT_2)
                 {
                     saved_state = CR;
                     state       = QUOTE;
@@ -742,7 +1021,17 @@ void LexStream::ProcessInputUnicode(char *buffer, long filesize)
                     state = RAW;
                     *(++input_ptr)=ch;                    
                 }
+               // clear saved_state == UNICODE_ESCAPE_DIGIT_2 status
+               saved_state = CR;
                 break;
+
+            case START:
+                // if for some reason converter produced or passed
+                // byte order mark, it have to be ignored.
+                state = RAW;
+                if(ch==U_BOM || ch==U_REVERSE_BOM)
+                    break; //ignore
+                    
             case RAW:
                 if(ch==U_BACKSLASH && saved_state != UNICODE_ESCAPE_DIGIT_2)
                 {
@@ -776,7 +1065,7 @@ void LexStream::ProcessInputUnicode(char *buffer, long filesize)
 
     return;
 }
-#endif
+#endif // defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
 
 //
 // This procedure uses a  quick sort algorithm to sort the stream ERRORS
@@ -890,20 +1179,14 @@ void LexStream::PrintMessages()
             {
                 for (int i = 0; i < bad_tokens.Length(); i++)
                 {
-                    if (FindLine(bad_tokens[i].start_location) == FindLine(bad_tokens[i].end_location))
-                         PrintSmallSource(i);
-                    else PrintLargeSource(i);
-
-                    Coutput << "\n*** Lexical Error: ";
-
-                    PrintMessage(bad_tokens[i].kind);
+                    JikesAPI::getInstance()->reportError(&bad_tokens[i]);
                 }
             }
         }
         else
         {
             for (int i = 0; i < bad_tokens.Length(); i++)
-                PrintEmacsMessage(i);
+                JikesAPI::getInstance()->reportError(&bad_tokens[i]);
         }
 
         DestroyInput();
@@ -914,197 +1197,4 @@ void LexStream::PrintMessages()
     return;
 }
 
-
-//
-//
-//
-void LexStream::PrintEmacsMessage(int k)
-{
-    int left_line_no    = FindLine(bad_tokens[k].start_location),
-        left_column_no  = FindColumn(bad_tokens[k].start_location),
-        right_line_no   = FindLine(bad_tokens[k].end_location),
-        right_column_no = FindColumn(bad_tokens[k].end_location);
-
-    Coutput << FileName()
-            << ':' << left_line_no  << ':' << left_column_no
-            << ':' << right_line_no << ':' << right_column_no
-            << ":\n    Lexical: ";
-
-    PrintMessage(bad_tokens[k].kind);
-
-    return;
-}
-
-
-//
-// This procedure is invoked to print a small message that may
-// only span a single line. The parameter k points to the error
-// message in the error structure.
-//
-void LexStream::PrintSmallSource(int k)
-{
-    int left_line_no = FindLine(bad_tokens[k].start_location);
-
-    Coutput << "\n\n";
-    Coutput.width(6);
-    Coutput << left_line_no;
-    Coutput << ". ";
-    for (int i = this -> LineStart(left_line_no); i <= this -> LineEnd(left_line_no); i++)
-        Coutput << this -> InputBuffer()[i];
-
-    int left_column_no = FindColumn(bad_tokens[k].start_location),
-        right_column_no = FindColumn(bad_tokens[k].end_location);
-
-    Coutput.width(left_column_no + 7);
-    Coutput << "";
-    if (left_column_no == right_column_no)
-        Coutput << '^';
-    else
-    {
-        int offset = 0;
-        for (size_t i = bad_tokens[k].start_location; i <= bad_tokens[k].end_location; i++)
-        {
-            if (this -> InputBuffer()[i] > 0xff)
-                offset += 5;
-        }
-
-        Coutput << '<';
-        Coutput.width(right_column_no - left_column_no + offset);
-        Coutput.fill('-');
-        Coutput << ">";
-        Coutput.fill(' ');
-    }
-
-    return;
-}
-
-
-//
-// This procedure is invoked to print a large message that may
-// span more than one line. The parameter message points to the
-// starting line. The parameter k points to the error message in
-// the error structure.
-//
-void LexStream::PrintLargeSource(int k)
-{
-    int left_line_no    = FindLine(bad_tokens[k].start_location),
-        left_column_no  = FindColumn(bad_tokens[k].start_location),
-        right_line_no   = FindLine(bad_tokens[k].end_location),
-        right_column_no = FindColumn(bad_tokens[k].end_location);
-
-    if (left_line_no == right_line_no)
-    {
-        if (left_line_no == 0)
-            Coutput << "\n";
-        else
-        {
-            Coutput << "\n\n";
-            Coutput.width(6);
-            Coutput << left_line_no << ". ";
-            for (int i = this -> LineStart(left_line_no); i <= this -> LineEnd(left_line_no); i++)
-                Coutput << this -> InputBuffer()[i];
-
-            int offset = 0;
-            for (size_t j = bad_tokens[k].start_location; j <= bad_tokens[k].end_location; j++)
-            {
-                if (this -> InputBuffer()[j] > 0xff)
-                    offset += 5;
-            }
-
-            Coutput.width(left_column_no + 8);
-            Coutput << "<";
-            Coutput.width(right_column_no - left_column_no + offset);
-            Coutput.fill('-');
-            Coutput << ">";
-            Coutput.fill(' ');
-        }
-    }
-    else
-    {
-        Coutput << "\n\n";
-        Coutput.width(left_column_no + 8);
-        Coutput << "<";
-
-        int segment_size = Tab::Wcslen(input_buffer, bad_tokens[k].start_location,
-                                                     LineEnd(FindLine(bad_tokens[k].start_location)));
-        Coutput.width(segment_size - 1);
-        Coutput.fill('-');
-        Coutput << "\n";
-        Coutput.fill(' ');
-
-        Coutput.width(6);
-        Coutput << left_line_no << ". ";
-        for (int i = this -> LineStart(left_line_no); i <= this -> LineEnd(left_line_no); i++)
-            Coutput << this -> InputBuffer()[i];
-
-        if (right_line_no > left_line_no + 1)
-        {
-            Coutput.width(left_column_no + 7);
-            Coutput << " ";
-            Coutput << ". . .\n";
-        }
-
-        Coutput.width(6);
-        Coutput << right_line_no << ". ";
-
-        int offset = 0;
-        for (int j = this -> LineStart(right_line_no); j <= this -> LineEnd(right_line_no); j++)
-        {
-            wchar_t c = this -> InputBuffer()[j];
-            if (c > 0xff)
-                offset += 5;
-            Coutput << c;
-        }
-
-        Coutput.width(8);
-        Coutput << "";
-        Coutput.width(right_column_no - 1 + offset);
-        Coutput.fill('-');
-        Coutput << ">";
-        Coutput.fill(' ');
-    }
-
-    return;
-}
-
-
-void LexStream::PrintMessage(StreamError::StreamErrorKind kind)
-{
-    switch(kind)
-    {
-        case StreamError::BAD_TOKEN:
-             Coutput << "Illegal token";
-             break;
-        case StreamError::BAD_OCTAL_CONSTANT:
-             Coutput << "Octal constant contains invalid digit";
-             break;
-        case StreamError::EMPTY_CHARACTER_CONSTANT:
-             Coutput << "Empty character constant";
-             break;
-        case StreamError::UNTERMINATED_CHARACTER_CONSTANT:
-             Coutput << "Character constant not properly terminated";
-             break;
-        case StreamError::UNTERMINATED_COMMENT:
-             Coutput << "Comment not properly terminated";
-             break;
-        case StreamError::UNTERMINATED_STRING_CONSTANT:
-             Coutput << "String constant not properly terminated";
-             break;
-        case StreamError::INVALID_HEX_CONSTANT:
-             Coutput << "The prefix 0x must be followed by at least one hex digit";
-             break;
-        case StreamError::INVALID_FLOATING_CONSTANT_EXPONENT:
-             Coutput << "floating-constant exponent has no digit";
-             break;
-        case StreamError::INVALID_UNICODE_ESCAPE:
-             Coutput << "Invalid unicode escape character";
-             break;
-        default:
-             assert(false);
-    }
-
-    Coutput << '\n';
-
-    return;
-}
 

@@ -1,4 +1,4 @@
-// $Id: diagnose.h,v 1.6 1999/11/03 00:46:30 shields Exp $
+// $Id: diagnose.h,v 1.11 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,17 +10,13 @@
 #ifndef diagnose_INCLUDED
 #define diagnose_INCLUDED
 
-#include "config.h"
+#include "platform.h"
 #include "parser.h"
+#include "jikesapi.h"
 
-struct PrimaryRepairInfo
-{
-    int code,
-        distance,
-        buffer_position,
-        misspell_index,
-        symbol;
-};
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 struct RepairCandidate
 {
@@ -34,20 +30,63 @@ struct StateInfo
         next;
 };
 
+class ParseErrorInfo: public JikesError
+{
+    friend class ParseError;
+    
+ public:
+    
+    virtual const wchar_t *getErrorMessage();
+    virtual const wchar_t *getErrorReport();
+    
+    virtual JikesErrorSeverity getSeverity();
+    virtual const char *getFileName();
+    
+    virtual int getLeftLineNo      ();
+    virtual int getLeftColumnNo    ();
+    virtual int getRightLineNo     ();
+    virtual int getRightColumnNo   ();
+
+ protected:        
+
+ private:
+    
+    int left_line_no    ;
+    int left_column_no  ;
+    int right_line_no   ;
+    int right_column_no ;
+    
+    static bool emacs_style_report;
+    LexStream *lex_stream;
+    
+    void Initialize(LexStream *);
+
+    wchar_t *regularErrorString ();
+    wchar_t *emacsErrorString   ();
+    
+    LexStream::TokenIndex left_token  ;
+    LexStream::TokenIndex right_token ;
+    
+    int                   name_index;   
+    int                   right_string_length;
+    int                   num;
+    unsigned char         msg_level;
+    ParseErrorCode        msg_code;
+    unsigned              scope_name_index;
+};
+
 
 class ParseError : public javaprs_table
 {
-public:
-    void Report(int msg_level, int msg_code, int name_index,
+ public:
+
+    void Report(int msg_level, ParseErrorCode, int name_index,
                 LexStream::TokenIndex left_token, LexStream::TokenIndex right_token,
                 int scope_name_index = 0);
 
     void SortMessages();
 
-    ParseError(Control &control_, LexStream *lex_stream_) : control(control_),
-                                                            lex_stream(lex_stream_),
-                                                            errors(256)
-    {}
+    ParseError(Control &control_, LexStream *lex_stream_);
     void PrintMessages();
 
 private:
@@ -55,24 +94,11 @@ private:
     Control &control;
     LexStream *lex_stream;
 
-    struct ErrorInfo
-    {
-        LexStream::TokenIndex left_token,
-                              right_token;
-        int                   name_index;
-        int                   right_string_length;
-        int                   num;
-        unsigned char         msg_level;
-        unsigned char         msg_code;
-        unsigned              scope_name_index;
-    };
+    Tuple<ParseErrorInfo> errors;
 
-    Tuple<ErrorInfo> errors;
-
-    void PrintLargeMessage(int k);
-    void PrintMessage(int k);
-    void PrintPrimaryMessage(int k);
-    void PrintSecondaryMessage(int k);
+    void PrintPrimaryMessage   (int k);
+    void PrintSecondaryMessage (int k);
+    
 };
 
 
@@ -128,7 +154,7 @@ private:
 
     RepairCandidate ErrorRecovery(TokenObject error_token);
     RepairCandidate PrimaryPhase(TokenObject error_token);
-    bool MergeCandidate(int state, int buffer_position);
+    int MergeCandidate(int state, int buffer_position);
     PrimaryRepairInfo CheckPrimaryDistance(int stack[],
                                            int stack_top,
                                            PrimaryRepairInfo repair);
@@ -160,4 +186,9 @@ private:
                         int buffer_position, int distance);
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif
+

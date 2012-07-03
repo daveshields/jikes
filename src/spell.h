@@ -1,4 +1,4 @@
-// $Id: spell.h,v 1.3 1999/08/26 15:34:10 shields Exp $
+// $Id: spell.h,v 1.6 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,8 +10,12 @@
 #ifndef spell_INCLUDED
 #define spell_INCLUDED
 
-#include "config.h"
+#include "platform.h"
 #include "case.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class Spell
 {
@@ -126,4 +130,9 @@ public:
     }
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif // #ifndef spell_INCLUDED
+

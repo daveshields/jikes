@@ -1,4 +1,4 @@
-// $Id: diagnose.cpp,v 1.12 1999/10/15 02:30:39 shields Exp $
+// $Id: diagnose.cpp,v 1.19 2000/07/25 11:32:32 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,14 +7,21 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <assert.h>
-#include <iostream.h>
+
 #include "diagnose.h"
 #include "control.h"
 #include "semantic.h"
 #include "case.h"
 #include "spell.h"
+
+/*
+//FIXME: need to readdress this include stuff
+#include <iostream.h>
+*/
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 void DiagnoseParser::ReallocateStacks()
 {
@@ -379,7 +386,7 @@ RepairCandidate DiagnoseParser::PrimaryPhase(TokenObject error_token)
 
     repair.distance = 0;
     repair.misspell_index = 0;
-    repair.code = 0;
+    repair.code = ERROR_CODE;
 
     candidate.symbol = 0;
 
@@ -516,7 +523,7 @@ RepairCandidate DiagnoseParser::PrimaryPhase(TokenObject error_token)
 /* the buffer.  If so, it returns the candidate in question;     */
 /* otherwise it returns 0.                                       */
 /*****************************************************************/
-bool DiagnoseParser::MergeCandidate(int state, int buffer_position)
+int DiagnoseParser::MergeCandidate(int state, int buffer_position)
 {
     int i,
         k,
@@ -1467,7 +1474,7 @@ RepairCandidate DiagnoseParser::SecondaryPhase(TokenObject error_token)
 
     candidate.symbol = 0;
 
-    repair.code = 0;
+    repair.code = ERROR_CODE;
     repair.distance = 0;
     repair.recovery_on_next_stack = false;
 
@@ -1882,6 +1889,13 @@ void DiagnoseParser::SecondaryDiagnosis(SecondaryRepairInfo repair)
 }
 
 
+ParseError::ParseError(Control &control_, LexStream *lex_stream_) : control(control_),
+    lex_stream(lex_stream_),
+    errors(256)
+{
+    ParseErrorInfo::emacs_style_report=!control_.option.errors;
+}
+
 //
 // This procedure uses a  quick sort algorithm to sort the ERRORS
 // by the left_line_no and left_column_no fields.
@@ -1896,7 +1910,7 @@ void ParseError::SortMessages()
      int top,
          i,
          j;
-     ErrorInfo pivot, temp;
+     ParseErrorInfo pivot, temp;
 
      top = 0;
      lostack[top] = 0;
@@ -1991,7 +2005,7 @@ void ParseError::SortMessages()
 /* the message into an array: error.                             */
 /*****************************************************************/
 void ParseError::Report(int msg_level,
-                        int msg_code,
+                        ParseErrorCode msg_code,
                         int name_index,
                         LexStream::TokenIndex left_token,
                         LexStream::TokenIndex right_token,
@@ -2008,16 +2022,247 @@ void ParseError::Report(int msg_level,
     errors[i].right_string_length = lex_stream -> NameStringLength(right_token);
     errors[i].scope_name_index    = scope_name_index;
 
-    if (control.option.dump_errors)
+    if(control.option.dump_errors)
     {
-        if (errors[i].left_token < errors[i].right_token)
-             PrintSecondaryMessage(i);
-        else PrintPrimaryMessage(i);
+        PrintPrimaryMessage(i);        
         errors.Reset(1); // we only need to indicate that at least one error was detected... See print_messages
-        Coutput.flush();
     }
 
     return;
+}
+
+void ParseErrorInfo::Initialize(LexStream *l)    
+{
+    lex_stream   = l;
+
+    left_line_no    = lex_stream -> Line   (left_token  );
+    left_column_no  = lex_stream -> Column (left_token  );
+    right_line_no   = lex_stream -> Line   (right_token );
+    right_column_no = lex_stream -> Column (right_token );
+}
+
+int ParseErrorInfo::getLeftLineNo      () { return left_line_no    ; }
+int ParseErrorInfo::getLeftColumnNo    () { return left_column_no  ; }
+int ParseErrorInfo::getRightLineNo     () { return right_line_no   ; }
+int ParseErrorInfo::getRightColumnNo   () { return right_column_no ; }
+
+JikesError::JikesErrorSeverity ParseErrorInfo::getSeverity()
+{ 
+    return JikesError::JIKES_ERROR; 
+}
+
+const char *ParseErrorInfo::getFileName() 
+{ 
+    assert(lex_stream);
+    return lex_stream -> FileName();   
+}
+
+const wchar_t *ParseErrorInfo::getErrorMessage() 
+{
+    ErrorString s;
+    const char *name;
+    int i, len = 0;
+
+#if defined(FULL_DIAGNOSIS)
+    if (name_index >= 0)
+    {
+        len  = ParseError::name_length[name_index];
+        name = &ParseError::string_buffer[ParseError::name_start[name_index]];
+    }
+#endif
+
+    switch(msg_code)
+    {
+    case ERROR_CODE:
+        s << "Parsing terminated at this token";
+        break;
+
+    case BEFORE_CODE:
+        for (i = 0; i < len; i++)
+            s << name[i];
+        s << " inserted before this token";
+        break;
+        
+    case INSERTION_CODE:
+        for (i = 0; i < len; i++)
+            s << name[i];
+        s << " expected after this token";
+        break;
+        
+    case DELETION_CODE:
+        if (left_token == right_token)
+            s << "Unexpected symbol ignored";
+        else 
+            s << "Unexpected symbols ignored";
+        break;
+
+    case INVALID_CODE:
+        if (len == 0)
+            s << "Unexpected input discarded";
+        else
+        {
+            s << "Invalid ";
+            for (i = 0; i < len; i++)
+                s << name[i];
+        }
+        break;
+
+    case SUBSTITUTION_CODE:
+        for (i = 0; i < len; i++)
+            s << name[i];
+        s << " expected instead of this token";
+        break;
+
+#if defined(SCOPE_REPAIR)
+    case SCOPE_CODE:
+        s << '\"';
+        for (i = ParseError::scope_suffix[- (int)name_index];
+             ParseError::scope_rhs[i] != 0; i++)
+        {
+            len  = ParseError::name_length[ParseError::scope_rhs[i]];
+            name = &ParseError::string_buffer[ParseError::name_start[ParseError::scope_rhs[i]]];
+            for (int j = 0; j < len; j++)
+                s << name[j];
+            if (ParseError::scope_rhs[i+1]) // any more symbols to print?
+                s << ' ';
+        }
+        s << '\"';
+        s << " inserted to complete ";
+        //
+        // TODO: This should not be an option
+        //
+        if (scope_name_index)
+        {
+            len  = ParseError::name_length[scope_name_index];
+            name = &ParseError::string_buffer[ParseError::name_start[scope_name_index]];
+            for (int j = 0; j < len; j++) // any more symbols to print?
+                s << name[j];
+        }
+        else 
+            s << "scope";
+        break;
+#endif
+
+    case MANUAL_CODE:
+        s << '\"';
+        for (i = 0; i < len; i++)
+            s << name[i];
+        s << "\" inserted to complete structure";
+        break;
+
+    case MERGE_CODE:
+        s << "symbols merged to form ";
+        for (i = 0; i < len; i++)
+            s << name[i];
+        break;
+
+    case EOF_CODE:
+        for (i = 0; i < len; i++)
+            s << name[i];
+        s << " reached after this token";
+        break;
+
+    case MISPLACED_CODE:
+        s << "misplaced construct(s)";
+        break;
+
+    default:
+        if (len == 0)
+        {
+            s << "unexpected input discarded";
+        }
+        else
+        {
+            for (i = 0; i < len; i++)
+                s << name[i];
+            s << " expected instead";
+        }
+        break;
+    }
+
+    return s.Array();
+}
+
+bool ParseErrorInfo::emacs_style_report=false;
+
+const wchar_t *ParseErrorInfo::getErrorReport() 
+{
+    return emacs_style_report?emacsErrorString():regularErrorString();
+}
+
+wchar_t *ParseErrorInfo::regularErrorString ()
+{
+    ErrorString s;
+    
+    if(left_line_no == right_line_no)
+    {
+        s << "\n\n";
+        s.width(6);
+        s << left_line_no << ". ";
+        for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
+            s << lex_stream -> InputBuffer()[i];
+        
+        int offset = lex_stream -> WcharOffset(left_token, right_token);
+        s.width(left_column_no + 8);
+        s << (msg_code == SCOPE_CODE || msg_code == MANUAL_CODE ? "^" : "<");
+        s.width(right_column_no + right_string_length - left_column_no + offset);
+        s.fill('-');
+        s << (msg_code == SCOPE_CODE || msg_code == MANUAL_CODE ? "^\n" : ">\n");
+        s.fill(' ');
+    }
+    else
+    {
+        s << "\n\n";
+        s.width(left_column_no + 8);
+        s << "<";
+        
+        s.width(lex_stream -> LineSegmentLength(left_token));
+        s.fill('-');
+        s << "\n";
+        s.fill(' ');
+        
+        s.width(6);
+        s << left_line_no << ". ";
+        for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
+            s << lex_stream -> InputBuffer()[i];
+        
+        if (right_line_no > left_line_no + 1)
+        {
+            s.width(left_column_no + 7);
+            s << " ";
+            s << ". . .\n";
+        }
+        
+        s.width(6);
+        s << right_line_no << ". ";
+        for (int j = lex_stream -> LineStart(right_line_no); j <= lex_stream -> LineEnd(right_line_no); j++)
+            s << lex_stream -> InputBuffer()[j];
+        
+        int offset = lex_stream -> WcharOffset(right_token);
+        s.width(8);
+        s << "";
+        s.width(right_column_no + right_string_length + offset);
+        s.fill('-');
+        s << (msg_code == SCOPE_CODE || msg_code == MANUAL_CODE ? "^\n" : ">\n");
+        s.fill(' ');
+    }
+    
+    s << "\n*** Syntax: " << getErrorMessage() << '\n';
+    
+    return s.Array();
+}
+
+wchar_t *ParseErrorInfo::emacsErrorString()
+{
+    ErrorString s;
+    
+    s << getFileName()
+      << ':' << left_line_no  << ':' << left_column_no
+      << ':' << right_line_no << ':' << right_column_no
+      << ": " << getSeverityString() << ": " 
+      << getErrorMessage() << '\n';
+    
+    return s.Array();    
 }
 
 
@@ -2075,92 +2320,87 @@ void ParseError::PrintMessages()
 
     SortMessages();
 
-    int stack_top = -1;
+    int stack_top    = -1;
     int *error_stack = new int[errors.Length()];
 
-    for (int k = 0; k < errors.Length(); k++)
+    for(int k = 0; k < errors.Length(); k++)
     {
-        int left_line_no    = lex_stream -> Line(errors[k].left_token),
-            left_column_no  = lex_stream -> Column(errors[k].left_token),
-            right_column_no = lex_stream -> Column(errors[k].right_token),
-            msg_code        = errors[k].msg_code;
-
-        Location left_token = errors[k].left_token;
-
-        for (; stack_top >= 0 && (errors[error_stack[stack_top]].right_token <= left_token); stack_top--)
+        for(; stack_top >= 0 && (errors[error_stack[stack_top]].right_token <= errors[k].left_token); stack_top--)
         {
              if (stack_top == 0)
-                 PrintLargeMessage(error_stack[stack_top]);
-             else
+             {
+                 PrintSecondaryMessage(error_stack[stack_top]);
+             } else
              {
                  int i = error_stack[stack_top],
                      j = error_stack[stack_top - 1];
 
-                 if ((errors[i].msg_code != SECONDARY_CODE &&
-                      errors[i].msg_code != MISPLACED_CODE &&
-                      errors[i].msg_code != DELETION_CODE) ||
-                     (errors[j].msg_code != DELETION_CODE  &&
-                      errors[j].msg_code != MISPLACED_CODE &&
-                      errors[j].msg_code != SECONDARY_CODE))
-                     PrintLargeMessage(i);
+                 if((errors[i].msg_code != SECONDARY_CODE &&
+                     errors[i].msg_code != MISPLACED_CODE &&
+                     errors[i].msg_code != DELETION_CODE) 
+                    ||
+                    (errors[j].msg_code != DELETION_CODE  &&
+                     errors[j].msg_code != MISPLACED_CODE &&
+                     errors[j].msg_code != SECONDARY_CODE)
+                 )
+                 {
+                     
+                     PrintSecondaryMessage(i);
+                 }
              }
         }
 
-        if (errors[k].left_token < errors[k].right_token)
+        if(errors[k].left_token < errors[k].right_token)
         {
             stack_top++;
             error_stack[stack_top] = k;
         }
-        else if ((stack_top >= 0) &&
-                 (errors[error_stack[stack_top]].msg_code ==
-                  SECONDARY_CODE ||
-                  errors[error_stack[stack_top]].msg_code ==
-                  DELETION_CODE) &&
-                 (errors[k].left_token ==
-                      errors[error_stack[stack_top]].left_token ||
-                  errors[k].right_token ==
-                      errors[error_stack[stack_top]].right_token));
-        else /* NOTE that input_line already contains a '\n' character */
+        else if(!((stack_top >= 0) &&
+                  (errors[error_stack[stack_top]].msg_code == SECONDARY_CODE ||
+                   errors[error_stack[stack_top]].msg_code == DELETION_CODE) 
+                  &&
+                  (errors[k].left_token  == errors[error_stack[stack_top]].left_token ||
+                   errors[k].right_token == errors[error_stack[stack_top]].right_token)))
         {
-            if (control.option.errors)
-            {
-                int m = left_column_no,
-                    n = right_column_no + errors[k].right_string_length - 1;
+            /* NOTE that input_line already contains a '\n' character */
+            /*
+              if (control.option.errors)
+              {
+                int m = errors[k].left_column_no,
+                    n = errors[k].right_column_no + errors[k].right_string_length - 1;
 
                 Coutput << "\n\n";
                 Coutput.width(6);
                 Coutput << left_line_no << ". ";
-                for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
+                for (int i = lex_stream -> LineStart(errors[k].left_line_no); i <= lex_stream -> LineEnd(errors[k].left_line_no); i++)
                     Coutput << lex_stream -> InputBuffer()[i];
 
-                if ((msg_code == SUBSTITUTION_CODE) ||
+                if((msg_code == SUBSTITUTION_CODE) ||
                     (n == m) ||
                     (msg_code == BEFORE_CODE)  ||
                     (msg_code == INVALID_CODE  && n <= (m+1)) ||
                     (msg_code == DELETION_CODE &&
-                     left_column_no == right_column_no))
+                     errors[k].left_column_no == errors[k].right_column_no))
                 {
                     Coutput.width(left_column_no + 9);
                     Coutput << "^\n";
-                }
-                else if (msg_code == INSERTION_CODE ||
-                         msg_code == EOF_CODE)
+                } else if (msg_code == INSERTION_CODE ||
+                           msg_code == EOF_CODE)
                 {
                     Coutput.width(n + 9);
                     Coutput << "^\n";
-                }
-                else
+                } else
                 {
                     int offset = lex_stream -> WcharOffset(errors[k].left_token, errors[k].right_token);
-                    Coutput.width(left_column_no + 8);
+                    Coutput.width(errors[k].left_column_no + 8);
                     Coutput << "<";
-                    Coutput.width(right_column_no + errors[k].right_string_length - left_column_no + offset);
+                    Coutput.width(errors[k].right_column_no + errors[k].right_string_length - errors[k].left_column_no + offset);
                     Coutput.fill('-');
                     Coutput << (msg_code == SCOPE_CODE || msg_code == MANUAL_CODE ? "^\n" : ">\n");
                     Coutput.fill(' ');
                 }
             }
-
+            */
             PrintPrimaryMessage(k);
         }
     }
@@ -2174,320 +2414,29 @@ void ParseError::PrintMessages()
              errors[i].msg_code != DELETION_CODE) ||
             (errors[j].msg_code != DELETION_CODE  &&
              errors[j].msg_code != SECONDARY_CODE))
-           PrintLargeMessage(i);
+           PrintSecondaryMessage(i);
     }
     if (stack_top == 0)
-        PrintLargeMessage(error_stack[stack_top]);
+        PrintSecondaryMessage(error_stack[stack_top]);
 
     Coutput.flush();
 
     delete [] error_stack;
 
-    if (control.option.errors)
+    if(control.option.errors)
         lex_stream -> DestroyInput();
 
     return;
 }
 
-
-//
-// This procedure is invoked to print a large message that may
-// span more than one line. The parameter ptr points to the
-// starting line. The parameter k points to the error message in
-// the error structure.
-//
-void ParseError::PrintLargeMessage(int k)
-{
-    if (control.option.errors)
-    {
-        int left_line_no    = lex_stream -> Line(errors[k].left_token),
-            left_column_no  = lex_stream -> Column(errors[k].left_token),
-            right_line_no   = lex_stream -> Line(errors[k].right_token),
-            right_column_no = lex_stream -> Column(errors[k].right_token);
-
-        if (left_line_no == right_line_no)
-        {
-            Coutput << "\n\n";
-            Coutput.width(6);
-            Coutput << left_line_no << ". ";
-            for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
-                Coutput << lex_stream -> InputBuffer()[i];
-
-            int offset = lex_stream -> WcharOffset(errors[k].left_token, errors[k].right_token);
-            Coutput.width(left_column_no + 8);
-            Coutput << (errors[k].msg_code == SCOPE_CODE || errors[k].msg_code == MANUAL_CODE ? "^" : "<");
-            Coutput.width(right_column_no + errors[k].right_string_length - left_column_no + offset);
-            Coutput.fill('-');
-            Coutput << (errors[k].msg_code == SCOPE_CODE || errors[k].msg_code == MANUAL_CODE ? "^\n" : ">\n");
-            Coutput.fill(' ');
-        }
-        else
-        {
-            Coutput << "\n\n";
-            Coutput.width(left_column_no + 8);
-            Coutput << "<";
-
-            Coutput.width(lex_stream -> LineSegmentLength(errors[k].left_token));
-            Coutput.fill('-');
-            Coutput << "\n";
-            Coutput.fill(' ');
-
-            Coutput.width(6);
-            Coutput << left_line_no << ". ";
-            for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
-                Coutput << lex_stream -> InputBuffer()[i];
-
-            if (right_line_no > left_line_no + 1)
-            {
-                Coutput.width(left_column_no + 7);
-                Coutput << " ";
-                Coutput << ". . .\n";
-            }
-
-            Coutput.width(6);
-            Coutput << right_line_no << ". ";
-            for (int j = lex_stream -> LineStart(right_line_no); j <= lex_stream -> LineEnd(right_line_no); j++)
-                Coutput << lex_stream -> InputBuffer()[j];
-
-            int offset = lex_stream -> WcharOffset(errors[k].right_token);
-            Coutput.width(8);
-            Coutput << "";
-            Coutput.width(right_column_no + errors[k].right_string_length + offset);
-            Coutput.fill('-');
-            Coutput << (errors[k].msg_code == SCOPE_CODE || errors[k].msg_code == MANUAL_CODE ? "^\n" : ">\n");
-            Coutput.fill(' ');
-        }
-    }
-
-    PrintSecondaryMessage(k);
-
-    return;
-}
-
-//
-// This procedure is invoked to form a primary error message. The
-// parameter k identifies the error to be processed.  The global
-// variable: msg, is used to store the message.
-//
 void ParseError::PrintPrimaryMessage(int k)
 {
-    const char *name;
-    int i,
-        len = 0;
-
-#if defined(FULL_DIAGNOSIS)
-    if (errors[k].name_index >= 0)
-    {
-        len = name_length[errors[k].name_index];
-        name = &string_buffer[name_start[errors[k].name_index]];
-    }
-#endif
-
-    if (! control.option.errors)
-    {
-        int left_line_no    = lex_stream -> Line(errors[k].left_token),
-            left_column_no  = lex_stream -> Column(errors[k].left_token),
-            right_line_no   = lex_stream -> Line(errors[k].right_token),
-            right_column_no = lex_stream -> Column(errors[k].right_token);
-
-        if (right_column_no != 0) // could not compute a column number
-            right_column_no += (errors[k].right_string_length - 1); // point to last character in right token
-
-        Coutput << lex_stream -> FileName()
-                << ':' << left_line_no  << ':' << left_column_no
-                << ':' << right_line_no << ':' << right_column_no
-                << ": Syntax: ";
-    }
-    else Coutput << "*** Syntax Error: ";
-
-    switch(errors[k].msg_code)
-    {
-        case ERROR_CODE:
-             Coutput << "Parsing terminated at this token";
-             break;
-        case BEFORE_CODE:
-             for (i = 0; i < len; i++)
-                 Coutput << name[i];
-             Coutput << " inserted before this token";
-             break;
-        case INSERTION_CODE:
-             for (i = 0; i < len; i++)
-                 Coutput << name[i];
-             Coutput << " expected after this token";
-             break;
-        case DELETION_CODE:
-             if (errors[k].left_token == errors[k].right_token)
-                  Coutput << "Unexpected symbol ignored";
-             else Coutput << "Unexpected symbols ignored";
-             break;
-        case INVALID_CODE:
-             if (len == 0)
-                 Coutput << "Unexpected input discarded";
-             else
-             {
-                 Coutput << "Invalid ";
-                 for (i = 0; i < len; i++)
-                     Coutput << name[i];
-             }
-             break;
-        case SUBSTITUTION_CODE:
-             for (i = 0; i < len; i++)
-                 Coutput << name[i];
-             Coutput << " expected instead of this token";
-             break;
-#if defined(SCOPE_REPAIR)
-        case SCOPE_CODE:
-             Coutput << '\"';
-             for (i = scope_suffix[- (int) errors[k].name_index];
-                  scope_rhs[i] != 0; i++)
-             {
-                 len  = name_length[scope_rhs[i]];
-                 name = &string_buffer[name_start[scope_rhs[i]]];
-                 for (int j = 0; j < len; j++)
-                     Coutput << name[j];
-                 if (scope_rhs[i+1]) // any more symbols to print?
-                     Coutput << ' ';
-             }
-             Coutput << '\"';
-             Coutput << " inserted to complete ";
-             //
-             // TODO: This should not be an option
-             //
-             if (errors[k].scope_name_index)
-             {
-                 len  = name_length[errors[k].scope_name_index];
-                 name = &string_buffer[name_start[errors[k].scope_name_index]];
-                 for (int j = 0; j < len; j++) // any more symbols to print?
-                      Coutput << name[j];
-             }
-             else Coutput << "scope";
-             break;
-#endif
-        case MANUAL_CODE:
-             Coutput << '\"';
-             for (i = 0; i < len; i++)
-                 Coutput << name[i];
-             Coutput << "\" inserted to complete structure";
-             break;
-        case MERGE_CODE:
-             Coutput << "symbols merged to form ";
-             for (i = 0; i < len; i++)
-                 Coutput << name[i];
-             break;
-        case EOF_CODE:
-             for (i = 0; i < len; i++)
-                 Coutput << name[i];
-             Coutput << " reached after this token";
-             break;
-        default:
-             if (errors[k].msg_code == MISPLACED_CODE)
-                  Coutput << "misplaced construct(s)";
-             else if (len == 0)
-                  Coutput << "unexpected input discarded";
-             else
-             {
-                 for (i = 0; i < len; i++)
-                     Coutput << name[i];
-                 Coutput << " expected instead";
-             }
-             break;
-    }
-
-    Coutput << '\n';
-
-    return;
+    errors[k].Initialize(lex_stream);
+    JikesAPI::getInstance()->reportError(&errors[k]);
 }
 
-//
-// This procedure is invoked to form a secondary error message.
-// The parameter k identifies the error to be processed.  The
-// global variable: msg, is used to store the message.
-//
 void ParseError::PrintSecondaryMessage(int k)
 {
-    const char *name;
-    int i,
-        len = 0;
-
-#if defined(FULL_DIAGNOSIS)
-    if (errors[k].name_index >= 0)
-    {
-        len = name_length[errors[k].name_index];
-        name = &string_buffer[name_start[errors[k].name_index]];
-    }
-#endif
-
-    if (! control.option.errors)
-    {
-        int left_line_no    = lex_stream -> Line(errors[k].left_token),
-            left_column_no  = lex_stream -> Column(errors[k].left_token),
-            right_line_no   = lex_stream -> Line(errors[k].right_token),
-            right_column_no = lex_stream -> Column(errors[k].right_token);
-
-        if (right_column_no != 0) // could not compute a column number
-            right_column_no += (errors[k].right_string_length - 1); // point to last character in right token
-
-        Coutput << lex_stream -> FileName()
-                << ':' << left_line_no  << ':' << left_column_no
-                << ':' << right_line_no << ':' << right_column_no
-                << ": Syntax: ";
-    }
-    else Coutput << "*** Syntax Error: ";
-
-    switch(errors[k].msg_code)
-    {
-        case MISPLACED_CODE:
-            Coutput << "Misplaced construct(s)";
-            break;
-#if defined(SCOPE_REPAIR)
-        case SCOPE_CODE:
-            Coutput << '\"';
-            for (i = scope_suffix[- (int) errors[k].name_index]; scope_rhs[i] != 0; i++)
-            {
-                len  = name_length[scope_rhs[i]];
-                name = &string_buffer[name_start[scope_rhs[i]]];
-                for (int j = 0; j < len; j++) // any more symbols to print?
-                     Coutput << name[j];
-                if (scope_rhs[i+1])
-                    Coutput << ' ';
-            }
-            Coutput << "\" inserted to complete ";
-            //
-            // TODO: This should not be an option
-            //
-            if (errors[k].scope_name_index)
-            {
-                len  = name_length[errors[k].scope_name_index];
-                name = &string_buffer[name_start[errors[k].scope_name_index]];
-                for (int j = 0; j < len; j++) // any more symbols to print?
-                     Coutput << name[j];
-            }
-            else Coutput << "phrase";
-            break;
-#endif
-        case  MANUAL_CODE:
-            Coutput << '\"';
-            for (i = 0; i < len; i++)
-                Coutput << name[i];
-            Coutput << "\" inserted to complete structure";
-            break;
-        case MERGE_CODE:
-            Coutput << "Symbols merged to form ";
-            for (i = 0; i < len; i++)
-                Coutput << name[i];
-            break;
-        default:
-            if (errors[k].msg_code == DELETION_CODE || len == 0)
-                Coutput << "Unexpected input discarded";
-            else
-            {
-                for (i = 0; i < len; i++)
-                    Coutput << name[i];
-                Coutput << " expected instead";
-            }
-    }
-
-    Coutput << '\n';
-
-    return;
+    errors[k].Initialize(lex_stream);
+    JikesAPI::getInstance()->reportError(&errors[k]);
 }

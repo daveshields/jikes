@@ -1,4 +1,4 @@
-// $Id: tab.h,v 1.5 2000/01/06 06:46:47 lord Exp $
+// $Id: tab.h,v 1.8 2000/07/25 11:32:34 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,11 +10,19 @@
 #ifndef tab_INCLUDED
 #define tab_INCLUDED
 
-#include "config.h"
+#include "platform.h"
+
+/*
+//FIXME: include stuff
 #ifdef HAVE_WCHAR_H
 # include <wchar.h>
 #endif
 #include <string.h>
+*/
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class Tab
 {
@@ -29,5 +37,10 @@ public:
 private:
     static int tab_size;
 };
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif
 

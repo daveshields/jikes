@@ -1,4 +1,4 @@
-// $Id: init.cpp,v 1.7 1999/09/13 14:21:16 shields Exp $
+// $Id: init.cpp,v 1.10 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,9 +7,13 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
+#include "platform.h"
 #include "semantic.h"
 #include "control.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 void Semantic::ProcessVariableInitializer(AstVariableDeclarator *variable_declarator)
 {

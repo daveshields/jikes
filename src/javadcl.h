@@ -1,4 +1,4 @@
-// $Id: javadcl.h,v 1.14 1999/10/17 02:02:12 shields Exp $
+// $Id: javadcl.h,v 1.16 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -9,6 +9,10 @@
 //
 #ifndef javadcl_INCLUDED
 #define javadcl_INCLUDED
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 
 #define CLASS_HEADER javaprs_table::
@@ -2739,4 +2743,9 @@ const unsigned short CLASS_HEADER in_symb[] = {0,
             0,0,0,0,0,0,0,0,0,0
                           };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif /* javadcl_INCLUDED */
+

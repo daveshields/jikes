@@ -1,4 +1,4 @@
-// $Id: double.h,v 1.6 2000/01/06 06:46:47 lord Exp $
+// $Id: double.h,v 1.11 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,11 +10,15 @@
 #ifndef Double_INCLUDED
 #define Double_INCLUDED
 
-#include "config.h"
-#include <math.h>
+#include "platform.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class LongInt;
 class IEEEdouble;
+
 class IEEEfloat
 {
 private:
@@ -78,8 +82,19 @@ public:
     IEEEfloat(char *);
     IEEEfloat(IEEEdouble a);
     IEEEfloat() {}
-
-    inline int IntValue() { return (int) FloatValue(); }
+    
+    inline int IntValue()
+        {
+            if(IsNaN())                                                             
+                return 0;                                                             
+            
+            if(value.float_value < INT_MIN)
+                return INT_MIN;
+            else if (value.float_value > INT_MAX)
+                return INT_MAX;
+            else
+                return (int)value.float_value;
+        }
 
     IEEEfloat  operator+  (IEEEfloat); // binary addition
     IEEEfloat  operator+  ();         // unary plus
@@ -111,26 +126,73 @@ public:
 class IEEEdouble
 {
 private:
+    enum { BIAS = 1023 };
+
     union
     {
         double double_value;
+#ifndef HAVE_UNSIGNED_LONG_LONG
         u4 word[2];
+#else
+        u8 words;
+#endif // HAVE_UNSIGNED_LONG_LONG
     } value;
 
-    enum { BIAS = 1023 };
-
-#ifdef WORDS_BIGENDIAN
-    u4 &High() { return value.word[0]; }
-    u4 &Low()  { return value.word[1]; }
+    // Set the high word only. Does not modify the low word!
+    inline void setHighWord(u4 high) {
+#ifndef HAVE_UNSIGNED_LONG_LONG
+# ifndef WORDS_BIGENDIAN
+        value.word[1] = high;
+# else
+        value.word[0] = high;
+# endif
 #else
-    u4 &Low()  { return value.word[0]; }
-    u4 &High() { return value.word[1]; }
-#endif
+        setHighAndLowWords(high, LowWord());
+#endif // HAVE_UNSIGNED_LONG_LONG
+    }
+
+    // Set the low word only. Does not modify the high word!
+    inline void setLowWord(u4 low) {
+#ifndef HAVE_UNSIGNED_LONG_LONG
+# ifndef WORDS_BIGENDIAN
+        value.word[0] = low;
+# else
+        value.word[1] = low;
+# endif
+#else
+        setHighAndLowWords(HighWord(), low);
+#endif // HAVE_UNSIGNED_LONG_LONG
+    }
+    
+    // Set the value for both words.
+    inline void setHighAndLowWords(u4 high, u4 low) {
+#ifndef HAVE_UNSIGNED_LONG_LONG
+# ifndef WORDS_BIGENDIAN
+        value.word[1] = high;
+        value.word[0] = low;
+# else
+        value.word[0] = high;
+        value.word[1] = low;
+# endif
+#else
+        value.words = (((u8) high) << 32) | low;
+#endif // HAVE_UNSIGNED_LONG_LONG
+    }
 
 public:
 
-    u4 HighWord() { return High(); }
-    u4 LowWord()  { return Low(); }
+#ifndef HAVE_UNSIGNED_LONG_LONG
+# ifndef WORDS_BIGENDIAN
+    inline u4 HighWord() { return value.word[1]; }
+    inline u4 LowWord()  { return value.word[0]; }
+# else
+    inline u4 HighWord() { return value.word[0]; }
+    inline u4 LowWord()  { return value.word[1]; }
+# endif
+#else
+    inline u4 HighWord() { return ((u4) (value.words >> 32)); }
+    inline u4 LowWord()  { return ((u4) value.words); }
+#endif // HAVE_UNSIGNED_LONG_LONG
 
     double DoubleValue() { return value.double_value; }
     double DoubleRoundedValue();
@@ -187,7 +249,18 @@ public:
     IEEEdouble(char *);
     IEEEdouble() {}
 
-    inline int IntValue() { return (int) DoubleValue(); }
+    inline int IntValue()
+        {
+            if(IsNaN())                                                             
+                return 0;                                                             
+            
+            if(value.double_value < INT_MIN)
+                return INT_MIN;
+            else if (value.double_value > INT_MAX)
+                return INT_MAX;
+            else
+                return (int)value.double_value;
+        }
 
     IEEEdouble  operator+  (IEEEdouble); // binary addition
     IEEEdouble  operator+  ();         // unary plus
@@ -214,4 +287,9 @@ public:
     static void Fmodulus(IEEEdouble, IEEEdouble, IEEEdouble &);
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif // Double_INCLUDED
+

@@ -1,4 +1,4 @@
-// $Id: error.cpp,v 1.42 2000/01/06 08:24:30 lord Exp $
+// $Id: error.cpp,v 1.53 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,16 +7,211 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <sys/stat.h>
+
 #include "error.h"
 #include "control.h"
 #include "semantic.h"
 #include "ast.h"
 
-unsigned char SemanticError::warning[SemanticError::_num_kinds] = { 0 };
-void (*SemanticError::print_message[SemanticError::_num_kinds]) (SemanticError::ErrorInfo &, LexStream *, Control &) = { NULL };
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
+unsigned char SemanticError::warning[SemanticError::_num_kinds] = { 0 };
+wchar_t * (*SemanticError::print_message[SemanticError::_num_kinds]) (ErrorInfo &, LexStream *, Control &) = { NULL };
+
+void ErrorInfo::Initialize(LexStream *l, wchar_t  *m, JikesErrorSeverity s)    
+{
+    lex_stream   = l;
+
+    left_line_no    = lex_stream -> Line   (left_token  );
+    left_column_no  = lex_stream -> Column (left_token  );
+    right_line_no   = lex_stream -> Line   (right_token );
+    right_column_no = lex_stream -> Column (right_token );
+    
+    /*
+     *   
+     * I do not understand following code and it is causing incorrect column values
+     * calculation. I commented in out for now. If you see any reason to restore
+     * it - please let me know.
+     * (lord)
+     *
+     
+     if(right_column_no != 0) // could not compute a column number
+     right_column_no += (right_string_length - 1); // point to last character in right token
+     
+    */
+
+    msg      = m;
+    severity = s;
+}
+
+ErrorInfo::ErrorInfo():msg(NULL),severity(JikesError::JIKES_ERROR)
+{
+}
+
+ErrorInfo::~ErrorInfo()
+{
+    delete []msg;
+}
+
+
+JikesError::JikesErrorSeverity ErrorInfo::getSeverity        () { return severity        ; }
+int ErrorInfo::getLeftLineNo      () { return left_line_no    ; }
+int ErrorInfo::getLeftColumnNo    () { return left_column_no  ; }
+int ErrorInfo::getRightLineNo     () { return right_line_no   ; }
+int ErrorInfo::getRightColumnNo   () { return right_column_no ; }
+
+const char *ErrorInfo::getFileName() 
+{ 
+    assert(lex_stream);
+    return lex_stream -> FileName();   
+}
+
+const wchar_t *ErrorInfo::getErrorMessage() 
+{
+    assert(msg);
+    return msg;
+}
+
+bool ErrorInfo::emacs_style_report=false;
+
+const wchar_t *ErrorInfo::getErrorReport() 
+{
+    return emacs_style_report?emacsErrorString():regularErrorString();
+}
+
+wchar_t *ErrorInfo::regularErrorString() 
+{
+    ErrorString s;
+
+    if(left_token < right_token)
+        PrintLargeSource(s);
+    else 
+        PrintSmallSource(s);
+    
+    s << "\n*** " << getSeverityString() << ": "
+      << getErrorMessage()
+      << '\n';
+    
+    return s.Array();
+}
+
+//
+// This procedure is invoked to print a large message that may
+// span more than one line. The parameter message points to the
+// starting line. The parameter k points to the error message in
+// the error structure.
+//
+void ErrorInfo::PrintLargeSource(ErrorString &s)
+{
+    if (left_line_no == right_line_no)
+    {
+        if (left_line_no == 0)
+            s << "\n";
+        else
+        {
+            s << "\n\n";
+            s.width(6);
+            s << left_line_no << ". ";
+            for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
+                s << lex_stream -> InputBuffer()[i];
+
+            int offset = lex_stream -> WcharOffset(left_token, right_token);
+            s.width(left_column_no + 8);
+            s << "<";
+            s.width(right_column_no + right_string_length - left_column_no - 1 + offset);
+            s.fill('-');
+            s << ">";
+            s.fill(' ');
+        }
+    }
+    else
+    {
+        s << "\n\n";
+        s.width(left_column_no + 8);
+        s << "<";
+
+        s.width(lex_stream -> LineSegmentLength(left_token));
+        s.fill('-');
+        s << "\n";
+        s.fill(' ');
+
+        s.width(6);
+        s << left_line_no << ". ";
+        for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
+            s << lex_stream -> InputBuffer()[i];
+
+        if (right_line_no > left_line_no + 1)
+        {
+            s.width(left_column_no + 7);
+            s << " ";
+            s << ". . .\n";
+        }
+
+        s.width(6);
+        s << right_line_no << ". ";
+        for (int j = lex_stream -> LineStart(right_line_no); j <= lex_stream -> LineEnd(right_line_no); j++)
+            s << lex_stream -> InputBuffer()[j];
+
+        int offset = lex_stream -> WcharOffset(right_token);
+        s.width(8);
+        s << "";
+        s.width(right_column_no + right_string_length - 1 + offset);
+        s.fill('-');
+        s << ">";
+        s.fill(' ');
+    }
+}
+
+//
+// This procedure is invoked to print a small message that may
+// only span a single line. The parameter k points to the error
+// message in the error structure.
+//
+void ErrorInfo::PrintSmallSource(ErrorString &s)
+{
+    if (left_line_no == 0)
+        s << "\n";
+    else
+    {
+        s << "\n\n";
+        s.width(6);
+        s << left_line_no;
+        s << ". ";
+        for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
+            s << lex_stream -> InputBuffer()[i];
+
+        s.width(left_column_no + 7);
+        s << "";
+        if (left_column_no == right_column_no && right_string_length == 1)
+            s << '^';
+        else
+        {
+            int offset = lex_stream -> WcharOffset(left_token, right_token);
+            s << '<';
+            s.width(right_column_no + right_string_length - left_column_no - 1 + offset);
+            s.fill('-');
+            s << ">";
+            s.fill(' ');
+        }
+    }
+}
+
+wchar_t *ErrorInfo::emacsErrorString()
+{
+    ErrorString s;
+
+    s << getFileName()
+      << ':' << left_line_no  << ':' << left_column_no
+      << ':' << right_line_no << ':' << right_column_no
+      << ": " << getSeverityString() << ": " 
+      << getErrorMessage() << '\n';
+    
+    return s.Array();
+}
+
+                       
 SemanticError::SemanticError(Control &control_, FileSymbol *file_symbol) : num_errors(0),
                                                                            num_warnings(0),
                                                                            control(control_),
@@ -24,7 +219,9 @@ SemanticError::SemanticError(Control &control_, FileSymbol *file_symbol) : num_e
                                                                            clone_count(0),
                                                                            buffer(1024),
                                                                            error(512)
-{}
+{
+    ErrorInfo::emacs_style_report=!control.option.errors;
+}
 
 //
 // This procedure is invoked by an JIKES PARSER or a semantic
@@ -224,7 +421,7 @@ void SemanticError::Report(SemanticErrorKind msg_code,
     //
     if (control.option.dump_errors)
     {
-        PrintEmacsMessage(i);
+        reportError(i);
 
         if (buffer.Length() > 0)
         {
@@ -232,7 +429,6 @@ void SemanticError::Report(SemanticErrorKind msg_code,
             buffer.Reset();
         }
         error.Reset(1); // we need at least 1 error in order for the return code to be set properly. See print_messages
-        Coutput.flush();
     }
 
     return;
@@ -240,11 +436,10 @@ void SemanticError::Report(SemanticErrorKind msg_code,
 
 void SemanticError::StaticInitializer()
 {
-    memset(warning, 0, _num_kinds * sizeof(bool));
+    memset(warning, 0, _num_kinds * sizeof(unsigned char));
 
     warning[INVALID_OPTION] = 1;
     warning[DISABLED_OPTION] = 1;
-    warning[UNSUPPORTED_ENCODING] = 1;
     warning[CANNOT_OPEN_ZIP_FILE] = 1;
     warning[CANNOT_OPEN_PATH_DIRECTORY] = 1;
 
@@ -303,7 +498,7 @@ void SemanticError::StaticInitializer()
 //    warning[VOID_TO_STRING] = 2;
 //
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     for (int i = 0; i < _num_kinds; i++)
         print_message[i] = NULL;
 #endif
@@ -390,6 +585,7 @@ void SemanticError::StaticInitializer()
     print_message[DUPLICATE_CONSTRUCTOR] = PrintDUPLICATE_CONSTRUCTOR;
     print_message[MISMATCHED_INHERITED_METHOD] = PrintMISMATCHED_INHERITED_METHOD;
     print_message[MISMATCHED_INHERITED_METHOD_EXTERNALLY] = PrintMISMATCHED_INHERITED_METHOD_EXTERNALLY;
+    print_message[MISMATCHED_INHERITED_METHODS_IN_BASE] = PrintMISMATCHED_INHERITED_METHODS_IN_BASE;
     print_message[DUPLICATE_FORMAL_PARAMETER] = PrintDUPLICATE_FORMAL_PARAMETER;
     print_message[MISMATCHED_CONSTRUCTOR_NAME] = PrintMISMATCHED_CONSTRUCTOR_NAME;
     print_message[METHOD_WITH_CONSTRUCTOR_NAME] = PrintMETHOD_WITH_CONSTRUCTOR_NAME;
@@ -580,7 +776,7 @@ void SemanticError::StaticInitializer()
     print_message[ZERO_DIVIDE_CAUTION] = PrintZERO_DIVIDE_CAUTION;
     print_message[VOID_TO_STRING] = PrintVOID_TO_STRING;
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     //
     // Make sure that there is a message associated with each code
     //
@@ -766,17 +962,8 @@ int SemanticError::PrintMessages()
                 for (int k = 0; k < error.Length(); k++)
                 {
                     if ((warning[error[k].msg_code] != 1) || (! control.option.nowarn))
-                    {
-                        if (error[k].left_token < error[k].right_token)
-                             PrintLargeSource(k);
-                        else PrintSmallSource(k);
-                        Coutput << "\n*** " << (warning[error[k].msg_code] == 1
-                                                    ? "Warning: "
-                                                    : (warning[error[k].msg_code] == 2 && (! control.option.zero_defect)
-                                                              ? "Caution: "
-                                                              : "Error: "));
-                        (print_message[error[k].msg_code]) (error[k], lex_stream, control);
-                        Coutput << '\n';
+                    {                        
+                        reportError(k);
                     }
                 }
                 lex_stream -> DestroyInput();
@@ -806,7 +993,9 @@ int SemanticError::PrintMessages()
             for (int k = 0; k < error.Length(); k++)
             {
                 if ((warning[error[k].msg_code] != 1) || (! control.option.nowarn))
-                    PrintEmacsMessage(k);
+                {
+                    reportError(k);
+                }
             }
         }
     }
@@ -816,145 +1005,18 @@ int SemanticError::PrintMessages()
     return return_code;
 }
 
-
-void SemanticError::PrintEmacsMessage(int k)
+void SemanticError::reportError(int k)
 {
-    int left_line_no    = lex_stream -> Line(error[k].left_token),
-        left_column_no  = lex_stream -> Column(error[k].left_token),
-        right_line_no   = lex_stream -> Line(error[k].right_token),
-        right_column_no = lex_stream -> Column(error[k].right_token);
+    error[k].Initialize(lex_stream,
+                        (print_message[error[k].msg_code]) (error[k], lex_stream, control),
+                        (warning[error[k].msg_code] == 1
+                         ? ErrorInfo::JIKES_WARNING
+                         : (warning[error[k].msg_code] == 2 && (! control.option.zero_defect)
+                            ? ErrorInfo::JIKES_CAUTION
+                            : ErrorInfo::JIKES_ERROR))
+    );
 
-    if (right_column_no != 0) // could not compute a column number
-        right_column_no += (error[k].right_string_length - 1); // point to last character in right token
-
-    Coutput << lex_stream -> FileName()
-            << ':' << left_line_no  << ':' << left_column_no
-            << ':' << right_line_no << ':' << right_column_no
-            << (warning[error[k].msg_code] == 1
-                       ? ": Warning: "
-                       : (warning[error[k].msg_code] == 2  && (! control.option.zero_defect)
-                                 ? ": Caution: "
-                                 : ": Error: "));
-    (print_message[error[k].msg_code]) (error[k], lex_stream, control);
-    Coutput << '\n';
-
-    return;
-}
-
-
-//
-// This procedure is invoked to print a large message that may
-// span more than one line. The parameter message points to the
-// starting line. The parameter k points to the error message in
-// the error structure.
-//
-void SemanticError::PrintLargeSource(int k)
-{
-    int left_line_no    = lex_stream -> Line(error[k].left_token),
-        left_column_no  = lex_stream -> Column(error[k].left_token),
-        right_line_no   = lex_stream -> Line(error[k].right_token),
-        right_column_no = lex_stream -> Column(error[k].right_token);
-
-    if (left_line_no == right_line_no)
-    {
-        if (left_line_no == 0)
-            Coutput << "\n";
-        else
-        {
-            Coutput << "\n\n";
-            Coutput.width(6);
-            Coutput << left_line_no << ". ";
-            for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
-                Coutput << lex_stream -> InputBuffer()[i];
-
-            int offset = lex_stream -> WcharOffset(error[k].left_token, error[k].right_token);
-            Coutput.width(left_column_no + 8);
-            Coutput << "<";
-            Coutput.width(right_column_no + error[k].right_string_length - left_column_no - 1 + offset);
-            Coutput.fill('-');
-            Coutput << ">";
-            Coutput.fill(' ');
-        }
-    }
-    else
-    {
-        Coutput << "\n\n";
-        Coutput.width(left_column_no + 8);
-        Coutput << "<";
-
-        Coutput.width(lex_stream -> LineSegmentLength(error[k].left_token));
-        Coutput.fill('-');
-        Coutput << "\n";
-        Coutput.fill(' ');
-
-        Coutput.width(6);
-        Coutput << left_line_no << ". ";
-        for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
-            Coutput << lex_stream -> InputBuffer()[i];
-
-        if (right_line_no > left_line_no + 1)
-        {
-            Coutput.width(left_column_no + 7);
-            Coutput << " ";
-            Coutput << ". . .\n";
-        }
-
-        Coutput.width(6);
-        Coutput << right_line_no << ". ";
-        for (int j = lex_stream -> LineStart(right_line_no); j <= lex_stream -> LineEnd(right_line_no); j++)
-            Coutput << lex_stream -> InputBuffer()[j];
-
-        int offset = lex_stream -> WcharOffset(error[k].right_token);
-        Coutput.width(8);
-        Coutput << "";
-        Coutput.width(right_column_no + error[k].right_string_length - 1 + offset);
-        Coutput.fill('-');
-        Coutput << ">";
-        Coutput.fill(' ');
-    }
-
-    return;
-}
-
-//
-// This procedure is invoked to print a small message that may
-// only span a single line. The parameter k points to the error
-// message in the error structure.
-//
-void SemanticError::PrintSmallSource(int k)
-{
-    int left_line_no = lex_stream -> Line(error[k].left_token);
-
-    if (left_line_no == 0)
-        Coutput << "\n";
-    else
-    {
-        Coutput << "\n\n";
-        Coutput.width(6);
-        Coutput << left_line_no;
-        Coutput << ". ";
-        for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
-            Coutput << lex_stream -> InputBuffer()[i];
-
-        int left_column_no = lex_stream -> Column(error[k].left_token),
-            right_column_no = lex_stream -> Column(error[k].right_token);
-
-        Coutput.width(left_column_no + 7);
-        Coutput << "";
-        if (left_column_no == right_column_no && error[k].right_string_length == 1)
-            Coutput << '^';
-        else
-        {
-            int offset = lex_stream -> WcharOffset(error[k].left_token, error[k].right_token);
-            Coutput << '<';
-            Coutput.width(right_column_no + error[k].right_string_length - left_column_no - 1 + offset);
-            Coutput.fill('-');
-            Coutput << ">";
-            Coutput.fill(' ');
-        }
-    }
-
-    return;
+    JikesAPI::getInstance()->reportError(&error[k]);
 }
 
 
@@ -963,553 +1025,638 @@ void SemanticError::PrintSmallSource(int k)
 // error messages. The parameter err identifies the error to
 // be processed.
 //
-void SemanticError::PrintBAD_ERROR(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintBAD_ERROR(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    fprintf(stderr, "chaos: Error code %i is not a valid error message code.\n", err.msg_code);
-
-    return;
+    ErrorString s;
+    s << "chaos: Error code " << err.msg_code << " is not a valid error message code.";
+    return s.Array();
 }
 
 
-void SemanticError::PrintDEFAULT_ERROR(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDEFAULT_ERROR(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
+    ErrorString s;
+
     if (err.insert1)
-        Coutput << err.insert1;
+        s << err.insert1;
     if (err.insert2)
-        Coutput << err.insert2;
+        s << err.insert2;
     if (err.insert3)
-        Coutput << err.insert3;
+        s << err.insert3;
     if (err.insert4)
-        Coutput << err.insert4;
+        s << err.insert4;
     if (err.insert5)
-        Coutput << err.insert5;
+        s << err.insert5;
     if (err.insert6)
-        Coutput << err.insert6;
+        s << err.insert6;
     if (err.insert7)
-        Coutput << err.insert7;
+        s << err.insert7;
     if (err.insert8)
-        Coutput << err.insert8;
+        s << err.insert8;
     if (err.insert9)
-        Coutput << err.insert9;
+        s << err.insert9;
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_OPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_OPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << '\"'
+    ErrorString s;
+
+    s << '\"'
             << err.insert1
             << "\" is an invalid option; "
             << StringConstant::U8S_command_format
             << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_K_OPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_K_OPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "No argument specified for +K option. The proper form is \"+Kxxx=xxx\" (with no intervening space).";
+    ErrorString s;
 
-    return;
+    s << "No argument specified for +K option. The proper form is \"+Kxxx=xxx\" (with no intervening space).";
+
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_K_TARGET(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_K_TARGET(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << '\"'
+    ErrorString s;
+    
+    s << '\"'
             << err.insert1
             << "\" is not a valid target in a +K option. The target must be a numeric type or boolean.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_TAB_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_TAB_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << '\"'
+    ErrorString s;
+
+    s << '\"'
             << err.insert1
             << "\" is not a valid tab size. An integer value is expected.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_DIRECTORY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_DIRECTORY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The directory specified in the \"-d\" option, \""
+    ErrorString s;
+    
+    s << "The directory specified in the \"-d\" option, \""
             << err.insert1
             << "\", is either invalid or it could not be expanded.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNSUPPORTED_OPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNSUPPORTED_OPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "This option \""
+    ErrorString s;
+    
+    s << "This option \""
             << err.insert1
             << "\" is currently unsupported.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDISABLED_OPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDISABLED_OPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "This option \""
+    ErrorString s;
+    
+    s << "This option \""
             << err.insert1
             << "\" has been temporarily disabled.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNSUPPORTED_ENCODING(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNSUPPORTED_ENCODING(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Unsupported encoding: \""
+    ErrorString s;
+    
+    s << "Unsupported encoding: \""
             << err.insert1
             << "\".";
     
-    return;
+    return s.Array();
 }              
 
-void SemanticError::PrintNO_CURRENT_DIRECTORY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNO_CURRENT_DIRECTORY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Could not open current directory.";
+    ErrorString s;
+    
+    s << "Could not open current directory.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCANNOT_OPEN_ZIP_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCANNOT_OPEN_ZIP_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The file \""
+    ErrorString s;
+    
+    s << "The file \""
             << err.insert1
             << "\" is not a valid zip file.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCANNOT_OPEN_PATH_DIRECTORY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCANNOT_OPEN_PATH_DIRECTORY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The file \""
+    ErrorString s;
+    
+    s << "The file \""
             << err.insert1
             << "\" is not a valid directory.";
 
-    return;
+    return s.Array();
 }
 
-
-void SemanticError::PrintPACKAGE_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPACKAGE_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Could not find package named: \n";
+    ErrorString s;
+
+    s << "Could not find package named: \n";
     for (int i = 1; i < control.classpath.Length(); i++)
     {
         PathSymbol *path_symbol = control.classpath[i];
         wchar_t *path = path_symbol -> Name();
 
-        Coutput << "                "
+        s << "                "
                 << path;
         if (path_symbol -> IsZip())
         {
-            Coutput << "("
+            s << "("
                     << err.insert1
                     << ")";
         }
         else
         {
-            Coutput << "/"
+            s << "/"
                     << err.insert1;
         }
 
         if (i + 2 < control.classpath.Length())
-             Coutput << ", \n";
+             s << ", \n";
         else if (i + 2 == control.classpath.Length())
-             Coutput << " or \n";
+             s << " or \n";
     }
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCANNOT_OPEN_DIRECTORY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCANNOT_OPEN_DIRECTORY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Unable to open directory \""
+    ErrorString s;
+    
+    s << "Unable to open directory \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintBAD_INPUT_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintBAD_INPUT_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The input file \""
+    ErrorString s;
+    
+    s << "The input file \""
             << err.insert1
             << "\" does not have the \".java\" extension.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNREADABLE_INPUT_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNREADABLE_INPUT_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The input file \""
+    ErrorString s;
+    
+    s << "The input file \""
             << err.insert1
             << "\" was not found.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNON_STANDARD_LIBRARY_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNON_STANDARD_LIBRARY_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A non-standard version of the type \"";
+    ErrorString s;
+
+    s << "A non-standard version of the type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" was found. Class files that depend on this type may not have been generated.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintLIBRARY_METHOD_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintLIBRARY_METHOD_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A class file was not generated for the type \"";
+    ErrorString s;
+
+    s << "A class file was not generated for the type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" because a library method that it depends on was not found. See system messages for more information.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCANNOT_REOPEN_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCANNOT_REOPEN_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Unable to reopen file \""
+    ErrorString s;
+    
+    s << "Unable to reopen file \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCANNOT_WRITE_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCANNOT_WRITE_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Unable to write file \""
+    ErrorString s;
+    
+    s << "Unable to write file \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCONSTANT_POOL_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCONSTANT_POOL_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Processing of this type, \"";
+    ErrorString s;
+
+    s << "Processing of this type, \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
-            << "\", produced a constant pool that exceeded the limit of 65535 elements.";
+    s << err.insert2
+       << "\", produced a constant pool that exceeded the limit of 65535 elements.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINTERFACES_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINTERFACES_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \"";
+    ErrorString s;
+
+    s << "The type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" implements more than 65535 interfaces.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMETHODS_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMETHODS_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \"";
+    ErrorString s;
+    
+    s << "The type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" contains more than 65535 methods.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSTRING_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTRING_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \"";
+    ErrorString s;
+
+    s << "The type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" generated one or more strings whose length exceeds the maximum length of 65535 Utf8 chacracters.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPARAMETER_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPARAMETER_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Method \""
+    ErrorString s;
+
+    s << "Method \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" contains more than 255 formal parameters. Note that a parameter of type long or double counts as 2 parameters.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintARRAY_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintARRAY_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The number of dimensions in an array is limited to 255.";
+    ErrorString s;
+    
+    s << "The number of dimensions in an array is limited to 255.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFIELDS_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFIELDS_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \"";
+    ErrorString s;
+
+    s << "The type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" contains more than 65535 fields.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintLOCAL_VARIABLES_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintLOCAL_VARIABLES_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Method \""
+    ErrorString s;
+
+    s << "Method \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" contains more than 65535 local variables.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSTACK_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTACK_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Processing of the method or constructor \""
+    ErrorString s;
+
+    s << "Processing of the method or constructor \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" requires a stack that exceeds the maximum limit of 65535.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCODE_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCODE_OVERFLOW(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Processing of the method or constructor \""
+    ErrorString s;
+
+    s << "Processing of the method or constructor \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" produced a code attribute that exceeds the code limit of 65535 elements.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCANNOT_COMPUTE_COLUMNS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCANNOT_COMPUTE_COLUMNS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Unable to reopen file \""
+    ErrorString s;
+
+    s << "Unable to reopen file \""
             << err.insert1
             << "\". Therefore, column positions may be incorrect.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintREDUNDANT_ABSTRACT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintREDUNDANT_ABSTRACT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The use of the \"abstract\" modifier in this context is redundant and strongly discouraged as a matter of style.";
+    ErrorString s;
+    
+    s << "The use of the \"abstract\" modifier in this context is redundant and strongly discouraged as a matter of style.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintREDUNDANT_FINAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintREDUNDANT_FINAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The use of the \"final\" modifier in this context is redundant and strongly discouraged as a matter of style.";
+    ErrorString s;
+    
+    s << "The use of the \"final\" modifier in this context is redundant and strongly discouraged as a matter of style.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintREDUNDANT_PUBLIC(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintREDUNDANT_PUBLIC(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The use of the \"public\" modifier in this context is redundant and strongly discouraged as a matter of style.";
+    ErrorString s;
+    
+    s << "The use of the \"public\" modifier in this context is redundant and strongly discouraged as a matter of style.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintREDUNDANT_STATIC(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintREDUNDANT_STATIC(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The use of the \"static\" modifier in this context is redundant and strongly discouraged as a matter of style.";
+    ErrorString s;
+    
+    s << "The use of the \"static\" modifier in this context is redundant and strongly discouraged as a matter of style.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintEMPTY_DECLARATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintEMPTY_DECLARATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "An EmptyDeclaration is a deprecated feature that should not be used - \";\" ignored.";
+    ErrorString s;
+    
+    s << "An EmptyDeclaration is a deprecated feature that should not be used - \";\" ignored.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintOBSOLESCENT_ABSTRACT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintOBSOLESCENT_ABSTRACT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Every interface in implicitly abstract. This modifier is obsolete and should not be used in new Java programs.";
+    ErrorString s;
+    
+    s << "Every interface in implicitly abstract. This modifier is obsolete and should not be used in new Java programs.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintOBSOLESCENT_BRACKETS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintOBSOLESCENT_BRACKETS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The use of empty bracket pairs following a MethodDeclarator should not be used in new Java programs.";
+    ErrorString s;
+    
+    s << "The use of empty bracket pairs following a MethodDeclarator should not be used in new Java programs.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNO_TYPES(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNO_TYPES(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "This compilation unit contains no type declaration.";
+    ErrorString s;
+    
+    s << "This compilation unit contains no type declaration.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_IN_MULTIPLE_FILES(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_IN_MULTIPLE_FILES(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The file \"";
+    ErrorString s;
+
+    s << "The file \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << ".java\" contains type \""
             << err.insert4
             << "\" which conflicts with file \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << ".java\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPACKAGE_TYPE_CONFLICT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPACKAGE_TYPE_CONFLICT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \"";
+    ErrorString s;
+
+    s << "The type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" contained in file \""
             << err.insert3
             << "\" conflicts with the package \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDIRECTORY_FILE_CONFLICT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDIRECTORY_FILE_CONFLICT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \""
+    ErrorString s;
+
+    s << "The type \""
             << err.insert1
             << "\" contained in file \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << ".java\" conflicts with the directory \""
             << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFILE_FILE_CONFLICT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFILE_FILE_CONFLICT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Cannot write class file \""
+    ErrorString s;
+    
+    s << "Cannot write class file \""
             << err.insert1
             << ".class\" because that name conflicts with the name of the class file \""
             << err.insert2
@@ -1517,13 +1664,15 @@ void SemanticError::PrintFILE_FILE_CONFLICT(ErrorInfo &err, LexStream *lex_strea
             << err.insert3
             << "\". This is illegal because file names are case-insensitive in this system.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMULTIPLE_PUBLIC_TYPES(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMULTIPLE_PUBLIC_TYPES(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \""
+    ErrorString s;
+    
+    s << "The type \""
             << err.insert1
             << "\" is declared public in compilation unit \""
             << lex_stream -> FileName()
@@ -1531,25 +1680,29 @@ void SemanticError::PrintMULTIPLE_PUBLIC_TYPES(ErrorInfo &err, LexStream *lex_st
             << err.insert2
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISMATCHED_TYPE_AND_FILE_NAMES(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISMATCHED_TYPE_AND_FILE_NAMES(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The public type \""
+    ErrorString s;
+    
+    s << "The public type \""
             << err.insert1
             << "\" does not match the name of its containing file \""
             << lex_stream -> FileName()
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintREFERENCE_TO_TYPE_IN_MISMATCHED_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintREFERENCE_TO_TYPE_IN_MISMATCHED_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \""
+    ErrorString s;
+    
+    s << "The type \""
             << err.insert1
             << "\" is defined in the file \""
             << err.insert2
@@ -1559,258 +1712,306 @@ void SemanticError::PrintREFERENCE_TO_TYPE_IN_MISMATCHED_FILE(ErrorInfo &err, Le
             << err.insert1
             << ".java\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_INNER_TYPE_NAME(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_INNER_TYPE_NAME(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The inner type named \""
+    ErrorString s;
+    
+    s << "The inner type named \""
             << err.insert1
             << "\" is nested in an outer class of the same name at location "
             << err.insert2
             << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_TYPE_DECLARATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_TYPE_DECLARATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Duplicate declaration of type \""
+    ErrorString s;
+    
+    s << "Duplicate declaration of type \""
             << err.insert1
             << "\". The other occurrence is at location "
             << err.insert2
             << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNNECESSARY_TYPE_IMPORT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNNECESSARY_TYPE_IMPORT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Unnecessary import of type \""
+    ErrorString s;
+    
+    s << "Unnecessary import of type \""
             << err.insert1
             << "\". The type is declared at location "
             << err.insert2
             << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNINITIALIZED_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNINITIALIZED_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The field \""
+    ErrorString s;
+    
+    s << "The field \""
             << err.insert1
             << "\" is not initialized.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Duplicate specification of this modifier.";
+    ErrorString s;
+    
+    s << "Duplicate specification of this modifier.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_ACCESS_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_ACCESS_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Duplicate specification of an access modifier. "
+    ErrorString s;
+    
+    s << "Duplicate specification of an access modifier. "
             "Only one instance of \"public\", \"private\", or \"protected\" may appear in a declaration.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_TOP_LEVEL_CLASS_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_TOP_LEVEL_CLASS_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is not a valid modifier for a top-level class.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_INNER_CLASS_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_INNER_CLASS_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is not a valid modifier for an inner class.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_STATIC_INNER_CLASS_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_STATIC_INNER_CLASS_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is not a valid modifier for an inner class that is enclosed in an interface.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_LOCAL_CLASS_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_LOCAL_CLASS_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is not a valid modifier for a local inner class.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFINAL_ABSTRACT_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFINAL_ABSTRACT_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A class may not be declared both \"final\" and \"abstract\".";
+    ErrorString s;
+    
+    s << "A class may not be declared both \"final\" and \"abstract\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_INTERFACE_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_INTERFACE_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is not a valid interface modifier.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintVOLATILE_FINAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintVOLATILE_FINAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A \"volatile\" field may not be declared \"final\".";
+    ErrorString s;
+    
+    s << "A \"volatile\" field may not be declared \"final\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFINAL_VOLATILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFINAL_VOLATILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A \"final\" field may not be declared \"volatile\".";
+    ErrorString s;
+    
+    s << "A \"final\" field may not be declared \"volatile\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_FIELD_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_FIELD_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is not a valid field modifier.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_LOCAL_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_LOCAL_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is not a valid local variable or parameter modifier.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_METHOD_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_METHOD_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is not a valid method modifier.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_SIGNATURE_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_SIGNATURE_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is not a valid signature modifier.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_CONSTRUCTOR_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_CONSTRUCTOR_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is not a valid constructor modifier.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_CONSTANT_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_CONSTANT_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is not a valid constant modifier.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPARENT_TYPE_IN_UNNAMED_PACKAGE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPARENT_TYPE_IN_UNNAMED_PACKAGE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type associated with this construct is (or depends on) the type ";
+    ErrorString s;
+
+    s << "The type associated with this construct is (or depends on) the type ";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << " which is contained in an unnamed package.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintRECOMPILATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintRECOMPILATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type associated with this construct depends on file ";
+    ErrorString s;
+
+    s << "The type associated with this construct depends on file ";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << ".class which, in turn, depends on file ";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << ".java. All files that depend on this source file, in particular, ";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << ".java should be recompiled.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Type ";
+    ErrorString s;
+
+    s << "Type ";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << " was not found.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_ON_DEMAND_IMPORT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_ON_DEMAND_IMPORT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Type "
+    ErrorString s;
+
+    s << "Type "
             << err.insert1
             << " is imported on demand from package "
             << err.insert2
@@ -1818,602 +2019,712 @@ void SemanticError::PrintDUPLICATE_ON_DEMAND_IMPORT(ErrorInfo &err, LexStream *l
             << err.insert3
             << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNOT_A_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNOT_A_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A type is expected here.";
+    ErrorString s;
+    
+    s << "A type is expected here.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNOT_A_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNOT_A_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Interface \"";
+    ErrorString s;
+
+    s << "Interface \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" cannot be used where a class is expected.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNOT_AN_INTERFACE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNOT_AN_INTERFACE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Class ";
+    ErrorString s;
+
+    s << "Class ";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << " cannot be used where an interface is expected.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSUPER_IS_FINAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSUPER_IS_FINAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The super class \"";
+    ErrorString s;
+
+    s << "The super class \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" is final. A final class must not have subclasses.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintOBJECT_WITH_SUPER_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintOBJECT_WITH_SUPER_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type "
+    ErrorString s;
+    
+    s << "The type "
             << err.insert1
             << '/'
             << err.insert2
             << " must not have a super type.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintOBJECT_HAS_NO_SUPER_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintOBJECT_HAS_NO_SUPER_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type "
+    ErrorString s;
+    
+    s << "The type "
             << err.insert1
             << '/'
             << err.insert2
             << " does not have a super type.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Duplicate declaration of field \""
+    ErrorString s;
+    
+    s << "Duplicate declaration of field \""
             << err.insert1
             << "\" in type \""
             << err.insert2
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Duplicate declaration of method \""
+    ErrorString s;
+    
+    s << "Duplicate declaration of method \""
             << err.insert1
             << "\" in type \""
             << err.insert2
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISMATCHED_INHERITED_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISMATCHED_INHERITED_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The return type of method \""
+    ErrorString s;
+
+    s << "The return type of method \""
             << err.insert1
             << "\" does not match the return type of method \""
             << err.insert2
             << "\" inherited from type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISMATCHED_INHERITED_METHOD_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISMATCHED_INHERITED_METHOD_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "In class \""
+    ErrorString s;
+
+    s << "In class \""
             << err.insert1
             << "\", the method \""
             << err.insert2
             << "\", inherited from type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\", does not have the same return type as the overridden method \""
             << err.insert5
             << "\", inherited from type \"";
     if (NotDot(err.insert6))
     {
-        Coutput << err.insert6
+        s << err.insert6
                 << "/";
     }
-    Coutput << err.insert7
+    s << err.insert7
             << "\".";
 
-    return;
+    return s.Array();
 }
 
-
-void SemanticError::PrintDUPLICATE_CONSTRUCTOR(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISMATCHED_INHERITED_METHODS_IN_BASE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Duplicate declaration of this constructor in type \""
+    ErrorString s;
+    
+    s << "In class \""
+            << err.insert1
+            << "\", the method \""
+            << err.insert2
+            << "\", inherited from type \"";
+    if (NotDot(err.insert3))
+    {
+        s << err.insert3
+                << "/";
+    }
+    s << err.insert4
+            << "\", does not have the same return type as the method \""
+            << err.insert5
+            << "\", inherited from type \"";
+    if (NotDot(err.insert6))
+    {
+        s << err.insert6
+                << "/";
+    }
+    s << err.insert7
+            << "\".";
+
+    return s.Array();
+}
+
+wchar_t *SemanticError::PrintDUPLICATE_CONSTRUCTOR(ErrorInfo &err, LexStream *lex_stream, Control &control)
+{
+    ErrorString s;
+    
+    s << "Duplicate declaration of this constructor in type \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISMATCHED_CONSTRUCTOR_NAME(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISMATCHED_CONSTRUCTOR_NAME(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The name of the constructor \""
+    ErrorString s;
+    
+    s << "The name of the constructor \""
             << err.insert1
             << "\" does not match the name of the class \""
             << err.insert2
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMETHOD_WITH_CONSTRUCTOR_NAME(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMETHOD_WITH_CONSTRUCTOR_NAME(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The name of this method \""
+    ErrorString s;
+    
+    s << "The name of this method \""
             << err.insert1
             << "\" matches the name of the containing class. "
                "However, the method is not a constructor since its declarator is qualified with a type.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_FORMAL_PARAMETER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_FORMAL_PARAMETER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Duplicate declaration of formal parameter "
+    ErrorString s;
+    
+    s << "Duplicate declaration of formal parameter "
             << err.insert1
             << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_LOCAL_VARIABLE_DECLARATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_LOCAL_VARIABLE_DECLARATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Duplicate declaration of local variable \""
+    ErrorString s;
+    
+    s << "Duplicate declaration of local variable \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_LOCAL_TYPE_DECLARATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_LOCAL_TYPE_DECLARATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Duplicate declaration of local class \""
+    ErrorString s;
+    
+    s << "Duplicate declaration of local class \""
             << err.insert1
             << "\". The other occurrence is at location "
             << err.insert2
             << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMULTIPLE_DEFAULT_LABEL(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMULTIPLE_DEFAULT_LABEL(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Multiple specification of default label in switch statement.";
+    ErrorString s;
+    
+    s << "Multiple specification of default label in switch statement.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNDECLARED_LABEL(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNDECLARED_LABEL(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << err.insert1
+    ErrorString s;
+    
+    s << err.insert1
             << " is an undeclared label.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_LABEL(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_LABEL(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Duplicate declaration of label \""
+    ErrorString s;
+    
+    s << "Duplicate declaration of label \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_THROWABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_THROWABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \"";
+    ErrorString s;
+
+    s << "The type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" is not a subclass of \"Throwable\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCATCH_PRIMITIVE_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCATCH_PRIMITIVE_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A primitive type cannot be used to declare a catch clause parameter - the type Error is assumed.";
+    ErrorString s;
+    
+    s << "A primitive type cannot be used to declare a catch clause parameter - the type Error is assumed.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCATCH_ARRAY_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCATCH_ARRAY_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A array type cannot be used to declare a catch clause parameter - the type Error is assumed.";
+    ErrorString s;
+    
+    s << "A array type cannot be used to declare a catch clause parameter - the type Error is assumed.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintAMBIGUOUS_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintAMBIGUOUS_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The field name \""
+    ErrorString s;
+
+    s << "The field name \""
             << err.insert1
             << "\" is an ambiguous name found in the types \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" and \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << "/";
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintAMBIGUOUS_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintAMBIGUOUS_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The the nested type name \""
+    ErrorString s;
+
+    s << "The the nested type name \""
             << err.insert1
             << "\" is an ambiguous name found in the types \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" and \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << "/";
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFIELD_IS_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFIELD_IS_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The name \""
+    ErrorString s;
+    
+    s << "The name \""
             << err.insert1
             << "\" cannot be dereferenced as it represents a type.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFIELD_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFIELD_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "No field named \""
+    ErrorString s;
+
+    s << "No field named \""
             << err.insert1
             << "\" was found in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFIELD_NAME_MISSPELLED(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFIELD_NAME_MISSPELLED(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "No field named \""
+    ErrorString s;
+
+    s << "No field named \""
             << err.insert1
             << "\" was found in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\". However, there is an accessible field \""
             << err.insert4
             << "\" whose name closely matches the name \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFIELD_WITH_PRIVATE_ACCESS_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFIELD_WITH_PRIVATE_ACCESS_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The field \""
+    ErrorString s;
+
+    s << "The field \""
             << err.insert1
             << "\" contained in class \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" has private access. Therefore, it is not accessible in class \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << "/";
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFIELD_WITH_DEFAULT_ACCESS_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFIELD_WITH_DEFAULT_ACCESS_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The field \""
+    ErrorString s;
+
+    s << "The field \""
             << err.insert1
             << "\" contained in class \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" has default access. Therefore, it is not accessible in class \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << "/";
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\" which is in a different package.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNAME_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNAME_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "No entity named \""
+    ErrorString s;
+    
+    s << "No entity named \""
             << err.insert1
             << "\" was found in this environment.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNAME_NOT_YET_AVAILABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNAME_NOT_YET_AVAILABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Illegal use of name \""
+    ErrorString s;
+    
+    s << "Illegal use of name \""
             << err.insert1
             << "\" which has not yet been fully declared at this point.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNAME_NOT_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNAME_NOT_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The name \""
+    ErrorString s;
+    
+    s << "The name \""
             << err.insert1
             << "\" does not denote a valid variable. If \""
             << err.insert1
             << "\" is a method that takes no argument, it must be followed by \"()\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMETHOD_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMETHOD_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "No match was found for method \""
+    ErrorString s;
+    
+    s << "No match was found for method \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMETHOD_NAME_NOT_FOUND_IN_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMETHOD_NAME_NOT_FOUND_IN_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "No method named \""
+    ErrorString s;
+
+    s << "No method named \""
             << err.insert1
             << "\" was found in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMETHOD_NAME_MISSPELLED(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMETHOD_NAME_MISSPELLED(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "No method named \""
+    ErrorString s;
+
+    s << "No method named \""
             << err.insert1
             << "\" was found in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\". However, there is an accessible method \""
             << err.insert4
             << "\" whose name closely matches the name \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMETHOD_WITH_PRIVATE_ACCESS_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMETHOD_WITH_PRIVATE_ACCESS_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Method \""
+    ErrorString s;
+
+    s << "Method \""
             << err.insert1
             << "\" in class \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" has private access. Therefore, it is not accessible in class \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << "/";
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMETHOD_WITH_DEFAULT_ACCESS_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMETHOD_WITH_DEFAULT_ACCESS_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Method \""
+    ErrorString s;
+
+    s << "Method \""
             << err.insert1
             << "\" in class \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" has protected or default access. Therefore, it is not accessible in class \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << "/";
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\" which is in a different package.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintHIDDEN_METHOD_IN_ENCLOSING_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintHIDDEN_METHOD_IN_ENCLOSING_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The method \""
+    ErrorString s;
+
+    s << "The method \""
             << err.insert1
             << "\" contained in the enclosing type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" is a perfect match for this method call."
                " However, it is not visible in this nested class because a"
                " method with the same name in an intervening class is hiding it.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFIELD_NOT_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFIELD_NOT_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The name \""
+    ErrorString s;
+
+    s << "The name \""
             << err.insert1
             << "\" is not a method name but the name of a field member of the type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The keyword \"new\" is expected before this name, \""
+    ErrorString s;
+
+    s << "The keyword \"new\" is expected before this name, \""
             << err.insert1
             << "\", as it is not the name of a method but the name of a type.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A type \""
+    ErrorString s;
+
+    s << "A type \""
             << err.insert1
             << "\" was found where a field name or method call was expected. Did you mean to write \""
             << err.insert1
@@ -2421,1336 +2732,1524 @@ void SemanticError::PrintTYPE_NOT_FIELD(ErrorInfo &err, LexStream *lex_stream, C
             << err.insert1
             << "()\", or ... ?";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMETHOD_NOT_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMETHOD_NOT_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The name \""
+    ErrorString s;
+
+    s << "The name \""
             << err.insert1
             << "\" is not a field name but the name of a method declared in the type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintAMBIGUOUS_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintAMBIGUOUS_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Ambiguous invocation of constructor \""
+    ErrorString s;
+
+    s << "Ambiguous invocation of constructor \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintAMBIGUOUS_METHOD_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintAMBIGUOUS_METHOD_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Ambiguous invocation of method \""
+    ErrorString s;
+
+    s << "Ambiguous invocation of method \""
             << err.insert1
             << "\". At least two methods are accessible from here: Method \""
             << err.insert2
             << "\" declared in type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << '/';
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\" and method \""
             << err.insert5
             << "\" declared in type \"";
     if (NotDot(err.insert6))
     {
-        Coutput << err.insert6
+        s << err.insert6
                 << '/';
     }
-    Coutput << err.insert7
+    s << err.insert7
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNAME_NOT_CLASS_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNAME_NOT_CLASS_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The name \""
+    ErrorString s;
+    
+    s << "The name \""
             << err.insert1
             << "\" does not denote a class (static) variable.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNOT_A_NUMERIC_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNOT_A_NUMERIC_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Only a variable of numeric type can appear in this context.";
+    ErrorString s;
+    
+    s << "Only a variable of numeric type can appear in this context.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMETHOD_NOT_CLASS_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMETHOD_NOT_CLASS_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The method \""
+    ErrorString s;
+    
+    s << "The method \""
             << err.insert1
             << "\" does not denote a class method.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintABSTRACT_TYPE_CREATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintABSTRACT_TYPE_CREATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Attempt to instantiate an abstract class \""
+    ErrorString s;
+    
+    s << "Attempt to instantiate an abstract class \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCONSTRUCTOR_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCONSTRUCTOR_NOT_FOUND(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "No match was found for constructor \""
+    ErrorString s;
+    
+    s << "No match was found for constructor \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMETHOD_FOUND_FOR_CONSTRUCTOR(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMETHOD_FOUND_FOR_CONSTRUCTOR(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "No match was found for constructor \""
+    ErrorString s;
+    
+    s << "No match was found for constructor \""
             << err.insert1
             << "\". However, a method with the same name was found at location "
             << err.insert2
             << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINCOMPATIBLE_TYPE_FOR_INITIALIZATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINCOMPATIBLE_TYPE_FOR_INITIALIZATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of the left-hand side (or array type) in this initialization (or array creation expression), \"";
+    ErrorString s;
+
+    s << "The type of the left-hand side (or array type) in this initialization (or array creation expression), \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", is not compatible with the type of the right-hand side expression, \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << '/';
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINCOMPATIBLE_TYPE_FOR_ASSIGNMENT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINCOMPATIBLE_TYPE_FOR_ASSIGNMENT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of the left-hand side in this assignment, \"";
+    ErrorString s;
+
+    s << "The type of the left-hand side in this assignment, \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", is not compatible with the type of the right-hand side expression, \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << '/';
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "In this conditional expression, the type of the false subexpression, \"";
+    ErrorString s;
+
+    s << "In this conditional expression, the type of the false subexpression, \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", is not compatible with the type of the true subexpression, \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << '/';
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintVOID_ARRAY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintVOID_ARRAY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Arrays of type \"void\" are not legal.";
+    ErrorString s;
+    
+    s << "Arrays of type \"void\" are not legal.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintVOID_TYPE_IN_EQUALITY_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintVOID_TYPE_IN_EQUALITY_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Subexpressions of type \"void\" may not appear in an EqualityExpression.";
+    ErrorString s;
+    
+    s << "Subexpressions of type \"void\" may not appear in an EqualityExpression.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of the left-hand side expression, \"";
+    ErrorString s;
+
+    s << "The type of the left-hand side expression, \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", is not compatible with the type of the right-hand side expression, \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << '/';
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\" (and vice-versa).";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_INSTANCEOF_CONVERSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_INSTANCEOF_CONVERSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of the left-side expression, \"";
+    ErrorString s;
+
+    s << "The type of the left-side expression, \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", cannot possibly be an instance of type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << '/';
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_CAST_CONVERSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_CAST_CONVERSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "An expression of type \""
+    ErrorString s;
+    
+    s << "An expression of type \""
             << err.insert1
             << "\" cannot be cast into type \""
             << err.insert2
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_CAST_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_CAST_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Expression found where a type is expected.";
+    ErrorString s;
+    
+    s << "Expression found where a type is expected.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_PRIMITIVE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_PRIMITIVE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of this expression, \""
+    ErrorString s;
+    
+    s << "The type of this expression, \""
             << err.insert1
             << "\", is not a primitive type.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_INTEGRAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_INTEGRAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of this expression, \""
+    ErrorString s;
+    
+    s << "The type of this expression, \""
             << err.insert1
             << "\", is not an integral type.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_NUMERIC(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_NUMERIC(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of this expression, \""
+    ErrorString s;
+    
+    s << "The type of this expression, \""
             << err.insert1
             << "\", is not numeric.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_INTEGER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_INTEGER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of this expression, \""
+    ErrorString s;
+    
+    s << "The type of this expression, \""
             << err.insert1
             << "\", cannot be promoted to \"int\" by widening conversion.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_BOOLEAN(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_BOOLEAN(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of this expression, \""
+    ErrorString s;
+    
+    s << "The type of this expression, \""
             << err.insert1
             << "\", is not boolean.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_ARRAY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_ARRAY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of this expression, \""
+    ErrorString s;
+    
+    s << "The type of this expression, \""
             << err.insert1
             << "\", is not an array type.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_REFERENCE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_REFERENCE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of this expression, \""
+    ErrorString s;
+    
+    s << "The type of this expression, \""
             << err.insert1
             << "\", is not a valid reference type in this context.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_VALID_FOR_SWITCH(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_VALID_FOR_SWITCH(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of a switch statement expression must be either \"int\", \"short\", \"char\" or \"byte\"."
+    ErrorString s;
+
+    s << "The type of a switch statement expression must be either \"int\", \"short\", \"char\" or \"byte\"."
             << " The type of this expression is \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_IS_VOID(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_IS_VOID(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "An expression of type \""
+    ErrorString s;
+    
+    s << "An expression of type \""
             << err.insert1
             << "\" is not valid in this context.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintVALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintVALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The value of this expression, "
+    ErrorString s;
+    
+    s << "The value of this expression, "
             << err.insert1
             << ", cannot be represented in the type of the switch statement expression, \""
             << err.insert2
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_CONVERTIBLE_TO_SWITCH_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_CONVERTIBLE_TO_SWITCH_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of this expression, \""
+    ErrorString s;
+    
+    s << "The type of this expression, \""
             << err.insert1
             << "\", is not assignment-convertible to the type of the switch statement expression, \""
             << err.insert2
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_CASE_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_CASE_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The value of this expression, "
+    ErrorString s;
+    
+    s << "The value of this expression, "
             << err.insert1
             << ", has already been used in this switch statement.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISPLACED_THIS_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISPLACED_THIS_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A \"this\" expression may only be used in the body of an instance method, "
+    ErrorString s;
+    
+    s << "A \"this\" expression may only be used in the body of an instance method, "
                "constructor (after the explicit constructor invocation, if any), "
                "initializer block, or in the initializer expression of an instance variable.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISPLACED_SUPER_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISPLACED_SUPER_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A \"super\" expression may only appear in the body of a class that has a super class and"
+    ErrorString s;
+    
+    s << "A \"super\" expression may only appear in the body of a class that has a super class and"
                " it must be enclosed in the body of an instance method or constructor or in the initializer"
                " of an instance variable.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFINAL_VARIABLE_TARGET_IN_LOOP(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFINAL_VARIABLE_TARGET_IN_LOOP(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Possible attempt to assign a value to a final variable \""
+    ErrorString s;
+    
+    s << "Possible attempt to assign a value to a final variable \""
             << err.insert1
             << "\""
             << ", within the body of a loop that may execute more than once.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTARGET_VARIABLE_IS_FINAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTARGET_VARIABLE_IS_FINAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Possible attempt to reassign a value to the final variable \""
+    ErrorString s;
+
+    s << "Possible attempt to reassign a value to the final variable \""
             << err.insert1
             << "\"";
     if (err.insert2)
     {
-        Coutput << ". The other assignement was at location "
+        s << ". The other assignement was at location "
                 << err.insert2;
     }
-    Coutput << '.';
+    s << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNINITIALIZED_FINAL_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNINITIALIZED_FINAL_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A final variable must be initialized.";
+    ErrorString s;
+    
+    s << "A final variable must be initialized.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNINITIALIZED_STATIC_FINAL_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNINITIALIZED_STATIC_FINAL_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A blank class final variable must be initialized in a static initializer block. "
+    ErrorString s;
+    
+    s << "A blank class final variable must be initialized in a static initializer block. "
                "We will assume that it has been initialized to avoid emitting spurious messages.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNINITIALIZED_FINAL_VARIABLE_IN_CONSTRUCTOR(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNINITIALIZED_FINAL_VARIABLE_IN_CONSTRUCTOR(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The blank final field \"this."
+    ErrorString s;
+    
+    s << "The blank final field \"this."
             << err.insert1
             << "\" is not definitely assigned a value in this constructor.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINIT_SCALAR_WITH_ARRAY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINIT_SCALAR_WITH_ARRAY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "An array initializer cannot be used to initialize a variable of type \""
+    ErrorString s;
+    
+    s << "An array initializer cannot be used to initialize a variable of type \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINIT_ARRAY_WITH_SCALAR(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINIT_ARRAY_WITH_SCALAR(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A single expression cannot be used to initialize an array variable of type \""
+    ErrorString s;
+    
+    s << "A single expression cannot be used to initialize an array variable of type \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_BYTE_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_BYTE_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A byte value must be an integer value (note that a character literal is not an integer value) in the range -128..127.";
+    ErrorString s;
+    
+    s << "A byte value must be an integer value (note that a character literal is not an integer value) in the range -128..127.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_SHORT_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_SHORT_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A short value must be an integer value (note that a character literal is not an integer value) "
+    ErrorString s;
+    
+    s << "A short value must be an integer value (note that a character literal is not an integer value) "
                "in the range -32768..32767.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_CHARACTER_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_CHARACTER_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A character literal must be a valid unicode value - i.e., a character literal enclosed in single quotes or "
+    ErrorString s;
+    
+    s << "A character literal must be a valid unicode value - i.e., a character literal enclosed in single quotes or "
                "an integer value in the range 0..65535 or an escaped 3-digit octal value in the range \\000..\\377.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_INT_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_INT_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The value of an \"int\" literal must be a decimal value in the range -2147483648..2147483647"
+    ErrorString s;
+    
+    s << "The value of an \"int\" literal must be a decimal value in the range -2147483648..2147483647"
                " or a hexadecimal or octal literal that fits in 32 bits.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_LONG_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_LONG_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The value of a long literal must be a decimal value in the range "
+    ErrorString s;
+    
+    s << "The value of a long literal must be a decimal value in the range "
                "-9223372036854775808..9223372036854775807 or a hexadecimal or octal literal that fits in 64 bits.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_FLOAT_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_FLOAT_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Invalid floating-point constant.";
+    ErrorString s;
+    
+    s << "Invalid floating-point constant.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_DOUBLE_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_DOUBLE_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Invalid double constant.";
+    ErrorString s;
+    
+    s << "Invalid double constant.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_STRING_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_STRING_VALUE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The value of this \"String\" literal is invalid. Perhaps it contains a bad escape sequence?";
+    ErrorString s;
+    
+    s << "The value of this \"String\" literal is invalid. Perhaps it contains a bad escape sequence?";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintRETURN_STATEMENT_IN_INITIALIZER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintRETURN_STATEMENT_IN_INITIALIZER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A return statement may not appear in an initializer block.";
+    ErrorString s;
+    
+    s << "A return statement may not appear in an initializer block.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISPLACED_RETURN_WITH_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISPLACED_RETURN_WITH_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A return statement with expression must be contained in a method declaration that is "
+    ErrorString s;
+    
+    s << "A return statement with expression must be contained in a method declaration that is "
                "declared to return a value.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISPLACED_RETURN_WITH_NO_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISPLACED_RETURN_WITH_NO_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A return statement with no expression may only appear in void method or a constructor.";
+    ErrorString s;
+    
+    s << "A return statement with no expression may only appear in void method or a constructor.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISMATCHED_RETURN_AND_METHOD_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISMATCHED_RETURN_AND_METHOD_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of this return expression, \"";
+    ErrorString s;
+
+    s << "The type of this return expression, \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", does not match the return type of the method, \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << '/';
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintEXPRESSION_NOT_THROWABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintEXPRESSION_NOT_THROWABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The expression in a throw statement must denote a variable or value of a reference type "
+    ErrorString s;
+    
+    s << "The expression in a throw statement must denote a variable or value of a reference type "
                "which is assignable to the type Throwable.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintBAD_THROWABLE_EXPRESSION_IN_TRY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintBAD_THROWABLE_EXPRESSION_IN_TRY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of the expression in this throw statement, \"";
+    ErrorString s;
+
+    s << "The type of the expression in this throw statement, \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", is not catchable by the enclosing try statement;";
     if (wcslen(err.insert3) > 0)
     {
-        Coutput << " nor is it assignable to an exception in the throws clause of the enclosing method or constructor \""
+        s << " nor is it assignable to an exception in the throws clause of the enclosing method or constructor \""
                 << err.insert3
                 << "\";";
     }
-    Coutput << " nor is it a subclass of RuntimeException or Error.";
+    s << " nor is it a subclass of RuntimeException or Error.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintBAD_THROWABLE_EXPRESSION_IN_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintBAD_THROWABLE_EXPRESSION_IN_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of the expression in this throw statement, \"";
+    ErrorString s;
+
+    s << "The type of the expression in this throw statement, \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", is not assignable to an exception in the throws clause of the enclosing method or constructor \""
             << err.insert3
             << "\"; nor is it a subclass of RuntimeException or Error.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintBAD_THROWABLE_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintBAD_THROWABLE_EXPRESSION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type of the expression in this throw statement, \"";
+    ErrorString s;
+
+    s << "The type of the expression in this throw statement, \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", is not a subclass of RuntimeException or Error.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISPLACED_BREAK_STATEMENT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISPLACED_BREAK_STATEMENT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A \"break\" statement must be enclosed in a \"switch\", \"while\", \"do\" or \"for\" statement.";
+    ErrorString s;
+    
+    s << "A \"break\" statement must be enclosed in a \"switch\", \"while\", \"do\" or \"for\" statement.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISPLACED_CONTINUE_STATEMENT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISPLACED_CONTINUE_STATEMENT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A \"continue\" statement must be enclosed in a \"while\", \"do\" or \"for\" statement.";
+    ErrorString s;
+    
+    s << "A \"continue\" statement must be enclosed in a \"while\", \"do\" or \"for\" statement.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISPLACED_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISPLACED_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Misplaced explicit constructor invocation.";
+    ErrorString s;
+    
+    s << "Misplaced explicit constructor invocation.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_CONTINUE_TARGET(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_CONTINUE_TARGET(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The statement labeled \""
+    ErrorString s;
+    
+    s << "The statement labeled \""
             << err.insert1
             << "\" cannot be continued since it is not a \"while\", \"do\" or \"for\" statement.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The abstract method \""
+    ErrorString s;
+    
+    s << "The abstract method \""
             << err.insert1
             << "\" is enclosed in a type, \""
             << err.insert2
             << "\", that is not abstract.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The abstract method \""
+    ErrorString s;
+
+    s << "The abstract method \""
             << err.insert1
             << "\", inherited from type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\", is not implemented in the non-abstract class \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << '/';
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD_FROM_ABSTRACT_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD_FROM_ABSTRACT_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The abstract method \""
+    ErrorString s;
+
+    s << "The abstract method \""
             << err.insert1
             << "\", inherited from type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\", is not implemented in the non-abstract class \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << '/';
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\". Since the type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" was read from a class file, it is possible that it just needs to be recompiled "
                "because after having inherited method \""
             << err.insert1
             << "\" from an interface, the method was subsequently removed from that interface.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The abstract method \""
+    ErrorString s;
+
+    s << "The abstract method \""
             << err.insert1
             << "\", belonging to the class \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" has default access."
                " Therefore, it is not inherited and hence, it cannot be implemented in the non-abstract class \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << '/';
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNO_ABSTRACT_METHOD_IMPLEMENTATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNO_ABSTRACT_METHOD_IMPLEMENTATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "No implementation of the abstract method \""
+    ErrorString s;
+
+    s << "No implementation of the abstract method \""
             << err.insert1
             << "\" declared in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" was found in class \""
             << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDUPLICATE_INTERFACE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDUPLICATE_INTERFACE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Duplicate specification of interface \"";
+    ErrorString s;
+
+    s << "Duplicate specification of interface \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" in definition of type \""
             << err.insert3
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNKNOWN_QUALIFIED_NAME_BASE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNKNOWN_QUALIFIED_NAME_BASE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "\""
+    ErrorString s;
+    
+    s << "\""
             << err.insert1
             << "\" is either a misplaced package name or a non-existent entity.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNKNOWN_AMBIGUOUS_NAME(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNKNOWN_AMBIGUOUS_NAME(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "\""
+    ErrorString s;
+    
+    s << "\""
             << err.insert1
             << "\" is either a misplaced package name or a non-existent entity. An expression name is expected in this context.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCIRCULAR_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCIRCULAR_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The class \"";
+    ErrorString s;
+
+    s << "The class \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" is circularly defined with its super type(s).";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCIRCULAR_INTERFACE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCIRCULAR_INTERFACE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The interface \"";
+    ErrorString s;
+
+    s << "The interface \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" is circularly defined with its super type(s).";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \"";
+    ErrorString s;
+
+    s << "The type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << '/';
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" with "
             << err.insert3
             << " access is not visible here.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPRIVATE_FIELD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPRIVATE_FIELD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The field \""
+    ErrorString s;
+
+    s << "The field \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" is private and not accessible here.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPROTECTED_FIELD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPROTECTED_FIELD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The field \""
+    ErrorString s;
+
+    s << "The field \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" is protected and not accessible here.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDEFAULT_FIELD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDEFAULT_FIELD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The field \""
+    ErrorString s;
+
+    s << "The field \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" has default access and is not accessible here.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPRIVATE_METHOD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPRIVATE_METHOD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Method \""
+    ErrorString s;
+
+    s << "Method \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" is private and not accessible here.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPROTECTED_METHOD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPROTECTED_METHOD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Method \""
+    ErrorString s;
+
+    s << "Method \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" is protected and not accessible here.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDEFAULT_METHOD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDEFAULT_METHOD_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Method \""
+    ErrorString s;
+
+    s << "Method \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" has default access and is not accessible here.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPRIVATE_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPRIVATE_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The constructor \""
+    ErrorString s;
+
+    s << "The constructor \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" is private. Therefore, it is not accessible here.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPROTECTED_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPROTECTED_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The constructor \""
+    ErrorString s;
+
+    s << "The constructor \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" is protected. Therefore, it is not accessible here.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDEFAULT_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDEFAULT_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The constructor \""
+    ErrorString s;
+
+    s << "The constructor \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" has default access. Therefore, it is not accessible here.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCONSTRUCTOR_DOES_NOT_THROW_THIS_EXCEPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCONSTRUCTOR_DOES_NOT_THROW_THIS_EXCEPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The constructor invoked here can throw the exception \"";
+    ErrorString s;
+
+    s << "The constructor invoked here can throw the exception \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" which is not thrown by the constructor containing this call.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCONSTRUCTOR_DOES_NOT_THROW_SUPER_EXCEPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCONSTRUCTOR_DOES_NOT_THROW_SUPER_EXCEPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A constructor associated with this ";
+    ErrorString s;
+
+    s << "A constructor associated with this ";
 
     if (wcslen(err.insert1) == 0)
-        Coutput << "anonymous type";
+        s << "anonymous type";
     else
     {
-        Coutput << "type, \""
+        s << "type, \""
                 << err.insert1
                 << "\",";
     }
 
-    Coutput << " does not throw the exception \"";
+    s << " does not throw the exception \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" thrown by its super type, \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << "/";
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPARAMETER_REDECLARED(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPARAMETER_REDECLARED(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The name of a formal parameter, \""
+    ErrorString s;
+    
+    s << "The name of a formal parameter, \""
             << err.insert1
             << "\", may not be used to declare a local variable or an exception parameter.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintBAD_ABSTRACT_METHOD_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintBAD_ABSTRACT_METHOD_MODIFIER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A method declaration that contains the keyword \"abstract\" may not also contain one of the keywords: "
+    ErrorString s;
+    
+    s << "A method declaration that contains the keyword \"abstract\" may not also contain one of the keywords: "
                "\"private\", \"static\", \"final\", \"native\" or \"synchronized\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintABSTRACT_METHOD_MODIFIER_CONFLICT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintABSTRACT_METHOD_MODIFIER_CONFLICT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "An abstract method may not also contain the keyword \""
+    ErrorString s;
+    
+    s << "An abstract method may not also contain the keyword \""
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintABSTRACT_METHOD_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintABSTRACT_METHOD_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "An abstract method, \""
+    ErrorString s;
+    
+    s << "An abstract method, \""
             << err.insert1
             << "\", cannot be invoked.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFINAL_METHOD_OVERRIDE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFINAL_METHOD_OVERRIDE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The method \""
+    ErrorString s;
+
+    s << "The method \""
             << err.insert1
             << "\" cannot override the final (or private) method \""
             << err.insert2
             << "\" declared in type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintFINAL_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintFINAL_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "In class \""
+    ErrorString s;
+
+    s << "In class \""
             << err.insert1
             << "\", the method \""
             << err.insert2
             << "\", inherited from type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\", overrides the final (or private) method \""
             << err.insert5
             << "\", inherited from type \"";
     if (NotDot(err.insert6))
     {
-        Coutput << err.insert6
+        s << err.insert6
                 << "/";
     }
-    Coutput << err.insert7
+    s << err.insert7
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPRIVATE_METHOD_OVERRIDE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPRIVATE_METHOD_OVERRIDE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The method \""
+    ErrorString s;
+
+    s << "The method \""
             << err.insert1
             << "\" is overriding the private (should be treated as final) method \""
             << err.insert2
             << "\" declared in type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintPRIVATE_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintPRIVATE_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "In class \""
+    ErrorString s;
+
+    s << "In class \""
             << err.insert1
             << "\", the method \""
             << err.insert2
             << "\", inherited from type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\", overrides the private (should be treated as final) method \""
             << err.insert5
             << "\", inherited from type \"";
     if (NotDot(err.insert6))
     {
-        Coutput << err.insert6
+        s << err.insert6
                 << "/";
     }
-    Coutput << err.insert7
+    s << err.insert7
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCLASS_METHOD_OVERRIDE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCLASS_METHOD_OVERRIDE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The instance method \""
+    ErrorString s;
+
+    s << "The instance method \""
             << err.insert1
             << "\" cannot override the static method \""
             << err.insert2
             << "\" declared in type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCLASS_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCLASS_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "In class \""
+    ErrorString s;
+
+    s << "In class \""
             << err.insert1
             << "\", the instance method \""
             << err.insert2
             << "\", inherited from type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\", cannot override the static method \""
             << err.insert5
             << "\", declared in type \"";
     if (NotDot(err.insert6))
     {
-        Coutput << err.insert6
+        s << err.insert6
                 << "/";
     }
-    Coutput << err.insert7
+    s << err.insert7
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINSTANCE_METHOD_OVERRIDE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINSTANCE_METHOD_OVERRIDE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The static method \""
+    ErrorString s;
+
+    s << "The static method \""
             << err.insert1
             << "\" cannot hide the instance method \""
             << err.insert2
             << "\" declared in \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINSTANCE_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINSTANCE_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "In class \""
+    ErrorString s;
+
+    s << "In class \""
             << err.insert1
             << "\", the static method \""
             << err.insert2
             << "\", inherited from type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\", hides the instance method \""
             << err.insert5
             << "\", declared in type \"";
     if (NotDot(err.insert6))
     {
-        Coutput << err.insert6
+        s << err.insert6
                 << "/";
     }
-    Coutput << err.insert7
+    s << err.insert7
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintBAD_ACCESS_METHOD_OVERRIDE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintBAD_ACCESS_METHOD_OVERRIDE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The method \""
+    ErrorString s;
+
+    s << "The method \""
             << err.insert1
             << "\" with "
             << err.insert2
@@ -3761,19 +4260,21 @@ void SemanticError::PrintBAD_ACCESS_METHOD_OVERRIDE(ErrorInfo &err, LexStream *l
             << " access declared in type \"";
     if (NotDot(err.insert5))
     {
-        Coutput << err.insert5
+        s << err.insert5
                 << "/";
     }
-    Coutput << err.insert6
+    s << err.insert6
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintBAD_ACCESS_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintBAD_ACCESS_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "In class \""
+    ErrorString s;
+
+    s << "In class \""
             << err.insert1
             << "\", the method \""
             << err.insert2
@@ -3782,10 +4283,10 @@ void SemanticError::PrintBAD_ACCESS_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, L
             << " access inherited from type \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << "/";
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\", cannot override the method \""
             << err.insert6
             << "\" with "
@@ -3793,38 +4294,42 @@ void SemanticError::PrintBAD_ACCESS_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &err, L
             << " access inherited from type \"";
     if (NotDot(err.insert8))
     {
-        Coutput << err.insert8
+        s << err.insert8
                 << "/";
     }
-    Coutput << err.insert9
+    s << err.insert9
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISMATCHED_OVERRIDDEN_EXCEPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISMATCHED_OVERRIDDEN_EXCEPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The exception \""
+    ErrorString s;
+
+    s << "The exception \""
             << err.insert1
             << "\" is not the same as or a subclass of any exception in the throws clause of the overridden method \""
             << err.insert2
             << "\" declared in type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintMISMATCHED_OVERRIDDEN_EXCEPTION_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintMISMATCHED_OVERRIDDEN_EXCEPTION_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "In class \""
+    ErrorString s;
+
+    s << "In class \""
             << err.insert1
             << "\", the exception \""
             << err.insert2
@@ -3833,501 +4338,569 @@ void SemanticError::PrintMISMATCHED_OVERRIDDEN_EXCEPTION_EXTERNALLY(ErrorInfo &e
             << "\" inherited from type \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << "/";
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\", is not the same as or a subclass of any exception in the throws clause of the overridden method \""
             << err.insert6
             << "\" declared in type \"";
     if (NotDot(err.insert7))
     {
-        Coutput << err.insert7
+        s << err.insert7
                 << "/";
     }
-    Coutput << err.insert8
+    s << err.insert8
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintABSTRACT_METHOD_WITH_BODY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintABSTRACT_METHOD_WITH_BODY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The declaration of the abstract or native method, \""
+    ErrorString s;
+
+    s << "The declaration of the abstract or native method, \""
             << err.insert1
             << "\", must not contain a method body.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintNON_ABSTRACT_METHOD_WITHOUT_BODY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintNON_ABSTRACT_METHOD_WITHOUT_BODY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The declaration of the non-abstract and non-native method, \""
+    ErrorString s;
+
+    s << "The declaration of the non-abstract and non-native method, \""
             << err.insert1
             << "\", must contain a method body.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSTATIC_OVERRIDE_ABSTRACT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTATIC_OVERRIDE_ABSTRACT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The static method \""
+    ErrorString s;
+
+    s << "The static method \""
             << err.insert1
             << "\" cannot hide an abstract method of the same name declared in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSTATIC_OVERRIDE_ABSTRACT_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTATIC_OVERRIDE_ABSTRACT_EXTERNALLY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "In class \""
+    ErrorString s;
+
+    s << "In class \""
             << err.insert1
             << "\", the static method \""
             << err.insert2
             << "\", inherited from type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\", cannot hide the abstract method \""
             << err.insert5
             << "\", inherited from type \"";
     if (NotDot(err.insert6))
     {
-        Coutput << err.insert6
+        s << err.insert6
                 << "/";
     }
-    Coutput << err.insert7
+    s << err.insert7
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCIRCULAR_THIS_CALL(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCIRCULAR_THIS_CALL(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The constructor \""
+    ErrorString s;
+
+    s << "The constructor \""
             << err.insert1
             << "\" may not directly or indirectly invoke itself.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINSTANCE_VARIABLE_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINSTANCE_VARIABLE_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The instance variable \""
+    ErrorString s;
+
+    s << "The instance variable \""
             << err.insert1
             << "\" declared in class \""
             << err.insert2
             << "\" is not accessible in an explicit constructor invocation.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINSTANCE_METHOD_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINSTANCE_METHOD_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The instance method \""
+    ErrorString s;
+
+    s << "The instance method \""
             << err.insert1
             << "\" declared in this class, \""
             << err.insert2
             << "\", or one of its super classes, is not accessible in an explicit constructor invocation.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSYNTHETIC_VARIABLE_ACCESS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSYNTHETIC_VARIABLE_ACCESS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Illegal attempt to access the synthetic field \""
+    ErrorString s;
+
+    s << "Illegal attempt to access the synthetic field \""
             << err.insert1
             << "\" contained in class \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSYNTHETIC_METHOD_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSYNTHETIC_METHOD_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Illegal attempt to invoke the synthetic method \""
+    ErrorString s;
+
+    s << "Illegal attempt to invoke the synthetic method \""
             << err.insert1
             << "\" contained in class \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSYNTHETIC_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSYNTHETIC_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Illegal attempt to invoke the synthetic constructor \""
+    ErrorString s;
+
+    s << "Illegal attempt to invoke the synthetic constructor \""
             << err.insert1
             << "\" from class \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTHIS_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTHIS_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The expression \""
+    ErrorString s;
+    
+    s << "The expression \""
             << err.insert1
             << "\" may not be used in an explicit constructor invocation.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSUPER_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSUPER_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The expression \""
+    ErrorString s;
+    
+    s << "The expression \""
             << err.insert1
             << "\" may not be used in an explicit constructor invocation.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINNER_CONSTRUCTOR_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINNER_CONSTRUCTOR_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The constructor for class \"";
+    ErrorString s;
+
+    s << "The constructor for class \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" is not accessible from an explicit constructor invocation in the immediately enclosing class \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintEXPRESSION_NOT_CONSTANT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintEXPRESSION_NOT_CONSTANT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "A constant expression is expected in this context.";
+    ErrorString s;
+    
+    s << "A constant expression is expected in this context.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNCATCHABLE_METHOD_THROWN_CHECKED_EXCEPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNCATCHABLE_METHOD_THROWN_CHECKED_EXCEPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The method \""
+    ErrorString s;
+
+    s << "The method \""
             << err.insert1
             << "\" can throw the checked exception \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\", but its invocation is neither enclosed in a try statement that can catch "
                "that exception nor in the body of a method or constructor that \"throws\" that exception.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNCATCHABLE_CONSTRUCTOR_THROWN_CHECKED_EXCEPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNCATCHABLE_CONSTRUCTOR_THROWN_CHECKED_EXCEPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The constructor \""
+    ErrorString s;
+
+    s << "The constructor \""
             << err.insert1
             << "\" can throw the checked exception \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\", but its invocation is neither enclosed in a try statement that can catch "
                "that exception nor in the body of a method or constructor that \"throws\" that exception.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNREACHABLE_CATCH_CLAUSE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNREACHABLE_CATCH_CLAUSE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "This catch block may be unreachable because there is no exception "
+    ErrorString s;
+
+    s << "This catch block may be unreachable because there is no exception "
                "whose type is assignable to \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" that can be thrown during execution of the body of the try block.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNREACHABLE_DEFAULT_CATCH_CLAUSE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNREACHABLE_DEFAULT_CATCH_CLAUSE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "This catch block may be unreachable because there is no exception "
+    ErrorString s;
+
+    s << "This catch block may be unreachable because there is no exception "
                "whose type is assignable to \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" that can be thrown during execution of the body of the try block."
                " However, this being a base exception class, compilation will proceed.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNREACHABLE_STATEMENT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNREACHABLE_STATEMENT(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "This statement is unreachable.";
+    ErrorString s;
+    
+    s << "This statement is unreachable.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNREACHABLE_STATEMENTS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNREACHABLE_STATEMENTS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "These statements are unreachable.";
+    ErrorString s;
+    
+    s << "These statements are unreachable.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintUNREACHABLE_CONSTRUCTOR_BODY(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintUNREACHABLE_CONSTRUCTOR_BODY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The body of this constructor is unreachable because the last initializer block "
+    ErrorString s;
+    
+    s << "The body of this constructor is unreachable because the last initializer block "
                "in this class does not complete normally.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintBLOCKED_CATCH_CLAUSE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintBLOCKED_CATCH_CLAUSE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "This catch block is unreachable: the exception \"";
+    ErrorString s;
+
+    s << "This catch block is unreachable: the exception \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" was used in a previous catch clause in this try statement at location "
             << err.insert3
             << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintVARIABLE_NOT_DEFINITELY_ASSIGNED(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintVARIABLE_NOT_DEFINITELY_ASSIGNED(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The variable \""
+    ErrorString s;
+    
+    s << "The variable \""
             << err.insert1
             << "\" may be accessed here before having been definitely assigned a value.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPED_METHOD_WITH_NO_RETURN(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPED_METHOD_WITH_NO_RETURN(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The method \""
+    ErrorString s;
+    
+    s << "The method \""
             << err.insert1
             << "\" must contain a return statement with an expression compatible with type \""
             << err.insert2
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDEFAULT_METHOD_NOT_OVERRIDDEN(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDEFAULT_METHOD_NOT_OVERRIDDEN(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Method \""
+    ErrorString s;
+
+    s << "Method \""
             << err.insert1
             << "\" in class \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" does not override the corresponding method with default access in class \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << "/";
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_IN_UNNAMED_PACKAGE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_IN_UNNAMED_PACKAGE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The file \""
+    ErrorString s;
+    
+    s << "The file \""
             << err.insert1
             << ".class\" was found in directory \""
             << err.insert2
             << "\" specified in the CLASSPATH. However, that class file specifies a type associated with the named package \""
             << err.insert3
             << "\" instead of the unnamed package.";
+
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_IN_WRONG_PACKAGE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_IN_WRONG_PACKAGE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \""
+    ErrorString s;
+
+    s << "The type \""
             << err.insert1
             << "\" was found in package \""
             << err.insert2
             << "\". However, that type is associated with ";
     if (wcslen(err.insert3) == 0)
-        Coutput << "the unnamed package";
+        s << "the unnamed package";
     else
     {
-        Coutput << "another named package, \""
+        s << "another named package, \""
                 << err.insert3
                 << "\"";
     }
-    Coutput << '.';
+    s << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NAME_MISMATCH(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NAME_MISMATCH(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The name of the type specified, \"";
+    ErrorString s;
+
+    s << "The name of the type specified, \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", does not match the name found in the class file: \""
             << err.insert3
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDEPRECATED_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDEPRECATED_TYPE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \"";
+    ErrorString s;
+
+    s << "The type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" has been deprecated.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDEPRECATED_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDEPRECATED_FIELD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The variable \""
+    ErrorString s;
+
+    s << "The variable \""
             << err.insert1
             << "\" declared in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" has been deprecated.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDEPRECATED_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDEPRECATED_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The method \""
+    ErrorString s;
+
+    s << "The method \""
             << err.insert1
             << "\" declared in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" has been deprecated.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintDEPRECATED_CONSTRUCTOR(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintDEPRECATED_CONSTRUCTOR(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The constructor \""
+    ErrorString s;
+
+    s << "The constructor \""
             << err.insert1
             << "\" declared in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" has been deprecated.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintONE_UNNAMED_PACKAGE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintONE_UNNAMED_PACKAGE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \""
+    ErrorString s;
+    
+    s << "The type \""
             << err.insert1
             << "\" was found in directory \""
             << err.insert2
@@ -4335,14 +4908,16 @@ void SemanticError::PrintONE_UNNAMED_PACKAGE(ErrorInfo &err, LexStream *lex_stre
                "one unnamed package. In a compiler that associates an unnamed package with each directory "
                "(as this compiler does with the +P option) this access would be illegal.";
 
-    return;
+    return s.Array();
 }
 
 
 
-void SemanticError::PrintCOMPRESSED_ZIP_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCOMPRESSED_ZIP_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The file "
+    ErrorString s;
+    
+    s << "The file "
             << err.insert1
             << "("
             << err.insert2
@@ -4352,125 +4927,141 @@ void SemanticError::PrintCOMPRESSED_ZIP_FILE(ErrorInfo &err, LexStream *lex_stre
             << err.insert1
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_CLASS_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_CLASS_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The class file \"";
+    ErrorString s;
+
+    s << "The class file \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << ".class\" has an invalid format.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCANNOT_OPEN_CLASS_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCANNOT_OPEN_CLASS_FILE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Unable to open file associated with type \"";
+    ErrorString s;
+
+    s << "Unable to open file associated with type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSTATIC_NOT_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTATIC_NOT_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The static class \"";
+    ErrorString s;
+
+    s << "The static class \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" is not an inner class.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintTYPE_NOT_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintTYPE_NOT_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \"";
+    ErrorString s;
+
+    s << "The type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", is not an inner class that is immediately enclosed in type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSUPER_TYPE_NOT_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSUPER_TYPE_NOT_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The super type \"";
+    ErrorString s;
+
+    s << "The super type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" of this type, \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\", is not an inner class that is immediately enclosed in type \"";
     if (NotDot(err.insert5))
     {
-        Coutput << err.insert5
+        s << err.insert5
                 << "/";
     }
-    Coutput << err.insert6
+    s << err.insert6
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSTATIC_FIELD_IN_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTATIC_FIELD_IN_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "An inner class may not contain a static field that is not final.";
+    ErrorString s;
+    
+    s << "An inner class may not contain a static field that is not final.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSTATIC_METHOD_IN_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTATIC_METHOD_IN_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Inner class may not contain static method.";
+    ErrorString s;
+    
+    s << "Inner class may not contain static method.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSTATIC_TYPE_IN_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTATIC_TYPE_IN_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The static type \""
+    ErrorString s;
+    
+    s << "The static type \""
             << err.insert1
             << "\" is enclosed in an inner class, \""
             << err.insert2
@@ -4478,194 +5069,214 @@ void SemanticError::PrintSTATIC_TYPE_IN_INNER_CLASS(ErrorInfo &err, LexStream *l
             << err.insert3
             << '.';
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSTATIC_INITIALIZER_IN_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTATIC_INITIALIZER_IN_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "This static initializer is enclosed in an inner class, \""
+    ErrorString s;
+    
+    s << "This static initializer is enclosed in an inner class, \""
             << err.insert1
             << "\", located at "
             << err.insert2
             << '.';
 
-    return;
+    return s.Array();
 }
 
 
 
-void SemanticError::PrintINNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Invalid reference in inner class \"";
+    ErrorString s;
+
+    s << "Invalid reference in inner class \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" to a non-final local variable, \""
             << err.insert3
             << "\", declared in method \""
             << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSTATIC_PROTECTED_FIELD_ACCESS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTATIC_PROTECTED_FIELD_ACCESS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The field \""
+    ErrorString s;
+
+    s << "The field \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" is a protected field contained in a different package than this one. "
                "Therefore, even though it may be accessible here as a simple name (if it is not hidden), "
                "it is not accessible via a field access.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintSTATIC_PROTECTED_METHOD_ACCESS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTATIC_PROTECTED_METHOD_ACCESS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The method \""
+    ErrorString s;
+
+    s << "The method \""
             << err.insert1
             << "\" in type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << '/';
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" is a protected method contained in a different package than this one. "
                "Therefore, even though it may be accessible here as a simple name (if it is not hidden), "
                "it is not accessible via a field access.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Ambiguous reference to field \""
+    ErrorString s;
+
+    s << "Ambiguous reference to field \""
             << err.insert1
             << "\" declared in (or inherited from) type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" but also declared in the enclosing method \""
             << err.insert4
             << "\". Explicit qualification is required.";
 
-    return;
+    return s.Array();
 }
 
-void SemanticError::PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Ambiguous reference to member named \""
+    ErrorString s;
+
+    s << "Ambiguous reference to member named \""
             << err.insert1
             << "\" inherited from type \"";
     if (NotDot(err.insert2))
     {
-        Coutput << err.insert2
+        s << err.insert2
                 << "/";
     }
-    Coutput << err.insert3
+    s << err.insert3
             << "\" but also declared or inherited in the enclosing type \"";
     if (NotDot(err.insert4))
     {
-        Coutput << err.insert4
+        s << err.insert4
                 << "/";
     }
-    Coutput << err.insert5
+    s << err.insert5
             << "\". Explicit qualification is required.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintILLEGAL_THIS_FIELD_ACCESS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintILLEGAL_THIS_FIELD_ACCESS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The type \"";
+    ErrorString s;
+
+    s << "The type \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\" is either not an outer type of type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\" or it is not accessible because this expression appears in a static region.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "An instance of \"";
+    ErrorString s;
+
+    s << "An instance of \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << StringConstant::US__DO
             << StringConstant::US_this
             << "\" is not accessible from an explicit constructor invocation.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "An instance of \"";
+    ErrorString s;
+
+    s << "An instance of \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << StringConstant::US__DO
             << StringConstant::US_this
             << "\" is not accessible here because it would have to cross a static region in the intervening type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintENCLOSING_INSTANCE_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintENCLOSING_INSTANCE_NOT_ACCESSIBLE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "An instance of \"";
+    ErrorString s;
+
+    s << "An instance of \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << StringConstant::US__DO
             << StringConstant::US_this
             << "\" is not accessible here"
@@ -4673,66 +5284,76 @@ void SemanticError::PrintENCLOSING_INSTANCE_NOT_ACCESSIBLE(ErrorInfo &err, LexSt
                "constructor (after the explicit constructor invocation, if any), "
                "initializer block, or in the initializer expression of an instance variable.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintZERO_DIVIDE_ERROR(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintZERO_DIVIDE_ERROR(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Attempt to divide by zero.";
+    ErrorString s;
+    
+    s << "Attempt to divide by zero.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintZERO_DIVIDE_CAUTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintZERO_DIVIDE_CAUTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Attempt to divide by zero.";
+    ErrorString s;
+    
+    s << "Attempt to divide by zero.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintVOID_TO_STRING(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintVOID_TO_STRING(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "Attempt to convert an expression of type void into a String.";
+    ErrorString s;
+    
+    s << "Attempt to convert an expression of type void into a String.";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintINVALID_ENCLOSING_INSTANCE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintINVALID_ENCLOSING_INSTANCE(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "The super type of this type, \"";
+    ErrorString s;
+
+    s << "The super type of this type, \"";
     if (NotDot(err.insert1))
     {
-        Coutput << err.insert1
+        s << err.insert1
                 << "/";
     }
-    Coutput << err.insert2
+    s << err.insert2
             << "\", is immediately enclosed in type \"";
     if (NotDot(err.insert3))
     {
-        Coutput << err.insert3
+        s << err.insert3
                 << "/";
     }
-    Coutput << err.insert4
+    s << err.insert4
             << "\" which does not match the type of this primary expression, \"";
     if (NotDot(err.insert5))
     {
-        Coutput << err.insert5
+        s << err.insert5
                 << "/";
     }
-    Coutput << err.insert6
+    s << err.insert6
             << "\".";
 
-    return;
+    return s.Array();
 }
 
 
-void SemanticError::PrintCONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintCONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
-    Coutput << "An anonymous class cannot have a constructor.";
+    ErrorString s;
+    
+    s << "An anonymous class cannot have a constructor.";
 
-    return;
+    return s.Array();
 }

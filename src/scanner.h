@@ -1,4 +1,4 @@
-// $Id: scanner.h,v 1.4 1999/06/22 19:17:31 shields Exp $
+// $Id: scanner.h,v 1.7 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,17 +10,23 @@
 #ifndef scanner_INCLUDED
 #define scanner_INCLUDED
 
-#include "config.h"
-#include <limits.h>
-#include <iostream.h>
-#include <string.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <time.h>
+#include "platform.h"
 #include "code.h"
 #include "javadef.h"
 #include "javasym.h"
 #include "stream.h"
+
+#ifdef HAVE_CTYPE_H
+#include <ctype.h>
+#endif
+
+#ifdef HAVE_TIME_H
+#include <time.h>
+#endif
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class Control;
 class FileSymbol;
@@ -120,7 +126,9 @@ private:
     void ClassifyNonAsciiUnicode();
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
 
-
+#endif
 

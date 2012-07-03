@@ -1,4 +1,4 @@
-// $Id: access.h,v 1.7 1999/07/06 13:49:15 shields Exp $
+// $Id: access.h,v 1.11 2000/07/25 11:32:31 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,7 +11,12 @@
 #ifndef access_INCLUDED
 #define access_INCLUDED
 
-#include "config.h"
+#include "platform.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
+
 
 class AccessFlags
 {
@@ -70,7 +75,7 @@ public:
     AccessFlags() : access_flags(0) {}
     AccessFlags(u2& _access_flags) : access_flags(_access_flags) {}
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     void Print()
     {
         Coutput << " access_flags: ";
@@ -92,6 +97,9 @@ public:
 #endif
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
 
+#endif
 

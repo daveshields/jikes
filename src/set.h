@@ -1,4 +1,4 @@
-// $Id: set.h,v 1.8 1999/10/09 15:38:33 shields Exp $
+// $Id: set.h,v 1.11 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,9 +10,13 @@
 #ifndef set_INCLUDED
 #define set_INCLUDED
 
-#include "config.h"
+#include "platform.h"
 #include "assert.h"
 #include "symbol.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class ShadowSymbol
 {
@@ -668,5 +672,10 @@ public:
                                            false_set(set_size)
     {}
 };
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif
 

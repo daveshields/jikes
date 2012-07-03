@@ -1,4 +1,4 @@
-// $Id: ast.h,v 1.18 1999/10/19 23:13:34 shields Exp $
+// $Id: ast.h,v 1.23 2000/07/25 11:32:31 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,13 +11,15 @@
 #ifndef ast_INCLUDED
 #define ast_INCLUDED
 
-#include "config.h"
-#include <assert.h>
-#include <string.h>
-#include <stdlib.h>
+#include "platform.h"
 #include "stream.h"
 #include "symbol.h"
 #include "set.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
+
 
 class Parser;
 class SemanticEnvironment;
@@ -145,7 +147,7 @@ public:
 //    destructor that can delete its subtrees. Therefore, a user can dispose of
 //    a whole ast tree (or subtree) by simply deleting the root node.
 //
-//    When the preprocessor variable TEST is defined the user may print out
+//    When the preprocessor variable JIKES_DEBUG is defined the user may print out
 //    an AST tree to standard output by calling the virtual function "Print"
 //    for the root node of the tree.
 //
@@ -365,7 +367,7 @@ public:
         _num_kinds
     };
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     typedef AstKind Kind;
     typedef AstTag  Tag;
 #else
@@ -379,7 +381,7 @@ public:
                      // is associated with a construct in a source file or that is was generated
                      // by the compiler. See functions "gen_ ..." and "new_ ..." below.
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     unsigned id;
     static unsigned count;
     static bool debug_unparse;
@@ -390,7 +392,7 @@ public:
 
     virtual ~Ast();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -661,7 +663,7 @@ public:
         Ast::kind = Ast::LIST_NODE;
         Ast::class_tag = Ast::NO_TAG;
         Ast::generated = 0;
-#ifdef TEST
+#ifdef JIKES_DEBUG
         --count; // don't count these nodes
 #endif
     }
@@ -814,7 +816,7 @@ public:
 
     inline void TransferLocallyDefinedVariablesTo(AstSwitchBlockStatement *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -850,7 +852,7 @@ public:
 
     virtual ~AstPrimitiveType();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -881,7 +883,7 @@ public:
 
     virtual ~AstBrackets();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -930,7 +932,7 @@ public:
     inline void AllocateBrackets(int estimate = 0);
     inline void AddBrackets(AstBrackets *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -972,7 +974,7 @@ public:
 
     virtual ~AstSimpleName();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1002,7 +1004,7 @@ public:
 
     virtual ~AstPackageDeclaration();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1033,7 +1035,7 @@ public:
 
     virtual ~AstImportDeclaration();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1086,7 +1088,7 @@ public:
     inline void AllocateTypeDeclarations(int estimate = 0);
     inline void AddTypeDeclaration(Ast *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(LexStream &, char * directory); // special form
     virtual void Unparse(Ostream &, LexStream &);
@@ -1143,7 +1145,7 @@ public:
 
     virtual ~AstModifier();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1172,7 +1174,7 @@ public:
 
     virtual ~AstEmptyDeclaration();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1288,7 +1290,7 @@ public:
     inline void AllocateEmptyDeclarations(int estimate = 0);
     inline void AddEmptyDeclaration(AstEmptyDeclaration *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1364,7 +1366,7 @@ public:
     inline void AllocateInterfaces(int estimate = 0);
     inline void AddInterface(AstExpression *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1411,7 +1413,7 @@ public:
     inline void AllocateVariableInitializers(int estimate = 0);
     inline void AddVariableInitializer(Ast *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1452,7 +1454,7 @@ public:
     inline void AllocateBrackets(int estimate = 0);
     inline void AddBrackets(AstBrackets *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1489,7 +1491,7 @@ public:
 
     virtual ~AstVariableDeclarator();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1546,7 +1548,7 @@ public:
     inline void AllocateVariableDeclarators(int estimate = 0);
     inline void AddVariableDeclarator(AstVariableDeclarator *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1590,7 +1592,7 @@ public:
     inline void AllocateParameterModifiers(int estimate = 0);
     inline void AddParameterModifier(AstModifier *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1642,7 +1644,7 @@ public:
     inline void AllocateFormalParameters(int estimate = 0);
     inline void AddFormalParameter(AstFormalParameter *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1707,7 +1709,7 @@ public:
     inline void AllocateThrows(int estimate = 0);
     inline void AddThrow(AstExpression *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1739,7 +1741,7 @@ public:
 
     virtual ~AstStaticInitializer();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1798,7 +1800,7 @@ public:
     inline void AllocateLocalArguments(int estimate = 0);
     inline void AddLocalArgument(AstExpression *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1862,7 +1864,7 @@ public:
     inline void AddNullArgument() { add_null_argument = true; }
     inline bool NeedsExtraNullArgument() { return add_null_argument; }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1921,7 +1923,7 @@ public:
     inline void AllocateLocalInitStatements(int estimate = 0);
     inline void AddLocalInitStatement(AstStatement *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -1971,7 +1973,7 @@ public:
     inline void AllocateThrows(int estimate = 0);
     inline void AddThrow(AstExpression *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2095,7 +2097,7 @@ public:
     inline void AllocateEmptyDeclarations(int estimate = 0);
     inline void AddEmptyDeclaration(AstEmptyDeclaration *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2146,7 +2148,7 @@ public:
     inline void AllocateVariableDeclarators(int estimate = 0);
     inline void AddVariableDeclarator(AstVariableDeclarator *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2208,7 +2210,7 @@ public:
 
     virtual ~AstIfStatement();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2248,7 +2250,7 @@ public:
 
     virtual ~AstEmptyStatement();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2285,7 +2287,7 @@ public:
 
     virtual ~AstExpressionStatement();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2326,7 +2328,7 @@ public:
 
     virtual ~AstCaseLabel();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2356,7 +2358,7 @@ public:
 
     virtual ~AstDefaultLabel();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2380,7 +2382,7 @@ private:
     AstArray<Ast *> *switch_labels;
     VariableSymbolArray *locally_defined_variables;
 
-    friend AstBlock;
+    friend class AstBlock;
 
 public:
     AstSwitchBlockStatement(StoragePool *pool_) : pool(pool_),
@@ -2408,7 +2410,7 @@ public:
     inline VariableSymbol *&LocallyDefinedVariable(int i) { return (*locally_defined_variables)[i]; }
     inline int NumLocallyDefinedVariables() { return (locally_defined_variables ? locally_defined_variables -> Length() : 0); }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2470,7 +2472,7 @@ public:
 
     void SortCases();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2508,7 +2510,7 @@ public:
 
     virtual ~AstWhileStatement();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2548,7 +2550,7 @@ public:
 
     virtual ~AstDoStatement();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2607,7 +2609,7 @@ public:
     inline void AllocateForUpdateStatements(int estimate = 0);
     inline void AddForUpdateStatement(AstExpressionStatement *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2646,7 +2648,7 @@ public:
 
     virtual ~AstBreakStatement();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2684,7 +2686,7 @@ public:
 
     virtual ~AstContinueStatement();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2722,7 +2724,7 @@ public:
 
     virtual ~AstReturnStatement();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2760,7 +2762,7 @@ public:
 
     virtual ~AstThrowStatement();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2798,7 +2800,7 @@ public:
 
     virtual ~AstSynchronizedStatement();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2834,7 +2836,7 @@ public:
 
     virtual ~AstCatchClause();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2864,7 +2866,7 @@ public:
 
     virtual ~AstFinallyClause();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2908,7 +2910,7 @@ public:
     inline void AllocateCatchClauses(int estimate = 0);
     inline void AddCatchClause(AstCatchClause *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -2977,7 +2979,7 @@ public:
 
     virtual ~AstIntegerLiteral();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3008,7 +3010,7 @@ public:
 
     virtual ~AstLongLiteral();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3039,7 +3041,7 @@ public:
 
     virtual ~AstFloatingPointLiteral();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3069,7 +3071,7 @@ public:
 
     virtual ~AstDoubleLiteral();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3099,7 +3101,7 @@ public:
 
     virtual ~AstTrueLiteral();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3129,7 +3131,7 @@ public:
 
     virtual ~AstFalseLiteral();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3159,7 +3161,7 @@ public:
 
     virtual ~AstStringLiteral();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3189,7 +3191,7 @@ public:
 
     virtual ~AstCharacterLiteral();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3219,7 +3221,7 @@ public:
 
     virtual ~AstNullLiteral();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3249,7 +3251,7 @@ public:
 
     virtual ~AstThisExpression();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3280,7 +3282,7 @@ public:
 
     virtual ~AstSuperExpression();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3313,7 +3315,7 @@ public:
 
     virtual ~AstParenthesizedExpression();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3344,7 +3346,7 @@ public:
 
     virtual ~AstTypeExpression();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3409,7 +3411,7 @@ public:
     inline void AddNullArgument() { add_null_argument = true; }
     inline bool NeedsExtraNullArgument() { return add_null_argument; }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3443,7 +3445,7 @@ public:
 
     virtual ~AstDimExpr();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3494,7 +3496,7 @@ public:
     inline void AllocateDimExprs(int estimate = 0);
     inline void AddDimExpr(AstDimExpr *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3571,7 +3573,7 @@ public:
     bool IsSuperAccess() { return field_access_tag == SUPER_TAG; }
     bool IsClassAccess() { return field_access_tag == CLASS_TAG; }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3629,7 +3631,7 @@ public:
     inline void AllocateArguments(int estimate = 0);
     inline void AddArgument(AstExpression *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3663,7 +3665,7 @@ public:
 
     virtual ~AstArrayAccess();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3721,7 +3723,7 @@ public:
 
     virtual ~AstPostUnaryExpression();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3779,7 +3781,7 @@ public:
 
     virtual ~AstPreUnaryExpression();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3830,7 +3832,7 @@ public:
     inline void AllocateBrackets(int estimate = 0);
     inline void AddBrackets(AstBrackets *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3908,7 +3910,7 @@ public:
 
     virtual ~AstBinaryExpression();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -3943,7 +3945,7 @@ public:
 
     virtual ~AstConditionalExpression();
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -4026,7 +4028,7 @@ public:
 
     inline bool SimpleAssignment() { return (assignment_tag == SIMPLE_EQUAL || assignment_tag == DEFINITE_EQUAL); }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     virtual void Print(LexStream &);
     virtual void Unparse(Ostream &, LexStream &);
 #endif
@@ -6096,5 +6098,9 @@ template <class T>
         base = NULL;
     }
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
 
 #endif
+

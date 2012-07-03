@@ -1,4 +1,4 @@
-// $Id: error.h,v 1.32 2000/01/06 08:24:30 lord Exp $
+// $Id: error.h,v 1.37 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,19 +10,87 @@
 #ifndef error_INCLUDED
 #define error_INCLUDED
 
-#include "config.h"
+#include "platform.h"
 #include "stream.h"
 #include "tuple.h"
+#include "jikesapi.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class Control;
 class LexStream;
 class Ast_CompilationUnit;
 class SymbolSet;
 class Semantic;
+class SemanticError;
+
+class ErrorInfo : public JikesError
+{
+    friend class SemanticError;
+    
+ public:
+    
+    virtual const wchar_t *getErrorMessage();
+    virtual const wchar_t *getErrorReport();
+
+    virtual JikesErrorSeverity getSeverity();
+    virtual const char *getFileName();
+
+    virtual int getLeftLineNo      ();
+    virtual int getLeftColumnNo    ();
+    virtual int getRightLineNo     ();
+    virtual int getRightColumnNo   ();
+
+    ErrorInfo();
+    virtual ~ErrorInfo();
+
+ protected:
+
+ private:
+    int left_line_no    ;
+    int left_column_no  ;
+    int right_line_no   ;
+    int right_column_no ;
+    
+    LexStream::TokenIndex left_token;
+    LexStream::TokenIndex right_token;
+    
+    wchar_t *insert1,
+        *insert2,
+        *insert3,
+        *insert4,
+        *insert5,
+        *insert6,
+        *insert7,
+        *insert8,
+        *insert9;
+
+    wchar_t  *msg;
+    unsigned num;
+    short    msg_code;
+    short    right_string_length;
+    JikesErrorSeverity severity;
+
+    static bool emacs_style_report;
+    LexStream *lex_stream;
+
+    wchar_t *regularErrorString ();
+    wchar_t *emacsErrorString   ();
+
+    void PrintLargeSource(ErrorString &s);
+    void PrintSmallSource(ErrorString &s);
+
+    void Initialize(LexStream *, wchar_t *, JikesErrorSeverity);
+};
 
 class SemanticError
 {
-public:
+    friend class ErrorInfo ;
+    friend class JikesAPI  ;
+
+ public:
     enum SemanticErrorKind
     {
         BAD_ERROR,
@@ -109,6 +177,7 @@ public:
         DUPLICATE_CONSTRUCTOR,
         MISMATCHED_INHERITED_METHOD,
         MISMATCHED_INHERITED_METHOD_EXTERNALLY,
+        MISMATCHED_INHERITED_METHODS_IN_BASE,
         DUPLICATE_FORMAL_PARAMETER,
         MISMATCHED_CONSTRUCTOR_NAME,
         METHOD_WITH_CONSTRUCTOR_NAME,
@@ -336,316 +405,300 @@ public:
 private:
     friend class Semantic;
 
+    void reportError(int k);
+
     Control &control;
     LexStream *lex_stream;
 
     int clone_count;
 
-    struct ErrorInfo
-    {
-        LexStream::TokenIndex left_token,
-                              right_token;
-        wchar_t *insert1,
-                *insert2,
-                *insert3,
-                *insert4,
-                *insert5,
-                *insert6,
-                *insert7,
-                *insert8,
-                *insert9;
-        unsigned num;
-        short    msg_code;
-        short    right_string_length;
-    };
-
     Tuple<wchar_t *> buffer;
     Tuple<ErrorInfo> error;
 
-    void PrintLargeSource(int);
-    void PrintSmallSource(int);
-
-    void PrintEmacsMessage(int);
-
     static unsigned char warning[];
-    static void (*print_message[_num_kinds])(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *(*print_message[_num_kinds])(ErrorInfo &, LexStream *, Control &);
 
-    static bool NotDot(wchar_t *str) { return (! (wcslen(str) == 0 || wcscmp(str, StringConstant::US__DO) == 0)); }
+    static bool NotDot(wchar_t *str)
+        {
+            return str ?
+                (! (wcslen(str) == 0 || wcscmp(str, StringConstant::US__DO) == 0)) :
+                false;
+        }
 
-    static void PrintBAD_ERROR(ErrorInfo &, LexStream *, Control &);
-    static void PrintDEFAULT_ERROR(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_OPTION(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_K_OPTION(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_K_TARGET(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_TAB_VALUE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_DIRECTORY(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNSUPPORTED_ENCODING(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNSUPPORTED_OPTION(ErrorInfo &, LexStream *, Control &);
-    static void PrintDISABLED_OPTION(ErrorInfo &, LexStream *, Control &);
-    static void PrintNO_CURRENT_DIRECTORY(ErrorInfo &, LexStream *, Control &);
-    static void PrintCANNOT_OPEN_ZIP_FILE(ErrorInfo &, LexStream *, Control &);
-    static void PrintCANNOT_OPEN_PATH_DIRECTORY(ErrorInfo &, LexStream *, Control &);
-    static void PrintPACKAGE_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
-    static void PrintCANNOT_OPEN_DIRECTORY(ErrorInfo &, LexStream *, Control &);
-    static void PrintBAD_INPUT_FILE(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNREADABLE_INPUT_FILE(ErrorInfo &, LexStream *, Control &);
-    static void PrintNON_STANDARD_LIBRARY_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintLIBRARY_METHOD_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
-    static void PrintCANNOT_REOPEN_FILE(ErrorInfo &, LexStream *, Control &);
-    static void PrintCANNOT_WRITE_FILE(ErrorInfo &, LexStream *, Control &);
-    static void PrintCONSTANT_POOL_OVERFLOW(ErrorInfo &, LexStream *, Control &);
-    static void PrintINTERFACES_OVERFLOW(ErrorInfo &, LexStream *, Control &);
-    static void PrintMETHODS_OVERFLOW(ErrorInfo &, LexStream *, Control &);
-    static void PrintSTRING_OVERFLOW(ErrorInfo &, LexStream *, Control &);
-    static void PrintPARAMETER_OVERFLOW(ErrorInfo &, LexStream *, Control &);
-    static void PrintARRAY_OVERFLOW(ErrorInfo &, LexStream *, Control &);
-    static void PrintFIELDS_OVERFLOW(ErrorInfo &, LexStream *, Control &);
-    static void PrintLOCAL_VARIABLES_OVERFLOW(ErrorInfo &, LexStream *, Control &);
-    static void PrintSTACK_OVERFLOW(ErrorInfo &, LexStream *, Control &);
-    static void PrintCODE_OVERFLOW(ErrorInfo &, LexStream *, Control &);
-    static void PrintCANNOT_COMPUTE_COLUMNS(ErrorInfo &, LexStream *, Control &);
-
-    static void PrintEMPTY_DECLARATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintREDUNDANT_ABSTRACT(ErrorInfo &, LexStream *, Control &);
-    static void PrintREDUNDANT_FINAL(ErrorInfo &, LexStream *, Control &);
-    static void PrintREDUNDANT_PUBLIC(ErrorInfo &, LexStream *, Control &);
-    static void PrintREDUNDANT_STATIC(ErrorInfo &, LexStream *, Control &);
-    static void PrintOBSOLESCENT_ABSTRACT(ErrorInfo &, LexStream *, Control &);
-    static void PrintOBSOLESCENT_BRACKETS(ErrorInfo &, LexStream *, Control &);
-    static void PrintNO_TYPES(ErrorInfo &, LexStream *, Control &);
-    static void PrintMULTIPLE_PUBLIC_TYPES(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_IN_MULTIPLE_FILES(ErrorInfo &, LexStream *, Control &);
-    static void PrintPACKAGE_TYPE_CONFLICT(ErrorInfo &, LexStream *, Control &);
-    static void PrintDIRECTORY_FILE_CONFLICT(ErrorInfo &, LexStream *, Control &);
-    static void PrintFILE_FILE_CONFLICT(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISMATCHED_TYPE_AND_FILE_NAMES(ErrorInfo &, LexStream *, Control &);
-    static void PrintREFERENCE_TO_TYPE_IN_MISMATCHED_FILE(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_INNER_TYPE_NAME(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_TYPE_DECLARATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNNECESSARY_TYPE_IMPORT(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_ACCESS_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintFINAL_ABSTRACT_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintVOLATILE_FINAL(ErrorInfo &, LexStream *, Control &);
-    static void PrintFINAL_VOLATILE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_TOP_LEVEL_CLASS_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_INNER_CLASS_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_STATIC_INNER_CLASS_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_LOCAL_CLASS_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_INTERFACE_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_FIELD_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_LOCAL_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_METHOD_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_SIGNATURE_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_CONSTRUCTOR_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_CONSTANT_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNINITIALIZED_FIELD(ErrorInfo &, LexStream *, Control &);
-    static void PrintPARENT_TYPE_IN_UNNAMED_PACKAGE(ErrorInfo &, LexStream *, Control &);
-    static void PrintRECOMPILATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_ON_DEMAND_IMPORT(ErrorInfo &, LexStream *, Control &);
-    static void PrintNOT_A_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintNOT_A_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintNOT_AN_INTERFACE(ErrorInfo &, LexStream *, Control &);
-    static void PrintSUPER_IS_FINAL(ErrorInfo &, LexStream *, Control &);
-    static void PrintOBJECT_WITH_SUPER_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintOBJECT_HAS_NO_SUPER_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_FIELD(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_METHOD(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_CONSTRUCTOR(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISMATCHED_INHERITED_METHOD(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISMATCHED_INHERITED_METHOD_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_FORMAL_PARAMETER(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISMATCHED_CONSTRUCTOR_NAME(ErrorInfo &, LexStream *, Control &);
-    static void PrintMETHOD_WITH_CONSTRUCTOR_NAME(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_LOCAL_VARIABLE_DECLARATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_LOCAL_TYPE_DECLARATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintMULTIPLE_DEFAULT_LABEL(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNDECLARED_LABEL(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_LABEL(ErrorInfo &, LexStream *, Control &);
-    static void PrintCATCH_PRIMITIVE_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintCATCH_ARRAY_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintAMBIGUOUS_FIELD(ErrorInfo &, LexStream *, Control &);
-    static void PrintAMBIGUOUS_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintFIELD_IS_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintFIELD_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
-    static void PrintFIELD_NAME_MISSPELLED(ErrorInfo &, LexStream *, Control &);
-    static void PrintFIELD_WITH_PRIVATE_ACCESS_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintFIELD_WITH_DEFAULT_ACCESS_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintNAME_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
-    static void PrintMETHOD_NOT_FIELD(ErrorInfo &, LexStream *, Control &);
-    static void PrintNAME_NOT_YET_AVAILABLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintNAME_NOT_VARIABLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintNAME_NOT_CLASS_VARIABLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintNOT_A_NUMERIC_VARIABLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintMETHOD_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
-    static void PrintMETHOD_NAME_NOT_FOUND_IN_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintMETHOD_NAME_MISSPELLED(ErrorInfo &, LexStream *, Control &);
-    static void PrintMETHOD_WITH_PRIVATE_ACCESS_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintMETHOD_WITH_DEFAULT_ACCESS_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintHIDDEN_METHOD_IN_ENCLOSING_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintFIELD_NOT_METHOD(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_METHOD(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_FIELD(ErrorInfo &, LexStream *, Control &);
-    static void PrintMETHOD_NOT_CLASS_METHOD(ErrorInfo &, LexStream *, Control &);
-    static void PrintAMBIGUOUS_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintAMBIGUOUS_METHOD_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintCONSTRUCTOR_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
-    static void PrintMETHOD_FOUND_FOR_CONSTRUCTOR(ErrorInfo &, LexStream *, Control &);
-    static void PrintABSTRACT_TYPE_CREATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_INSTANCEOF_CONVERSION(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_CAST_CONVERSION(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_CAST_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINCOMPATIBLE_TYPE_FOR_INITIALIZATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintINCOMPATIBLE_TYPE_FOR_ASSIGNMENT(ErrorInfo &, LexStream *, Control &);
-    static void PrintINCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION(ErrorInfo &, LexStream *, Control &);
-    static void PrintINCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION(ErrorInfo &, LexStream *, Control &);
-    static void PrintVOID_ARRAY(ErrorInfo &, LexStream *, Control &);
-    static void PrintVOID_TYPE_IN_EQUALITY_EXPRESSION(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_THROWABLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_PRIMITIVE(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_INTEGRAL(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_NUMERIC(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_INTEGER(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_BOOLEAN(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_ARRAY(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_REFERENCE(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_VALID_FOR_SWITCH(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_IS_VOID(ErrorInfo &, LexStream *, Control &);
-    static void PrintVALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_CONVERTIBLE_TO_SWITCH_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_CASE_VALUE(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISPLACED_THIS_EXPRESSION(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISPLACED_SUPER_EXPRESSION(ErrorInfo &, LexStream *, Control &);
-    static void PrintTARGET_VARIABLE_IS_FINAL(ErrorInfo &, LexStream *, Control &);
-    static void PrintFINAL_VARIABLE_TARGET_IN_LOOP(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNINITIALIZED_FINAL_VARIABLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNINITIALIZED_STATIC_FINAL_VARIABLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNINITIALIZED_FINAL_VARIABLE_IN_CONSTRUCTOR(ErrorInfo &, LexStream *, Control &);
-    static void PrintINIT_SCALAR_WITH_ARRAY(ErrorInfo &, LexStream *, Control &);
-    static void PrintINIT_ARRAY_WITH_SCALAR(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_BYTE_VALUE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_SHORT_VALUE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_CHARACTER_VALUE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_INT_VALUE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_LONG_VALUE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_FLOAT_VALUE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_DOUBLE_VALUE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_STRING_VALUE(ErrorInfo &, LexStream *, Control &);
-    static void PrintRETURN_STATEMENT_IN_INITIALIZER(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISPLACED_RETURN_WITH_EXPRESSION(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISPLACED_RETURN_WITH_NO_EXPRESSION(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISMATCHED_RETURN_AND_METHOD_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintEXPRESSION_NOT_THROWABLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintBAD_THROWABLE_EXPRESSION_IN_TRY(ErrorInfo &, LexStream *, Control &);
-    static void PrintBAD_THROWABLE_EXPRESSION_IN_METHOD(ErrorInfo &, LexStream *, Control &);
-    static void PrintBAD_THROWABLE_EXPRESSION(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISPLACED_BREAK_STATEMENT(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISPLACED_CONTINUE_STATEMENT(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISPLACED_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_CONTINUE_TARGET(ErrorInfo &, LexStream *, Control &);
-    static void PrintNON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD(ErrorInfo &, LexStream *, Control &);
-    static void PrintNON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD(ErrorInfo &, LexStream *, Control &);
-    static void PrintNON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD_FROM_ABSTRACT_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintNON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD(ErrorInfo &, LexStream *, Control &);
-    static void PrintNO_ABSTRACT_METHOD_IMPLEMENTATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintDUPLICATE_INTERFACE(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNKNOWN_QUALIFIED_NAME_BASE(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNKNOWN_AMBIGUOUS_NAME(ErrorInfo &, LexStream *, Control &);
-    static void PrintCIRCULAR_INTERFACE(ErrorInfo &, LexStream *, Control &);
-    static void PrintCIRCULAR_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintPRIVATE_FIELD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintPROTECTED_FIELD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintDEFAULT_FIELD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintPRIVATE_METHOD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintPROTECTED_METHOD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintDEFAULT_METHOD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintPRIVATE_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintPROTECTED_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintDEFAULT_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintCONSTRUCTOR_DOES_NOT_THROW_THIS_EXCEPTION(ErrorInfo &, LexStream *, Control &);
-    static void PrintCONSTRUCTOR_DOES_NOT_THROW_SUPER_EXCEPTION(ErrorInfo &, LexStream *, Control &);
-    static void PrintPARAMETER_REDECLARED(ErrorInfo &, LexStream *, Control &);
-    static void PrintBAD_ABSTRACT_METHOD_MODIFIER(ErrorInfo &, LexStream *, Control &);
-    static void PrintABSTRACT_METHOD_MODIFIER_CONFLICT(ErrorInfo &, LexStream *, Control &);
-    static void PrintABSTRACT_METHOD_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintFINAL_METHOD_OVERRIDE(ErrorInfo &, LexStream *, Control &);
-    static void PrintFINAL_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
-    static void PrintPRIVATE_METHOD_OVERRIDE(ErrorInfo &, LexStream *, Control &);
-    static void PrintPRIVATE_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
-    static void PrintINSTANCE_METHOD_OVERRIDE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINSTANCE_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
-    static void PrintCLASS_METHOD_OVERRIDE(ErrorInfo &, LexStream *, Control &);
-    static void PrintCLASS_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISMATCHED_OVERRIDDEN_EXCEPTION(ErrorInfo &, LexStream *, Control &);
-    static void PrintMISMATCHED_OVERRIDDEN_EXCEPTION_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
-    static void PrintABSTRACT_METHOD_WITH_BODY(ErrorInfo &, LexStream *, Control &);
-    static void PrintNON_ABSTRACT_METHOD_WITHOUT_BODY(ErrorInfo &, LexStream *, Control &);
-    static void PrintBAD_ACCESS_METHOD_OVERRIDE(ErrorInfo &, LexStream *, Control &);
-    static void PrintBAD_ACCESS_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
-    static void PrintSTATIC_OVERRIDE_ABSTRACT(ErrorInfo &, LexStream *, Control &);
-    static void PrintSTATIC_OVERRIDE_ABSTRACT_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
-    static void PrintCIRCULAR_THIS_CALL(ErrorInfo &, LexStream *, Control &);
-    static void PrintINSTANCE_VARIABLE_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintINSTANCE_METHOD_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintSYNTHETIC_VARIABLE_ACCESS(ErrorInfo &, LexStream *, Control &);
-    static void PrintSYNTHETIC_METHOD_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintSYNTHETIC_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintTHIS_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintSUPER_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintINNER_CONSTRUCTOR_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintEXPRESSION_NOT_CONSTANT(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNCATCHABLE_METHOD_THROWN_CHECKED_EXCEPTION(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNCATCHABLE_CONSTRUCTOR_THROWN_CHECKED_EXCEPTION(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNREACHABLE_CATCH_CLAUSE(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNREACHABLE_DEFAULT_CATCH_CLAUSE(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNREACHABLE_STATEMENT(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNREACHABLE_STATEMENTS(ErrorInfo &, LexStream *, Control &);
-    static void PrintUNREACHABLE_CONSTRUCTOR_BODY(ErrorInfo &, LexStream *, Control &);
-    static void PrintBLOCKED_CATCH_CLAUSE(ErrorInfo &, LexStream *, Control &);
-    static void PrintVARIABLE_NOT_DEFINITELY_ASSIGNED(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPED_METHOD_WITH_NO_RETURN(ErrorInfo &, LexStream *, Control &);
-
-    static void PrintDEFAULT_METHOD_NOT_OVERRIDDEN(ErrorInfo &, LexStream *, Control &);
-
-    static void PrintONE_UNNAMED_PACKAGE(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_IN_UNNAMED_PACKAGE(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_IN_WRONG_PACKAGE(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NAME_MISMATCH(ErrorInfo &, LexStream *, Control &);
-
-    static void PrintDEPRECATED_TYPE(ErrorInfo &, LexStream *, Control &);
-    static void PrintDEPRECATED_FIELD(ErrorInfo &, LexStream *, Control &);
-    static void PrintDEPRECATED_METHOD(ErrorInfo &, LexStream *, Control &);
-    static void PrintDEPRECATED_CONSTRUCTOR(ErrorInfo &, LexStream *, Control &);
-
-    static void PrintCOMPRESSED_ZIP_FILE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_CLASS_FILE(ErrorInfo &, LexStream *, Control &);
-    static void PrintCANNOT_OPEN_CLASS_FILE(ErrorInfo &, LexStream *, Control &);
-
-    static void PrintSTATIC_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintTYPE_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintSUPER_TYPE_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintSTATIC_FIELD_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintSTATIC_METHOD_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintSTATIC_TYPE_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintSTATIC_INITIALIZER_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintINNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintSTATIC_PROTECTED_FIELD_ACCESS(ErrorInfo &, LexStream *, Control &);
-    static void PrintSTATIC_PROTECTED_METHOD_ACCESS(ErrorInfo &, LexStream *, Control &);
-    static void PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL(ErrorInfo &, LexStream *, Control &);
-    static void PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER(ErrorInfo &, LexStream *, Control &);
-    static void PrintILLEGAL_THIS_FIELD_ACCESS(ErrorInfo &, LexStream *, Control &);
-    static void PrintCONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS(ErrorInfo &, LexStream *, Control &);
-    static void PrintENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
-    static void PrintENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION(ErrorInfo &, LexStream *, Control &);
-    static void PrintENCLOSING_INSTANCE_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
-    static void PrintINVALID_ENCLOSING_INSTANCE(ErrorInfo &, LexStream *, Control &);
-    static void PrintZERO_DIVIDE_ERROR(ErrorInfo &, LexStream *, Control &);
-    static void PrintZERO_DIVIDE_CAUTION(ErrorInfo &, LexStream *, Control &);
-    static void PrintVOID_TO_STRING(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintBAD_ERROR(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDEFAULT_ERROR(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_OPTION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_K_OPTION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_K_TARGET(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_TAB_VALUE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_DIRECTORY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNSUPPORTED_ENCODING(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNSUPPORTED_OPTION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDISABLED_OPTION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNO_CURRENT_DIRECTORY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCANNOT_OPEN_ZIP_FILE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCANNOT_OPEN_PATH_DIRECTORY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPACKAGE_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCANNOT_OPEN_DIRECTORY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintBAD_INPUT_FILE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNREADABLE_INPUT_FILE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNON_STANDARD_LIBRARY_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintLIBRARY_METHOD_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCANNOT_REOPEN_FILE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCANNOT_WRITE_FILE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCONSTANT_POOL_OVERFLOW(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINTERFACES_OVERFLOW(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMETHODS_OVERFLOW(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTRING_OVERFLOW(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPARAMETER_OVERFLOW(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintARRAY_OVERFLOW(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFIELDS_OVERFLOW(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintLOCAL_VARIABLES_OVERFLOW(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTACK_OVERFLOW(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCODE_OVERFLOW(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCANNOT_COMPUTE_COLUMNS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintEMPTY_DECLARATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintREDUNDANT_ABSTRACT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintREDUNDANT_FINAL(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintREDUNDANT_PUBLIC(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintREDUNDANT_STATIC(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintOBSOLESCENT_ABSTRACT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintOBSOLESCENT_BRACKETS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNO_TYPES(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMULTIPLE_PUBLIC_TYPES(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_IN_MULTIPLE_FILES(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPACKAGE_TYPE_CONFLICT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDIRECTORY_FILE_CONFLICT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFILE_FILE_CONFLICT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISMATCHED_TYPE_AND_FILE_NAMES(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintREFERENCE_TO_TYPE_IN_MISMATCHED_FILE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_INNER_TYPE_NAME(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_TYPE_DECLARATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNNECESSARY_TYPE_IMPORT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_ACCESS_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFINAL_ABSTRACT_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintVOLATILE_FINAL(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFINAL_VOLATILE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_TOP_LEVEL_CLASS_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_INNER_CLASS_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_STATIC_INNER_CLASS_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_LOCAL_CLASS_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_INTERFACE_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_FIELD_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_LOCAL_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_METHOD_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_SIGNATURE_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_CONSTRUCTOR_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_CONSTANT_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNINITIALIZED_FIELD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPARENT_TYPE_IN_UNNAMED_PACKAGE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintRECOMPILATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_ON_DEMAND_IMPORT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNOT_A_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNOT_A_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNOT_AN_INTERFACE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSUPER_IS_FINAL(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintOBJECT_WITH_SUPER_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintOBJECT_HAS_NO_SUPER_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_FIELD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_METHOD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_CONSTRUCTOR(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISMATCHED_INHERITED_METHOD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISMATCHED_INHERITED_METHOD_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISMATCHED_INHERITED_METHODS_IN_BASE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_FORMAL_PARAMETER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISMATCHED_CONSTRUCTOR_NAME(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMETHOD_WITH_CONSTRUCTOR_NAME(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_LOCAL_VARIABLE_DECLARATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_LOCAL_TYPE_DECLARATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMULTIPLE_DEFAULT_LABEL(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNDECLARED_LABEL(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_LABEL(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCATCH_PRIMITIVE_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCATCH_ARRAY_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintAMBIGUOUS_FIELD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintAMBIGUOUS_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFIELD_IS_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFIELD_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFIELD_NAME_MISSPELLED(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFIELD_WITH_PRIVATE_ACCESS_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFIELD_WITH_DEFAULT_ACCESS_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNAME_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMETHOD_NOT_FIELD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNAME_NOT_YET_AVAILABLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNAME_NOT_VARIABLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNAME_NOT_CLASS_VARIABLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNOT_A_NUMERIC_VARIABLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMETHOD_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMETHOD_NAME_NOT_FOUND_IN_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMETHOD_NAME_MISSPELLED(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMETHOD_WITH_PRIVATE_ACCESS_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMETHOD_WITH_DEFAULT_ACCESS_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintHIDDEN_METHOD_IN_ENCLOSING_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFIELD_NOT_METHOD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_METHOD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_FIELD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMETHOD_NOT_CLASS_METHOD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintAMBIGUOUS_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintAMBIGUOUS_METHOD_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCONSTRUCTOR_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMETHOD_FOUND_FOR_CONSTRUCTOR(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintABSTRACT_TYPE_CREATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_INSTANCEOF_CONVERSION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_CAST_CONVERSION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_CAST_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINCOMPATIBLE_TYPE_FOR_INITIALIZATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINCOMPATIBLE_TYPE_FOR_ASSIGNMENT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintVOID_ARRAY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintVOID_TYPE_IN_EQUALITY_EXPRESSION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_THROWABLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_PRIMITIVE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_INTEGRAL(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_NUMERIC(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_INTEGER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_BOOLEAN(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_ARRAY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_REFERENCE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_VALID_FOR_SWITCH(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_IS_VOID(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintVALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_CONVERTIBLE_TO_SWITCH_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_CASE_VALUE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISPLACED_THIS_EXPRESSION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISPLACED_SUPER_EXPRESSION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTARGET_VARIABLE_IS_FINAL(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFINAL_VARIABLE_TARGET_IN_LOOP(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNINITIALIZED_FINAL_VARIABLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNINITIALIZED_STATIC_FINAL_VARIABLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNINITIALIZED_FINAL_VARIABLE_IN_CONSTRUCTOR(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINIT_SCALAR_WITH_ARRAY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINIT_ARRAY_WITH_SCALAR(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_BYTE_VALUE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_SHORT_VALUE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_CHARACTER_VALUE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_INT_VALUE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_LONG_VALUE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_FLOAT_VALUE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_DOUBLE_VALUE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_STRING_VALUE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintRETURN_STATEMENT_IN_INITIALIZER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISPLACED_RETURN_WITH_EXPRESSION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISPLACED_RETURN_WITH_NO_EXPRESSION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISMATCHED_RETURN_AND_METHOD_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintEXPRESSION_NOT_THROWABLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintBAD_THROWABLE_EXPRESSION_IN_TRY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintBAD_THROWABLE_EXPRESSION_IN_METHOD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintBAD_THROWABLE_EXPRESSION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISPLACED_BREAK_STATEMENT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISPLACED_CONTINUE_STATEMENT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISPLACED_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_CONTINUE_TARGET(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD_FROM_ABSTRACT_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNO_ABSTRACT_METHOD_IMPLEMENTATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_INTERFACE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNKNOWN_QUALIFIED_NAME_BASE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNKNOWN_AMBIGUOUS_NAME(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCIRCULAR_INTERFACE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCIRCULAR_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPRIVATE_FIELD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPROTECTED_FIELD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDEFAULT_FIELD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPRIVATE_METHOD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPROTECTED_METHOD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDEFAULT_METHOD_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPRIVATE_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPROTECTED_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDEFAULT_CONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCONSTRUCTOR_DOES_NOT_THROW_THIS_EXCEPTION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCONSTRUCTOR_DOES_NOT_THROW_SUPER_EXCEPTION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPARAMETER_REDECLARED(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintBAD_ABSTRACT_METHOD_MODIFIER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintABSTRACT_METHOD_MODIFIER_CONFLICT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintABSTRACT_METHOD_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFINAL_METHOD_OVERRIDE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintFINAL_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPRIVATE_METHOD_OVERRIDE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPRIVATE_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINSTANCE_METHOD_OVERRIDE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINSTANCE_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCLASS_METHOD_OVERRIDE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCLASS_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISMATCHED_OVERRIDDEN_EXCEPTION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISMATCHED_OVERRIDDEN_EXCEPTION_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintABSTRACT_METHOD_WITH_BODY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintNON_ABSTRACT_METHOD_WITHOUT_BODY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintBAD_ACCESS_METHOD_OVERRIDE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintBAD_ACCESS_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTATIC_OVERRIDE_ABSTRACT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTATIC_OVERRIDE_ABSTRACT_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCIRCULAR_THIS_CALL(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINSTANCE_VARIABLE_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINSTANCE_METHOD_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSYNTHETIC_VARIABLE_ACCESS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSYNTHETIC_METHOD_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSYNTHETIC_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTHIS_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSUPER_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINNER_CONSTRUCTOR_IN_EXPLICIT_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintEXPRESSION_NOT_CONSTANT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNCATCHABLE_METHOD_THROWN_CHECKED_EXCEPTION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNCATCHABLE_CONSTRUCTOR_THROWN_CHECKED_EXCEPTION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNREACHABLE_CATCH_CLAUSE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNREACHABLE_DEFAULT_CATCH_CLAUSE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNREACHABLE_STATEMENT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNREACHABLE_STATEMENTS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNREACHABLE_CONSTRUCTOR_BODY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintBLOCKED_CATCH_CLAUSE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintVARIABLE_NOT_DEFINITELY_ASSIGNED(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPED_METHOD_WITH_NO_RETURN(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDEFAULT_METHOD_NOT_OVERRIDDEN(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintONE_UNNAMED_PACKAGE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_IN_UNNAMED_PACKAGE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_IN_WRONG_PACKAGE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NAME_MISMATCH(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDEPRECATED_TYPE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDEPRECATED_FIELD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDEPRECATED_METHOD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDEPRECATED_CONSTRUCTOR(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCOMPRESSED_ZIP_FILE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_CLASS_FILE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCANNOT_OPEN_CLASS_FILE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTATIC_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintTYPE_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSUPER_TYPE_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTATIC_FIELD_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTATIC_METHOD_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTATIC_TYPE_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTATIC_INITIALIZER_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTATIC_PROTECTED_FIELD_ACCESS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTATIC_PROTECTED_METHOD_ACCESS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintILLEGAL_THIS_FIELD_ACCESS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintENCLOSING_INSTANCE_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINVALID_ENCLOSING_INSTANCE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintZERO_DIVIDE_ERROR(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintZERO_DIVIDE_CAUTION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintVOID_TO_STRING(ErrorInfo &, LexStream *, Control &);
 
     void SortMessages();
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif
+

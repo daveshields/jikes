@@ -1,4 +1,4 @@
-// $Id: getclass.h,v 1.4 1999/08/26 15:34:08 shields Exp $
+// $Id: getclass.h,v 1.8 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,10 +10,14 @@
 #ifndef getclass_INCLUDED
 #define getclass_INCLUDED
 
-#include "config.h"
+#include "platform.h"
 #include "semantic.h"
 #include "long.h"
 #include "double.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class Cp_Info
 {
@@ -33,69 +37,69 @@ public:
         CONSTANT_Utf8               = 1
     };
 
-    static u1 Tag(char *buffer) { return (u1) *buffer; }
+    static u1 Tag(const char *buffer) { return (u1) *buffer; }
 };
 
 class Constant_Utf8_info : public Cp_Info
 {
 public:
-    static u2 Length(char *buffer) { return Semantic::GetU2(buffer + 1); } // skip tag
-    static char *Bytes(char *buffer) { return buffer + 3; } // skip tag and length
+    static u2 Length(const char *buffer) { return Semantic::GetU2(buffer + 1); } // skip tag
+    static const char *Bytes(const char *buffer) { return buffer + 3; } // skip tag and length
 };
 
 
 class Constant_Class_info : public Cp_Info
 {
 public:
-    static u2 NameIndex(char *buffer) { return Semantic::GetU2(buffer + 1); }
+    static u2 NameIndex(const char *buffer) { return Semantic::GetU2(buffer + 1); }
 };
 
 
 class Constant_Fieldref_info : public Cp_Info
 {
 public:
-    static u2 ClassIndex(char *buffer) { return Semantic::GetU2(buffer + 1); }
-    static u2 NameAndTypeIndex(char *buffer) { return Semantic::GetU2(buffer + 3); }
+    static u2 ClassIndex(const char *buffer) { return Semantic::GetU2(buffer + 1); }
+    static u2 NameAndTypeIndex(const char *buffer) { return Semantic::GetU2(buffer + 3); }
 };
 
 
 class Constant_Methodref_info : public Cp_Info
 {
 public:
-    static u2 ClassIndex(char *buffer) { return Semantic::GetU2(buffer + 1); }
-    static u2 NameAndTypeIndex(char *buffer) { return Semantic::GetU2(buffer + 3); }
+    static u2 ClassIndex(const char *buffer) { return Semantic::GetU2(buffer + 1); }
+    static u2 NameAndTypeIndex(const char *buffer) { return Semantic::GetU2(buffer + 3); }
 };
 
 
 class Constant_InterfaceMethodref_info : public Cp_Info
 {
 public:
-    static u2 ClassIndex(char *buffer) { return Semantic::GetU2(buffer + 1); }
-    static u2 NameAndTypeIndex(char *buffer) { return Semantic::GetU2(buffer + 3); }
+    static u2 ClassIndex(const char *buffer) { return Semantic::GetU2(buffer + 1); }
+    static u2 NameAndTypeIndex(const char *buffer) { return Semantic::GetU2(buffer + 3); }
 };
 
 
 class Constant_NameAndType_info : public Cp_Info
 {
 public:
-    static u2 NameIndex(char *buffer) { return Semantic::GetU2(buffer + 1); }
-    static u2 DescriptorIndex(char *buffer) { return Semantic::GetU2(buffer + 3); }
+    static u2 NameIndex(const char *buffer) { return Semantic::GetU2(buffer + 1); }
+    static u2 DescriptorIndex(const char *buffer) { return Semantic::GetU2(buffer + 3); }
 };
 
 
 class Constant_String_info : public Cp_Info
 {
 public:
-    static u2 StringIndex(char *buffer) { return Semantic::GetU2(buffer + 1); }
+    static u2 StringIndex(const char *buffer) { return Semantic::GetU2(buffer + 1); }
 };
 
 
 class Constant_Integer_info : public Cp_Info
 {
 public:
-    static u4 Bytes(char *buffer) { return Semantic::GetU4(buffer + 1); }
+    static u4 Bytes(const char *buffer) { return Semantic::GetU4(buffer + 1); }
 
-    static int Value(char *buffer)
+    static int Value(const char *buffer)
     {
         union field
         {
@@ -111,9 +115,9 @@ public:
 class Constant_Float_info : public Cp_Info
 {
 public:
-    static u4 Bytes(char *buffer) { return Semantic::GetU4(buffer + 1); }
+    static u4 Bytes(const char *buffer) { return Semantic::GetU4(buffer + 1); }
 
-    static IEEEfloat Value(char *buffer)
+    static IEEEfloat Value(const char *buffer)
     {
         return IEEEfloat(Semantic::GetU4(buffer+1));
     }
@@ -123,10 +127,10 @@ public:
 class Constant_Long_info : public Cp_Info
 {
 public:
-    static u4 HighBytes(char *buffer) { return Semantic::GetU4(buffer + 1); }
-    static u4 LowBytes(char *buffer) { return Semantic::GetU4(buffer + 5); }
+    static u4 HighBytes(const char *buffer) { return Semantic::GetU4(buffer + 1); }
+    static u4 LowBytes(const char *buffer) { return Semantic::GetU4(buffer + 5); }
 
-    static LongInt Value(char *buffer)
+    static LongInt Value(const char *buffer)
     {
         return LongInt(HighBytes(buffer), LowBytes(buffer));
     }
@@ -136,12 +140,18 @@ public:
 class Constant_Double_info : public Cp_Info
 {
 public:
-    static u4 HighBytes(char *buffer) { return Semantic::GetU4(buffer + 1); }
-    static u4 LowBytes(char *buffer) { return Semantic::GetU4(buffer + 5); }
+    static u4 HighBytes(const char *buffer) { return Semantic::GetU4(buffer + 1); }
+    static u4 LowBytes(const char *buffer) { return Semantic::GetU4(buffer + 5); }
 
-    static IEEEdouble Value(char *buffer)
+    static IEEEdouble Value(const char *buffer)
     {
         return IEEEdouble(HighBytes(buffer), LowBytes(buffer));
     }
 };
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif
+

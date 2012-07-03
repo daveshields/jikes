@@ -1,5 +1,9 @@
 #include "code.h"
 
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
+
 char Code::code[39424] =
 {
     //

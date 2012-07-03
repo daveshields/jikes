@@ -1,4 +1,4 @@
-// $Id: control.cpp,v 1.28 1999/11/18 03:37:22 shields Exp $
+// $Id: control.cpp,v 1.36 2000/07/25 11:32:32 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,8 +7,6 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <sys/stat.h>
 #include "control.h"
 #include "scanner.h"
 #include "parser.h"
@@ -17,8 +15,11 @@
 #include "bytecode.h"
 #include "case.h"
 
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
-Control::Control(ArgumentExpander &arguments, Option &option_) : return_code(0),
+Control::Control(char **arguments, Option &option_) : return_code(0),
                                                                  option(option_),
                                                                  dot_classpath_index(0),
                                                                  system_table(NULL),
@@ -35,7 +36,7 @@ Control::Control(ArgumentExpander &arguments, Option &option_) : return_code(0),
                                                                  float_pool(&bad_value),
                                                                  double_pool(&bad_value),
                                                                  Utf8_pool(&bad_value),
-#ifdef TEST
+#ifdef JIKES_DEBUG
                                                                  input_files_processed(0),
                                                                  class_files_read(0),
                                                                  class_files_written(0),
@@ -537,9 +538,7 @@ Control::Control(ArgumentExpander &arguments, Option &option_) : return_code(0),
 
     delete main_file_clone; // delete the clone of the main source file...
 
-#ifdef NO_LEAKS
     delete [] input_files;
-#endif
 
     return;
 }
@@ -547,7 +546,6 @@ Control::Control(ArgumentExpander &arguments, Option &option_) : return_code(0),
 
 Control::~Control()
 {
-#ifdef NO_LEAKS
     for (int i = 0; i < bad_zip_filenames.Length(); i++)
         delete [] bad_zip_filenames[i];
 
@@ -563,9 +561,9 @@ Control::~Control()
     delete scanner;
     delete parser;
     delete system_semantic;
-#endif
+    delete system_table;
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     if (option.debug_dump_lex || option.debug_dump_ast || option.debug_unparse_ast)
     {
         Coutput << line_count << " source lines read\n\n"
@@ -653,7 +651,7 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
 
         DirectorySymbol *directory_symbol = NULL;
         struct stat status;
-        if ((::SystemStat(input_name, &status) == 0) && (status.st_mode & STAT_S_IFDIR))
+        if ((::SystemStat(input_name, &status) == 0) && (status.st_mode & JIKES_STAT_S_IFDIR))
             directory_symbol = system_table -> FindDirectorySymbol(status.st_dev, status.st_ino);
 
         if (! directory_symbol)
@@ -760,20 +758,20 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
 
                     char *current_directory = option.GetMainCurrentDirectory();
                     int prefix_length = strlen(current_directory);
-                    int start = (prefix_length <= length &&
+                    int start = (prefix_length <= (int) length &&
                                  Case::StringSegmentEqual(current_directory, full_directory_name, prefix_length) &&
                                  (full_directory_name[prefix_length] == U_SLASH || full_directory_name[prefix_length] == U_NULL)
                                                 ? prefix_length + 1
                                                 : 0);
 
-                    if (start > length)
+                    if (start > (int) length)
                          name_length = 0;
-                    else if (start <= length) // note that we can assert that (start != length)
+                    else if (start <= (int) length) // note that we can assert that (start != length)
                     {
                         delete [] name;
                         name_length = length - start;
                         name = new wchar_t[name_length + 1];
-                        for (int k = 0, i = start; i < length; i++, k++)
+                        for (int k = 0, i = start; i < (int) length; i++, k++)
                             name[k] = full_directory_name[i];
                         name[name_length] = U_NULL;
                     }
@@ -860,7 +858,7 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
 #endif
 
 
-void Control::ProcessNewInputFiles(SymbolSet &file_set, ArgumentExpander &arguments, int first_index)
+void Control::ProcessNewInputFiles(SymbolSet &file_set, char **arguments, int first_index)
 {
     for (int i = 0; i < bad_input_filenames.Length(); i++)
         delete [] bad_input_filenames[i];
@@ -873,37 +871,43 @@ void Control::ProcessNewInputFiles(SymbolSet &file_set, ArgumentExpander &argume
     //
     // Process all file names specified in command line
     //
-    for (int j = first_index; j < arguments.argc; j++)
+    if(arguments)
     {
-        char *file_name = arguments.argv[j];
-        int file_name_length = strlen(file_name);
-
-        wchar_t *name = new wchar_t[file_name_length + 1];
-        for (int i = 0; i < file_name_length; i++)
-            name[i] = (file_name[i] != U_BACKSLASH ? file_name[i] : (wchar_t) U_SLASH); // change backslash to forward slash.
-        name[file_name_length] = U_NULL;
-
-        //
-        // File must be of the form xxx.java where xxx is a
-        // character string consisting of at least one character.
-        //
-        if (file_name_length < FileSymbol::java_suffix_length ||
-            (! FileSymbol::IsJavaSuffix(&file_name[file_name_length - FileSymbol::java_suffix_length])))
-            bad_input_filenames.Next() = name;
-        else
+        int j=0;
+        while(arguments[j])
         {
-            FileSymbol *file_symbol = FindOrInsertJavaInputFile(name, file_name_length - FileSymbol::java_suffix_length);
+            char *file_name = arguments[j++];
+            int file_name_length = strlen(file_name);
 
-            if (! file_symbol)
-                unreadable_input_filenames.Next() = name;
+            wchar_t *name = new wchar_t[file_name_length + 1];
+            for(int i = 0; i < file_name_length; i++)
+                name[i] = (file_name[i] != U_BACKSLASH ? file_name[i] : (wchar_t) U_SLASH); // change backslash to forward slash.
+            name[file_name_length] = U_NULL;
+            
+            //
+            // File must be of the form xxx.java where xxx is a
+            // character string consisting of at least one character.
+            //
+            if (file_name_length < FileSymbol::java_suffix_length ||
+                (! FileSymbol::IsJavaSuffix(&file_name[file_name_length - FileSymbol::java_suffix_length])))
+            {
+                bad_input_filenames.Next() = name;
+            }
             else
             {
-                delete [] name;
-                file_set.AddElement(file_symbol);
+                FileSymbol *file_symbol = FindOrInsertJavaInputFile(name, file_name_length - FileSymbol::java_suffix_length);
+                
+                if (! file_symbol)
+                    unreadable_input_filenames.Next() = name;
+                else
+                {
+                    delete [] name;
+                    file_set.AddElement(file_symbol);
+                }
             }
         }
     }
-
+    
     return;
 }
 
@@ -1354,7 +1358,7 @@ void Control::CleanUp(FileSymbol *file_symbol)
 
     if (sem)
     {
-#ifdef TEST
+#ifdef JIKES_DEBUG
         if (option.debug_dump_lex)
         {
             sem -> lex_stream -> Reset(); // rewind input and ...

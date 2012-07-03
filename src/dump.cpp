@@ -1,4 +1,4 @@
-// $Id: dump.cpp,v 1.7 1999/10/09 16:34:07 shields Exp $
+// $Id: dump.cpp,v 1.11 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,14 +7,23 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#ifdef TEST
+#ifdef JIKES_DEBUG
 
-#include "config.h"
+#include "platform.h"
 #include "javasym.h"
 #include "control.h"
 #include "stream.h"
+
+/*
+//FIXME: need to readdress this include stuff
 #include <iostream.h>
 #include <stdio.h>
+*/
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
+
 
 static char*
       TK_notoken_STRING      = "TK_notoken",

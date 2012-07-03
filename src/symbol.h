@@ -1,4 +1,4 @@
-// $Id: symbol.h,v 1.31 1999/11/18 03:37:23 shields Exp $
+// $Id: symbol.h,v 1.37 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,13 +10,7 @@
 #ifndef symbol_INCLUDED
 #define symbol_INCLUDED
 
-#include "config.h"
-#include <assert.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <string.h>
+#include "platform.h"
 #include "code.h"
 #include "stream.h"
 #include "option.h"
@@ -25,6 +19,10 @@
 #include "access.h"
 #include "tuple.h"
 #include "case.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class Semantic;
 class SemanticEnvironment;
@@ -213,7 +211,7 @@ public:
     virtual ~FileSymbol()
     {
         delete [] file_name;
-        delete buffer;
+        if (buffer) delete buffer;
         delete lex_stream;
     }
 
@@ -526,7 +524,7 @@ public:
     {
         return (*throws_signatures)[i];
     }
-    void AddThrowsSignature(char *signature_, int length)
+    void AddThrowsSignature(const char *signature_, int length)
     {
         char *signature = new char[length + 1];
         strncpy(signature, signature_, length);
@@ -1014,7 +1012,7 @@ public:
     {
         return (*nested_type_signatures)[i];
     }
-    void AddNestedTypeSignature(char *signature_, int length)
+    void AddNestedTypeSignature(const char *signature_, int length)
     {
         char *signature = new char[length + 1];
         strncpy(signature, signature_, length);
@@ -1062,7 +1060,7 @@ private:
     // The fields hash_address and next_type are used in the class TypeLookupTable
     // to contruct a mapping from each fully_qualified name into the type that it defines.
     //
-    friend TypeLookupTable;
+    friend class TypeLookupTable;
     unsigned hash_address;
     TypeSymbol *next_type;
 
@@ -1256,7 +1254,7 @@ public:
         return type_;
     }
 
-    void SetSignatureString(char *signature_, int length)
+    void SetSignatureString(const char *signature_, int length)
     {
         signature_string = new char[length + 1];
         strncpy(signature_string, signature_, length);
@@ -2309,4 +2307,9 @@ inline SymbolTable *BlockSymbol::Table()
     }
 #endif
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif // ifndef symbol_INCLUDED
+

@@ -1,27 +1,43 @@
 The files in this directory and its contained subdirectories
-collectively comprise the distribution of the IBM Jikes
-Compiler, http://ibm.com/developerworks/opensource.
+collectively comprise the distribution of the IBM Jikes Compiler,
+http://oss.software.ibm.com/developerworks/opensource/jikes/project/index.html
 
-This distribution is covered by the 
- IBM Public License Version Version 1.0 - Jikes
-contained in the file license.htm.  You must accept the terms 
-of the license agreement to use this software.
+This distribution is covered by the "IBM Public License Version
+Version 1.0 - Jikes" contained in the file license.htm.  You must
+accept the terms of the license agreement to use this software.
 
-Documentation files provided include:
+This software is OSI Certified Open Source Software.
+OSI Certified is a certification mark of the Open Source Initiative.
+
+See the ChangeLog for file revision history.
+
+For instructions on how to build and install jikes, see
+the INSTALL file.
+
+Documentation files provided in 'doc' directory include:
 
 jikes.html: the Jikes FAQ (Frequently Asked Questions).
 
 news.html: news of developements since the move to IBM's
 developerWorks site in September 1999.
 
-news_v1.html: news of developments since the release of 
-the source in December 1998 to September 1999, when the work
-was moved from IBM Research to IBM's developerWorks site.
-
 jikes.1: the man page.
+
+contrib.html: names of contributors, including the Jikes Project Core
+Team.
 
 jikes.spec: "spec" file for use with RPM (Red Hat Package Manager).
 
-contrib.html: names of contributors, including the Jikes Project Core Team.
+Complete program source is provided in the 'src' subdirectory.
 
-ChangeLog: revision history.
+However, note that some of the files are machine-generated.
+Any changes that require edits to the file src/java.g will also
+require you to obtain a copy of the Jikes Parser Generator (jikespg).
+
+http://oss.software.ibm.com/developerworks/opensource/jikes/project/pub/index.html
+
+If you have further questions, you can consult the archives of the
+Jikes mailing lists, or subscribe to the Jikes list and then seek
+help. See this URL for info on how to sign up for the mailing lists.
+http://oss.software.ibm.com/developerworks/opensource/jikes/project/subscribe.html
+

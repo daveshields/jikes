@@ -1,4 +1,4 @@
-// $Id: getclass.cpp,v 1.16 1999/11/03 00:46:31 shields Exp $
+// $Id: getclass.cpp,v 1.22 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,26 +7,30 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <sys/stat.h>
+
+#include "getclass.h"
 #include "control.h"
 #include "semantic.h"
 #include "access.h"
-#include "getclass.h"
 #include "zip.h"
+#include "jikesapi.h"
 
-inline u1 Semantic::GetU1(char *buffer)
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
+
+inline u1 Semantic::GetU1(const char *buffer)
 {
     return *buffer;
 }
 
-inline u2 Semantic::GetU2(char *buffer)
+inline u2 Semantic::GetU2(const char *buffer)
 {
     u2 i = (u1) *buffer++;
     return (i << 8) + (u1) *buffer;
 }
 
-inline u4 Semantic::GetU4(char *buffer)
+inline u4 Semantic::GetU4(const char *buffer)
 {
     u4 i = (u1) *buffer++;
     i = (i << 8) + (u1) *buffer++;
@@ -34,18 +38,18 @@ inline u4 Semantic::GetU4(char *buffer)
     return (i << 8) + (u1) *buffer;
 }
 
-inline u1 Semantic::GetAndSkipU1(char *&buffer)
+inline u1 Semantic::GetAndSkipU1(const char *&buffer)
 {
     return (u1) *buffer++;
 }
 
-inline u2 Semantic::GetAndSkipU2(char *&buffer)
+inline u2 Semantic::GetAndSkipU2(const char *&buffer)
 {
     u2 i = (u1) *buffer++;
     return (i << 8) + (u1) *buffer++;
 }
 
-inline u4 Semantic::GetAndSkipU4(char *&buffer)
+inline u4 Semantic::GetAndSkipU4(const char *&buffer)
 {
     u4 i = (u1) *buffer++;
     i = (i << 8) + (u1) *buffer++;
@@ -53,7 +57,7 @@ inline u4 Semantic::GetAndSkipU4(char *&buffer)
     return (i << 8) + (u1) *buffer++;
 }
 
-inline void Semantic::Skip(char *&buffer, int n)
+inline void Semantic::Skip(const char *&buffer, int n)
 {
     buffer += n;
 }
@@ -119,7 +123,7 @@ TypeSymbol *Semantic::RetrieveNestedTypes(TypeSymbol *base_type, wchar_t *signat
 }
 
 
-TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type, char *utf8_signature, int length, LexStream::TokenIndex tok)
+TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type, const char *utf8_signature, int length, LexStream::TokenIndex tok)
 {
     TypeSymbol *type = control.type_table.FindType(utf8_signature, length);
 
@@ -245,7 +249,7 @@ TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type, char *utf8_si
 }
 
 
-TypeSymbol *Semantic::ProcessSignature(TypeSymbol *base_type, char *signature, LexStream::TokenIndex tok)
+TypeSymbol *Semantic::ProcessSignature(TypeSymbol *base_type, const char *signature, LexStream::TokenIndex tok)
 {
     TypeSymbol *type;
     int num_dimensions = 0;
@@ -279,7 +283,7 @@ TypeSymbol *Semantic::ProcessSignature(TypeSymbol *base_type, char *signature, L
                  // The signature is of the form: "L<filename>;" - So, +1 to skip the 'L'
                  // ReadTypeFromSignature considers a semicolon to be a terminator.
                  //
-                 char *str = ++signature;
+                 const char *str = ++signature;
                  while (*str != U_SEMICOLON)
                      str++;
                  type = ReadTypeFromSignature(base_type, signature, str - signature, tok);
@@ -305,21 +309,21 @@ TypeSymbol *Semantic::ProcessSignature(TypeSymbol *base_type, char *signature, L
 
 inline TypeSymbol *Semantic::GetClassPool(TypeSymbol *base_type,
                                           TypeSymbol **class_pool,
-                                          char **constant_pool,
+                                          const char **constant_pool,
                                           int index,
                                           LexStream::TokenIndex tok)
 {
     if (! class_pool[index])
     {
         u2 name_index = Constant_Class_info::NameIndex(constant_pool[index]);
-        char *str = Constant_Utf8_info::Bytes(constant_pool[name_index]);
+        const char *str = Constant_Utf8_info::Bytes(constant_pool[name_index]);
 
         if (*str == U_LEFT_BRACKET)
             class_pool[index] = ProcessSignature(base_type, str, tok);
         else
         {
             u2 length = Constant_Utf8_info::Length(constant_pool[name_index]);
-            char *p;
+            const char *p;
             for (p = &str[length - 1]; Code::IsDigit(*p); p--)
                 ;
             if (*p != U_DOLLAR) // not an anonymous class
@@ -333,7 +337,7 @@ inline TypeSymbol *Semantic::GetClassPool(TypeSymbol *base_type,
 
 void Semantic::ReadClassFile(TypeSymbol *type, LexStream::TokenIndex tok)
 {
-#ifdef TEST
+#ifdef JIKES_DEBUG
     control.class_files_read++;
 #endif
 
@@ -371,9 +375,9 @@ void Semantic::ReadClassFile(TypeSymbol *type, LexStream::TokenIndex tok)
     }
     else
     {
-#ifdef UNIX_FILE_SYSTEM
-        FILE *classfile = ::SystemFopen(file_symbol -> FileName(), "rb");
-        if (classfile == NULL)
+		// Get a ReadObject from the API that contains the filew data.
+        JikesAPI::FileReader  *classFile   = JikesAPI::getInstance()->read(file_symbol->FileName());
+        if (classFile == NULL)
         {
             type -> SetSymbolTable(1); // this symbol table will only contain a default constructor
             if (type != control.Object())
@@ -387,58 +391,20 @@ void Semantic::ReadClassFile(TypeSymbol *type, LexStream::TokenIndex tok)
                            type -> ContainingPackage() -> PackageName(),
                            type -> ExternalName());
         }
+
         else
         {
-            struct stat status;
-            ::SystemStat(file_symbol -> FileName(), &status);
+        	// Process the file data.
+            size_t   size  = classFile->getBufferSize();
 
-            char *class_buffer = new char[status.st_size];
-            fread(class_buffer, sizeof(char), status.st_size, classfile);
-            fclose(classfile);
-
-            if (! ProcessClassFile(type, class_buffer, status.st_size, tok))
-                ProcessBadClass(type, tok);
-
-            delete [] class_buffer;
-        }
-#elif defined(WIN32_FILE_SYSTEM)
-        HANDLE classfile = CreateFile(file_symbol -> FileName(), GENERIC_READ, FILE_SHARE_READ,
-                                      NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
-        HANDLE mapfile = (classfile == INVALID_HANDLE_VALUE
-                                     ? classfile
-                                     : CreateFileMapping(classfile, NULL, PAGE_READONLY, 0, 0, NULL));
-
-        char *class_buffer = (mapfile == INVALID_HANDLE_VALUE ? NULL : (char *) MapViewOfFile(mapfile, FILE_MAP_READ, 0, 0, 0));
-
-        if (class_buffer == NULL)
-        {
-            type -> SetSymbolTable(1); // this symbol table will only contain a default constructor
-            if (type != control.Object())
-                type -> super = (type == control.Throwable() ? control.Object() : control.Throwable());
-            type -> MarkBad();
-            AddDefaultConstructor(type);
-
-            ReportSemError(SemanticError::CANNOT_OPEN_CLASS_FILE,
-                           tok,
-                           tok,
-                           type -> ContainingPackage() -> PackageName(),
-                           type -> ExternalName());
-        }
-        else
-        {
-            DWORD high_order,
-                  size = GetFileSize(classfile, &high_order);
-
-            size = (size == 0xFFFFFFFF && GetLastError() != NO_ERROR ? 0 : size);
-
-            if (! ProcessClassFile(type, class_buffer, size, tok))
-                ProcessBadClass(type, tok);
-
-            UnmapViewOfFile(class_buffer);
-            CloseHandle(mapfile);
-            CloseHandle(classfile);
-        }
+#if defined(WIN32_FILE_SYSTEM)
+            size = ((0xFFFFFFFF && GetLastError()) != NO_ERROR) ? 0 : size;
 #endif
+            if (! ProcessClassFile(type, classFile->getBuffer(),size, tok))
+                ProcessBadClass(type, tok);
+
+            delete classFile;
+        }
     }
 
     return;
@@ -465,9 +431,9 @@ void Semantic::ProcessBadClass(TypeSymbol *type, LexStream::TokenIndex tok)
 }
 
 
-bool Semantic::ProcessClassFile(TypeSymbol *type, char *buffer, int buffer_size, LexStream::TokenIndex tok)
+bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer, int buffer_size, LexStream::TokenIndex tok)
 {
-    char *buffer_tail = &buffer[buffer_size];
+    const char *buffer_tail = &buffer[buffer_size];
 
     type -> MarkHeaderProcessed();
     type -> MarkConstructorMembersProcessed();
@@ -483,7 +449,7 @@ bool Semantic::ProcessClassFile(TypeSymbol *type, char *buffer, int buffer_size,
     if (! InRange(buffer, buffer_tail, 2))
         return false;
     u2 constant_pool_count = GetAndSkipU2(buffer);
-    char **constant_pool = new char*[constant_pool_count];
+    const char **constant_pool = new const char*[constant_pool_count];
     TypeSymbol **class_pool = (TypeSymbol **)
                               memset(new TypeSymbol*[constant_pool_count], 0, constant_pool_count * sizeof(TypeSymbol *));
 
@@ -564,7 +530,7 @@ fflush(stderr);
         return false;
     u2 this_class_index = GetAndSkipU2(buffer); // The index of this class
     u2 name_index = Constant_Class_info::NameIndex(constant_pool[this_class_index]);
-    char *type_name = Constant_Utf8_info::Bytes(constant_pool[name_index]);
+    const char *type_name = Constant_Utf8_info::Bytes(constant_pool[name_index]);
     u2 type_name_length = Constant_Utf8_info::Length(constant_pool[name_index]);
 
     int n;
@@ -776,13 +742,13 @@ fflush(stderr);
                     {
                         u2 string_index = Constant_String_info::StringIndex(constant_pool[constantvalue_index]);
                         u2 length = Constant_Utf8_info::Length(constant_pool[string_index]);
-                        char *value = Constant_Utf8_info::Bytes(constant_pool[string_index]);
+                        const char *value = Constant_Utf8_info::Bytes(constant_pool[string_index]);
                         symbol -> initial_value = control.Utf8_pool.FindOrInsert(value, length);
                     }
                     else if (tag == Cp_Info::CONSTANT_Utf8)
                     {
                         u2 length = Constant_Utf8_info::Length(constant_pool[constantvalue_index]);
-                        char *value = Constant_Utf8_info::Bytes(constant_pool[constantvalue_index]);
+                        const char *value = Constant_Utf8_info::Bytes(constant_pool[constantvalue_index]);
                         symbol -> initial_value = control.Utf8_pool.FindOrInsert(value, length);
                     }
 else
@@ -848,7 +814,7 @@ fflush(stderr);
                 method -> SetContainingType(type);
                 method -> SetFlags(access_flags);
 
-                char *signature = Constant_Utf8_info::Bytes(constant_pool[descriptor_index]);
+                const char *signature = Constant_Utf8_info::Bytes(constant_pool[descriptor_index]);
                 int length = Constant_Utf8_info::Length(constant_pool[descriptor_index]);
 
                 method -> SetSignature(control.Utf8_pool.FindOrInsert(signature, length));
@@ -1019,7 +985,7 @@ fflush(stderr);
             for (int j = NameAndType_root; j != 0; j = next_pool_index[j])
             {
                 u2 descriptor_index = Constant_NameAndType_info::DescriptorIndex(constant_pool[j]);
-                char *signature = Constant_Utf8_info::Bytes(constant_pool[descriptor_index]);
+                const char *signature = Constant_Utf8_info::Bytes(constant_pool[descriptor_index]);
 
                 if (! class_pool[descriptor_index])
                 {
@@ -1032,7 +998,7 @@ fflush(stderr);
                         signature++; // +1 to skip initial '('
                         while (*signature != U_RIGHT_PARENTHESIS)
                         {
-                            char *str;
+                            const char *str;
                             for (str = signature; *str == U_LEFT_BRACKET; str++)
                                 ;
 

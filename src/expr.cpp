@@ -1,4 +1,4 @@
-// $Id: expr.cpp,v 1.50 2000/01/06 08:24:30 lord Exp $
+// $Id: expr.cpp,v 1.54 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,18 +7,27 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
+#include "platform.h"
 #include "double.h"
-#include "config.h"
-#include <assert.h>
-#include <stdio.h>
-#include <math.h>
-#include <sys/stat.h>
 #include "parser.h"
 #include "semantic.h"
 #include "control.h"
 #include "table.h"
 #include "tuple.h"
 #include "spell.h"
+
+/*
+//FIXME: need to readdress this include stuff
+#include <assert.h>
+#include <stdio.h>
+#include <math.h>
+*/
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
+
 
 bool Semantic::IsIntValueRepresentableInType(AstExpression *expr, TypeSymbol *type)
 {
@@ -1861,18 +1870,7 @@ void Semantic::ConstructorAccessCheck(AstClassInstanceCreationExpression *class_
         {
             if (constructor -> ACC_PROTECTED())
             {
-                //
-                // TODO: we need to file a query to Sun regarding which test is required here!
-                // According to the rules 6.6.2 in the JLS, access to a protected constructor
-                // that is not contained in the same package is only valid through a "super(...)" call.
-                // However, javac seems to have relaxed this restriction to allow subclass access...
-                //
-                //
-                // TODO: we have filed a query to Sun regarding which test is required here!
-                //
-                // if (! (containing_type -> ContainingPackage() == this_package || this_type -> IsSubclass(containing_type)))
-                //
-                if (! (containing_type -> ContainingPackage() == this_package || this_type -> HasProtectedAccessTo(containing_type)))
+                if(containing_type->ContainingPackage() != this_package)
                 {
                     ReportSemError(SemanticError::PROTECTED_CONSTRUCTOR_NOT_ACCESSIBLE,
                                    class_creation -> class_type -> LeftToken(),

@@ -1,4 +1,4 @@
-// $Id: segment.cpp,v 1.3 1999/10/15 02:30:42 shields Exp $
+// $Id: segment.cpp,v 1.6 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,8 +7,12 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
+
 #include "segment.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 u2 &PairSegment::Image(u2 target)
 {

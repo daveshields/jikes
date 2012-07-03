@@ -1,4 +1,4 @@
-// $Id: option.cpp,v 1.30 2000/01/06 08:24:30 lord Exp $
+// $Id: option.cpp,v 1.43 2000/07/30 22:56:31 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -8,15 +8,22 @@
 // You must accept the terms of that agreement to use this software.
 //
 
-#include <ctype.h>
-#include "config.h"
 #include "option.h"
 #include "javasym.h"
 #include "error.h"
 #include "case.h"
 
-#ifdef CYGWIN
+//FIXME: include stuff
+//#include <ctype.h>
+
+
+// FIXME: this and other # defined things need to go in platform.cpp!
+#ifdef HAVE_SYS_CYGWIN_H
 #include <sys/cygwin.h>
+#endif
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
 #endif
 
 //
@@ -33,11 +40,13 @@ bool ArgumentExpander::ArgumentExpanded(Tuple<char *> &arguments, char *file_nam
         buffer[file_size] = '\n';
         for (int k = 0; k < file_size; k++)
         {
-            //
-            // isgraph(c) is true if c is any printing character except space.
-            //
+            // FIXME : When \r is replaced by \n, we should not need to check for U_CARRIAGE_RETURN.
+            // Skip spaces and line termination characters
             while (buffer[k] == U_SPACE || buffer[k] == U_LINE_FEED || buffer[k] == U_CARRIAGE_RETURN)
                 k++;
+            // If we are at the end of the file, there must not have been any arguments in the file
+            if (k >= file_size)
+                break;
 
             int n;
             for (n = k + 1; ! (buffer[n] == U_SPACE || buffer[n] == U_LINE_FEED || buffer[n] == U_CARRIAGE_RETURN); n++)
@@ -154,23 +163,10 @@ void Option::SaveCurrentDirectoryOnDisk(char c)
 #endif
 
 
-Option::Option(ArgumentExpander &arguments) : 
-                                              classpath(NULL),
-                                              directory(NULL),
-                                              dependence_report_name(NULL),
-                                              encoding(NULL),
-#ifdef HAVE_LIB_ICU_UC
+Option::Option(ArgumentExpander &arguments) :
+#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
                                               converter(NULL),
 #endif
-                                              nowrite(false),
-                                              deprecation(false),
-                                              O(false),
-                                              g(false),
-                                              verbose(false),
-                                              depend(false),
-                                              nowarn(false),
-                                              classpath_search_order(false),
-                                              zero_defect(false),
                                               first_file_index(arguments.argc),
                                               debug_trap_op(0),
                                               debug_dump_lex(false),
@@ -188,7 +184,8 @@ Option::Option(ArgumentExpander &arguments) :
                                               dump_errors(false),
                                               errors(true),
                                               comments(false),
-                                              pedantic(false)
+                                              pedantic(false),
+                                              dependence_report_name(NULL)
 {
 #ifdef WIN32_FILE_SYSTEM
     for (int j = 0; j < 128; j++)
@@ -200,7 +197,7 @@ Option::Option(ArgumentExpander &arguments) :
     DWORD length = GetCurrentDirectory(directory_length, main_current_directory);
     if (length > directory_length)
     {
-        delete [] main_current_directory;
+        delete [] main_current_directory; // FIXME: missing a delete of main_current_directory ???
         main_current_directory = StringConstant::U8S__DO;
         main_disk = 0;
     }
@@ -215,6 +212,7 @@ Option::Option(ArgumentExpander &arguments) :
     current_directory[0] = main_current_directory;
 #endif
 
+    char * classpath_buffer;
     Tuple<int> filename_index(2048);
 
     for (int i = 1; i < arguments.argc; i++)
@@ -224,6 +222,13 @@ Option::Option(ArgumentExpander &arguments) :
             if (strcmp(arguments.argv[i],"-classpath") == 0 && ((i + 1) < arguments.argc))
             {
                 classpath = arguments.argv[++i];
+		
+                /* Create a copy of the -classpath argument so we can modify
+                   this copy and delete it later in ~JikesOption */
+                classpath_buffer = new char[strlen(classpath)+1];
+                strcpy(classpath_buffer, classpath);
+                classpath = classpath_buffer;
+
 #ifdef EBCDIC
                 //
                 //  Maintain CLASSPATH in ASCII and translate back to EBCDIC when building file name
@@ -236,15 +241,25 @@ Option::Option(ArgumentExpander &arguments) :
                  depend = true;
             else if (strcmp(arguments.argv[i], "-encoding") == 0 && ((i + 1) < arguments.argc))
             {
-#ifdef HAVE_LIB_ICU_UC
+#if defined(HAVE_LIB_ICU_UC)
                 encoding = new char[strlen(arguments.argv[++i]) + 1];
                 strcpy(encoding, arguments.argv[i]);
                 UErrorCode err=U_ZERO_ERROR;
                 converter=ucnv_open(encoding, &err);
                 if(!converter)
                     bad_options.Next() = new OptionError(SemanticError::UNSUPPORTED_ENCODING, encoding); 
+#elif defined(HAVE_ICONV_H)
+                encoding = new char[strlen(arguments.argv[++i]) + 1];
+                strcpy(encoding, arguments.argv[i]);
+                converter=iconv_open("utf-16", encoding);
+                if(converter==(iconv_t)-1)
+                {
+                    converter = NULL;
+                    bad_options.Next() = new OptionError(SemanticError::UNSUPPORTED_ENCODING, encoding); 
+                }
 #else
-// if compiling without ICU support, will only support one encoding (ascii).
+                bad_options.Next() = new OptionError(SemanticError::UNSUPPORTED_OPTION, "-encoding"); 
+                i++;
 #endif
                 continue;
             }
@@ -265,7 +280,7 @@ Option::Option(ArgumentExpander &arguments) :
             else if (strcmp(arguments.argv[i], "-d") == 0 && ((i + 1) < arguments.argc))
             {
                 ++i;
-#ifdef UNIX_FILE_SYSTEM
+#if defined(UNIX_FILE_SYSTEM)
                 int length = strlen(arguments.argv[i]);
                 directory = new char[length + 1];
                 strcpy(directory, arguments.argv[i]);
@@ -331,15 +346,17 @@ Option::Option(ArgumentExpander &arguments) :
                  comments = true;
             else if (strcmp(arguments.argv[i], "+C") == 0)
                  debug_dump_class = true;
-            else if (strcmp(arguments.argv[i], "+CSO") == 0)
-                 classpath_search_order = true;
+            else if (strcmp(arguments.argv[i], "+OLDCSO") == 0)
+                 old_classpath_search_order = true;
             else if (strcmp(arguments.argv[i],"+D") == 0)
             {
                  dump_errors = true;
                  errors = false;
             }
             else if (strcmp(arguments.argv[i],"+E") == 0)
-                 errors = false;
+            {
+                errors = false;
+            }
             else if (arguments.argv[i][0] == '+' && arguments.argv[i][1] == 'K')
             {
                 char *name = arguments.argv[i] + 2,
@@ -448,10 +465,9 @@ Option::Option(ArgumentExpander &arguments) :
         {
             /* Create a copy of the classpath string we can modify
                this copy without worry that it will effect the env array */
-            char * buf;
-            buf = new char[strlen(classpath)];
-            strcpy(buf, classpath);
-            classpath = buf;
+            classpath_buffer = new char[strlen(classpath)+1];
+            strcpy(classpath_buffer, classpath);
+            classpath = classpath_buffer;
 
 #ifdef EBCDIC
             //
@@ -467,15 +483,6 @@ Option::Option(ArgumentExpander &arguments) :
                 delete [] classpath;
                 classpath = NULL;
             }
-
-#ifdef CYGWIN
-            // Under Cygwin, we convert a windows style path into a unix style path
-            // so that we can parse it using the unix path seperator char ':'
-            buf = new char[cygwin_win32_to_posix_path_list_buf_size(classpath)];
-            cygwin_win32_to_posix_path_list(classpath, buf);
-            delete [] classpath;
-            classpath = buf;
-#endif
         }
 
         if (! classpath)
@@ -485,6 +492,20 @@ Option::Option(ArgumentExpander &arguments) :
             classpath[1] = U_NULL;
         }
     }
+    
+    // If we need to do a cygwin CLASSPATH conversion do it after the env is checked
+    // so that it will work for a -classpath argument or a CLASSPATH env var.
+
+#ifdef HAVE_CYGWIN_WIN32_TO_POSIX_PATH_LIST
+    // Under Cygwin, we convert a windows style path into a unix
+    // style path. A path like "C:\Cygwin\tmp;C:\Windows" is converted
+    // into "/tmp:/cygdrive/c/Windows" (assuming C:\Cygwin is cygroot).
+    // We can then parse it using the unix path seperator char ':'
+    classpath_buffer = new char[cygwin_win32_to_posix_path_list_buf_size(classpath)];
+    cygwin_win32_to_posix_path_list(classpath, classpath_buffer);
+    delete [] classpath;
+    classpath = classpath_buffer;
+#endif
 
     //
     // Initially, first_file_index is set to argc. Since the array filename_index
@@ -517,13 +538,15 @@ Option::~Option()
     for (int i = 0; i < bad_options.Length(); i++)
         delete bad_options[i];
 
-    delete [] classpath;
-    delete [] directory;
-
 #ifdef WIN32_FILE_SYSTEM
     for (char c = 'a'; c <= 'z'; c++)
         delete [] current_directory[c];
 #endif
 
+// Currently we use ICU even if iconv is present.
+#if defined(HAVE_ICONV_H) && !defined(HAVE_LIB_ICU_UC)
+    if(converter)
+        iconv_close(converter);
+#endif
     return;
 }

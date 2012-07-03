@@ -7,7 +7,14 @@
 // You must accept the terms of that agreement to use this software.
 //
 
+
+
 #ifndef HEADERS
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
+
 void Parser::InitRuleAction()
 {
     rule_action[0] = &Parser::BadAction;
@@ -1821,4 +1828,10 @@ void Parser::InitRuleAction()
 #ifndef HEADERS
     return;
 }
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif
+

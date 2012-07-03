@@ -1,4 +1,4 @@
-// $Id: zip.h,v 1.5 1999/07/06 14:00:40 shields Exp $
+// $Id: zip.h,v 1.8 2000/07/25 11:32:34 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,20 +10,28 @@
 #ifndef zip_INCLUDED
 #define zip_INCLUDED
 
-#ifdef WIN32_FILE_SYSTEM
-#include <windows.h>
-#endif
+#include "platform.h"
 
-#include "config.h"
-#include <stddef.h>
-#include <stdio.h>
+//FIXME: need to remove ?
+//#ifdef WIN32_FILE_SYSTEM
+//#include <windows.h>
+//#endif
+
+//#include <stddef.h>
+//#include <stdio.h>
+
 #include "tuple.h"
 #include "unzip.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class Control;
 class Zip;
 class DirectorySymbol;
 class FileSymbol;
+class NameSymbol;
 
 
 class ZipFile : public Unzip
@@ -94,5 +102,10 @@ private:
     HANDLE zipfile, mapfile;
 #endif
 };
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif /* zip_INCLUDED */
 

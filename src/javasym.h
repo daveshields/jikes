@@ -1,4 +1,4 @@
-// $Id: javasym.h,v 1.11 1999/10/17 02:02:12 shields Exp $
+// $Id: javasym.h,v 1.13 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -9,6 +9,10 @@
 //
 #ifndef javasym_INCLUDED
 #define javasym_INCLUDED
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 enum {
       TK_BodyMarker = 101,
@@ -120,5 +124,9 @@ enum {
       TK_EOF = 96,
       TK_EOL = 108
      };
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
 
 #endif /* javasym_INCLUDED */

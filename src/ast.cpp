@@ -1,4 +1,4 @@
-// $Id: ast.cpp,v 1.20 1999/11/18 03:37:22 shields Exp $
+// $Id: ast.cpp,v 1.25 2000/07/25 11:32:31 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -8,12 +8,15 @@
 // You must accept the terms of that agreement to use this software.
 //
 
-#include "config.h"
 #include "ast.h"
-#ifdef TEST
-    unsigned Ast::count = 0;
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
 #endif
 
+#ifdef JIKES_DEBUG
+    unsigned Ast::count = 0;
+#endif
 
 //
 // Allocate another block of storage for the VariableSymbol array.
@@ -1000,7 +1003,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     return clone;
 }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     void Ast::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (Ast):  "
@@ -1511,7 +1514,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         for (int i = 0; i < this -> NumForInitStatements(); i++)
             Coutput << " #" << this -> ForInitStatement(i) -> id;
         Coutput << "; #" << (end_expression_opt ? end_expression_opt -> id : 0) << ";";
-        for (int k = 0; k < this -> NumForInitStatements(); k++)
+        for (int k = 0; k < this -> NumForUpdateStatements(); k++)
             Coutput << " #" << this -> ForUpdateStatement(k) -> id;
         Coutput << ") #" << statement -> id << "\n";
 

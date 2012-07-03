@@ -1,4 +1,4 @@
-// $Id: zip.cpp,v 1.6 1999/08/26 15:34:11 shields Exp $
+// $Id: zip.cpp,v 1.10 2000/07/25 11:32:34 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,13 +7,14 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <assert.h>
-#include <iostream.h>
-#include <string.h>
-#include "control.h"
+
 #include "zip.h"
+#include "control.h"
 #include "symbol.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 //************************************************************************************************
 //
@@ -324,7 +325,7 @@ Zip::Zip(Control &control_, char *zipfile_name) : control(control_),
     if (zipfile)
     {
         int rc = fseek(zipfile, -22, SEEK_END);
-        if (rc == 0);
+        if (rc == 0)
         {
             zipbuffer = new char[22];
             buffer_ptr = zipbuffer;

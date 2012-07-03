@@ -1,4 +1,4 @@
-// $Id: bytecode.cpp,v 1.43 2000/01/06 06:46:47 lord Exp $
+// $Id: bytecode.cpp,v 1.50 2000/07/25 11:32:31 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -8,18 +8,20 @@
 // You must accept the terms of that agreement to use this software.
 //
 
-#include "assert.h"
-#include "config.h"
-#include "ast.h"
 #include "bytecode.h"
+#include "ast.h"
 #include "class.h"
 #include "control.h"
 #include "semantic.h"
 #include "stream.h"
 #include "symbol.h"
 #include "table.h"
+
+/*
+//FIXME: need to readdress this include stuff
+#ifdef HAVE_IOSTREAM_H
 #include <iostream.h>
-#include <string.h>
+#endif
 
 #ifdef HAVE_WCHAR_H
 # include <wchar.h>
@@ -27,6 +29,11 @@
 
 #ifdef WIN32_FILE_SYSTEM
 #include <windows.h>
+#endif
+*/
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
 #endif
 
 void ByteCode::CompileClass()
@@ -458,7 +465,7 @@ void ByteCode::CompileClass()
 
     if (this_semantic.NumErrors() == 0)
          Write();
-#ifdef TEST
+#ifdef JIKES_DEBUG
     else if (this_control.option.debug_dump_class)
          PrintCode();
 #endif
@@ -546,7 +553,7 @@ void ByteCode::CompileInterface()
 
     if (this_semantic.NumErrors() == 0)
          Write();
-#ifdef TEST
+#ifdef JIKES_DEBUG
     else if (this_control.option.debug_dump_class)
          PrintCode();
 #endif
@@ -935,7 +942,8 @@ void ByteCode::EndMethod(int method_index, MethodSymbol *msym)
             if (local_variable_table_attribute -> LocalVariableTableLength() > 0)
                  code_attribute -> AddAttribute(local_variable_table_attribute);
             else delete local_variable_table_attribute; // local_variable_table_attribute not needed, so delete it now
-        }
+        } else if (local_variable_table_attribute)// delete if we're dealing w/
+	  delete local_variable_table_attribute;  // a generated access method.
 
         methods[method_index].AddAttribute(code_attribute);
 
@@ -1064,7 +1072,7 @@ void ByteCode::DeclareLocalVariable(AstVariableDeclarator *declarator)
 
     if (this_control.option.g)
     {
-#ifdef TEST
+#ifdef JIKES_DEBUG
         assert(method_stack -> StartPc(declarator -> symbol) == 0xFFFF); // must be uninitialized
 #endif
 #ifdef DUMP
@@ -1107,7 +1115,7 @@ void ByteCode::EmitStatement(AstStatement *statement)
         for (int i = 0; i < statement -> NumDefinedVariables(); i++)
         {
             VariableSymbol *variable = statement -> DefinedVariable(i);
-#ifdef TEST
+#ifdef JIKES_DEBUG
             assert(method_stack -> StartPc(variable) == 0xFFFF); // must be uninitialized
 #endif
 #ifdef DUMP
@@ -1124,22 +1132,22 @@ Coutput.flush();
 
     switch (statement -> kind)
     {
-        case Ast::BLOCK: // JLS 13.2
+        case Ast::BLOCK: // JLS 14.2
              EmitBlockStatement((AstBlock *) statement);
              break;
-        case Ast::LOCAL_VARIABLE_DECLARATION: // JLS 13.3
+        case Ast::LOCAL_VARIABLE_DECLARATION: // JLS 14.3
              {
                  AstLocalVariableDeclarationStatement *lvds = statement -> LocalVariableDeclarationStatementCast();
                  for (int i = 0; i < lvds -> NumVariableDeclarators(); i++)
                      DeclareLocalVariable(lvds -> VariableDeclarator(i));
              }
              break;
-        case Ast::EMPTY_STATEMENT: // JLS 13.5
+        case Ast::EMPTY_STATEMENT: // JLS 14.5
              break;
-        case Ast::EXPRESSION_STATEMENT: // JLS 13.7
+        case Ast::EXPRESSION_STATEMENT: // JLS 14.7
              EmitStatementExpression(statement -> ExpressionStatementCast() -> expression);
              break;
-        case Ast::IF: // JLS 13.8
+        case Ast::IF: // JLS 14.8
              {
                  AstIfStatement *if_statement = (AstIfStatement *) statement;
                  if (if_statement -> expression -> IsConstant())
@@ -1183,10 +1191,10 @@ Coutput.flush();
                  }
              }
              break;
-        case Ast::SWITCH: // JLS 13.9
+        case Ast::SWITCH: // JLS 14.9
              EmitSwitchStatement(statement -> SwitchStatementCast());
              break;
-        case Ast::SWITCH_BLOCK: // JLS 13.9
+        case Ast::SWITCH_BLOCK: // JLS 14.9
         case Ast::CASE:
         case Ast::DEFAULT:
             //
@@ -1194,7 +1202,7 @@ Coutput.flush();
             // are not directly visited
             //
             break;
-        case Ast::WHILE: // JLS 13.10
+        case Ast::WHILE: // JLS 14.10
              {
                  AstWhileStatement *wp = statement -> WhileStatementCast();
                  //
@@ -1220,7 +1228,7 @@ Coutput.flush();
                  CompleteLabel(method_stack -> TopContinueLabel());
              }
              break;
-        case Ast::DO: // JLS 13.11
+        case Ast::DO: // JLS 14.11
              {
                  AstDoStatement *sp = statement -> DoStatementCast();
                  Label begin_label;
@@ -1240,7 +1248,7 @@ Coutput.flush();
                  CompleteLabel(method_stack -> TopContinueLabel());
              }
              break;
-        case Ast::FOR: // JLS 13.12
+        case Ast::FOR: // JLS 14.12
              {
                  AstForStatement *for_statement = statement -> ForStatementCast();
                  for (int i = 0; i < for_statement -> NumForInitStatements(); i++)
@@ -1275,15 +1283,15 @@ Coutput.flush();
                  CompleteLabel(method_stack -> TopContinueLabel());
              }
              break;
-        case Ast::BREAK: // JLS 13.13
+        case Ast::BREAK: // JLS 14.13
              ProcessAbruptExit(statement -> BreakStatementCast() -> nesting_level);
              EmitBranch(OP_GOTO, method_stack -> BreakLabel(statement -> BreakStatementCast() -> nesting_level));
              break;
-        case Ast::CONTINUE: // JLS 13.14
+        case Ast::CONTINUE: // JLS 14.14
              ProcessAbruptExit(statement -> ContinueStatementCast() -> nesting_level);
              EmitBranch(OP_GOTO, method_stack -> ContinueLabel(statement -> ContinueStatementCast() -> nesting_level));
              break;
-        case Ast::RETURN: // JLS 13.15
+        case Ast::RETURN: // JLS 14.15
              EmitReturnStatement(statement -> ReturnStatementCast());
              break;
         case Ast::SUPER_CALL:
@@ -1292,14 +1300,14 @@ Coutput.flush();
         case Ast::THIS_CALL:
              EmitThisInvocation((AstThisCall *) statement);
              break;
-        case Ast::THROW: // JLS 13.16
+        case Ast::THROW: // JLS 14.16
              EmitExpression(statement -> ThrowStatementCast() -> expression);
              PutOp(OP_ATHROW);
              break;
-        case Ast::SYNCHRONIZED_STATEMENT: // JLS 13.17
+        case Ast::SYNCHRONIZED_STATEMENT: // JLS 14.17
              EmitSynchronizedStatement(statement -> SynchronizedStatementCast());
              break;
-        case Ast::TRY: // JLS 13.18
+        case Ast::TRY: // JLS 14.18
              EmitTryStatement(statement -> TryStatementCast());
              break;
         case Ast::CLASS: // Class Declaration
@@ -1308,8 +1316,8 @@ Coutput.flush();
              // these are factored out by the front end; and so must be skipped here
              //
              break;
-        case Ast::CATCH:   // JLS 13.18
-        case Ast::FINALLY: // JLS 13.18
+        case Ast::CATCH:   // JLS 14.18
+        case Ast::FINALLY: // JLS 14.18
              // handled by TryStatement
         default:
             assert(false && "unknown statement kind");
@@ -1367,7 +1375,7 @@ void ByteCode::EmitBlockStatement(AstBlock *block)
         {
             VariableSymbol *variable = block -> LocallyDefinedVariable(i);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
             assert(method_stack -> StartPc(variable) != 0xFFFF);
 #endif
 #ifdef DUMP
@@ -1644,7 +1652,7 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *switch_statement)
             {
                 VariableSymbol *variable = switch_block_statement -> LocallyDefinedVariable(i);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
                 assert(method_stack -> StartPc(variable) != 0xFFFF);
 #endif
 #ifdef DUMP
@@ -1658,7 +1666,7 @@ Coutput.flush();
                                                                    RegisterUtf8(variable -> ExternalIdentity() -> Utf8_literal),
                                                                    RegisterUtf8(variable -> Type() -> signature),
                                                                    variable -> LocalVariableIndex());
-#ifdef TEST
+#ifdef JIKES_DEBUG
                 method_stack -> StartPc(variable) = 0xFFFF;
 #endif
             }
@@ -1676,7 +1684,7 @@ Coutput.flush();
         {
             VariableSymbol *variable = switch_block -> LocallyDefinedVariable(i);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
             assert(method_stack -> StartPc(variable) != 0xFFFF);
 #endif
 #ifdef DUMP
@@ -3174,7 +3182,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
     {
         VariableSymbol *variable = assignment_expression -> left_hand_side -> symbol -> VariableCast();
         assert(variable);
-#ifdef TEST
+#ifdef JIKES_DEBUG
         assert(method_stack -> StartPc(variable) == 0xFFFF); // must be uninitialized
 #endif
 #ifdef DUMP
@@ -3652,12 +3660,19 @@ void ByteCode::EmitMethodInvocation(AstMethodInvocation *expression)
 
     bool is_super = false; // set if super call
 
-    AstFieldAccess *field = method_call -> method -> FieldAccessCast();
     AstSimpleName *simple_name = method_call -> method -> SimpleNameCast();
     if (msym -> ACC_STATIC())
     {
+        AstFieldAccess *field = expression -> resolution_opt ?
+            (((MethodSymbol *)expression->symbol)->ACC_STATIC() ? expression->method->FieldAccessCast() : NULL)
+            :
+            method_call -> method -> FieldAccessCast()
+            ;
+
+        
         if (field)
         {
+            // JLS 15.11.4.7
             if (field -> base -> MethodInvocationCast())
             {
                 EmitMethodInvocation(field -> base -> MethodInvocationCast());
@@ -3667,10 +3682,17 @@ void ByteCode::EmitMethodInvocation(AstMethodInvocation *expression)
             {
                 (void) EmitClassInstanceCreationExpression(field -> base -> ClassInstanceCreationExpressionCast(), false);
             }
+            else 
+            {
+	        // FIXME : diasbled because it is crashing jikes !
+	        // This seems to have been caused by a fix for bug #198
+	        //PutOp(EmitExpression(field -> base) == 2 ? OP_POP2 : OP_POP); // discard value
+            }
         }
     }
     else
     {
+        AstFieldAccess *field = method_call -> method -> FieldAccessCast();
         if (field)
         {
             AstFieldAccess *sub_field_access = field -> base -> FieldAccessCast();
@@ -4528,7 +4550,7 @@ void ByteCode::EmitStringAppendMethod(TypeSymbol *type)
 }
 
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
 static void op_trap()
 {
     int i = 0; // used for debugger trap
@@ -4557,7 +4579,7 @@ ByteCode::ByteCode(TypeSymbol *unit_type) : ClassFile(unit_type),
                                             fieldref_constant_pool_index(NULL),
                                             methodref_constant_pool_index(NULL)
 {
-#ifdef TEST
+#ifdef JIKES_DEBUG
     if (! this_control.option.nowrite)
         this_control.class_files_written++;
 #endif
@@ -5119,7 +5141,7 @@ void ByteCode::FinishCode(TypeSymbol *type)
 
 void ByteCode::PutOp(unsigned char opc)
 {
-#ifdef TEST
+#ifdef JIKES_DEBUG
     if (this_control.option.debug_trap_op > 0 && code_attribute -> CodeLength() == this_control.option.debug_trap_op)
         op_trap();
 
@@ -5401,7 +5423,7 @@ void ByteCode::ChangeStack(int i)
 }
 
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
 void ByteCode::PrintCode()
 {
     Coutput << "magic " << hex << magic << dec

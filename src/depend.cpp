@@ -1,4 +1,4 @@
-// $Id: depend.cpp,v 1.15 2000/01/07 00:25:53 lord Exp $
+// $Id: depend.cpp,v 1.18 2000/07/25 11:32:32 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,11 +7,18 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <time.h>
+#include "depend.h"
 #include "control.h"
 #include "ast.h"
 #include "semantic.h"
+
+#ifdef HAVE_TIME_H
+#include <time.h>
+#endif
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 //
 // Note that the types are ordered based on on the subtype relationship. We reverse

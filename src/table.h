@@ -1,4 +1,4 @@
-// $Id: table.h,v 1.7 1999/08/26 15:34:10 shields Exp $
+// $Id: table.h,v 1.10 2000/07/25 11:32:34 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,8 +10,12 @@
 #ifndef table_INCLUDED
 #define table_INCLUDED
 
-#include "config.h"
+#include "platform.h"
 #include "symbol.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class VariableShadowSymbol
 {
@@ -433,6 +437,10 @@ private:
     MethodShadowSymbol **base;
     int hash_size;
 };
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
 
+#endif
 

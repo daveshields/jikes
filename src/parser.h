@@ -1,4 +1,4 @@
-// $Id: parser.h,v 1.6 2000/01/06 06:46:47 lord Exp $
+// $Id: parser.h,v 1.10 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,15 +10,25 @@
 #ifndef parser_INCLUDED
 #define parser_INCLUDED
 
-#include "config.h"
-#include <limits.h>
+#include "platform.h"
+#include "lpginput.h"
+
+/*
+//FIXME: include stuff
 #include <ctype.h>
+#include <limits.h>
 #ifdef HAVE_WCHAR_H
 # include <wchar.h>
 #endif
 #include <string.h>
 #include <stdio.h>
-#include "lpginput.h"
+*/
+
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
+
 
 class StoragePool;
 class AstPackageDeclaration;
@@ -28,10 +38,36 @@ class AstInterfaceDeclaration;
 class Ast;
 class AstListNode;
 
+enum ParseErrorCode
+{
+    ERROR_CODE,
+    BEFORE_CODE,
+    INSERTION_CODE,
+    INVALID_CODE,
+    SUBSTITUTION_CODE,
+    DELETION_CODE,
+    MERGE_CODE,
+    MISPLACED_CODE,
+    SCOPE_CODE,
+    MANUAL_CODE,
+    SECONDARY_CODE,
+    EOF_CODE
+};
+
+struct PrimaryRepairInfo
+{
+    ParseErrorCode code;
+    
+    int distance,
+        buffer_position,
+        misspell_index,
+        symbol;
+};
+
 struct SecondaryRepairInfo
 {
-    int code,
-        distance,
+    ParseErrorCode code;
+    int distance,
         buffer_position,
         stack_position,
         num_deletions,
@@ -170,4 +206,9 @@ protected:
     int ParseCheck(int stack[], int stack_top, int first_token, int buffer_position);
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif
+

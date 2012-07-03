@@ -1,4 +1,4 @@
-// $Id: body.cpp,v 1.28 2000/01/06 08:24:30 lord Exp $
+// $Id: body.cpp,v 1.31 2000/07/25 11:32:31 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -8,10 +8,13 @@
 // You must accept the terms of that agreement to use this software.
 //
 
-#include "config.h"
-#include <assert.h>
+#include "platform.h"
 #include "semantic.h"
 #include "control.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 void Semantic::ProcessBlockStatements(AstBlock *block_body)
 {

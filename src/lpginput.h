@@ -1,4 +1,4 @@
-// $Id: lpginput.h,v 1.3 1999/01/25 20:00:31 shields Exp $
+// $Id: lpginput.h,v 1.6 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,13 +10,21 @@
 #ifndef lpginput_INCLUDED
 #define lpginput_INCLUDED
 
-#include "config.h"
+#include "platform.h"
 #include "stream.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 typedef LexStream::TokenIndex TokenObject;
 typedef LexStream::TokenIndex Location;
 
 inline Location Loc(TokenObject i) { return i; }
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
 
 #include "javasym.h" /* mapping of lexical symbols  */
 #include "javadef.h" /* definition of parsing names */

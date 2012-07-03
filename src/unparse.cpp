@@ -1,4 +1,4 @@
-// $Id: unparse.cpp,v 1.5 1999/12/14 17:31:53 lord Exp $
+// $Id: unparse.cpp,v 1.10 2000/07/26 08:28:50 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,16 +7,23 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
+#include "platform.h"
 #include "ast.h"
+
+//FIXME: need to move to platform.h
 #include <iostream.h>
 #include <fstream.h>
-#ifdef TEST
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
+
+#ifdef JIKES_DEBUG
     bool Ast::debug_unparse = false;
 #endif
 
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
 // Special top-level form
 void AstCompilationUnit::Unparse(LexStream& lex_stream, char *directory)
 {

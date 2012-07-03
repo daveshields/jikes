@@ -1,4 +1,4 @@
-// $Id: parser.cpp,v 1.6 2000/01/07 00:25:53 lord Exp $
+// $Id: parser.cpp,v 1.10 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,11 +7,12 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <assert.h>
-#include <iostream.h>
 #include "parser.h"
 #include "ast.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 void Parser::ReallocateStacks()
 {
@@ -626,7 +627,7 @@ void Parser::ErrorRepair(TokenObject error_token)
 {
     SecondaryRepairInfo repair;
 
-    repair.code = 0;
+    repair.code = ERROR_CODE;
     do
     {
         repair.distance = 0;

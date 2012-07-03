@@ -1,4 +1,4 @@
-// $Id: segment.h,v 1.1 1999/07/28 23:15:48 shields Exp $
+// $Id: segment.h,v 1.4 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,9 +10,12 @@
 #ifndef segment_INCLUDED
 #define segment_INCLUDED
 
-#include <stdio.h>
-#include "config.h"
+#include "platform.h"
 #include "tuple.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class SegmentPool;
 
@@ -187,4 +190,9 @@ public:
     TripletSegment *AllocateTripletSegment() { return triplet_segment_pool.Next() = new TripletSegment(*this); }
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif
+

@@ -1,4 +1,4 @@
-// $Id: javaprs.h,v 1.13 1999/10/17 02:02:12 shields Exp $
+// $Id: javaprs.h,v 1.15 2000/07/25 11:32:33 mdejong Exp $
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://www.ibm.com/research/jikes.
@@ -13,6 +13,10 @@
 #define DEFERRED_RECOVERY
 #define FULL_DIAGNOSIS
 #define SPACE_TABLES
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class LexStream;
 
@@ -80,5 +84,9 @@ public:
         return act;
     }
 };
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
 
 #endif /* javaprs_INCLUDED */

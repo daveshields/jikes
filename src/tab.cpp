@@ -1,4 +1,4 @@
-// $Id: tab.cpp,v 1.2 1999/07/06 13:49:25 shields Exp $
+// $Id: tab.cpp,v 1.4 2000/07/25 11:32:34 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -8,6 +8,10 @@
 // You must accept the terms of that agreement to use this software.
 //
 #include "tab.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 int Tab::tab_size = Tab::DEFAULT_TAB_SIZE;
 

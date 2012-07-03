@@ -1,4 +1,4 @@
-// $Id: symbol.cpp,v 1.32 2000/01/06 08:24:30 lord Exp $
+// $Id: symbol.cpp,v 1.36 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
@@ -7,9 +7,7 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <sys/stat.h>
-#include <assert.h>
+#include "symbol.h"
 #include "stream.h"
 #include "control.h"
 #include "ast.h"
@@ -19,10 +17,8 @@
 #include "set.h"
 #include "case.h"
 
-#ifdef UNIX_FILE_SYSTEM
-#include <dirent.h>
-#elif defined(WIN32_FILE_SYSTEM)
-#include <windows.h>
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
 #endif
 
 char *FileSymbol::java_suffix = StringConstant::U8S__DO_java;
@@ -581,6 +577,8 @@ TypeSymbol::TypeSymbol(NameSymbol *name_symbol_) : semantic_environment(NULL),
 
 TypeSymbol::~TypeSymbol()
 {
+    if (read_method) delete read_method;
+    if (write_method) delete write_method;
     delete semantic_environment;
     delete local;
     delete non_local;
@@ -762,7 +760,8 @@ void DirectorySymbol::ReadDirectory()
     if (! entries)
     {
         entries = new DirectoryTable();
-
+	
+//FIXME: these need to go into platform.cpp
 #ifdef UNIX_FILE_SYSTEM
         DIR *directory = opendir(this -> DirectoryName());
         if (directory)

@@ -1,4 +1,4 @@
-// $Id: depend.h,v 1.7 2000/01/07 00:25:53 lord Exp $
+// $Id: depend.h,v 1.10 2000/07/25 11:32:32 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,15 +10,21 @@
 #ifndef depend_INCLUDED
 #define depend_INCLUDED
 
-#include "tuple.h"
-#include "config.h"
-#include <limits.h>
+#include "platform.h"
+// Also included in platform.h but that might change
+//#include "tuple.h"
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class Semantic;
 class TypeSymbol;
+class FileSymbol;
 class AstClassBody;
 class AstConstructorDeclaration;
 class SymbolSet;
+class Control;
 
 class CycleChecker
 {
@@ -138,4 +144,9 @@ private:
     Tuple<TypeSymbol *> &type_list;
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif /* cycle_INCLUDED */
+

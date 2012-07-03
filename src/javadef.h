@@ -1,4 +1,4 @@
-// $Id: javadef.h,v 1.11 1999/10/17 02:02:12 shields Exp $
+// $Id: javadef.h,v 1.14 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,20 +10,11 @@
 #ifndef javadef_INCLUDED
 #define javadef_INCLUDED
 
-enum {
-      ERROR_CODE,
-      BEFORE_CODE,
-      INSERTION_CODE,
-      INVALID_CODE,
-      SUBSTITUTION_CODE,
-      DELETION_CODE,
-      MERGE_CODE,
-      MISPLACED_CODE,
-      SCOPE_CODE,
-      MANUAL_CODE,
-      SECONDARY_CODE,
-      EOF_CODE,
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
+enum {
       ERROR_SYMBOL      = 107,
       MAX_DISTANCE      = 30,
       MIN_DISTANCE      = 3,
@@ -51,5 +42,9 @@ enum {
       ERROR_ACTION      = 5177
      };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
 
 #endif /* javadef_INCLUDED */
+

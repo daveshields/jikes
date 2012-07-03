@@ -1,4 +1,4 @@
-// $Id: long.cpp,v 1.12 2000/01/07 21:23:58 lord Exp $
+// $Id: long.cpp,v 1.16 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,10 +7,14 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
-#include <iostream.h>
+
 #include "long.h"
 #include "double.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
+
 //
 // Note that the minimum long value, (0x80000000, 0x00000000), can be represented
 // exactly in a double field. However, the maximum long value, (0x7FFFFFFF, 0xFFFFFFFF)
@@ -30,11 +34,13 @@ BaseLong::operator ULongInt()
 
 bool BaseLong::operator== (BaseLong op)
 {
+    // FIXME : these tests could be sped up by comparing the value directly
     return ((HighWord() == op.HighWord()) && (LowWord() == op.LowWord()));
 }
 
 bool BaseLong::operator!= (BaseLong op)
 {
+    // FIXME : these tests could be sped up by comparing the value directly
     return ((HighWord() != op.HighWord()) || (LowWord() != op.LowWord()));
 }
 
@@ -261,27 +267,24 @@ BaseLong& BaseLong::operator*= (BaseLong op)
 }
 
 
-BaseLong::BaseLong(u4 a, u4 b)
+BaseLong::BaseLong(u4 high, u4 low)
 {
-    High() = a;
-    Low() = b;
+    setHighAndLowWords(high, low);
 }
 
 BaseLong::BaseLong(u4 a)
 {
-    High() = 0;
-    Low() = a;
+    setHighAndLowWords(0, a);
 }
 
 BaseLong::BaseLong(i4 a)
 {
-    Low() = a;
     //
-    // Since the carry is not guaranteed to ripple, we cannot use this code.
+    // Since the carry bit is not guaranteed to ripple, we cannot use this code.
     //
-    //        HighWord() = a >> 31;
+    //        a << 31;
     //
-    High() = (a < 0 ? 0xFFFFFFFF : 0x00000000);
+    setHighAndLowWords(a < 0 ? 0xFFFFFFFF : 0x00000000, a);
 }
 
 
@@ -307,7 +310,7 @@ void BaseLong::Divide(BaseLong dividend, BaseLong divisor, BaseLong &quotient, B
     for (int j = 0; j < 32; j++)
     {
         remainder <<= 1;
-        remainder.Low() |= (low >> 31);
+        remainder.setLowWord(remainder.LowWord() | (low >> 31));
         low <<= 1;
         if ((ULongInt) divisor <= remainder)
         {
@@ -418,8 +421,7 @@ LongInt::LongInt(IEEEfloat a) : BaseLong(0,0)
 {
     IEEEdouble value = IEEEdouble(a);
     LongInt lvalue = LongInt(value);
-    High() = lvalue.HighWord();
-    Low() = lvalue.LowWord();
+    setHighAndLowWords(lvalue.HighWord(), lvalue.LowWord());
     return;
 }
 
@@ -428,22 +430,20 @@ LongInt::LongInt(IEEEdouble a) : BaseLong (0,0)
     if (a.HighWord() == 0x7fffffff && a.LowWord() == 0xffffffff) // if NaN
         ; // *this is already initialized to 0
     else if (a.HighWord() == 0xfff00000 && a.LowWord() == 0x00000000) // if NEGATIVE_INFINITY())
-        High() = 0x80000000;
+        setHighWord(0x80000000);
     else if (a.HighWord() == 0x7ff00000 && a.LowWord() == 0x00000000) // if POSITIVE_INFINITY())
     {
-        High() = 0x7FFFFFFF;
-        Low()  = 0xFFFFFFFF;
+        setHighAndLowWords(0x7FFFFFFF, 0xFFFFFFFF);
     }
     else
     {
         double b = floor(a.DoubleValue() < 0.0 ? -a.DoubleValue() : a.DoubleValue()); // DSDouble
 
         if (b < IEEEdouble::min_long.DoubleValue())
-            High() = 0x80000000;
+            setHighWord(0x80000000);
         else if (-b <= IEEEdouble::min_long.DoubleValue())
         {
-            High() = 0x7FFFFFFF;
-            Low()  = 0xFFFFFFFF;
+            setHighAndLowWords(0x7FFFFFFF, 0xFFFFFFFF);
         }
         else
         {

@@ -1,4 +1,4 @@
-// $Id: semantic.h,v 1.28 2000/01/06 07:47:24 lord Exp $
+// $Id: semantic.h,v 1.34 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,10 +10,7 @@
 #ifndef semantic_INCLUDED
 #define semantic_INCLUDED
 
-#include "config.h"
-#ifdef HAVE_WCHAR_H
-# include <wchar.h>
-#endif
+#include "platform.h"
 #include "ast.h"
 #include "diagnose.h"
 #include "error.h"
@@ -21,6 +18,18 @@
 #include "control.h"
 #include "tuple.h"
 #include "set.h"
+
+/*
+//FIXME: include stuff
+#ifdef HAVE_WCHAR_H
+# include <wchar.h>
+#endif
+*/
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
+
 
 class cp_info;
 class TypeShadowSymbol;
@@ -861,9 +870,9 @@ public:
         return;
     }
 
-    TypeSymbol *ProcessSignature(TypeSymbol *, char *, LexStream::TokenIndex);
+    TypeSymbol *ProcessSignature(TypeSymbol *, const char *, LexStream::TokenIndex);
     TypeSymbol *ReadType(FileSymbol *, PackageSymbol *, NameSymbol *, LexStream::TokenIndex);
-    TypeSymbol *ReadTypeFromSignature(TypeSymbol *, char *, int, LexStream::TokenIndex);
+    TypeSymbol *ReadTypeFromSignature(TypeSymbol *, const char *, int, LexStream::TokenIndex);
     TypeSymbol *ProcessNestedType(TypeSymbol *, NameSymbol *, LexStream::TokenIndex);
 
 private:
@@ -957,13 +966,14 @@ private:
     AccessFlags ProcessStaticNestedClassModifiers(AstClassDeclaration *);
     AccessFlags ProcessInterfaceModifiers(AstInterfaceDeclaration *);
     AccessFlags ProcessNestedInterfaceModifiers(AstInterfaceDeclaration *);
+    AccessFlags ProcessStaticNestedInterfaceModifiers(AstInterfaceDeclaration *);
     AccessFlags ProcessFieldModifiers(AstFieldDeclaration *);
     AccessFlags ProcessLocalModifiers(AstLocalVariableDeclarationStatement *);
     AccessFlags ProcessFormalModifiers(AstFormalParameter *);
     AccessFlags ProcessMethodModifiers(AstMethodDeclaration *);
     AccessFlags ProcessConstructorModifiers(AstConstructorDeclaration *);
     AccessFlags ProcessConstantModifiers(AstFieldDeclaration *);
-    AccessFlags ProcessAbstractMethodModifiers(AstMethodDeclaration *);
+    AccessFlags ProcessInterfaceMethodModifiers(AstMethodDeclaration *);
     void AddDefaultConstructor(TypeSymbol *);
     void ProcessConstructorDeclaration(AstConstructorDeclaration *);
     void ProcessMethodDeclaration(AstMethodDeclaration *);
@@ -1220,11 +1230,11 @@ private:
     void ComputeFieldsClosure(TypeSymbol *, LexStream::TokenIndex);
     void ComputeMethodsClosure(TypeSymbol *, LexStream::TokenIndex);
 
-    inline bool InRange(char *buffer_ptr, char *buffer_tail, int size) { return ((buffer_ptr + size) <= buffer_tail); }
+    inline bool InRange(const char *buffer_ptr, const char *buffer_tail, int size) { return ((buffer_ptr + size) <= buffer_tail); }
     TypeSymbol *RetrieveNestedTypes(TypeSymbol *, wchar_t *, LexStream::TokenIndex);
-    TypeSymbol *GetClassPool(TypeSymbol *, TypeSymbol **, char **, int, LexStream::TokenIndex);
+    TypeSymbol *GetClassPool(TypeSymbol *, TypeSymbol **, const char **, int, LexStream::TokenIndex);
     void ProcessBadClass(TypeSymbol *, LexStream::TokenIndex);
-    bool ProcessClassFile(TypeSymbol *, char *, int, LexStream::TokenIndex);
+    bool ProcessClassFile(TypeSymbol *, const char *, int, LexStream::TokenIndex);
     void ReadClassFile(TypeSymbol *, LexStream::TokenIndex);
 
     //
@@ -1238,14 +1248,14 @@ private:
 
 public:
 
-    static inline u1 GetU1(char *);
-    static inline u2 GetU2(char *);
-    static inline u4 GetU4(char *);
+    static inline u1 GetU1(const char *);
+    static inline u2 GetU2(const char *);
+    static inline u4 GetU4(const char *);
 
-    static inline u1 GetAndSkipU1(char *&);
-    static inline u2 GetAndSkipU2(char *&);
-    static inline u4 GetAndSkipU4(char *&);
-    static inline void Skip(char *&, int);
+    static inline u1 GetAndSkipU1(const char *&);
+    static inline u2 GetAndSkipU2(const char *&);
+    static inline u4 GetAndSkipU4(const char *&);
+    static inline void Skip(const char *&, int);
 
     inline void AddDependence(TypeSymbol *, TypeSymbol *, LexStream::TokenIndex, bool = false);
     inline void SetObjectSuperType(TypeSymbol *, LexStream::TokenIndex);
@@ -1305,4 +1315,10 @@ inline void Semantic::AddStringConversionDependence(TypeSymbol *type, LexStream:
     else // (type == control.double_type)
          AddDependence(ThisType(), control.Double(), tok);
 }
+
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif
+

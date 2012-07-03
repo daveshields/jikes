@@ -1,439 +1,515 @@
-# $Id: Makefile.in,v 1.14 2000/01/06 06:46:47 lord Exp $
+# Makefile.in generated automatically by automake 1.4a from Makefile.am
 
-# This software is subject to the terms of the IBM Jikes Compiler
-# License Agreement available at the following URL:
-# http://www.ibm.com/research/jikes.
-# Copyright (C) 1996, 1998, International Business Machines Corporation
-# and others.  All Rights Reserved.
-# You must accept the terms of that agreement to use this software.
+# Copyright (C) 1994, 1995-9, 2000 Free Software Foundation, Inc.
+# This Makefile.in is free software; the Free Software Foundation
+# gives unlimited permission to copy and/or distribute it,
+# with or without modifications, as long as this notice is preserved.
 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY, to the extent permitted by law; without
+# even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE.
 
-CXX=@CXX@
-CXXREQUIREDFLAGS=@CXXREQUIREDFLAGS@ -I@srcdir@
-CXXDEBUGFLAGS=@CXXDEBUGFLAGS@
-CXXOPTFLAGS=@CXXOPTFLAGS@
-CXXFLAGS=@CXXFLAGS@ @DEFS@
-ERASE=@ERASE@
-EXECUTABLE=@EXECUTABLE@
-LD=@LD@
-LDFLAGS=@LDFLAGS@
-LIBS=@LIBS@
-SYSOBJECTS=@SYSOBJECTS@
+SHELL = @SHELL@
 
+srcdir = @srcdir@
+top_srcdir = @top_srcdir@
+VPATH = @srcdir@
+prefix = @prefix@
+exec_prefix = @exec_prefix@
 
-BUILD_DIR=@BUILD_DIR@
+bindir = @bindir@
+sbindir = @sbindir@
+libexecdir = @libexecdir@
+datadir = @datadir@
+sysconfdir = @sysconfdir@
+sharedstatedir = @sharedstatedir@
+localstatedir = @localstatedir@
+libdir = @libdir@
+infodir = @infodir@
+mandir = @mandir@
+includedir = @includedir@
+oldincludedir = /usr/include
 
-srcdir		= @srcdir@
-prefix		= @prefix@
-exec_prefix	= @exec_prefix@
+pkgdatadir = $(datadir)/@PACKAGE@
+pkglibdir = $(libdir)/@PACKAGE@
+pkgincludedir = $(includedir)/@PACKAGE@
 
+top_builddir = ..
 
-#
-# You should not need to edit below here
-#
+ACLOCAL = @ACLOCAL@
+AUTOCONF = @AUTOCONF@
+AUTOMAKE = @AUTOMAKE@
+AUTOHEADER = @AUTOHEADER@
 
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA = @INSTALL_DATA@
+INSTALL_SCRIPT = @INSTALL_SCRIPT@
+INSTALL_STRIP_FLAG =
+transform = @program_transform_name@
 
-all:  $(EXECUTABLE)
+NORMAL_INSTALL = :
+PRE_INSTALL = :
+POST_INSTALL = :
+NORMAL_UNINSTALL = :
+PRE_UNINSTALL = :
+POST_UNINSTALL = :
 
-clean:
-	$(ERASE) $(EXECUTABLE)
-	$(ERASE) $(OBJECTS)
-	$(ERASE) core
-	$(ERASE) gencode.class
-
-distclean: clean
-	$(ERASE) config.cache config.log config.status
-	$(ERASE) Makefile TAGS
-	$(ERASE) *~
-
-install: all
-	mkdir -p $(prefix)/bin
-	strip $(EXECUTABLE)
-	cp $(EXECUTABLE) $(prefix)/bin
-	mkdir -p $(prefix)/man/man1
-	cp ../jikes.1 $(prefix)/man/man1
-
-OBJECTS=jikes.@O@ scanner.@O@ code.@O@ zip.@O@ unzip.@O@ \
-        ast.@O@ diagnose.@O@ parser.@O@ lpginput.@O@ javaact.@O@ \
-        error.@O@ set.@O@ symbol.@O@ lookup.@O@ long.@O@ depend.@O@ \
-        stream.@O@ op.@O@ control.@O@ modifier.@O@ system.@O@ \
-        bytecode.@O@ body.@O@ decl.@O@ definite.@O@ dump.@O@ expr.@O@ \
-        getclass.@O@ init.@O@ double.@O@ config.@O@ option.@O@ \
-        incrmnt.@O@ case.@O@ tab.@O@ segment.@O@ unparse.@O@
-
-$(EXECUTABLE):	$(OBJECTS)
-	$(LD) $(LDFLAGS)  $(OBJECTS) $(SYSOBJECTS) $(LIBS)
-
-
-javasym.h: $(srcdir)/java.g
-	jikespg $(srcdir)/java.g
-	$(ERASE) java.l
-
-javadef.h: $(srcdir)/java.g
-	jikespg $(srcdir)/java.g
-	$(ERASE) java.l
-
-javadcl.h: $(srcdir)/java.g
-	jikespg $(srcdir)/java.g
-	$(ERASE) java.l
-
-javaprs.h: $(srcdir)/java.g
-	jikespg $(srcdir)/java.g
-	$(ERASE) java.l
+@SET_MAKE@
+host_alias = @host_alias@
+host_triplet = @host@
+AMDEP = @AMDEP@
+AMTAR = @AMTAR@
+AWK = @AWK@
+CC = @CC@
+CPP = @CPP@
+CXX = @CXX@
+CXXCPP = @CXXCPP@
+DEPDIR = @DEPDIR@
+EXEEXT = @EXEEXT@
+JIKESPG = @JIKESPG@
+MAINT = @MAINT@
+MAKEINFO = @MAKEINFO@
+OBJEXT = @OBJEXT@
+PACKAGE = @PACKAGE@
+STRIP = @STRIP@
+VERSION = @VERSION@
+install_sh = @install_sh@
 
 
-ast.@O@:  $(srcdir)/ast.cpp $(srcdir)/config.h \
-          $(srcdir)/code.h $(srcdir)/case.h $(srcdir)/ast.h \
-          $(srcdir)/stream.h $(srcdir)/javadef.h $(srcdir)/javasym.h \
-          $(srcdir)/tuple.h $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-          $(srcdir)/double.h $(srcdir)/symbol.h $(srcdir)/option.h \
-          $(srcdir)/depend.h $(srcdir)/access.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/ast.cpp 
+bin_PROGRAMS = jikes
 
-unparse.@O@:  $(srcdir)/unparse.cpp $(srcdir)/config.h \
-          $(srcdir)/code.h $(srcdir)/case.h $(srcdir)/ast.h \
-          $(srcdir)/stream.h $(srcdir)/javadef.h $(srcdir)/javasym.h \
-          $(srcdir)/tuple.h $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-          $(srcdir)/double.h $(srcdir)/symbol.h $(srcdir)/option.h \
-          $(srcdir)/depend.h $(srcdir)/access.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/unparse.cpp 
-
-body.@O@: $(srcdir)/body.cpp $(srcdir)/config.h $(srcdir)/semantic.h \
-          $(srcdir)/ast.h $(srcdir)/stream.h $(srcdir)/javadef.h \
-          $(srcdir)/javasym.h $(srcdir)/tuple.h \
-          $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-          $(srcdir)/double.h $(srcdir)/code.h \
-	  $(srcdir)/case.h $(srcdir)/symbol.h $(srcdir)/option.h \
-          $(srcdir)/depend.h $(srcdir)/access.h $(srcdir)/diagnose.h \
-          $(srcdir)/parser.h $(srcdir)/lpginput.h $(srcdir)/javaprs.h \
-          $(srcdir)/javaact.h $(srcdir)/error.h $(srcdir)/control.h $(srcdir)/set.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/body.cpp 
-
-bytecode.@O@: $(srcdir)/bytecode.cpp $(srcdir)/config.h $(srcdir)/ast.h \
-              $(srcdir)/stream.h $(srcdir)/javadef.h $(srcdir)/javasym.h \
-              $(srcdir)/tuple.h $(srcdir)/tab.h \
-              $(srcdir)/lookup.h $(srcdir)/long.h $(srcdir)/double.h \
-              $(srcdir)/code.h $(srcdir)/case.h \
-              $(srcdir)/symbol.h $(srcdir)/option.h $(srcdir)/depend.h \
-              $(srcdir)/access.h $(srcdir)/bytecode.h $(srcdir)/class.h \
-              $(srcdir)/semantic.h $(srcdir)/diagnose.h $(srcdir)/parser.h \
-              $(srcdir)/lpginput.h $(srcdir)/javaprs.h $(srcdir)/javaact.h \
-              $(srcdir)/error.h $(srcdir)/control.h $(srcdir)/set.h \
-              $(srcdir)/op.h $(srcdir)/segment.h  \
-              $(srcdir)/op.h $(srcdir)/table.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/bytecode.cpp 
-
-config.@O@:  $(srcdir)/config.cpp $(srcdir)/config.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/config.cpp 
-
-code.@O@:  $(srcdir)/code.cpp $(srcdir)/code.h $(srcdir)/config.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/code.cpp 
-
-control.@O@:  $(srcdir)/control.cpp $(srcdir)/config.h $(srcdir)/control.h \
-              $(srcdir)/option.h $(srcdir)/code.h \
-              $(srcdir)/tuple.h $(srcdir)/symbol.h $(srcdir)/stream.h \
-              $(srcdir)/javadef.h $(srcdir)/javasym.h $(srcdir)/tab.h \
-              $(srcdir)/lookup.h $(srcdir)/long.h $(srcdir)/double.h \
-              $(srcdir)/case.h $(srcdir)/depend.h \
-              $(srcdir)/access.h $(srcdir)/set.h $(srcdir)/scanner.h \
-	      $(srcdir)/parser.h $(srcdir)/lpginput.h $(srcdir)/javaprs.h \
-              $(srcdir)/javaact.h $(srcdir)/semantic.h $(srcdir)/ast.h \
-	      $(srcdir)/diagnose.h $(srcdir)/error.h $(srcdir)/bytecode.h \
-              $(srcdir)/class.h $(srcdir)/segment.h \
-              $(srcdir)/class.h $(srcdir)/op.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/control.cpp 
-
-case.@O@:  $(srcdir)/case.cpp $(srcdir)/config.h $(srcdir)/case.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/case.cpp 
-
-diagnose.@O@:  $(srcdir)/diagnose.cpp $(srcdir)/config.h $(srcdir)/diagnose.h \
-               $(srcdir)/parser.h $(srcdir)/lpginput.h $(srcdir)/stream.h \
-	       $(srcdir)/javadef.h $(srcdir)/javasym.h $(srcdir)/tuple.h \
-               $(srcdir)/tab.h $(srcdir)/lookup.h \
-               $(srcdir)/long.h $(srcdir)/double.h \
-               $(srcdir)/code.h $(srcdir)/case.h $(srcdir)/javaprs.h \
-               $(srcdir)/javaact.h $(srcdir)/control.h $(srcdir)/option.h \
-	       $(srcdir)/symbol.h $(srcdir)/depend.h $(srcdir)/access.h \
-               $(srcdir)/set.h $(srcdir)/semantic.h $(srcdir)/ast.h \
-               $(srcdir)/error.h $(srcdir)/spell.h
-	$(CXX) $(CXXFLAGS) $(srcdir)/diagnose.cpp 
-
-decl.@O@:  $(srcdir)/decl.cpp $(srcdir)/config.h $(srcdir)/semantic.h \
-           $(srcdir)/ast.h $(srcdir)/stream.h $(srcdir)/javadef.h \
-           $(srcdir)/javasym.h $(srcdir)/tuple.h \
-           $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-           $(srcdir)/double.h $(srcdir)/code.h \
-	   $(srcdir)/case.h $(srcdir)/symbol.h $(srcdir)/option.h \
-           $(srcdir)/depend.h $(srcdir)/access.h $(srcdir)/diagnose.h \
-           $(srcdir)/parser.h $(srcdir)/lpginput.h $(srcdir)/javaprs.h \
-           $(srcdir)/javaact.h $(srcdir)/error.h $(srcdir)/control.h \
-           $(srcdir)/set.h $(srcdir)/table.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/decl.cpp 
-
-definite.@O@:  $(srcdir)/definite.cpp $(srcdir)/config.h $(srcdir)/semantic.h \
-               $(srcdir)/ast.h $(srcdir)/stream.h $(srcdir)/javadef.h \
-	       $(srcdir)/javasym.h $(srcdir)/tuple.h \
-               $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-               $(srcdir)/double.h $(srcdir)/code.h \
-               $(srcdir)/case.h $(srcdir)/symbol.h $(srcdir)/option.h \
-               $(srcdir)/depend.h $(srcdir)/access.h $(srcdir)/diagnose.h \
-	       $(srcdir)/parser.h $(srcdir)/lpginput.h $(srcdir)/javaprs.h \
-               $(srcdir)/javaact.h $(srcdir)/error.h $(srcdir)/control.h \
-               $(srcdir)/set.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/definite.cpp 
-
-depend.@O@:  $(srcdir)/depend.cpp $(srcdir)/config.h $(srcdir)/ast.h \
-             $(srcdir)/stream.h $(srcdir)/javadef.h $(srcdir)/javasym.h \
-             $(srcdir)/tuple.h $(srcdir)/tab.h \
-             $(srcdir)/lookup.h $(srcdir)/long.h $(srcdir)/double.h \
-             $(srcdir)/code.h $(srcdir)/case.h \
-	     $(srcdir)/symbol.h $(srcdir)/option.h $(srcdir)/depend.h \
-             $(srcdir)/access.h $(srcdir)/semantic.h $(srcdir)/diagnose.h \
-	     $(srcdir)/parser.h $(srcdir)/lpginput.h $(srcdir)/javaprs.h \
-             $(srcdir)/javaact.h $(srcdir)/error.h $(srcdir)/control.h \
-             $(srcdir)/set.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/depend.cpp 
-
-double.@O@:  $(srcdir)/double.cpp $(srcdir)/config.h $(srcdir)/double.h \
-             $(srcdir)/long.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/double.cpp 
-
-dump.@O@:  $(srcdir)/dump.cpp $(srcdir)/config.h $(srcdir)/javasym.h \
-           $(srcdir)/control.h $(srcdir)/option.h \
-           $(srcdir)/code.h $(srcdir)/tuple.h $(srcdir)/symbol.h \
-           $(srcdir)/stream.h $(srcdir)/javadef.h $(srcdir)/tab.h \
-           $(srcdir)/lookup.h $(srcdir)/long.h $(srcdir)/double.h \
-           $(srcdir)/case.h $(srcdir)/depend.h \
-           $(srcdir)/access.h $(srcdir)/set.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/dump.cpp 
-
-error.@O@:  $(srcdir)/error.cpp $(srcdir)/config.h \
-            $(srcdir)/code.h $(srcdir)/case.h \
-            $(srcdir)/error.h $(srcdir)/stream.h $(srcdir)/javadef.h \
-            $(srcdir)/javasym.h $(srcdir)/tuple.h $(srcdir)/tab.h \
-            $(srcdir)/lookup.h $(srcdir)/long.h $(srcdir)/double.h \
-            $(srcdir)/control.h $(srcdir)/option.h $(srcdir)/symbol.h \
-            $(srcdir)/depend.h $(srcdir)/access.h $(srcdir)/set.h \
-	    $(srcdir)/semantic.h $(srcdir)/ast.h $(srcdir)/diagnose.h \
-            $(srcdir)/parser.h $(srcdir)/lpginput.h $(srcdir)/javaprs.h \
-	    $(srcdir)/javaact.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/error.cpp 
-
-expr.@O@:  $(srcdir)/expr.cpp $(srcdir)/double.h $(srcdir)/config.h \
-           $(srcdir)/parser.h $(srcdir)/lpginput.h \
-           $(srcdir)/stream.h $(srcdir)/javadef.h $(srcdir)/javasym.h \
-           $(srcdir)/tuple.h $(srcdir)/tab.h $(srcdir)/lookup.h \
-           $(srcdir)/long.h $(srcdir)/code.h \
-           $(srcdir)/case.h $(srcdir)/javaprs.h $(srcdir)/javaact.h \
-           $(srcdir)/semantic.h $(srcdir)/ast.h $(srcdir)/symbol.h \
-	   $(srcdir)/option.h $(srcdir)/depend.h $(srcdir)/access.h \
-           $(srcdir)/diagnose.h $(srcdir)/error.h $(srcdir)/control.h \
-           $(srcdir)/set.h $(srcdir)/table.h $(srcdir)/spell.h
-	$(CXX) $(CXXFLAGS) $(srcdir)/expr.cpp 
-
-getclass.@O@:  $(srcdir)/getclass.cpp $(srcdir)/config.h $(srcdir)/control.h \
-               $(srcdir)/option.h $(srcdir)/code.h \
-               $(srcdir)/tuple.h $(srcdir)/symbol.h $(srcdir)/stream.h \
-               $(srcdir)/javadef.h $(srcdir)/javasym.h $(srcdir)/tab.h \
-               $(srcdir)/lookup.h $(srcdir)/long.h $(srcdir)/double.h \
-               $(srcdir)/case.h $(srcdir)/depend.h \
-               $(srcdir)/access.h $(srcdir)/set.h $(srcdir)/semantic.h \
-	       $(srcdir)/ast.h $(srcdir)/diagnose.h $(srcdir)/parser.h \
-               $(srcdir)/lpginput.h $(srcdir)/javaprs.h $(srcdir)/javaact.h \
-               $(srcdir)/error.h $(srcdir)/getclass.h $(srcdir)/zip.h \
-               $(srcdir)/unzip.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/getclass.cpp 
-
-incrmnt.@O@:  $(srcdir)/incrmnt.cpp $(srcdir)/config.h $(srcdir)/control.h \
-              $(srcdir)/option.h $(srcdir)/code.h \
-              $(srcdir)/tuple.h $(srcdir)/symbol.h $(srcdir)/stream.h \
-              $(srcdir)/javadef.h $(srcdir)/javasym.h $(srcdir)/tab.h \
-              $(srcdir)/lookup.h $(srcdir)/long.h $(srcdir)/double.h \
-              $(srcdir)/case.h $(srcdir)/depend.h \
-              $(srcdir)/access.h $(srcdir)/set.h $(srcdir)/scanner.h \
-	      $(srcdir)/parser.h $(srcdir)/lpginput.h $(srcdir)/javaprs.h \
-              $(srcdir)/javaact.h $(srcdir)/semantic.h $(srcdir)/ast.h \
-	      $(srcdir)/diagnose.h $(srcdir)/error.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/incrmnt.cpp 
-
-init.@O@:  $(srcdir)/init.cpp $(srcdir)/config.h $(srcdir)/semantic.h \
-           $(srcdir)/ast.h $(srcdir)/stream.h $(srcdir)/javadef.h \
-           $(srcdir)/javasym.h $(srcdir)/tuple.h \
-           $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-           $(srcdir)/double.h $(srcdir)/code.h \
-	   $(srcdir)/case.h $(srcdir)/symbol.h $(srcdir)/option.h \
-           $(srcdir)/depend.h $(srcdir)/access.h $(srcdir)/diagnose.h \
-           $(srcdir)/parser.h $(srcdir)/lpginput.h $(srcdir)/javaprs.h \
-           $(srcdir)/javaact.h $(srcdir)/error.h $(srcdir)/control.h $(srcdir)/set.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/init.cpp
-
-javaact.@O@: $(srcdir)/javaact.cpp $(srcdir)/config.h $(srcdir)/parser.h \
-             $(srcdir)/lpginput.h $(srcdir)/stream.h $(srcdir)/javadef.h \
-	     $(srcdir)/javasym.h $(srcdir)/tuple.h \
-             $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-             $(srcdir)/double.h $(srcdir)/code.h \
-             $(srcdir)/case.h $(srcdir)/javaprs.h $(srcdir)/javaact.h \
-             $(srcdir)/ast.h $(srcdir)/symbol.h $(srcdir)/option.h \
-	     $(srcdir)/depend.h $(srcdir)/access.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/javaact.cpp
-
-jikes.@O@:  $(srcdir)/jikes.cpp $(srcdir)/config.h $(srcdir)/control.h \
-            $(srcdir)/option.h $(srcdir)/code.h \
-            $(srcdir)/tuple.h $(srcdir)/symbol.h $(srcdir)/stream.h \
-            $(srcdir)/javadef.h $(srcdir)/javasym.h $(srcdir)/tab.h \
-            $(srcdir)/lookup.h $(srcdir)/long.h $(srcdir)/double.h \
-            $(srcdir)/case.h $(srcdir)/depend.h \
-            $(srcdir)/access.h $(srcdir)/set.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/jikes.cpp
-
-long.@O@:  $(srcdir)/long.cpp $(srcdir)/config.h $(srcdir)/long.h \
-           $(srcdir)/double.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/long.cpp 
-
-lookup.@O@:  $(srcdir)/lookup.cpp $(srcdir)/config.h $(srcdir)/lookup.h \
-             $(srcdir)/tuple.h $(srcdir)/long.h \
-             $(srcdir)/double.h $(srcdir)/symbol.h $(srcdir)/code.h \
-             $(srcdir)/stream.h $(srcdir)/javadef.h $(srcdir)/javasym.h \
-             $(srcdir)/tab.h $(srcdir)/case.h \
-             $(srcdir)/option.h $(srcdir)/depend.h $(srcdir)/access.h \
-             $(srcdir)/ast.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/lookup.cpp
-
-lpginput.@O@:  $(srcdir)/lpginput.cpp $(srcdir)/config.h $(srcdir)/lpginput.h \
-               $(srcdir)/stream.h $(srcdir)/javadef.h $(srcdir)/javasym.h \
-	       $(srcdir)/tuple.h $(srcdir)/tab.h \
-               $(srcdir)/lookup.h $(srcdir)/long.h $(srcdir)/double.h \
-               $(srcdir)/code.h $(srcdir)/case.h \
-               $(srcdir)/javaprs.h $(srcdir)/javadcl.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/lpginput.cpp 
-
-modifier.@O@:  $(srcdir)/modifier.cpp $(srcdir)/config.h $(srcdir)/semantic.h \
-               $(srcdir)/ast.h $(srcdir)/stream.h $(srcdir)/javadef.h \
-	       $(srcdir)/javasym.h $(srcdir)/tuple.h \
-               $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-               $(srcdir)/double.h $(srcdir)/code.h \
-               $(srcdir)/case.h $(srcdir)/symbol.h $(srcdir)/option.h \
-               $(srcdir)/depend.h $(srcdir)/access.h $(srcdir)/diagnose.h \
-	       $(srcdir)/parser.h $(srcdir)/lpginput.h $(srcdir)/javaprs.h \
-               $(srcdir)/javaact.h $(srcdir)/error.h $(srcdir)/control.h \
-               $(srcdir)/set.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/modifier.cpp 
-
-op.@O@:  $(srcdir)/op.cpp $(srcdir)/config.h $(srcdir)/op.h $(srcdir)/tuple.h \
-         $(srcdir)/class.h $(srcdir)/semantic.h $(srcdir)/ast.h \
-	 $(srcdir)/stream.h $(srcdir)/javadef.h $(srcdir)/javasym.h \
-         $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h $(srcdir)/double.h \
-	 $(srcdir)/code.h $(srcdir)/case.h $(srcdir)/symbol.h \
-         $(srcdir)/option.h $(srcdir)/depend.h $(srcdir)/access.h \
-         $(srcdir)/diagnose.h $(srcdir)/parser.h $(srcdir)/lpginput.h \
-         $(srcdir)/javaprs.h $(srcdir)/javaact.h $(srcdir)/error.h \
-	 $(srcdir)/control.h $(srcdir)/set.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/op.cpp 
-
-option.@O@:  $(srcdir)/option.cpp $(srcdir)/option.h $(srcdir)/config.h \
-             $(srcdir)/code.h $(srcdir)/tuple.h \
-             $(srcdir)/javasym.h $(srcdir)/error.h $(srcdir)/stream.h \
-             $(srcdir)/javadef.h $(srcdir)/tab.h $(srcdir)/lookup.h \
-             $(srcdir)/long.h $(srcdir)/double.h \
-             $(srcdir)/case.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/option.cpp 
-
-parser.@O@:  $(srcdir)/parser.cpp $(srcdir)/config.h $(srcdir)/parser.h \
-             $(srcdir)/lpginput.h $(srcdir)/stream.h $(srcdir)/javadef.h \
-	     $(srcdir)/javasym.h $(srcdir)/tuple.h \
-             $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-             $(srcdir)/double.h $(srcdir)/code.h \
-             $(srcdir)/case.h $(srcdir)/javaprs.h $(srcdir)/javaact.h \
-             $(srcdir)/ast.h $(srcdir)/symbol.h $(srcdir)/option.h \
-	     $(srcdir)/depend.h $(srcdir)/access.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/parser.cpp
-
-scanner.@O@: $(srcdir)/scanner.cpp $(srcdir)/config.h $(srcdir)/scanner.h \
-             $(srcdir)/code.h $(srcdir)/javadef.h \
-             $(srcdir)/javasym.h $(srcdir)/stream.h $(srcdir)/tuple.h \
-             $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-             $(srcdir)/double.h $(srcdir)/case.h \
-             $(srcdir)/control.h $(srcdir)/option.h $(srcdir)/symbol.h \
-             $(srcdir)/depend.h $(srcdir)/access.h $(srcdir)/set.h $(srcdir)/error.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/scanner.cpp 
-
-set.@O@:  $(srcdir)/set.cpp $(srcdir)/set.h $(srcdir)/config.h \
-          $(srcdir)/symbol.h $(srcdir)/code.h \
-          $(srcdir)/stream.h $(srcdir)/javadef.h $(srcdir)/javasym.h \
-          $(srcdir)/tuple.h $(srcdir)/tab.h $(srcdir)/lookup.h \
-          $(srcdir)/long.h $(srcdir)/double.h \
-          $(srcdir)/case.h $(srcdir)/option.h $(srcdir)/depend.h \
-          $(srcdir)/access.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/set.cpp 
-
-stream.@O@:  $(srcdir)/stream.cpp $(srcdir)/config.h $(srcdir)/stream.h \
-             $(srcdir)/javadef.h $(srcdir)/javasym.h $(srcdir)/tuple.h \
-             $(srcdir)/tab.h $(srcdir)/lookup.h \
-             $(srcdir)/long.h $(srcdir)/double.h \
-             $(srcdir)/code.h $(srcdir)/case.h $(srcdir)/zip.h \
-	     $(srcdir)/unzip.h $(srcdir)/symbol.h $(srcdir)/option.h \
-             $(srcdir)/depend.h $(srcdir)/access.h $(srcdir)/control.h \
-             $(srcdir)/set.h $(srcdir)/semantic.h $(srcdir)/ast.h \
-             $(srcdir)/diagnose.h $(srcdir)/parser.h $(srcdir)/lpginput.h \
-             $(srcdir)/javaprs.h $(srcdir)/javaact.h $(srcdir)/error.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/stream.cpp 
-
-symbol.@O@:  $(srcdir)/symbol.cpp $(srcdir)/config.h $(srcdir)/stream.h \
-             $(srcdir)/javadef.h $(srcdir)/javasym.h $(srcdir)/tuple.h \
-             $(srcdir)/tab.h $(srcdir)/lookup.h \
-             $(srcdir)/long.h $(srcdir)/double.h \
-             $(srcdir)/code.h $(srcdir)/case.h $(srcdir)/control.h \
-	     $(srcdir)/option.h $(srcdir)/symbol.h $(srcdir)/depend.h \
-             $(srcdir)/access.h $(srcdir)/set.h $(srcdir)/ast.h \
-             $(srcdir)/semantic.h $(srcdir)/diagnose.h $(srcdir)/parser.h \
-             $(srcdir)/lpginput.h $(srcdir)/javaprs.h $(srcdir)/javaact.h \
-             $(srcdir)/error.h $(srcdir)/table.h $(srcdir)/zip.h $(srcdir)/unzip.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/symbol.cpp
-
-system.@O@:  $(srcdir)/system.cpp $(srcdir)/config.h $(srcdir)/control.h \
-             $(srcdir)/option.h $(srcdir)/code.h \
-             $(srcdir)/tuple.h $(srcdir)/symbol.h $(srcdir)/stream.h \
-             $(srcdir)/javadef.h $(srcdir)/javasym.h $(srcdir)/tab.h \
-             $(srcdir)/lookup.h $(srcdir)/long.h $(srcdir)/double.h \
-             $(srcdir)/case.h $(srcdir)/depend.h \
-             $(srcdir)/access.h $(srcdir)/set.h $(srcdir)/semantic.h \
-	     $(srcdir)/ast.h $(srcdir)/diagnose.h $(srcdir)/parser.h \
-             $(srcdir)/lpginput.h $(srcdir)/javaprs.h $(srcdir)/javaact.h \
-             $(srcdir)/error.h $(srcdir)/zip.h $(srcdir)/unzip.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/system.cpp 
-
-tab.@O@: $(srcdir)/tab.h $(srcdir)/tab.cpp $(srcdir)/config.h
-	$(CXX) $(CXXFLAGS) $(srcdir)/tab.cpp
-
-unzip.@O@:  $(srcdir)/unzip.cpp $(srcdir)/config.h $(srcdir)/unzip.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/unzip.cpp 
-
-wom.@O@:  $(srcdir)/wom.cpp $(srcdir)/config.h $(srcdir)/semantic.h \
-          $(srcdir)/ast.h $(srcdir)/stream.h $(srcdir)/javadef.h \
-          $(srcdir)/javasym.h $(srcdir)/tuple.h \
-          $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-          $(srcdir)/double.h $(srcdir)/code.h \
-	  $(srcdir)/case.h $(srcdir)/symbol.h $(srcdir)/option.h \
-          $(srcdir)/depend.h $(srcdir)/access.h $(srcdir)/diagnose.h \
-          $(srcdir)/parser.h $(srcdir)/lpginput.h $(srcdir)/javaprs.h \
-          $(srcdir)/javaact.h $(srcdir)/error.h $(srcdir)/control.h $(srcdir)/set.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/wom.cpp
-
-zip.@O@:  $(srcdir)/zip.cpp $(srcdir)/config.h $(srcdir)/control.h \
-          $(srcdir)/option.h $(srcdir)/code.h $(srcdir)/tuple.h \
-	  $(srcdir)/symbol.h $(srcdir)/stream.h $(srcdir)/javadef.h \
-          $(srcdir)/javasym.h $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
-	  $(srcdir)/double.h $(srcdir)/case.h \
-          $(srcdir)/depend.h $(srcdir)/access.h $(srcdir)/set.h \
-          $(srcdir)/zip.h $(srcdir)/unzip.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/zip.cpp 
-
-segment.@O@:  $(srcdir)/segment.cpp $(srcdir)/segment.h $(srcdir)/tuple.h $(srcdir)/config.h 
-	$(CXX) $(CXXFLAGS) $(srcdir)/segment.cpp
+jikes_SOURCES = \
+ast.cpp \
+body.cpp \
+bytecode.cpp \
+case.cpp \
+code.cpp \
+control.cpp \
+decl.cpp \
+definite.cpp \
+depend.cpp \
+diagnose.cpp \
+double.cpp \
+dump.cpp \
+error.cpp \
+expr.cpp \
+getclass.cpp \
+incrmnt.cpp \
+init.cpp \
+javaact.cpp \
+jikes.cpp \
+jikesapi.cpp \
+long.cpp \
+lookup.cpp \
+lpginput.cpp \
+modifier.cpp \
+op.cpp \
+option.cpp \
+parser.cpp \
+scanner.cpp \
+segment.cpp \
+set.cpp \
+stream.cpp \
+symbol.cpp \
+system.cpp \
+tab.cpp \
+unparse.cpp \
+unzip.cpp \
+zip.cpp \
+platform.cpp \
+jikesapi.h
 
 
-tags:
-	etags *.h *.cpp
+# FIXME : jikesapi.h does not get installed right now.
+
+noinst_HEADERS = \
+access.h \
+ast.h \
+bytecode.h \
+case.h \
+class.h \
+code.h \
+control.h \
+depend.h \
+diagnose.h \
+double.h \
+error.h \
+getclass.h \
+javaact.h \
+javadcl.h \
+javadef.h \
+javaprs.h \
+javasym.h \
+jikesapi.h \
+long.h \
+lookup.h \
+lpginput.h \
+op.h \
+option.h \
+parser.h \
+platform.h \
+scanner.h \
+segment.h \
+semantic.h \
+set.h \
+spell.h \
+stream.h \
+symbol.h \
+tab.h \
+table.h \
+tuple.h \
+unzip.h \
+zip.h
+
+subdir = src
+mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
+CONFIG_HEADER = config.h
+CONFIG_CLEAN_FILES = 
+bin_PROGRAMS =  jikes$(EXEEXT)
+PROGRAMS =  $(bin_PROGRAMS)
 
 
-TAGS:  tags
+DEFS = @DEFS@ -I. -I$(srcdir) -I.
+CPPFLAGS = @CPPFLAGS@
+LDFLAGS = @LDFLAGS@
+LIBS = @LIBS@
+am_jikes_OBJECTS =  ast.$(OBJEXT) body.$(OBJEXT) bytecode.$(OBJEXT) \
+case.$(OBJEXT) code.$(OBJEXT) control.$(OBJEXT) decl.$(OBJEXT) \
+definite.$(OBJEXT) depend.$(OBJEXT) diagnose.$(OBJEXT) double.$(OBJEXT) \
+dump.$(OBJEXT) error.$(OBJEXT) expr.$(OBJEXT) getclass.$(OBJEXT) \
+incrmnt.$(OBJEXT) init.$(OBJEXT) javaact.$(OBJEXT) jikes.$(OBJEXT) \
+jikesapi.$(OBJEXT) long.$(OBJEXT) lookup.$(OBJEXT) lpginput.$(OBJEXT) \
+modifier.$(OBJEXT) op.$(OBJEXT) option.$(OBJEXT) parser.$(OBJEXT) \
+scanner.$(OBJEXT) segment.$(OBJEXT) set.$(OBJEXT) stream.$(OBJEXT) \
+symbol.$(OBJEXT) system.$(OBJEXT) tab.$(OBJEXT) unparse.$(OBJEXT) \
+unzip.$(OBJEXT) zip.$(OBJEXT) platform.$(OBJEXT)
+jikes_OBJECTS =  $(am_jikes_OBJECTS)
+jikes_LDADD = $(LDADD)
+jikes_DEPENDENCIES = 
+jikes_LDFLAGS = 
+CXXCOMPILE = $(CXX) $(DEFS) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
+CXXFLAGS = @CXXFLAGS@
+CXXLD = $(CXX)
+CXXLINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
+CFLAGS = @CFLAGS@
+COMPILE = $(CC) $(DEFS) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+CCLD = $(CC)
+LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
+DIST_SOURCES =  $(jikes_SOURCES)
+HEADERS =  $(noinst_HEADERS)
+
+depcomp = $(SHELL) $(top_srcdir)/depcomp
+DEP_FILES =  @AMDEP@ $(DEPDIR)/ast.Po $(DEPDIR)/body.Po \
+$(DEPDIR)/bytecode.Po $(DEPDIR)/case.Po $(DEPDIR)/code.Po \
+$(DEPDIR)/control.Po $(DEPDIR)/decl.Po $(DEPDIR)/definite.Po \
+$(DEPDIR)/depend.Po $(DEPDIR)/diagnose.Po $(DEPDIR)/double.Po \
+$(DEPDIR)/dump.Po $(DEPDIR)/error.Po $(DEPDIR)/expr.Po \
+$(DEPDIR)/getclass.Po $(DEPDIR)/incrmnt.Po $(DEPDIR)/init.Po \
+$(DEPDIR)/javaact.Po $(DEPDIR)/jikes.Po $(DEPDIR)/jikesapi.Po \
+$(DEPDIR)/long.Po $(DEPDIR)/lookup.Po $(DEPDIR)/lpginput.Po \
+$(DEPDIR)/modifier.Po $(DEPDIR)/op.Po $(DEPDIR)/option.Po \
+$(DEPDIR)/parser.Po $(DEPDIR)/platform.Po $(DEPDIR)/scanner.Po \
+$(DEPDIR)/segment.Po $(DEPDIR)/set.Po $(DEPDIR)/stream.Po \
+$(DEPDIR)/symbol.Po $(DEPDIR)/system.Po $(DEPDIR)/tab.Po \
+$(DEPDIR)/unparse.Po $(DEPDIR)/unzip.Po $(DEPDIR)/zip.Po
+DIST_COMMON =  $(noinst_HEADERS) ./stamp-h.in Makefile.am Makefile.in \
+config.h.in depcomp
+
+
+DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
+
+GZIP_ENV = --best
+SOURCES = $(jikes_SOURCES)
+OBJECTS = $(am_jikes_OBJECTS)
+
+all: all-redirect
+.SUFFIXES:
+.SUFFIXES: .c .cpp .h .o .obj
+$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ Makefile.am $(top_srcdir)/configure.in $(ACLOCAL_M4) 
+	cd $(top_srcdir) && $(AUTOMAKE) --gnu src/Makefile
+
+Makefile: $(srcdir)/Makefile.in  $(top_builddir)/config.status
+	cd $(top_builddir) \
+	  && CONFIG_FILES=$(subdir)/$@ CONFIG_HEADERS= $(SHELL) ./config.status
+
+
+config.h: stamp-h
+	@if test ! -f $@; then \
+		rm -f stamp-h; \
+		$(MAKE) stamp-h; \
+	else :; fi
+stamp-h: $(srcdir)/config.h.in $(top_builddir)/config.status
+	@rm -f stamp-h stamp-hT
+	@echo timestamp > stamp-hT 2> /dev/null
+	cd $(top_builddir) \
+	  && CONFIG_FILES= CONFIG_HEADERS=src/config.h \
+	     $(SHELL) ./config.status
+	@mv stamp-hT stamp-h
+$(srcdir)/config.h.in: @MAINTAINER_MODE_TRUE@$(srcdir)/./stamp-h.in
+	@if test ! -f $@; then \
+		rm -f $(srcdir)/./stamp-h.in; \
+		$(MAKE) $(srcdir)/./stamp-h.in; \
+	else :; fi
+$(srcdir)/./stamp-h.in: $(top_srcdir)/configure.in $(ACLOCAL_M4) 
+	@rm -f $(srcdir)/./stamp-h.in $(srcdir)/./stamp-h.inT
+	@echo timestamp > $(srcdir)/./stamp-h.inT 2> /dev/null
+	cd $(top_srcdir) && $(AUTOHEADER)
+	@mv $(srcdir)/./stamp-h.inT $(srcdir)/./stamp-h.in
+
+mostlyclean-hdr:
+
+clean-hdr:
+
+distclean-hdr:
+	-rm -f config.h
+
+maintainer-clean-hdr:
+
+mostlyclean-binPROGRAMS:
+
+clean-binPROGRAMS:
+	-test -z "$(bin_PROGRAMS)" || rm -f $(bin_PROGRAMS)
+
+distclean-binPROGRAMS:
+
+maintainer-clean-binPROGRAMS:
+
+install-binPROGRAMS: $(bin_PROGRAMS)
+	@$(NORMAL_INSTALL)
+	$(mkinstalldirs) $(DESTDIR)$(bindir)
+	@list='$(bin_PROGRAMS)'; for p in $$list; do \
+	  if test -f $$p; then \
+	    f="`echo $$p|sed -e 's/$(EXEEXT)$$//' -e '$(transform)' -e 's/$$/$(EXEEXT)/'`"; \
+	    echo "  $(INSTALL_PROGRAM) $(INSTALL_STRIP_FLAG) $$p $(DESTDIR)$(bindir)/$$f"; \
+	     $(INSTALL_PROGRAM) $(INSTALL_STRIP_FLAG) $$p $(DESTDIR)$(bindir)/$$f; \
+	  else :; fi; \
+	done
+
+uninstall-binPROGRAMS:
+	@$(NORMAL_UNINSTALL)
+	@list='$(bin_PROGRAMS)'; for p in $$list; do \
+	  f="`echo $$p|sed -e 's/$(EXEEXT)$$//' -e '$(transform)' -e 's/$$/$(EXEEXT)/'`"; \
+	  echo " rm -f $(DESTDIR)$(bindir)/$$f"; \
+	  rm -f $(DESTDIR)$(bindir)/$$f; \
+	done
+
+mostlyclean-compile:
+	-rm -f *.o core *.core
+	-rm -f *.$(OBJEXT)
+
+clean-compile:
+
+distclean-compile:
+	-rm -f *.tab.c
+
+maintainer-clean-compile:
+
+jikes$(EXEEXT): $(jikes_OBJECTS) $(jikes_DEPENDENCIES)
+	@rm -f jikes$(EXEEXT)
+	$(CXXLINK) $(jikes_LDFLAGS) $(jikes_OBJECTS) $(jikes_LDADD) $(LIBS)
+
+tags: TAGS
+
+ID: $(HEADERS) $(SOURCES) $(LISP) $(TAGS_FILES)
+	list='$(SOURCES) $(HEADERS) $(TAGS_FILES)'; \
+	unique=`for i in $$list; do \
+	    if test -f "$$i"; then echo $$i; else echo $(srcdir)/$$i; fi; \
+	  done | \
+	  $(AWK) '    { files[$$0] = 1; } \
+	       END { for (i in files) print i; }'`; \
+	mkid -fID $$unique $(LISP)
+
+TAGS:  $(HEADERS) $(SOURCES) config.h.in $(TAGS_DEPENDENCIES) \
+		$(TAGS_FILES) $(LISP)
+	tags=; \
+	here=`pwd`; \
+	list='$(SOURCES) $(HEADERS) $(TAGS_FILES)'; \
+	unique=`for i in $$list; do \
+	    if test -f "$$i"; then echo $$i; else echo $(srcdir)/$$i; fi; \
+	  done | \
+	  $(AWK) '    { files[$$0] = 1; } \
+	       END { for (i in files) print i; }'`; \
+	test -z "$(ETAGS_ARGS)config.h.in$$unique$(LISP)$$tags" \
+	  || etags $(ETAGS_ARGS) $$tags config.h.in $$unique $(LISP)
+
+mostlyclean-tags:
+
+clean-tags:
+
+distclean-tags:
+	-rm -f TAGS ID
+
+maintainer-clean-tags:
+
+@AMDEP@include $(DEPDIR)/ast.Po
+@AMDEP@include $(DEPDIR)/body.Po
+@AMDEP@include $(DEPDIR)/bytecode.Po
+@AMDEP@include $(DEPDIR)/case.Po
+@AMDEP@include $(DEPDIR)/code.Po
+@AMDEP@include $(DEPDIR)/control.Po
+@AMDEP@include $(DEPDIR)/decl.Po
+@AMDEP@include $(DEPDIR)/definite.Po
+@AMDEP@include $(DEPDIR)/depend.Po
+@AMDEP@include $(DEPDIR)/diagnose.Po
+@AMDEP@include $(DEPDIR)/double.Po
+@AMDEP@include $(DEPDIR)/dump.Po
+@AMDEP@include $(DEPDIR)/error.Po
+@AMDEP@include $(DEPDIR)/expr.Po
+@AMDEP@include $(DEPDIR)/getclass.Po
+@AMDEP@include $(DEPDIR)/incrmnt.Po
+@AMDEP@include $(DEPDIR)/init.Po
+@AMDEP@include $(DEPDIR)/javaact.Po
+@AMDEP@include $(DEPDIR)/jikes.Po
+@AMDEP@include $(DEPDIR)/jikesapi.Po
+@AMDEP@include $(DEPDIR)/long.Po
+@AMDEP@include $(DEPDIR)/lookup.Po
+@AMDEP@include $(DEPDIR)/lpginput.Po
+@AMDEP@include $(DEPDIR)/modifier.Po
+@AMDEP@include $(DEPDIR)/op.Po
+@AMDEP@include $(DEPDIR)/option.Po
+@AMDEP@include $(DEPDIR)/parser.Po
+@AMDEP@include $(DEPDIR)/platform.Po
+@AMDEP@include $(DEPDIR)/scanner.Po
+@AMDEP@include $(DEPDIR)/segment.Po
+@AMDEP@include $(DEPDIR)/set.Po
+@AMDEP@include $(DEPDIR)/stream.Po
+@AMDEP@include $(DEPDIR)/symbol.Po
+@AMDEP@include $(DEPDIR)/system.Po
+@AMDEP@include $(DEPDIR)/tab.Po
+@AMDEP@include $(DEPDIR)/unparse.Po
+@AMDEP@include $(DEPDIR)/unzip.Po
+@AMDEP@include $(DEPDIR)/zip.Po
+
+mostlyclean-depend:
+
+clean-depend:
+
+distclean-depend:
+	-rm -rf $(DEPDIR)
+
+maintainer-clean-depend:
+
+@AMDEP@CXXDEPMODE = @CXXDEPMODE@
+
+.cpp.o:
+@AMDEP@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
+@AMDEP@	depfile='$(DEPDIR)/$*.Po' tmpdepfile='$(DEPDIR)/$*.TPo' @AMDEPBACKSLASH@
+@AMDEP@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+	$(CXXCOMPILE) -c -o $@ `test -f $< || echo '$(srcdir)/'`$<
+
+.cpp.obj:
+@AMDEP@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
+@AMDEP@	depfile='$(DEPDIR)/$*.Po' tmpdepfile='$(DEPDIR)/$*.TPo' @AMDEPBACKSLASH@
+@AMDEP@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+	$(CXXCOMPILE) -c -o $@ `cygpath -w $<`
+
+
+distdir = $(top_builddir)/$(PACKAGE)-$(VERSION)/$(subdir)
+
+distdir: $(DISTFILES)
+	@for file in $(DISTFILES); do \
+	  d=$(srcdir); \
+	  if test -d $$d/$$file; then \
+	    cp -pR $$d/$$file $(distdir) \
+	    || exit 1; \
+	  else \
+	    test -f $(distdir)/$$file \
+	    || cp -p $$d/$$file $(distdir)/$$file \
+	    || exit 1; \
+	  fi; \
+	done
+info-am:
+info: info-am
+dvi-am:
+dvi: dvi-am
+check-am: all-am
+check: check-am
+installcheck-am:
+installcheck: installcheck-am
+all-recursive-am: config.h
+	$(MAKE) $(AM_MAKEFLAGS) all-recursive
+
+install-exec-am: install-binPROGRAMS
+install-exec: install-exec-am
+
+install-data-am:
+install-data: install-data-am
+
+install-am: all-am
+	@$(MAKE) $(AM_MAKEFLAGS) install-exec-am install-data-am
+install: install-am
+uninstall-am: uninstall-binPROGRAMS
+uninstall: uninstall-am
+all-am: Makefile $(PROGRAMS) $(HEADERS) config.h
+all-redirect: all-am
+install-strip:
+	$(MAKE) $(AM_MAKEFLAGS) INSTALL_STRIP_FLAG=-s install
+installdirs:
+	$(mkinstalldirs)  $(DESTDIR)$(bindir)
+
+
+mostlyclean-generic:
+
+clean-generic:
+
+distclean-generic:
+	-rm -f Makefile $(CONFIG_CLEAN_FILES)
+	-rm -f config.cache config.log stamp-h stamp-h[0-9]*
+
+maintainer-clean-generic:
+	-rm -f Makefile.in
+mostlyclean-am:  mostlyclean-hdr mostlyclean-binPROGRAMS \
+		mostlyclean-compile mostlyclean-tags mostlyclean-depend \
+		mostlyclean-generic
+
+mostlyclean: mostlyclean-am
+
+clean-am:  clean-hdr clean-binPROGRAMS clean-compile clean-tags \
+		clean-depend clean-generic mostlyclean-am
+
+clean: clean-am
+
+distclean-am:  distclean-hdr distclean-binPROGRAMS distclean-compile \
+		distclean-tags distclean-depend distclean-generic \
+		clean-am
+
+distclean: distclean-am
+
+maintainer-clean-am:  maintainer-clean-hdr maintainer-clean-binPROGRAMS \
+		maintainer-clean-compile maintainer-clean-tags \
+		maintainer-clean-depend maintainer-clean-generic \
+		distclean-am
+	@echo "This command is intended for maintainers to use;"
+	@echo "it deletes files that may require special tools to rebuild."
+
+maintainer-clean: maintainer-clean-am
+
+.PHONY: mostlyclean-hdr distclean-hdr clean-hdr maintainer-clean-hdr \
+mostlyclean-binPROGRAMS distclean-binPROGRAMS clean-binPROGRAMS \
+maintainer-clean-binPROGRAMS uninstall-binPROGRAMS install-binPROGRAMS \
+mostlyclean-compile distclean-compile clean-compile \
+maintainer-clean-compile tags mostlyclean-tags distclean-tags \
+clean-tags maintainer-clean-tags mostlyclean-depend distclean-depend \
+clean-depend maintainer-clean-depend distdir info-am info dvi-am dvi \
+check check-am installcheck-am installcheck all-recursive-am \
+install-exec-am install-exec install-data-am install-data install-am \
+install uninstall-am uninstall all-redirect all-am all install-strip \
+installdirs mostlyclean-generic distclean-generic clean-generic \
+maintainer-clean-generic clean mostlyclean distclean maintainer-clean
+
+
+# FIXME : This is currently broken, need to ask Tom why is does not work.
+#INCLUDES = -I$(srcdir) -I.
+
+# Special rule to remake autogenerated Java files
+
+jikespg:
+	cd $(srcdir)
+	jikespg java.g
+	rm -f java.l
+
+# Tell versions [3.59,3.63) of GNU make to not export all variables.
+# Otherwise a system limit (for SysV at least) may be exceeded.
+.NOEXPORT:

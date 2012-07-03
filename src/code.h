@@ -1,9 +1,17 @@
 #ifndef code_INCLUDED
 #define code_INCLUDED
 
-#include "config.h"
+#include "platform.h"
+
+/*
+//FIXME: need to readdress this include stuff
 #include <ctype.h>
 #include <assert.h>
+*/
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class Code
 {
@@ -47,7 +55,7 @@ public:
          assert(base[c >> LOG_COMPLEMENT_SIZE] + c < (&code[39424]));
     }
 
-    static inline bool IsNewline(wchar_t c) // \r characters are replaced by \x0a in read_input.
+    static inline bool IsNewline(wchar_t c) // \r characters are replaced by \x0a in Stream::ProcessInput().
     {
         return c == '\x0a';
     }
@@ -90,4 +98,9 @@ public:
 
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif
+

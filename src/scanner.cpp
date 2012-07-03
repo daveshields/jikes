@@ -1,4 +1,4 @@
-// $Id: scanner.cpp,v 1.11 2000/01/06 08:24:30 lord Exp $
+// $Id: scanner.cpp,v 1.15 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,10 +7,13 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "config.h"
 #include "scanner.h"
 #include "control.h"
 #include "error.h"
+
+#ifdef	HAVE_NAMESPACES
+using namespace Jikes;
+#endif
 
 int (*Scanner::scan_keyword[13]) (wchar_t *p1) =
 {
@@ -184,9 +187,8 @@ void Scanner::Scan(FileSymbol *file_symbol)
         if (control.option.dump_errors)
         {
             lex -> SortMessages();
-            for (int i = 0; i < lex -> bad_tokens.Length(); i++)
-                lex -> PrintEmacsMessage(i);
-            Coutput.flush();
+            for(int i = 0; i < lex -> bad_tokens.Length(); i++)
+                JikesAPI::getInstance()->reportError(&(lex->bad_tokens[i]));
         }
         lex -> DestroyInput(); // get rid of input buffer
     }
@@ -344,7 +346,7 @@ void Scanner::ScanStarComment()
 
     lex -> bad_tokens.Next().Initialize(StreamError::UNTERMINATED_COMMENT,
                                         current_comment -> location,
-                                        (unsigned) (cursor - lex -> InputBuffer()) - 1);
+                                        (unsigned) (cursor - lex -> InputBuffer()) - 1, lex);
 
     current_comment -> length = (cursor - lex -> InputBuffer()) - current_comment -> location;
 
@@ -743,7 +745,7 @@ inline void Scanner::CheckOctalLiteral(wchar_t *cursor, wchar_t *tail)
         if (p < tail)
             lex -> bad_tokens.Next().Initialize(StreamError::BAD_OCTAL_CONSTANT,
                                                 (unsigned) (cursor - lex -> InputBuffer()),
-                                                (unsigned) (tail - lex -> InputBuffer()) - 1);
+                                                (unsigned) (tail - lex -> InputBuffer()) - 1, lex);
     }
 
     return;
@@ -781,7 +783,7 @@ void Scanner::ClassifyCharLiteral()
         if (len == 1)
             lex -> bad_tokens.Next().Initialize(StreamError::EMPTY_CHARACTER_CONSTANT,
                                                 current_token -> Location(),
-                                                (unsigned) (ptr - lex -> InputBuffer()));
+                                                (unsigned) (ptr - lex -> InputBuffer()), lex);
         ptr++;
     }
     else
@@ -790,7 +792,7 @@ void Scanner::ClassifyCharLiteral()
             current_token -> SetKind(0);
         lex -> bad_tokens.Next().Initialize(StreamError::UNTERMINATED_CHARACTER_CONSTANT,
                                             current_token -> Location(),
-                                            (unsigned) (ptr - lex -> InputBuffer()) - 1);
+                                            (unsigned) (ptr - lex -> InputBuffer()) - 1, lex);
     }
 
     current_token -> SetSymbol(control.char_table.FindOrInsertLiteral(cursor, ptr - cursor));
@@ -833,7 +835,7 @@ void Scanner::ClassifyStringLiteral()
             current_token -> SetKind(0);
         lex -> bad_tokens.Next().Initialize(StreamError::UNTERMINATED_STRING_CONSTANT,
                                             current_token -> Location(),
-                                            (unsigned) (ptr - lex -> InputBuffer()) - 1);
+                                            (unsigned) (ptr - lex -> InputBuffer()) - 1, lex);
     }
 
     current_token -> SetSymbol(control.string_table.FindOrInsertLiteral(cursor, ptr - cursor));
@@ -994,7 +996,7 @@ void Scanner::ClassifyNumericLiteral()
             }
             else lex -> bad_tokens.Next().Initialize(StreamError::INVALID_HEX_CONSTANT,
                                                      current_token -> Location(),
-                                                     (unsigned) (ptr - lex -> InputBuffer()) - 1);
+                                                     (unsigned) (ptr - lex -> InputBuffer()) - 1, lex);
         }
     }
 
@@ -1026,7 +1028,7 @@ void Scanner::ClassifyNumericLiteral()
         }
         else lex -> bad_tokens.Next().Initialize(StreamError::INVALID_FLOATING_CONSTANT_EXPONENT,
                                                  current_token -> Location(),
-                                                 (unsigned) (ptr - lex -> InputBuffer()) - 1);
+                                                 (unsigned) (ptr - lex -> InputBuffer()) - 1, lex);
     }
 
     /******************************************************************/
@@ -1536,7 +1538,7 @@ void Scanner::ClassifyBadToken()
 
          lex -> bad_tokens.Next().Initialize(StreamError::BAD_TOKEN,
                                              current_token -> Location(),
-                                             current_token -> Location());
+                                             current_token -> Location(), lex);
     }
     else
     {

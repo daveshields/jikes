@@ -1,4 +1,4 @@
-// $Id: stream.h,v 1.15 2000/01/07 00:25:53 lord Exp $
+// $Id: stream.h,v 1.25 2000/07/25 11:32:33 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,28 +10,53 @@
 #ifndef stream_INCLUDED
 #define stream_INCLUDED
 
-#include "config.h"
-#include <sys/stat.h>
-#include <limits.h>
-#include <iostream.h>
-#include <stddef.h>
-#include <stdio.h>
+#include "platform.h"
 #include "javadef.h"
 #include "javasym.h"
 #include "tuple.h"
 #include "tab.h"
 #include "lookup.h"
+#include "jikesapi.h"
 
-class Control;
-class Input_info;
-class Scanner;
-class Symbol;
-class FileSymbol;
-class ZipFile;
+/*
+//FIXME: include stuff
+#include <limits.h>
+#include <iostream.h>
+#include <stddef.h>
+#include <stdio.h>
+*/
 
-class StreamError
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
+
+class Control    ;
+class Input_info ;
+class Scanner    ;
+class Symbol     ;
+class FileSymbol ;
+class ZipFile    ;
+class LexStream  ;
+
+class StreamError : public JikesError
 {
-public:
+    friend class LexStream;
+
+ public:
+
+    StreamError();
+    
+    virtual const wchar_t *getErrorMessage();
+    virtual const wchar_t *getErrorReport();
+    
+    virtual JikesErrorSeverity getSeverity();
+    virtual const char *getFileName();
+    
+    virtual int getLeftLineNo      ();
+    virtual int getLeftColumnNo    ();
+    virtual int getRightLineNo     ();
+    virtual int getRightColumnNo   ();
+    
     enum StreamErrorKind
     {
         BAD_TOKEN,
@@ -45,18 +70,32 @@ public:
         INVALID_UNICODE_ESCAPE
     };
 
-    unsigned start_location,
-             end_location;
-    StreamErrorKind kind;
+    void Initialize(StreamErrorKind kind_, unsigned start_location_, unsigned end_location_, LexStream *);
 
-    void Initialize(StreamErrorKind kind_, unsigned start_location_, unsigned end_location_)
-    {
-        kind = kind_;
-        start_location = start_location_;
-        end_location = end_location_;
+ protected:
 
-        return;
-    }
+ private:
+
+    unsigned        start_location ;
+    unsigned        end_location   ;
+    StreamErrorKind kind           ;
+    
+    static  bool    emacs_style_report;
+    LexStream      *lex_stream;
+
+    int left_line_no    ;
+    int left_column_no  ;
+    int right_line_no   ;
+    int right_column_no ;
+
+    wchar_t *regularErrorString();
+    wchar_t *emacsErrorString();
+    
+    void PrintLargeSource(ErrorString &s);
+    void PrintSmallSource(ErrorString &s);
+
+    bool initialized;
+    
 };
 
 
@@ -66,7 +105,11 @@ public:
 //
 class LexStream
 {
-public:
+
+    friend class StreamError;
+    
+ public:
+    
     typedef int TypeIndex;
     typedef int TokenIndex;
     typedef int CommentIndex;
@@ -185,30 +228,14 @@ public:
 
     inline int NumBadTokens() { return bad_tokens.Length(); }
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     int file_read;
 #endif
 
     //*
     //* Constructors and Destructor.
     //*
-    LexStream(Control &control_, FileSymbol *file_symbol_) : file_symbol(file_symbol_),
-#ifdef TEST
-                                                             file_read(0),
-#endif
-                                                             tokens(NULL),
-                                                             columns(NULL),
-                                                             token_stream(12, 16),
-                                                             comments(NULL),
-                                                             comment_stream(10, 8),
-                                                             locations(NULL),
-                                                             line_location(12, 8),
-                                                             initial_reading_of_input(true),
-                                                             input_buffer(NULL),
-                                                             input_buffer_length(0),
-                                                             comment_buffer(NULL),
-                                                             control(control_)
-    {}
+    LexStream(Control &control_, FileSymbol *file_symbol_);
 
     bool ComputeColumns()
     {
@@ -236,10 +263,6 @@ public:
 
     void SortMessages();
     void PrintMessages();
-    void PrintEmacsMessage(int);
-    void PrintSmallSource(int);
-    void PrintLargeSource(int);
-    void PrintMessage(StreamError::StreamErrorKind);
 
     void SetUpComments()
     {
@@ -267,8 +290,8 @@ public:
         return;
     }
 
-#ifdef TEST
-void LexStream::Dump(); // temporary function used to dump token stream.
+#ifdef JIKES_DEBUG
+void Dump(); // temporary function used to dump token stream.
 #endif
 
     //
@@ -291,8 +314,10 @@ private:
 
     int hexvalue(wchar_t ch);
     
+#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
     enum UnicodeLexerState
     {
+        START,
         RAW,
         CR,
         QUOTE,
@@ -301,6 +326,7 @@ private:
         UNICODE_ESCAPE_DIGIT_1,
         UNICODE_ESCAPE_DIGIT_2
     };
+#endif
     
     friend class Scanner;
 
@@ -387,10 +413,10 @@ private:
     Control &control;
 
     void ReadInput();
-    void ProcessInput(char *, long);
-    void ProcessInputAscii(char *, long);
-#ifdef HAVE_LIB_ICU_UC
-    void ProcessInputUnicode(char *, long);
+    void ProcessInput(const char *, long);
+    void ProcessInputAscii(const char *, long);
+#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
+    void ProcessInputUnicode(const char *, long);
 #endif  
 
     wchar_t *KeywordName(int);
@@ -405,4 +431,9 @@ private:
     }
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
 #endif
+
+#endif
+

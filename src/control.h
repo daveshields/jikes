@@ -1,4 +1,4 @@
-// $Id: control.h,v 1.24 2000/01/06 08:24:30 lord Exp $
+// $Id: control.h,v 1.30 2000/07/25 11:32:32 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,13 +10,21 @@
 #ifndef control_INCLUDED
 #define control_INCLUDED
 
-#include "config.h"
-#include <iostream.h>
-#include <stdio.h>
+#include "platform.h"
 #include "option.h"
 #include "symbol.h"
 #include "tuple.h"
 #include "set.h"
+
+/*
+//FIXME: need to readdress this include stuff
+#include <iostream.h>
+#include <stdio.h>
+*/
+
+#ifdef	HAVE_NAMESPACES
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 class StoragePool;
 class Scanner;
@@ -398,7 +406,7 @@ public:
                      *null_literal,
                      *this_literal;
 
-    Control(ArgumentExpander &, Option &);
+    Control(char **, Option &);
     ~Control();
 
     Utf8LiteralValue *ConvertUnicodeToUtf8(wchar_t *source)
@@ -411,9 +419,9 @@ public:
         return literal;
     }
 
-    static int ConvertUtf8ToUnicode(wchar_t *, char *, int);
+    static int ConvertUtf8ToUnicode(wchar_t *, const char *, int);
 
-    NameSymbol *ConvertUtf8ToUnicode(char *source, int length)
+    NameSymbol *ConvertUtf8ToUnicode(const char *source, int length)
     {
         wchar_t *name = new wchar_t[length + 1];
         int name_length = ConvertUtf8ToUnicode(name, source, length);
@@ -522,7 +530,7 @@ public:
 
     void ProcessHeaders(FileSymbol *);
 
-#ifdef TEST
+#ifdef JIKES_DEBUG
     int input_files_processed,
         class_files_read,
         class_files_written,
@@ -594,10 +602,15 @@ private:
     void ProcessMembers();
     void ProcessBodies(TypeSymbol *);
 
-    void ProcessNewInputFiles(SymbolSet &, ArgumentExpander &, int = 0);
+    void ProcessNewInputFiles(SymbolSet &, char **, int = 0);
 
     FileSymbol *FindOrInsertJavaInputFile(DirectorySymbol *, NameSymbol *);
     FileSymbol *FindOrInsertJavaInputFile(wchar_t *, int);
 };
 
+#ifdef	HAVE_NAMESPACES
+}			// Close namespace Jikes block
+#endif
+
 #endif /* control_INCLUDED */
+
