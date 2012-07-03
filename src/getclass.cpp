@@ -1,4 +1,4 @@
-// $Id: getclass.cpp,v 1.14 1999/09/01 14:58:25 shields Exp $
+// $Id: getclass.cpp,v 1.15 1999/09/17 17:52:40 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -123,7 +123,12 @@ TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type, char *utf8_si
 {
     TypeSymbol *type = control.type_table.FindType(utf8_signature, length);
 
-    if (! type)
+    if (type)
+    {
+        if (type -> SourcePending())
+            control.ProcessHeaders(type -> file_symbol);
+    }
+    else
     {
         wchar_t *signature = new wchar_t[length + 1];
         (void) Control::ConvertUtf8ToUnicode(signature, utf8_signature, length);

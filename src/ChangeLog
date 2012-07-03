@@ -1,3 +1,29 @@
+1999-09-17    <shields@jikes.watson.ibm.com>
+
+	* jikes.cpp:
+	Release as version 1.06
+
+	* error.cpp: 
+	* error.h:
+	* option.cpp:
+	Disable '++' option due to observed erratic behavior -- will try
+	to fix soon.
+
+	* config.cpp:
+	* control.cpp:
+	* decl.cpp:
+	* expr.cpp:
+	* getclass.cpp:
+	* incrmnt.cpp:
+	* jikes.cpp:
+	* lookup.cpp:
+	* lookup.h:
+	* option.cpp:
+	* semantic.h:
+	* symbol.cpp:
+	Fixes for 489, 490, 491.
+	Add new option -Xdepend, synomym for -depend.
+
 1999-09-15    <shields@jikes.watson.ibm.com>
 
 	* expr.cpp: 

@@ -1,4 +1,4 @@
-// $Id: incrmnt.cpp,v 1.10 1999/08/26 15:34:08 shields Exp $
+// $Id: incrmnt.cpp,v 1.11 1999/09/17 17:48:37 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -355,6 +355,12 @@ void Control::ComputeRecompilationSet(TypeDependenceChecker &dependence_checker)
 //
 bool Control::IncrementalRecompilation()
 {
+    //
+    // Empty out the type lookup table so that it does not continue
+    // to point to a type that is deleted here.
+    //
+    type_table.SetEmpty();
+
     SymbolSet candidates(input_java_file_set.Size() + input_class_file_set.Size() + recompilation_file_set.Size());
     ArgumentExpander *new_arguments = NULL;
 

@@ -1,4 +1,4 @@
-// $Id: config.cpp,v 1.22 1999/09/13 14:21:14 shields Exp $
+// $Id: config.cpp,v 1.23 1999/09/17 17:48:36 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -210,8 +210,8 @@ wchar_t StringConstant::US_AND[]                        = {U_AM, U_NU}, // "&"
 
 wchar_t StringConstant::US_smallest_int[] = {U_MINUS, U_2, U_1, U_4, U_7, U_4, U_8, U_3, U_6, U_4, U_8, U_NU}; // "-2147483648"
 
-char StringConstant::U8S_command_format[] = "use: jikes [-classpath path][-d dir][-debug][-depend][-deprecation]"
-                                            "[-g][-nowarn][-nowrite][-O][-verbose][-Xstdout]"
+char StringConstant::U8S_command_format[] = "use: jikes [-classpath path][-d dir][-debug][-depend|-Xdepend][-deprecation]"
+                                            "[-g][-nowarn][-nowrite][-O][-verbose][-Xdepend][-Xstdout]"
                                             "[+1.0][++][+B][+D][+E][+F][+K][+M][+P][+T][+U][+Z]"
                                             " file.java...";
 

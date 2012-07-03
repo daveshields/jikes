@@ -1,4 +1,4 @@
-// $Id: option.cpp,v 1.12 1999/08/26 15:34:09 shields Exp $
+// $Id: option.cpp,v 1.14 1999/09/17 20:44:24 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -222,7 +222,7 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                     classpath[k] = Code::ToASCII(classpath[k]);
 #endif
             }
-            else if (strcmp(arguments.argv[i], "-depend") == 0)
+            else if (strcmp(arguments.argv[i], "-depend") == 0 || strcmp(arguments.argv[i], "-Xdepend") == 0)
                  depend = true;
             else if (strcmp(arguments.argv[i],"-verbose") == 0)
                  verbose = true;
@@ -398,8 +398,14 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
             }
             else if (strcmp(arguments.argv[i],"++") == 0)
             {
+                 //
+                 // TODO:
+                 //
+                 bad_options.Next() = new OptionError(SemanticError::DISABLED_OPTION, arguments.argv[i]);
+                 /*
                  incremental = true;
                  full_check = true;
+                 */
             }
             else if (strcmp(arguments.argv[i], "+Z") == 0)
                  zero_defect = true;

@@ -1,4 +1,4 @@
-// $Id: lookup.h,v 1.10 1999/09/01 14:58:25 shields Exp $
+// $Id: lookup.h,v 1.11 1999/09/17 17:48:37 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -493,6 +493,7 @@ public:
 
     TypeSymbol *FindType(char *, int);
     void InsertType(TypeSymbol *);
+    void SetEmpty();
 
 private:
     Tuple<TypeSymbol *> symbol_pool;

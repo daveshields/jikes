@@ -1,4 +1,4 @@
-// $Id: error.cpp,v 1.30 1999/09/13 14:21:15 shields Exp $
+// $Id: error.cpp,v 1.31 1999/09/17 20:44:24 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -244,6 +244,7 @@ void SemanticError::StaticInitializer()
     memset(warning, 0, _num_kinds * sizeof(bool));
 
     warning[INVALID_OPTION] = 1;
+    warning[DISABLED_OPTION] = 1;
     warning[CANNOT_OPEN_ZIP_FILE] = 1;
     warning[CANNOT_OPEN_PATH_DIRECTORY] = 1;
 
@@ -314,6 +315,7 @@ void SemanticError::StaticInitializer()
     print_message[INVALID_TAB_VALUE] = PrintINVALID_TAB_VALUE;
     print_message[INVALID_DIRECTORY] = PrintINVALID_DIRECTORY;
     print_message[UNSUPPORTED_OPTION] = PrintUNSUPPORTED_OPTION;
+    print_message[DISABLED_OPTION] = PrintDISABLED_OPTION;
     print_message[NO_CURRENT_DIRECTORY] = PrintNO_CURRENT_DIRECTORY;
     print_message[CANNOT_OPEN_ZIP_FILE] = PrintCANNOT_OPEN_ZIP_FILE;
     print_message[CANNOT_OPEN_PATH_DIRECTORY] = PrintCANNOT_OPEN_PATH_DIRECTORY;
@@ -1045,6 +1047,16 @@ void SemanticError::PrintUNSUPPORTED_OPTION(ErrorInfo &err, LexStream *lex_strea
     Coutput << "This option \""
             << err.insert1
             << "\" is currently unsupported.";
+
+    return;
+}
+
+
+void SemanticError::PrintDISABLED_OPTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
+{
+    Coutput << "The option \""
+            << err.insert1
+            << "\" has been temporarily disabled.";
 
     return;
 }

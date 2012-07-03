@@ -1,4 +1,4 @@
-// $Id: error.h,v 1.23 1999/09/13 14:21:15 shields Exp $
+// $Id: error.h,v 1.24 1999/09/17 20:44:24 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -34,6 +34,7 @@ public:
         INVALID_TAB_VALUE,
         INVALID_DIRECTORY,
         UNSUPPORTED_OPTION,
+        DISABLED_OPTION,
 
         NO_CURRENT_DIRECTORY,
         CANNOT_OPEN_ZIP_FILE,
@@ -376,6 +377,7 @@ private:
     static void PrintINVALID_TAB_VALUE(ErrorInfo &, LexStream *, Control &);
     static void PrintINVALID_DIRECTORY(ErrorInfo &, LexStream *, Control &);
     static void PrintUNSUPPORTED_OPTION(ErrorInfo &, LexStream *, Control &);
+    static void PrintDISABLED_OPTION(ErrorInfo &, LexStream *, Control &);
     static void PrintNO_CURRENT_DIRECTORY(ErrorInfo &, LexStream *, Control &);
     static void PrintCANNOT_OPEN_ZIP_FILE(ErrorInfo &, LexStream *, Control &);
     static void PrintCANNOT_OPEN_PATH_DIRECTORY(ErrorInfo &, LexStream *, Control &);

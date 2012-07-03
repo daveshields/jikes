@@ -1,4 +1,4 @@
-.TH jikes 1 "16 September 1999" 
+.TH jikes 1 "17 September 1999" 
 .SH NAME
 jikes \- java source to bytecode compiler
 .SH SYNOPSIS
@@ -13,6 +13,7 @@ jikes \- java source to bytecode compiler
 [\fB\-nowrite\fP]
 [\fB\-O\fP]
 [\fB\-verbose\fP]
+[\fB\-Xdepend\fP]
 [\fB\-Xstdout\fP]
 [\fB\+1.0\fP]
 [\fB\+\+\fP]
@@ -67,6 +68,9 @@ do not write LineNumberTable
 .TP
 \fB\-verbose
 list files read and written
+.TP
+\fB\-Xdepend
+same as -depend
 .TP
 \fB\-Xstdout
 write error messages to standard output, not stderr
@@ -124,9 +128,11 @@ takes precedence over any value specified via the environment.
 .SH "SEE ALSO"
 .TP
 \fIhttp://ibm.com/developerworks/opensource\fP
-See the Jikes section, for news of recent developments,
-to download new versions, to report bugs, or to learn how to participate in the
-development process.
+See the Jikes Project section 
+for news of recent developments,
+to download new versions, 
+to report bugs, or 
+to learn how to participate in the development process.
 .TP
 \fIjikes.htm\fP
 for a more complete description in FAQ format. This file is
@@ -139,7 +145,11 @@ International Business Machines Corporation and others. All Rights Reserved.
 .PP
 \fBJikes\fP is licensed under the \fIIBM Public License\fP, included
 in the file \fIlicense.htm\fP distributed with the program, and also
-available at the Jikes Project URL given above.
+available at the Jikes Project URL.
+
+.SH BUGS
+The '++' option has been temporarily disabled until some recently-discovered 
+problems are resolved (v1.06, 17 Sep 99).
 
 .SH NOTES
 Java is a registered trademark of Sun Microsystems, Inc.

@@ -1,4 +1,4 @@
-// $Id: control.cpp,v 1.19 1999/09/13 14:21:14 shields Exp $
+// $Id: control.cpp,v 1.20 1999/09/17 17:48:36 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1313,6 +1313,8 @@ void Control::ProcessPackageDeclaration(FileSymbol *file_symbol, AstPackageDecla
                 TypeSymbol *type = file_symbol -> package -> InsertOuterTypeSymbol(name_symbol);
                 type -> file_symbol = file_symbol;
                 type -> outermost_type = type;
+                type -> supertypes_closure = new SymbolSet;
+                type -> subtypes = new SymbolSet;
                 type -> SetOwner(file_symbol -> package);
                 type -> SetSignature(*this);
                 type -> MarkSourcePending();

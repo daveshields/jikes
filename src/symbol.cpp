@@ -1,4 +1,4 @@
-// $Id: symbol.cpp,v 1.23 1999/09/12 18:04:45 shields Exp $
+// $Id: symbol.cpp,v 1.24 1999/09/17 17:48:37 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
@@ -360,7 +360,8 @@ void TypeSymbol::SetSignature(Control &control)
 
         delete [] type_signature;
 
-        control.type_table.InsertType((TypeSymbol *) this);
+        if (! (this -> Anonymous() || this -> IsLocal()))
+            control.type_table.InsertType((TypeSymbol *) this);
     }
 
     return;
@@ -1679,13 +1680,7 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
 
             class_creation -> class_body_opt = class_body;
 
-            //
-            // We artificially enter a static region for the creation of this anonymous type
-            // to guarantee that it is a top-level class that does not depend on its surrounding.
-            //
-            sem -> EnterStaticRegion();
             TypeSymbol *anonymous_type = sem -> GetAnonymousType(class_creation, control.Object());
-            sem -> ExitStaticRegion();
 
             //
             //

@@ -1,4 +1,4 @@
-// $Id: decl.cpp,v 1.30 1999/09/12 18:04:43 shields Exp $
+// $Id: decl.cpp,v 1.31 1999/09/17 17:48:36 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -187,8 +187,6 @@ void Semantic::ProcessTypeNames()
 
                         type -> MarkSourceNoLongerPending();
                         type -> semantic_environment = new SemanticEnvironment((Semantic *) this, type, NULL);
-                        type -> supertypes_closure = new SymbolSet;
-                        type -> subtypes = new SymbolSet;
                         type -> declaration = class_declaration;
                         type -> SetFlags(ProcessClassModifiers(class_declaration));
                         //
@@ -246,8 +244,6 @@ void Semantic::ProcessTypeNames()
 
                         type -> MarkSourceNoLongerPending();
                         type -> semantic_environment = new SemanticEnvironment((Semantic *) this, type, NULL);
-                        type -> supertypes_closure = new SymbolSet;
-                        type -> subtypes = new SymbolSet;
                         type -> declaration = interface_declaration;
                         type -> file_symbol = source_file_symbol;
                         type -> SetFlags(ProcessInterfaceModifiers(interface_declaration));

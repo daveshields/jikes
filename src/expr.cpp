@@ -1,4 +1,4 @@
-// $Id: expr.cpp,v 1.36 1999/09/15 17:48:20 shields Exp $
+// $Id: expr.cpp,v 1.37 1999/09/17 17:48:36 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -4194,7 +4194,16 @@ TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class
     //
     inner_type -> SetACC_FINAL();
 
-    if (StaticRegion())
+    //
+    // Note that if the anonymous type we are constructing was encountered while
+    // we were processing an explicit constructor invocation, we assume we are
+    // in a static region. This allows the anonymous type to be constructed without
+    // requiring a this$0 parameter as the "this" pointer argument that would
+    // be passed such a this$0 parameter does not yet exist at that point. Furthermore,
+    // making the anonymous type static also prevents it from accessing any surrounding
+    // instance variable that would require the this$0 pointer.
+    //
+    if (StaticRegion() || (ExplicitConstructorInvocation() && inner_type -> ContainingType() == ThisType()))
          inner_type -> SetACC_STATIC();
     else inner_type -> InsertThis(0);
 
@@ -4250,7 +4259,7 @@ TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class
 
     //
     // Add the default constructor to the body of the anonymous type.
-    // If the symbol was resolve to "no_type" then constructor will be NULL
+    // If the symbol was resolved to "no_type" then constructor will be NULL
     //
     MethodSymbol *constructor = class_creation -> class_type -> symbol -> MethodCast();
     if (constructor)
