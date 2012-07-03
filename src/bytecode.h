@@ -1,4 +1,4 @@
-// $Id: bytecode.h,v 1.16 1999/10/13 16:17:41 shields Exp $
+// $Id: bytecode.h,v 1.17 1999/10/17 01:58:39 shields Exp $
 //
 // License Agreement available at the following URL:
 // http://www.ibm.com/research/jikes.

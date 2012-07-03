@@ -1,4 +1,4 @@
-// $Id: lookup.cpp,v 1.14 1999/09/17 17:48:37 shields Exp $
+// $Id: lookup.cpp,v 1.18 1999/10/18 20:56:24 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -9,6 +9,7 @@
 //
 #include "config.h"
 #include <iostream.h>
+#include "control.h"
 #include "lookup.h"
 #include "symbol.h"
 #include "code.h"
@@ -431,6 +432,10 @@ Coutput << "    slot " << n << " contains " << num << " element(s)\n";
 if (hash_size < total)
     total = total;
 */
+
+#ifdef TEST
+    delete [] base;
+#endif
 }
 
 
@@ -1582,60 +1587,22 @@ Utf8LiteralValue *Utf8LiteralTable::FindOrInsert(char *str, int len)
 }
 
 
-bool Utf8LiteralTable::IsConstant(AstExpression *expression)
+void Utf8LiteralTable::EvaluateConstant(AstExpression *expression, int start, int end)
 {
-    //
-    // Recall that addition if left-recursive
-    //
-    while (! expression -> IsConstant())
+    if (end - start > 1)
     {
-        AstBinaryExpression *binary_expression;
-        AstCastExpression *cast_expression;
-        AstParenthesizedExpression *parenthesized_expression;
-
-        if (binary_expression = expression -> BinaryExpressionCast())
-        {
-             AstExpression *right = binary_expression -> right_expression;
-             if (! IsConstant(right))
-                 return false;
-             expression = binary_expression -> left_expression;
-        }
-        else if (cast_expression = expression -> CastExpressionCast())
-             expression = cast_expression -> expression;
-        else if (parenthesized_expression = expression -> ParenthesizedExpressionCast())
-             expression = parenthesized_expression -> expression;
-        else return false; // Not a constant String expression
-    }
-
-    if (expression -> IsConstant())
-        expr -> Next() = expression;
-
-    return expression -> IsConstant();
-}
-
-
-void Utf8LiteralTable::CheckStringConstant(AstExpression *expression)
-{
-    expr = new Tuple<AstExpression *>(256);
-
-    if (IsConstant(expression))
-    {
-        Utf8LiteralValue *literal;
         int length = 0;
-        for (int i = 0; i < expr -> Length(); i++)
+        for (int i = start; i < end; i++)
         {
-            literal = (Utf8LiteralValue *) (*expr)[i] -> value;
+            Utf8LiteralValue *literal = (Utf8LiteralValue *) (*expr)[i] -> value;
             length += literal -> length;
         }
         char *str = new char[length + 1]; // +1 for '\0'
 
-        //
-        // Since we started on the right, we have to run over the list in reverse order.
-        //
         int index = 0;
-        for (int k = expr -> Length() - 1; k >= 0; k--)
+        for (int k = start; k < end; k++)
         {
-            literal = (Utf8LiteralValue *) (*expr)[k] -> value;
+            Utf8LiteralValue *literal = (Utf8LiteralValue *) (*expr)[k] -> value;
 
             assert(literal -> value);
 
@@ -1648,6 +1615,59 @@ void Utf8LiteralTable::CheckStringConstant(AstExpression *expression)
 
         delete [] str;
     }
+
+    return;
+}
+
+
+bool Utf8LiteralTable::IsConstant(AstExpression *expression)
+{
+    if (expression -> IsConstant())
+    {
+        expr -> Next() = expression;
+        return true;
+    }
+
+    AstBinaryExpression *binary_expression;
+    AstCastExpression *cast_expression;
+    AstParenthesizedExpression *parenthesized_expression;
+    if (binary_expression = expression -> BinaryExpressionCast())
+    {
+        int left_start_marker = expr -> Length();
+
+        AstExpression *left  = binary_expression -> left_expression,
+                      *right = binary_expression -> right_expression;
+
+        bool left_is_constant = IsConstant(left);
+
+        int left_end_marker = expr -> Length();
+
+        bool right_is_constant = IsConstant(right);
+        if (left_is_constant && right_is_constant)
+             return true;
+
+        if (left_is_constant)
+             EvaluateConstant(left, left_start_marker, left_end_marker);
+        else if (right_is_constant)
+             EvaluateConstant(right, left_end_marker, expr -> Length());
+
+        expr -> Reset(left_start_marker);
+    }
+    else if (cast_expression = expression -> CastExpressionCast())
+         return IsConstant(cast_expression -> expression);
+    else if (parenthesized_expression = expression -> ParenthesizedExpressionCast())
+         return IsConstant(parenthesized_expression -> expression);
+
+    return false; // Not a constant String expression
+}
+
+
+void Utf8LiteralTable::CheckStringConstant(AstExpression *expression)
+{
+    expr = new Tuple<AstExpression *>(256);
+
+    if (IsConstant(expression))
+        EvaluateConstant(expression, 0, expr -> Length());
 
     delete expr;
 

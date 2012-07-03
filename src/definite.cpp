@@ -1,4 +1,4 @@
-// $Id: definite.cpp,v 1.13 1999/10/13 16:17:41 shields Exp $
+// $Id: definite.cpp,v 1.14 1999/10/17 01:58:40 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:

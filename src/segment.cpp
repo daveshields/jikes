@@ -1,4 +1,4 @@
-// $Id: segment.cpp,v 1.2 1999/08/26 15:34:09 shields Exp $
+// $Id: segment.cpp,v 1.3 1999/10/15 02:30:42 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -20,7 +20,7 @@ u2 &PairSegment::Image(u2 target)
                 return list[i].value;
         }
 
-        if (top < LIST_LIMIT)
+        if (top < (int)LIST_LIMIT)
         {
             int j = top++;
             list[j].target = target;
@@ -82,7 +82,7 @@ Pair &TripletSegment::Image(u2 target)
                 return *list[i].value;
         }
 
-        if (top < LIST_LIMIT)
+        if (top < (int)LIST_LIMIT)
         {
             int j = top++;
             list[j].target = target;

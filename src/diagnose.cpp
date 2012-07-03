@@ -1,4 +1,4 @@
-// $Id: diagnose.cpp,v 1.11 1999/10/09 16:34:06 shields Exp $
+// $Id: diagnose.cpp,v 1.12 1999/10/15 02:30:39 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -72,8 +72,7 @@ void DiagnoseParser::DiagnoseParse()
         i,
         tok,
         lhs_symbol,
-        act = START_STATE,
-        current_kind = lex_stream -> Kind(curtok);
+        act = START_STATE;
 
     ReallocateStacks();
 

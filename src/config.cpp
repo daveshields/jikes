@@ -1,4 +1,4 @@
-// $Id: config.cpp,v 1.26 1999/10/10 17:32:53 shields Exp $
+// $Id: config.cpp,v 1.28 1999/10/15 12:44:29 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -124,6 +124,7 @@ wchar_t StringConstant::US_AND[]                        = {U_AM, U_NU}, // "&"
         StringConstant::US_TYPE[] = {U_T, U_Y, U_P, U_E, U_NU}, // "TYPE"
         StringConstant::US_Throwable[] = {U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e, U_NU}, // Throwable
         StringConstant::US_Void[] = {U_V, U_o, U_i, U_d, U_NU}, // Void
+        StringConstant::US_Vector[] = {U_V, U_e, U_c, U_t, U_o, U_r, U_NU}, // Vector
         StringConstant::US__DO[] = {U_DO, U_NU}, // "."
         StringConstant::US__DO__DO[] = {U_DO, U_DO, U_NU}, // ".."
         StringConstant::US__DS[] = {U_DS, U_NU}, // "$"
@@ -178,6 +179,7 @@ wchar_t StringConstant::US_AND[]                        = {U_AM, U_NU}, // "&"
         StringConstant::US_interface[] = {U_i, U_n, U_t, U_e, U_r, U_f, U_a, U_c, U_e, U_NU}, // "interface"
         StringConstant::US_java_SL_io[] =  {U_j, U_a, U_v, U_a, U_SL, U_i, U_o, U_NU}, // "java/io"
         StringConstant::US_java_SL_lang[] = {U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_NU}, // "java/lang"
+        StringConstant::US_java_SL_util[] = {U_j, U_a, U_v, U_a, U_SL, U_u, U_t, U_i, U_l, U_NU}, // "java/lang"
         StringConstant::US_length[] = {U_l, U_e, U_n, U_g, U_t, U_h, U_NU}, // "length"
         StringConstant::US_long[] = {U_l, U_o, U_n, U_g, U_NU}, // "long"
         StringConstant::US_native[] = {U_n, U_a, U_t, U_i, U_v, U_e, U_NU}, // "native"
@@ -430,6 +432,42 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
     }
 #endif
 
+#ifdef CYGWIN
+
+    wchar_t *wcscpy(wchar_t *s, wchar_t *ct)
+    {
+        wchar_t *ptr;
+        for (ptr = s; *ct; ptr++, ct++)
+            *ptr = *ct;
+        *ptr = U_NULL;
+
+        return s;
+    }
+
+    wchar_t *wcscat(wchar_t *s, wchar_t *ct)
+    {
+        wchar_t *ptr = s;
+
+        while (*ptr)
+            ptr++;
+        wcscpy(ptr, ct);
+
+        return s;
+    }
+
+    int wcsncmp(wchar_t *cs, wchar_t *ct, int n)
+    {
+        while (*cs == *ct && *cs && *ct && n-- > 0)
+        {
+            cs++;
+            ct++;
+        }
+
+        return (n <= 0 || *cs == *ct ? 0 : (*cs < *ct ? -1 : 1));
+    }
+
+#endif
+
 #ifdef __OS2__
 // changes for OS/2 from John Price, jgprice@ozemail.com.au, 2/99
 #include <direct.h>
@@ -449,5 +487,61 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
 #else
     char PathSeparator() { return U_SEMICOLON; } // ";"
 #endif
+
+int SystemMkdirhier(char *dirname)
+{
+    if (::SystemIsDirectory(dirname))
+	return 0;
+
+    for (char *ptr = dirname; *ptr; ptr++)
+	{
+	    char delimiter = *ptr;
+	    if (delimiter == U_SLASH)
+		{
+		    *ptr = U_NULL;
+
+		    if (! ::SystemIsDirectory(dirname))
+			::SystemMkdir(dirname);
+
+		    *ptr = delimiter;
+		}
+	}
+
+    ::SystemMkdir(dirname);
+    
+    return (! ::SystemIsDirectory(dirname));
+}
+
+
+// These next two should definitely be inlined; but when I add "inline", I
+// get linker problems.
+
+
+// Given three strings, return a newly-allocated string which is their concatenation.
+char * strcat3(const char * prefix, const char * middle, const char * suffix) {
+  int prefix_len = strlen(prefix);
+  int prefix_middle_len = prefix_len + strlen(middle);
+
+  char * result = new char[prefix_middle_len + strlen(suffix) + 1];
+  strcpy(result, prefix);
+  // The below is more efficient than this commented-out code.
+  // strcat(result, middle);
+  // strcat(result, suffix);
+  strcpy(result + prefix_len, middle);
+  strcpy(result + prefix_middle_len, suffix);
+  return result;
+}
+
+// It's inconceivable that this is the right way to go about this.
+// One alternative is to use ConvertUnicodeToUtf8.
+char * wstring2string(wchar_t * in) {
+  char * result = new char[wcslen(in) + 1];
+  result[wcslen(in)] = 0;
+  for (size_t i=0; i<wcslen(in); i++) {
+    wchar_t ch = in[i];
+    result[i] = (ch >> 8 == 0 ? (char)ch : '?');
+  }
+  return result;
+}
 
 Ostream Coutput;

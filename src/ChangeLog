@@ -1,3 +1,149 @@
+1999-10-18    <shields@jikes.watson.ibm.com>
+
+	--- Release v1.08 ---
+	* jikes.cpp: Set version to 1.08 and release date
+	* lookup.cpp: Plug a memory leak.
+
+	* decl.cpp: 
+	Use conditional ifdef ERNST to disable assertions that 
+	Mike Ernst inserted to stay on the safe side, but which are
+	probably not needed. Mike and I discussed this a while ago;
+	we just haven't yet had the time to sort it out.
+	
+
+	* Makefile.hand: Add clause for unparse.cpp
+	* option.h: add declaration for 'ascii' option
+	* stream.cpp: delete code from Ernst that caused compilation
+	problems, using ifdef ERNST, etc.
+
+	* error.cpp: 
+	* error.h:
+	* incrmnt.cpp:
+	* jikes.cpp:
+	* option.cpp:
+	Add code from Philippe. Fix bug in incremental, and re-enable
+	++ option. Implement Neil Martin's suggestion for divide by
+	zero, namely to treat as caution and not error. Update version date.
+
+1999-10-16    <shields@jikes.watson.ibm.com>
+	* ast.cpp:
+	* body.cpp:
+	* bytecode.cpp:
+	* bytecode.h:
+	* control.cpp:
+	* control.h:
+	* definite.cpp:
+	* error.cpp:
+	* error.h:
+	* expr.cpp:
+	* java.g (and related files):
+	* jikes.cpp:
+	* lookup.cpp:
+	* lookup.h:
+	* semantic.h:
+	* symbol.cpp:
+	* symbol.h:
+	* system.cpp:
+	more changes from Philippe re access methods for protected.
+
+1999-10-16    <shields@jikes.watson.ibm.com>
+	* configure.in:
+	Add fix from Moses DeJong for patch submitted yesterday.
+	
+1999-10-16    <shields@jikes.watson.ibm.com>
+	* configure.in:
+	Add check from Moses DeJong for sufficiently recent version of autoconf.
+
+1999-10-16    <shields@jikes.watson.ibm.com>
+	* lookup.cpp:
+	Make some changes to Mike Ernst's recent changes will compile using the
+	more restrictive IBM xlC compiler.
+
+1999-10-15    <shields@jikes.watson.ibm.com>
+	* error.cpp:
+	* error.cpp:
+	Incorporate changes from Vadim sent in yesterday re ICU.
+
+1999-10-15    <shields@jikes.watson.ibm.com>
+	* unparse.cpp:
+	Add to source base.
+
+1999-10-15    <shields@jikes.watson.ibm.com>
+
+	* ast.h:
+	* decl.cpp:
+	* expr.cpp:
+	* java.g:
+	* symbol.cpp: (look for TODO-ERNST)
+	* system.cpp:
+	Make changes, in some case commenting out code, or making it conditional,
+	so can compile cleanly on Win/NT.
+
+1999-10-15    <shields@jikes.watson.ibm.com>
+
+	* configure.in:
+	* configure:
+	I have applied Mo's patch to add Cygwin support.
+	
+
+
+1999-10-13     <dejong@cs.umn.edu>
+
+	* configure.in:
+	Added cygwin build support.
+
+	* config.h, config.cpp:
+	Added #if defined(CYGWIN) blocks for wchar functions
+	    that are not implemented in cygwin.
+
+
+1999-10-14    <shields@jikes.watson.ibm.com>
+
+	* Makefile.in: 
+	* ast.cpp:
+	* ast.h:
+	* body.cpp:
+	* bytecode.cpp:
+	* class.h:
+	* config.cpp:
+	* config.h:
+	* control.cpp:
+	* control.h:
+	* decl.cpp:
+	* depend.h:
+	* diagnose.cpp:
+	* diagnose.h:
+	* error.cpp:
+	* expr.cpp:
+	* java.g:
+	* javaact.cpp:
+	* long.cpp:
+	* lookup.cpp:
+	* lookup.h:
+	* option.cpp:
+	* option.h:
+	* parser.h:
+	* segment.cpp:
+	* semantic.h:
+	* stream.cpp:
+	* stream.h:
+	* symbol.cpp:
+	* symbol.h:
+	* system.cpp:
+	* tuple.h:
+	* unparse.cpp: (new)
+	* error.h: 
+	* error.cpp:
+	Add substantial patch from Mike Ernst:
+	(1) add "unparse" function
+	(2) produce many fewer messages when compiling with -Wall option.
+
+1999-10-13    <shields@jikes.watson.ibm.com>
+
+	vz1014: more unicode patches from Vadim, this one should have been
+	in 1.07 (it's my fault it wasn't), and is needed to get clean
+	compile with ICU enabled.
+
 1999-10-13    <shields@jikes.watson.ibm.com>
 
 	* stream.h: Delete extraneous ",' that causes AIX xlC to complain

@@ -1,4 +1,4 @@
-// $Id: stream.h,v 1.11 1999/10/13 23:47:42 shields Exp $
+// $Id: stream.h,v 1.12 1999/10/15 02:30:42 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -121,7 +121,7 @@ public:
     class NameSymbol *NameSymbol(TokenIndex);
 
     char *FileName();
-    int FileNameLength();
+    size_t FileNameLength();
 
     inline int LineLength(unsigned line_no) { return locations[line_no + 1] - locations[line_no]; }
     inline int LineStart(unsigned line_no)  { return locations[line_no]; }
@@ -192,22 +192,22 @@ public:
     //*
     //* Constructors and Destructor.
     //*
-    LexStream(Control &control_, FileSymbol *file_symbol_) : control(control_),
-                                                             file_symbol(file_symbol_),
+    LexStream(Control &control_, FileSymbol *file_symbol_) : file_symbol(file_symbol_),
+#ifdef TEST
+							     file_read(0),
+#endif
+                                                             tokens(NULL),
+                                                             columns(NULL),
+                                                             token_stream(12, 16),
+                                                             comments(NULL),
+                                                             comment_stream(10, 8),
+                                                             locations(NULL),
+                                                             line_location(12, 8),
                                                              initial_reading_of_input(true),
                                                              input_buffer(NULL),
                                                              input_buffer_length(0),
                                                              comment_buffer(NULL),
-                                                             token_stream(12, 16),
-                                                             tokens(NULL),
-                                                             columns(NULL),
-                                                             comment_stream(10, 8),
-                                                             comments(NULL),
-                                                             line_location(12, 8),
-                                                             locations(NULL)
-#ifdef TEST
-                                                           , file_read(0)
-#endif
+							     control(control_)
     {}
 
     bool ComputeColumns()

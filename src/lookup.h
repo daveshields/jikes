@@ -1,4 +1,4 @@
-// $Id: lookup.h,v 1.11 1999/09/17 17:48:37 shields Exp $
+// $Id: lookup.h,v 1.13 1999/10/17 01:58:42 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -19,6 +19,7 @@
 #include "long.h"
 #include "double.h"
 
+class Control;
 class Symbol;
 class PackageSymbol;
 class TypeSymbol;
@@ -789,6 +790,7 @@ public:
 private:
 
     Tuple<AstExpression *> *expr;
+    void EvaluateConstant(AstExpression *, int, int);
     bool IsConstant(AstExpression *);
 
     enum

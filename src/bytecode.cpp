@@ -1,4 +1,4 @@
-// $Id: bytecode.cpp,v 1.37 1999/10/13 16:17:41 shields Exp $
+// $Id: bytecode.cpp,v 1.39 1999/10/17 01:58:39 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -4421,60 +4421,49 @@ void ByteCode::ConcatenateString(AstBinaryExpression *expression)
 }
 
 
-void ByteCode::AppendString(AstExpression *p)
+void ByteCode::AppendString(AstExpression *expression)
 {
-    AstBinaryExpression *binexpr;
-    if (p -> BinaryExpressionCast())
-    {
-        binexpr = p -> BinaryExpressionCast();
-        if (binexpr -> binary_tag == AstBinaryExpression::PLUS &&
-            (IsReferenceType(binexpr -> left_expression -> Type()) || IsReferenceType(binexpr -> right_expression -> Type())))
-        {
-            AppendString(binexpr -> left_expression);
-            AppendString(binexpr -> right_expression);
+    TypeSymbol *type = expression -> Type();
 
+    if (expression -> IsConstant())
+    {
+        assert(type == this_control.String());
+        LoadConstantAtIndex(RegisterString((Utf8LiteralValue *) expression -> value));
+    }
+    else
+    {
+        AstBinaryExpression *binary_expression = expression -> BinaryExpressionCast();
+        if (binary_expression)
+        {
+            if (binary_expression -> binary_tag == AstBinaryExpression::PLUS &&
+                (IsReferenceType(binary_expression -> left_expression -> Type()) ||
+                 IsReferenceType(binary_expression -> right_expression -> Type())))
+            {
+                AppendString(binary_expression -> left_expression);
+                AppendString(binary_expression -> right_expression);
+
+                return;
+            }
+        }
+
+        if (expression -> ParenthesizedExpressionCast())
+        {
+            AppendString(expression -> ParenthesizedExpressionCast() -> expression);
             return;
         }
-    }
 
-    if (p -> ParenthesizedExpressionCast())
-    {
-        AppendString(p -> ParenthesizedExpressionCast() -> expression);
-        return;
-    }
-
-    AstCastExpression *cast = p -> CastExpressionCast();
-    if (cast) // here if cast expression, verify that converting to string
-    {
-        if (cast -> kind == Ast::CAST && cast -> Type() == this_control.String())
+        AstCastExpression *cast = expression -> CastExpressionCast();
+        if (cast) // here if cast expression, verify that converting to string
         {
-            AppendString(cast -> expression);
-            return;
+            if (cast -> kind == Ast::CAST && cast -> Type() == this_control.String())
+            {
+                AppendString(cast -> expression);
+                return;
+            }
         }
-    }
 
-    //
-    // replace explicit reference to "null" by
-    // corresponding string.
-    //
-    TypeSymbol *type = p -> Type();
-    if (type == this_control.null_type)
-    {
-        u2 null_string_index = RegisterString(this_control.null_literal);
-
-        if (null_string_index <= 255)
-        {
-            PutOp(OP_LDC);
-            PutU1((u1) null_string_index);
-        }
-        else
-        {
-            PutOp(OP_LDC_W);
-            PutU2(null_string_index);
-        }
-        type = this_control.String();
+        EmitExpression(expression);
     }
-    else EmitExpression(p);
 
     EmitStringAppendMethod(type);
 

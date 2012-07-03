@@ -1,4 +1,4 @@
-// $Id: error.h,v 1.26 1999/10/13 16:17:42 shields Exp $
+// $Id: error.h,v 1.30 1999/10/18 16:51:03 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -296,7 +296,8 @@ public:
         ENCLOSING_INSTANCE_NOT_ACCESSIBLE,
         INVALID_ENCLOSING_INSTANCE,
 
-        ZERO_DIVIDE,
+        ZERO_DIVIDE_ERROR,
+        ZERO_DIVIDE_CAUTION,
         VOID_TO_STRING,
 
         _num_kinds
@@ -640,7 +641,8 @@ private:
     static void PrintENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION(ErrorInfo &, LexStream *, Control &);
     static void PrintENCLOSING_INSTANCE_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
     static void PrintINVALID_ENCLOSING_INSTANCE(ErrorInfo &, LexStream *, Control &);
-    static void PrintZERO_DIVIDE(ErrorInfo &, LexStream *, Control &);
+    static void PrintZERO_DIVIDE_ERROR(ErrorInfo &, LexStream *, Control &);
+    static void PrintZERO_DIVIDE_CAUTION(ErrorInfo &, LexStream *, Control &);
     static void PrintVOID_TO_STRING(ErrorInfo &, LexStream *, Control &);
 
     void SortMessages();

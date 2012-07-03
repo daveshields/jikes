@@ -1,4 +1,4 @@
-// $Id: depend.h,v 1.5 1999/03/25 14:10:11 shields Exp $
+// $Id: depend.h,v 1.6 1999/10/15 02:30:39 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -83,8 +83,8 @@ class TypeDependenceChecker : public CycleChecker
 {
 public:
     TypeDependenceChecker(Control *control_, SymbolSet &file_set_, Tuple<TypeSymbol *> &type_trash_bin_)
-        : control(control_),
-          file_set(file_set_),
+        : file_set(file_set_),
+          control(control_),
           type_trash_bin(type_trash_bin_)
     {}
 

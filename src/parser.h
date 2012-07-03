@@ -1,4 +1,4 @@
-// $Id: parser.h,v 1.4 1999/08/26 15:34:09 shields Exp $
+// $Id: parser.h,v 1.5 1999/10/15 02:30:42 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -43,13 +43,13 @@ class Parser : public javaprs_table
 public:
 
     Parser() : ast_pool(NULL),
-               parse_package_header_only(false),
                parse_header_only(false),
-               stack(NULL),
+               parse_package_header_only(false),
                location_stack(NULL),
                parse_stack(NULL),
-               temp_stack(NULL),
-               stack_length(0)
+               stack_length(0),
+               stack(NULL),
+               temp_stack(NULL)
     {
         InitRuleAction();
         return;

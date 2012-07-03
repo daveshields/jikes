@@ -1,4 +1,4 @@
-// $Id: symbol.h,v 1.25 1999/10/13 17:56:44 shields Exp $
+// $Id: symbol.h,v 1.27 1999/10/17 01:58:43 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:

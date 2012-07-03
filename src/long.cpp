@@ -1,4 +1,4 @@
-// $Id: long.cpp,v 1.7 1999/08/26 15:34:09 shields Exp $
+// $Id: long.cpp,v 1.8 1999/10/15 02:30:41 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -105,10 +105,19 @@ BaseLong BaseLong::operator<< (BaseLong op)
     // whereas on windows the Microsoft compiler produces the value of x(very bad !).
     // That is the reason why we have the initial special check for (n == 0).
     //
-    return (n == 0 ? *this
-                   : n < 32
-                       ? BaseLong((HighWord() << n) | (LowWord() >> (32 - n)), LowWord() << n)
-                       : BaseLong(LowWord() << (n - 32), 0));
+
+    // gcc-2.95.1 compiler bug prevents use of this implementation.
+    // return (n == 0 ? *this
+    // 	       : n < 32
+    // 		   ? BaseLong((HighWord() << n) | (LowWord() >> (32 - n)), LowWord() << n)
+    // 		   : BaseLong(LowWord() << (n - 32), 0));
+    
+    if (n == 0)
+	return *this;
+    else if (n < 32)
+	return BaseLong((HighWord() << n) | (LowWord() >> (32 - n)), LowWord() << n);
+    else
+	return BaseLong(LowWord() << (n - 32), 0);
 }
 
 BaseLong& BaseLong::operator<<= (BaseLong op)
@@ -485,10 +494,20 @@ ULongInt ULongInt::operator>> (ULongInt op)
     // whereas on windows the Microsoft compiler produces the value of x(very bad !).
     // That is the reason why we have the initial special check for (n == 0).
     //
-    return (n == 0 ? *this
-                   : n < 32
-                       ? ULongInt(HighWord() >> n, (HighWord() << (32 - n)) | (LowWord() >> n))
-                       : ULongInt(0, HighWord() >> (n - 32)));
+
+    // gcc-2.95.1 compiler bug prevents this implementation
+    // return (n == 0 ? *this
+    // 	       : n < 32
+    // 		   ? ULongInt(HighWord() >> n, (HighWord() << (32 - n)) | (LowWord() >> n))
+    // 		   : ULongInt(0, HighWord() >> (n - 32)));
+
+    if (n == 0)
+	return *this;
+    else if (n < 32)
+	return ULongInt(HighWord() >> n, (HighWord() << (32 - n)) | (LowWord() >> n));
+    else
+	return ULongInt(0, HighWord() >> (n - 32));
+
 }
 
 ULongInt& ULongInt::operator>>= (ULongInt op)
@@ -633,10 +652,19 @@ LongInt LongInt::operator>> (LongInt op)
     // shift the "long" quantity in a similar manner as the system (compiler + environement)
     // used to compile it would shift a 32-bit signed integer.
     //
-    return (n == 0 ? *this
-                   : n < 32
-                       ? LongInt(((i4) HighWord()) >> n, (HighWord() << (32 - n)) | (LowWord() >> n))
-                       : LongInt(((i4) HighWord()) >> 31, ((i4) HighWord()) >> (n - 32)));
+
+    // gcc-2.95.1 compiler bug prevents use of this implementation
+    // return (n == 0 ? *this
+    // 	       : n < 32
+    // 		   ? LongInt(((i4) HighWord()) >> n, (HighWord() << (32 - n)) | (LowWord() >> n))
+    // 		   : LongInt(((i4) HighWord()) >> 31, ((i4) HighWord()) >> (n - 32)));
+
+    if (n == 0)
+	return *this;
+    else if (n < 32)
+	return LongInt(((i4) HighWord()) >> n, (HighWord() << (32 - n)) | (LowWord() >> n));
+    else 
+	return LongInt(((i4) HighWord()) >> 31, ((i4) HighWord()) >> (n - 32));
 }
 
 LongInt& LongInt::operator>>= (LongInt op)

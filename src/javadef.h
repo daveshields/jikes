@@ -1,9 +1,9 @@
-// $Id: javadef.h,v 1.8 1999/08/19 18:53:50 shields Exp $
+// $Id: javadef.h,v 1.11 1999/10/17 02:02:12 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1999, International Business Machines Corporation
+// Copyright (C) 1996, 1998, International Business Machines Corporation
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //

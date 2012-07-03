@@ -1,3 +1,14 @@
+1999-10-18    <shields@jikes.watson.ibm.com> 
+
+	-- Release 1.08 --
+	* jikes.1: Drop BUGS section since incremental again supported.
+	* Save old "Research News" as news_v1.html (new file).
+	* Start news.html with news from developerWorks.
+	* Rename contrib.htm to contrib.html
+	* Rename jikes.htm to jikes.html
+	* Update README to reflect above changes
+	* Update jikes.spec to 1.08.
+
 1999-09-17    <shields@jikes.watson.ibm.com>
 	
 	-- Release 1.06 --

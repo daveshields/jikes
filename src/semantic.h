@@ -1,4 +1,4 @@
-// $Id: semantic.h,v 1.24 1999/10/09 15:38:33 shields Exp $
+// $Id: semantic.h,v 1.26 1999/10/17 01:58:42 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1288,7 +1288,9 @@ inline void Semantic::SetObjectSuperType(TypeSymbol *type, LexStream::TokenIndex
 
 inline void Semantic::AddStringConversionDependence(TypeSymbol *type, LexStream::TokenIndex tok)
 {
-    if (type == control.boolean_type)
+    if (type == control.null_type)
+         ;
+    else if (type == control.boolean_type)
          AddDependence(ThisType(), control.Boolean(), tok);
     else if (type == control.char_type)
          AddDependence(ThisType(), control.Character(), tok);

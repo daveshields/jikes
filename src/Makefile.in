@@ -1,4 +1,12 @@
-# $Id: Makefile.in,v 1.9 1999/10/09 16:34:05 shields Exp $
+# $Id: Makefile.in,v 1.10 1999/10/15 02:30:38 shields Exp $
+
+# This software is subject to the terms of the IBM Jikes Compiler
+# License Agreement available at the following URL:
+# http://www.ibm.com/research/jikes.
+# Copyright (C) 1996, 1998, International Business Machines Corporation
+# and others.  All Rights Reserved.
+# You must accept the terms of that agreement to use this software.
+
 
 CC=@CC@
 CCREQUIREDFLAGS=@CCREQUIREDFLAGS@ -I@srcdir@
@@ -34,7 +42,7 @@ clean:
 
 distclean: clean
 	$(ERASE) config.cache config.log config.status
-	$(ERASE) Makefile
+	$(ERASE) Makefile TAGS
 
 install: all
 	mkdir -p $(prefix)/bin
@@ -49,7 +57,7 @@ OBJECTS=jikes.@O@ scanner.@O@ code.@O@ zip.@O@ unzip.@O@ \
         stream.@O@ op.@O@ control.@O@ modifier.@O@ system.@O@ \
         bytecode.@O@ body.@O@ decl.@O@ definite.@O@ dump.@O@ expr.@O@ \
         getclass.@O@ init.@O@ double.@O@ config.@O@ option.@O@ \
-        incrmnt.@O@ case.@O@ tab.@O@ segment.@O@
+        incrmnt.@O@ case.@O@ tab.@O@ segment.@O@ unparse.@O@
 
 $(EXECUTABLE):	$(OBJECTS)
 	$(LD) $(LDFLAGS)  $(OBJECTS) $(SYSOBJECTS) $(LIBS)
@@ -79,6 +87,14 @@ ast.@O@:  $(srcdir)/ast.cpp $(srcdir)/config.h \
           $(srcdir)/double.h $(srcdir)/symbol.h $(srcdir)/option.h \
           $(srcdir)/depend.h $(srcdir)/access.h 
 	$(CC) $(CCFLAGS) $(srcdir)/ast.cpp 
+
+unparse.@O@:  $(srcdir)/unparse.cpp $(srcdir)/config.h \
+          $(srcdir)/code.h $(srcdir)/case.h $(srcdir)/ast.h \
+          $(srcdir)/stream.h $(srcdir)/javadef.h $(srcdir)/javasym.h \
+          $(srcdir)/tuple.h $(srcdir)/tab.h $(srcdir)/lookup.h $(srcdir)/long.h \
+          $(srcdir)/double.h $(srcdir)/symbol.h $(srcdir)/option.h \
+          $(srcdir)/depend.h $(srcdir)/access.h 
+	$(CC) $(CCFLAGS) $(srcdir)/unparse.cpp 
 
 body.@O@: $(srcdir)/body.cpp $(srcdir)/config.h $(srcdir)/semantic.h \
           $(srcdir)/ast.h $(srcdir)/stream.h $(srcdir)/javadef.h \
@@ -413,3 +429,8 @@ zip.@O@:  $(srcdir)/zip.cpp $(srcdir)/config.h $(srcdir)/control.h \
 segment.@O@:  $(srcdir)/segment.cpp $(srcdir)/segment.h $(srcdir)/tuple.h $(srcdir)/config.h 
 	$(CC) $(CCFLAGS) $(srcdir)/segment.cpp
 
+
+tags:
+	etags *.h *.cpp
+
+TAGS:  tags

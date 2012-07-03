@@ -1,4 +1,4 @@
-// $Id: control.cpp,v 1.22 1999/10/10 13:18:20 shields Exp $
+// $Id: control.cpp,v 1.24 1999/10/17 01:58:40 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -421,7 +421,16 @@ Control::Control(ArgumentExpander &arguments, Option &option_) : return_code(0),
                         for (int j = 0; j < file_symbol -> types.Length(); j++)
                         {
                             TypeSymbol *type = file_symbol -> types[j];
+#ifdef EBCDIC
+                            for (char *p = java_name; *p; p++)
+                                 fprintf(outfile, "%c", Code::ToEBCDIC(*p));
+                            fprintf(outfile, " : ");
+                            for (char *q = type -> SignatureString(); *q; q++)
+                                 fprintf(outfile, "%c", Code::ToEBCDIC(*q));
+                            fprintf(outfile, "\n");
+#else
                             fprintf(outfile, "%s : %s\n", java_name, type -> SignatureString());
+#endif
 
                             //
                             //
@@ -432,7 +441,15 @@ Control::Control(ArgumentExpander &arguments, Option &option_) : return_code(0),
                             {
                                 if (! type -> parents -> IsElement(static_parent)) // Only a static reference to static_parent?
                                 {
+#ifdef EBCDIC
+                                    fprintf(outfile, "   !");
+                                    for (char *q = static_parent -> SignatureString(); *q; q++)
+                                         fprintf(outfile, "%c", Code::ToEBCDIC(*q));
+                                    fprintf(outfile, "\n");
+#else
                                     fprintf(outfile, "   !%s\n", static_parent -> SignatureString());
+#endif
+
                                     //
                                     // If the type is contained in a type that is not one of the input files, save it
                                     //
@@ -448,7 +465,14 @@ Control::Control(ArgumentExpander &arguments, Option &option_) : return_code(0),
                                              parent;
                                              parent = (TypeSymbol *) type -> parents -> NextElement())
                             {
+#ifdef EBCDIC
+                                fprintf(outfile, "    ");
+                                for (char *q = parent -> SignatureString(); *q; q++)
+                                     fprintf(outfile, "%c", Code::ToEBCDIC(*q));
+                                fprintf(outfile, "\n");
+#else
                                 fprintf(outfile, "    %s\n", parent -> SignatureString());
+#endif
 
                                 //
                                 // If the type is contained in a type that is not one of the input files, save it
@@ -467,7 +491,16 @@ Control::Control(ArgumentExpander &arguments, Option &option_) : return_code(0),
                                      type = (TypeSymbol *) types_in_new_files.NextElement())
                     {
                         char *class_name = type -> file_symbol -> FileName();
+#ifdef EBCDIC
+                        for (char *p = class_name; *p; p++)
+                             fprintf(outfile, "%c", Code::ToEBCDIC(*p));
+                        fprintf(outfile, " : ");
+                        for (char *q = type -> SignatureString(); *q; q++)
+                             fprintf(outfile, "%c", Code::ToEBCDIC(*q));
+                        fprintf(outfile, "\n");
+#else
                         fprintf(outfile, "%s : %s\n", class_name, type -> SignatureString());
+#endif
                     }
 
                     fclose(outfile);

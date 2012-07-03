@@ -1,4 +1,4 @@
-// $Id: tuple.h,v 1.6 1999/08/26 15:34:10 shields Exp $
+// $Id: tuple.h,v 1.7 1999/10/15 02:30:42 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -198,6 +198,12 @@ public:
             AllocateMoreSpace();
         return i;
     }
+
+    inline void Push(T elt) { this -> Next() = elt; }
+    // Not "return (*this)[--top]" because that may violate an invariant
+    // in operator[].
+    inline T Pop() { assert(top!=0); top--; return base[top >> log_blksize][top]; }
+    inline T Top() { assert(top!=0); return (*this)[top-1]; }
 
     //
     // Add an element to the dynamic array and return a reference to

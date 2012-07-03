@@ -1,4 +1,4 @@
-// $Id: stream.cpp,v 1.15 1999/10/13 16:33:23 shields Exp $
+// $Id: stream.cpp,v 1.17 1999/10/18 18:16:12 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -169,7 +169,7 @@ LexStream::~LexStream()
 // Name of input file where the token appeared.
 //
 char *LexStream::FileName() { return file_symbol -> FileName(); }
-int LexStream::FileNameLength() { return file_symbol -> FileNameLength(); }
+size_t LexStream::FileNameLength() { return file_symbol -> FileNameLength(); }
 
 
 void LexStream::InitializeColumns()
@@ -178,11 +178,10 @@ void LexStream::InitializeColumns()
     {
         columns = new unsigned short[token_stream.Length()];
 
-        int col = 0,
-            start = 0,
+        int start = 0,
             k = 1;
 
-        for (int i = 0; i < input_buffer_length; i++)
+        for (size_t i = 0; i < input_buffer_length; i++)
         {
             if (Code::IsNewline(input_buffer[i]))
                 start = i;
@@ -283,7 +282,16 @@ assert(locations);
 
 void LexStream::ReadInput()
 {
+#ifdef ERNST
+    if (file_symbol -> buffer)
+    {
+
+        ProcessInput(file_symbol -> buffer, strlen(file_symbol -> buffer));
+    }
+    else if (file_symbol -> IsZip())
+#else
     if (file_symbol -> IsZip())
+#endif
     {
         ZipFile *zipfile = new ZipFile(file_symbol);
 
@@ -348,6 +356,13 @@ void LexStream::RereadInput()
 {
     if (input_buffer) // if input already available, do nothing
         ;
+#ifdef ERNST
+    else if (file_symbol -> buffer)
+    {
+      fprintf(stderr, "chaos: Don\'t know how to RereadInput a buffer\n");
+      assert(false);
+    }
+#endif
     else if (file_symbol -> IsZip())
     {
         ZipFile *zipfile = new ZipFile(file_symbol);
@@ -429,7 +444,7 @@ int LexStream::hexvalue(wchar_t ch)
 }
 
 //
-// Read file_size Ascii characters from srcfile, convert them to unicode and
+// Read file_size Ascii characters from srcfile, convert them to unicode, and
 // store them in input_buffer.
 //
 void LexStream::ProcessInput(char *buffer, long filesize)
@@ -813,7 +828,7 @@ void LexStream::PrintSmallSource(int k)
     else
     {
         int offset = 0;
-        for (int i = bad_tokens[k].start_location; i <= bad_tokens[k].end_location; i++)
+        for (size_t i = bad_tokens[k].start_location; i <= bad_tokens[k].end_location; i++)
         {
             if (this -> InputBuffer()[i] > 0xff)
                 offset += 5;
@@ -856,7 +871,7 @@ void LexStream::PrintLargeSource(int k)
                 Coutput << this -> InputBuffer()[i];
 
             int offset = 0;
-            for (int j = bad_tokens[k].start_location; j <= bad_tokens[k].end_location; j++)
+            for (size_t j = bad_tokens[k].start_location; j <= bad_tokens[k].end_location; j++)
             {
                 if (this -> InputBuffer()[j] > 0xff)
                     offset += 5;

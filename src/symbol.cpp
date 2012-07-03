@@ -1,4 +1,4 @@
-// $Id: symbol.cpp,v 1.26 1999/10/13 17:56:44 shields Exp $
+// $Id: symbol.cpp,v 1.29 1999/10/17 01:58:42 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:

@@ -4,7 +4,7 @@
 %options nogoto-default
 %options single-productions
 %options la=2,names=max
--- $Id: java.g,v 1.10 1999/10/09 15:38:32 shields Exp $
+-- $Id: java.g,v 1.13 1999/10/17 01:58:41 shields Exp $
 -- This software is subject to the terms of the IBM Jikes Compiler
 -- License Agreement available at the following URL:
 -- http://www.ibm.com/research/jikes.

@@ -1,4 +1,4 @@
-// $Id: config.h,v 1.23 1999/10/10 13:18:20 shields Exp $
+// $Id: config.h,v 1.25 1999/10/15 12:44:29 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -286,6 +286,7 @@ public:
                    US_StringBuffer[], // "StringBuffer"
                    US_String[], // "String"
                    US_TYPE[], // "TYPE"
+                   US_Vector[], // Vector
                    US_Throwable[], // "Throwable"
                    US_Void[], // "Void"
                    US__DO[], // "."
@@ -342,6 +343,7 @@ public:
                    US_interface[], // "interface"
                    US_java_SL_io[], // "java/io"
                    US_java_SL_lang[], // "java/lang"
+                   US_java_SL_util[], // "java/util"
                    US_length[], // "length"
                    US_long[], // "long"
                    US_native[], // "native"
@@ -456,7 +458,7 @@ class IntToString
 public:
     IntToString(int num)
     {
-        if (num == 0x80000000)
+        if (num == (int)0x80000000)
         {
             str = info;
             strcpy(str, StringConstant::U8S_smallest_int);
@@ -487,6 +489,22 @@ private:
 };
 
 
+#if defined(GNU_LIBC5)
+    extern size_t wcslen(wchar_t *);
+    extern wchar_t *wcscpy(wchar_t *, wchar_t *);
+    extern wchar_t *wcsncpy(wchar_t *, wchar_t *, int);
+    extern wchar_t *wcscat(wchar_t *, wchar_t *);
+    extern int wcscmp(wchar_t *, wchar_t *);
+    extern int wcsncmp(wchar_t *, wchar_t *, int);
+#endif
+
+#if defined(CYGWIN)
+    extern wchar_t *wcscpy(wchar_t *, wchar_t *);
+    extern wchar_t *wcscat(wchar_t *, wchar_t *);
+    extern int wcsncmp(wchar_t *, wchar_t *, int);
+#endif
+
+
 //
 // Same as IntToString for wide strings
 //
@@ -495,7 +513,7 @@ class IntToWstring
 public:
     IntToWstring(int num)
     {
-        if (num == 0x80000000)
+        if (num == (int)0x80000000)
         {
             wstr = winfo;
             wcscpy(wstr,  StringConstant::US_smallest_int);
@@ -559,23 +577,16 @@ extern int SystemIsDirectory(char *name);
 #define UNIX_FILE_SYSTEM
 #endif
 
-
-#if defined(GNU_LIBC5)
-    extern size_t wcslen(wchar_t *);
-    extern wchar_t *wcscpy(wchar_t *, wchar_t *);
-    extern wchar_t *wcsncpy(wchar_t *, wchar_t *, int);
-    extern wchar_t *wcscat(wchar_t *, wchar_t *);
-    extern int wcscmp(wchar_t *, wchar_t *);
-    extern int wcsncmp(wchar_t *, wchar_t *, int);
-#endif
-
-
 //
 // The symbol used in this environment for separating argument in a system string. E.g., in a unix system
 // directories specified in the CLASSPATH are separated by a ':', whereas in win95 it is ';'.
 //
 extern char PathSeparator();
 extern int SystemMkdir(char *);
+extern int SystemMkdirhier(char *);
+
+extern char * strcat3(const char *, const char *, const char *);
+extern char * wstring2string(wchar_t * in);
 
 //
 // Some compilers do not correctly predefine the primitive type "bool"
@@ -609,8 +620,12 @@ public:
                 expand_wchar(false)
     {}
 
+    Ostream(ostream *_os) : os(_os),
+	                    expand_wchar(false)
+    {}
+
     void StandardOutput() { os = &cout; }
-    void SetExpandWchar() { expand_wchar = true; }
+    void SetExpandWchar(bool val = true) { expand_wchar = val; }
     bool ExpandWchar() { return expand_wchar; }
 
     Ostream &operator<<(wchar_t ch)
@@ -698,7 +713,7 @@ public:
         return *this;
     }
 
-    Ostream& operator<<(const signed char *c)
+    Ostream &operator<<(const signed char *c)
     {
         *os << c;
         return *this;

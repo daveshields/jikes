@@ -1,4 +1,4 @@
-// $Id: error.cpp,v 1.33 1999/10/13 16:17:42 shields Exp $
+// $Id: error.cpp,v 1.38 1999/10/18 16:51:02 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -291,6 +291,7 @@ void SemanticError::StaticInitializer()
     warning[BAD_INPUT_FILE] = 2;
     warning[UNREADABLE_INPUT_FILE] = 2;
     warning[UNREACHABLE_DEFAULT_CATCH_CLAUSE] = 2;
+    warning[ZERO_DIVIDE_CAUTION] = 2;
 
 //
 // TODO: Let these conditions be flagged as errors now.
@@ -575,7 +576,8 @@ void SemanticError::StaticInitializer()
     print_message[ENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION] = PrintENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION;
     print_message[ENCLOSING_INSTANCE_NOT_ACCESSIBLE] = PrintENCLOSING_INSTANCE_NOT_ACCESSIBLE;
     print_message[INVALID_ENCLOSING_INSTANCE] = PrintINVALID_ENCLOSING_INSTANCE;
-    print_message[ZERO_DIVIDE] = PrintZERO_DIVIDE;
+    print_message[ZERO_DIVIDE_ERROR] = PrintZERO_DIVIDE_ERROR;
+    print_message[ZERO_DIVIDE_CAUTION] = PrintZERO_DIVIDE_CAUTION;
     print_message[VOID_TO_STRING] = PrintVOID_TO_STRING;
 
 #ifdef TEST
@@ -4674,7 +4676,15 @@ void SemanticError::PrintENCLOSING_INSTANCE_NOT_ACCESSIBLE(ErrorInfo &err, LexSt
 }
 
 
-void SemanticError::PrintZERO_DIVIDE(ErrorInfo &err, LexStream *lex_stream, Control &control)
+void SemanticError::PrintZERO_DIVIDE_ERROR(ErrorInfo &err, LexStream *lex_stream, Control &control)
+{
+    Coutput << "Attempt to divide by zero.";
+
+    return;
+}
+
+
+void SemanticError::PrintZERO_DIVIDE_CAUTION(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
     Coutput << "Attempt to divide by zero.";
 

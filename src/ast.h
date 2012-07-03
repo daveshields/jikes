@@ -1,4 +1,4 @@
-// $Id: ast.h,v 1.15 1999/10/13 16:17:41 shields Exp $
+// $Id: ast.h,v 1.17 1999/10/15 17:41:36 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -28,8 +28,8 @@ class VariableSymbolArray
     typedef VariableSymbol * T;
 
     T **base;
-    int base_size,
-        top,
+    size_t base_size;
+    int top,
         size;
     StoragePool *pool;
     unsigned short log_blksize,
@@ -102,7 +102,7 @@ public:
 
 //
 // Global function used when the space for a dynamic object is
-// preallocated,but we need to call a constructor to initialize the
+// preallocated, but we need to call a constructor to initialize the
 // space.
 //
 // inline static void *operator new(size_t, void *p) { return p; }
@@ -152,7 +152,7 @@ public:
 //    DynamicArrays are used to implement lists. This representation has the
 //    advantage of being very flexible and easy to use. However, it may be slightly
 //    less time-efficient than a straightforward linked list. My guess is no more
-//    that 10% which justifies this use, but that should be checked at some point...
+//    than 10% which justifies this use, but that should be checked at some point...
 //
 //**********************************************************************************
 
@@ -382,6 +382,7 @@ public:
 #ifdef TEST
     unsigned id;
     static unsigned count;
+    static bool debug_unparse;
 
     Ast() : id(++count)
     {}
@@ -391,6 +392,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     //
@@ -566,8 +568,8 @@ template <class T>
 class AstArray
 {
     T **base;
-    int base_size,
-        top,
+    size_t base_size;
+    int top,
         size;
     StoragePool *pool;
     unsigned short log_blksize,
@@ -625,6 +627,12 @@ public:
     // that new element.
     //
     T& Next() { int i = NextIndex(); return base[i >> log_blksize][i]; }
+
+    inline void Push(T elt) { this -> Next() = elt; }
+    // Not "return (*this)[--top]" because that may violate an invariant
+    // in operator[].
+    inline T Pop() { assert(top!=0); top--; return base[top >> log_blksize][top]; }
+    inline T Top() { assert(top!=0); return (*this)[top-1]; }
 
     //
     // Constructor of a ast array.
@@ -768,12 +776,15 @@ public:
     LexStream::TokenIndex left_brace_token;
     LexStream::TokenIndex right_brace_token;
 
+    bool no_braces;
+
     AstBlock(StoragePool *pool_) : labels(NULL),
                                    block_statements(NULL),
                                    locally_defined_variables(NULL),
                                    block_tag(NONE),
                                    block_symbol(NULL),
-                                   nesting_level(0)
+                                   nesting_level(0),
+                   no_braces(false)
     {
         Ast::kind = Ast::BLOCK;
         Ast::class_tag = Ast::STATEMENT;
@@ -805,6 +816,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -840,6 +852,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -870,6 +883,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -918,6 +932,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -959,6 +974,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -988,6 +1004,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1018,6 +1035,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1070,6 +1088,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1125,6 +1144,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1153,6 +1173,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1196,7 +1217,6 @@ public:
 
     AstClassBody(StoragePool *pool_) : pool(pool_),
                                        class_body_declarations(NULL),
-                                       default_constructor(NULL),
                                        instance_variables(NULL),
                                        class_variables(NULL),
                                        methods(NULL),
@@ -1206,6 +1226,7 @@ public:
                                        inner_interfaces(NULL),
                                        blocks(NULL),
                                        empty_declarations(NULL),
+                                       default_constructor(NULL),
                                        this_block(NULL)
     {
         Ast::kind = Ast::CLASS_BODY;
@@ -1219,6 +1240,7 @@ public:
     inline int NumClassBodyDeclarations() { return (class_body_declarations ? class_body_declarations -> Length() : 0); }
     inline void AllocateClassBodyDeclarations(int estimate = 0);
     inline void AddClassBodyDeclaration(Ast *);
+    inline void AddClassBodyDeclarationNicely(Ast *);
 
     inline AstFieldDeclaration *&InstanceVariable(int i) { return (*instance_variables)[i]; }
     inline int NumInstanceVariables() { return (instance_variables ? instance_variables -> Length() : 0); }
@@ -1267,6 +1289,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1315,7 +1338,7 @@ public:
         Ast::kind = Ast::CLASS;
         Ast::class_tag = Ast::NO_TAG;
         Ast::generated = 0;
-	AstStatement::pool = pool_;
+    AstStatement::pool = pool_;
     }
 
     virtual ~AstClassDeclaration();
@@ -1342,6 +1365,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1388,6 +1412,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1428,6 +1453,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1464,6 +1490,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1520,6 +1547,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1563,6 +1591,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1614,6 +1643,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1678,6 +1708,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1709,6 +1740,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1767,6 +1799,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1830,6 +1863,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1888,6 +1922,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -1911,8 +1946,8 @@ public:
     AstConstructorBlock *constructor_body;
 
     AstConstructorDeclaration(StoragePool *pool_) : pool(pool_),
-                                                    throws(NULL),
                                                     constructor_modifiers(NULL),
+                                                    throws(NULL),
                                                     constructor_symbol(NULL),
                                                     index(CycleChecker::OMEGA)
     {
@@ -1937,6 +1972,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2001,12 +2037,12 @@ public:
                                                   interface_modifiers(NULL),
                                                   extends_interfaces(NULL),
                                                   interface_member_declarations(NULL),
-                                                  semantic_environment(NULL),
                                                   class_variables(NULL),
                                                   methods(NULL),
                                                   inner_classes(NULL),
                                                   inner_interfaces(NULL),
-                                                  empty_declarations(NULL)
+                                                  empty_declarations(NULL),
+                                                  semantic_environment(NULL)
     {
         Ast::kind = Ast::INTERFACE;
         Ast::class_tag = Ast::NO_TAG;
@@ -2060,6 +2096,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2110,6 +2147,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2171,6 +2209,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2210,6 +2249,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2246,6 +2286,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2286,6 +2327,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2315,6 +2357,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2366,6 +2409,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2427,6 +2471,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2464,6 +2509,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2503,6 +2549,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2561,6 +2608,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2599,6 +2647,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2636,6 +2685,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2673,6 +2723,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2710,6 +2761,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2747,6 +2799,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2782,6 +2835,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2811,6 +2865,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2854,6 +2909,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2922,6 +2978,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2952,6 +3009,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -2982,6 +3040,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3011,6 +3070,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3040,6 +3100,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3069,6 +3130,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3098,6 +3160,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3127,6 +3190,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3156,6 +3220,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3185,6 +3250,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3215,6 +3281,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3247,6 +3314,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3277,6 +3345,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3341,6 +3410,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3374,6 +3444,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3424,6 +3495,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3481,8 +3553,8 @@ public:
     //
     AstExpression *resolution_opt;
 
-    AstFieldAccess(FieldAccessTag tag = NONE) : field_access_tag(tag),
-                                                resolution_opt(NULL)
+    AstFieldAccess(FieldAccessTag tag = NONE) : resolution_opt(NULL),
+                                                field_access_tag(tag)
     {
         Ast::kind = Ast::DOT;
         Ast::class_tag = Ast::EXPRESSION;
@@ -3500,6 +3572,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3557,6 +3630,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3590,6 +3664,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3647,6 +3722,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3704,6 +3780,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3754,6 +3831,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3831,6 +3909,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3865,6 +3944,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -3930,9 +4010,9 @@ public:
     LexStream::TokenIndex assignment_operator_token;
     AstExpression *expression;
 
-    AstAssignmentExpression(AssignmentExpressionTag tag_, LexStream::TokenIndex token_) : assignment_tag(tag_),
-                                                                                          assignment_operator_token(token_),
-                                                                                          write_method(NULL)
+    AstAssignmentExpression(AssignmentExpressionTag tag_, LexStream::TokenIndex token_) : write_method(NULL),
+                                                                                          assignment_tag(tag_),
+                                                                                          assignment_operator_token(token_)
     {
         Ast::kind = Ast::ASSIGNMENT;
         Ast::class_tag = Ast::EXPRESSION;
@@ -3947,6 +4027,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(Ostream &, LexStream &);
 #endif
 
     virtual Ast *Clone(StoragePool *);
@@ -4025,8 +4106,8 @@ public:
 private:
 
     Cell **base;
-    int base_size,
-        top,
+    size_t base_size;
+    int top,
         size;
 
     size_t log_blksize,
@@ -4050,7 +4131,7 @@ private:
         // reallocated.
         //
         //
-        int k = size >> log_blksize; /* which segment? */
+        size_t k = size >> log_blksize; /* which segment? */
 
         //
         // If the base is overflowed, reallocate it and initialize the new elements to NULL.
@@ -5786,6 +5867,58 @@ inline void AstClassBody::AddClassBodyDeclaration(Ast *member)
     class_body_declarations -> Next() = member;
 }
 
+// not inline
+void AstClassBody::AddClassBodyDeclarationNicely(Ast *member)
+{
+    AstFieldDeclaration *field_declaration = member -> FieldDeclarationCast();
+    AstMethodDeclaration *method_declaration = member -> MethodDeclarationCast();
+    AstConstructorDeclaration *constructor_declaration = member -> ConstructorDeclarationCast();
+    AstStaticInitializer *static_initializer = member -> StaticInitializerCast();
+    AstClassDeclaration *class_declaration = member -> ClassDeclarationCast();
+    AstInterfaceDeclaration *interface_declaration = member -> InterfaceDeclarationCast();
+    AstBlock *block = member -> BlockCast();
+
+    AddClassBodyDeclaration(member);
+
+
+    // This is lifted from Parser::Act68.
+
+    if (field_declaration)
+    {
+        if (field_declaration -> StaticFieldCast())
+            AddClassVariable(field_declaration);
+        else AddInstanceVariable(field_declaration);
+    }
+    else if (method_declaration)
+    {
+        AddMethod(method_declaration);
+    }
+    else if (constructor_declaration)
+    {
+        AddConstructor(constructor_declaration);
+    }
+    else if (static_initializer)
+    {
+        AddStaticInitializer(static_initializer);
+    }
+    else if (class_declaration)
+    {
+        AddNestedClass(class_declaration);
+    }
+    else if (interface_declaration)
+    {
+        AddNestedInterface(interface_declaration);
+    }
+    else if (block)
+    {
+        AddBlock(block);
+    }
+    else // assert(block = member -> EmptyDeclarationCast())
+    {
+        AddEmptyDeclaration((AstEmptyDeclaration *) member);
+    }
+}
+
 inline void AstForStatement::AllocateForInitStatements(int estimate)
 {
     if (! for_init_statements)
@@ -5885,7 +6018,7 @@ template <class T>
         // reallocated.
         //
         //
-        int k = size >> log_blksize; /* which segment? */
+        size_t k = size >> log_blksize; /* which segment? */
 
         //
         // If the base is overflowed, reallocate it and initialize the new elements to NULL.

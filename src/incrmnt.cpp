@@ -1,4 +1,4 @@
-// $Id: incrmnt.cpp,v 1.11 1999/09/17 17:48:37 shields Exp $
+// $Id: incrmnt.cpp,v 1.12 1999/10/18 16:51:03 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -28,9 +28,9 @@ void Control::RemoveTrashedTypes(SymbolSet &type_trash_set)
     //
     for (type = (TypeSymbol *) type_trash_set.FirstElement(); type; type = (TypeSymbol *) type_trash_set.NextElement())
     {
-        for (TypeSymbol *static_parent = (TypeSymbol *) type -> parents -> FirstElement();
+        for (TypeSymbol *static_parent = (TypeSymbol *) type -> static_parents -> FirstElement();
                          static_parent;
-                         static_parent = (TypeSymbol *) type -> parents -> NextElement())
+                         static_parent = (TypeSymbol *) type -> static_parents -> NextElement())
         {
             if (! type_trash_set.IsElement(static_parent))
             {

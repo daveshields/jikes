@@ -1,4 +1,4 @@
-// $Id: body.cpp,v 1.24 1999/10/13 16:17:41 shields Exp $
+// $Id: body.cpp,v 1.26 1999/10/17 01:58:39 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:

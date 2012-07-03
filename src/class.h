@@ -1,4 +1,4 @@
-// $Id: class.h,v 1.12 1999/10/13 16:21:51 shields Exp $
+// $Id: class.h,v 1.13 1999/10/15 02:30:39 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -625,12 +625,12 @@ class Code_attribute : public attribute_info
 public:
 
     Code_attribute(u2 _name_index, u2 _max_locals) : attribute_info(Code, _name_index),
-                                                     code(8, 4),
-                                                     exception_table(6, 16),
-                                                     attributes(6, 16),
+						     attribute_length(0),
                                                      max_stack(0),
                                                      max_locals(_max_locals),
-                                                     attribute_length(0)
+                                                     code(8, 4),
+                                                     exception_table(6, 16),
+                                                     attributes(6, 16)
     {}
     virtual ~Code_attribute()
     {
@@ -1459,10 +1459,10 @@ public:
     u2 AttributesCount() { return attributes.Length(); }
     Tuple<attribute_info *> attributes; /* attributes[attributes_count] */
 
-    ClassFile(TypeSymbol *unit_type_) : unit_type(unit_type_),
-                                        constant_pool(8, 4),
+    ClassFile(TypeSymbol *unit_type_) : constant_pool(8, 4),
                                         fields(6, 16),
-                                        methods(6, 16)
+                                        methods(6, 16),
+                                        unit_type(unit_type_)
     {}
 
     ~ClassFile()

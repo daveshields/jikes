@@ -1,4 +1,4 @@
-// $Id: control.h,v 1.19 1999/10/12 12:46:10 shields Exp $
+// $Id: control.h,v 1.21 1999/10/17 01:58:40 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -373,11 +373,6 @@ public:
         return StringBuffer_append_object_method;
     }
 
-    //
-    //
-    //
-    LiteralValue bad_value;
-
     IntLiteralTable    int_pool;
     LongLiteralTable   long_pool;
     FloatLiteralTable  float_pool;
@@ -438,6 +433,11 @@ public:
     LiteralValue *NullValue() { return &null_value; }
 
     //
+    // The one and only bad value constant.
+    //
+    LiteralValue *BadValue() { return &bad_value; }
+
+    //
     // Note that only names are converted here and not literals, since
     // no error can occur in a name.
     // A literal is converted during the semantic pass so that an
@@ -472,8 +472,6 @@ public:
     static DirectorySymbol *GetOutputDirectory(FileSymbol *);
     static FileSymbol *GetJavaFile(PackageSymbol *, NameSymbol *);
     static FileSymbol *GetFile(Control &, PackageSymbol *, NameSymbol *);
-    static FileSymbol *GetFileBoth(Control &, PackageSymbol *, NameSymbol *);
-    static FileSymbol *GetFileFirst(Control &, PackageSymbol *, NameSymbol *);
 
     PackageSymbol *FindOrInsertPackage(LexStream *, AstExpression *);
     void ProcessPackageDeclaration(FileSymbol *, AstPackageDeclaration *);
@@ -525,7 +523,8 @@ public:
 
 private:
 
-    LiteralValue null_value;
+    LiteralValue null_value,
+                 bad_value;
 
     TypeSymbol *Serializable_type,
 
