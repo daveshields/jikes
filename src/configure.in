@@ -1,0 +1,319 @@
+# $Id: configure.in,v 1.11 1999/08/25 12:11:06 shields Exp $
+dnl	This file is an input file used by the GNU "autoconf" program to
+dnl	generate the file "configure", which is run to configure the
+dnl	Makefile in this directory.
+AC_INIT(jikes.cpp)
+
+# Convert srcdir into full path name
+srcdir=`cd $srcdir ; pwd`
+echo "srcdir is $srcdir"
+
+
+#--------------------------------------------------------------------
+#	see if --with-jikespg location is given on the command line
+#--------------------------------------------------------------------
+
+AC_ARG_WITH(jikespg, [  --with-jikespg=PROG     location of jikes parser generator (optional)],
+	JIKESPG=$withval, JIKESPG=NONE)
+
+if test "$JIKESPG" != "NONE"; then
+    if test ! -f "$JIKESPG" || test ! -x "$JIKESPG"; then
+        AC_MSG_ERROR([jikespg argument '$JIKESPG' is not a file or is not executable])
+    fi
+else
+    JIKESPG=jikespg
+fi
+
+
+#--------------------------------------------------------------------
+#	see if --with-icc is given on the command line
+#--------------------------------------------------------------------
+
+AC_ARG_WITH(icc, [  --with-icc=PROG         use the IBM Cset++ compiler, optional PROG can be given instead of searching on the PATH],
+	CC=$withval, CC=NONE)
+
+if test "$CC" != "NONE"; then
+    if test "$CC" = yes; then
+        AC_PATH_PROG(CC, icc)
+
+        if test "$CC" = ""; then
+            AC_PATH_PROG(CC, xlC)
+
+            if test "$CC" = ""; then
+                AC_MSG_ERROR([could not find icc or xlC on your PATH.])
+            fi
+        fi
+    fi
+
+    if test ! -f "$CC" || test ! -x "$CC"; then
+        AC_MSG_ERROR([argument '$CC' is not a file or is not executable])
+    fi
+
+    CC_NAME=icc
+    CCREQUIREDFLAGS="-c -DICC"
+    CCOPTFLAGS="-O2"
+    CCDEBUGFLAGS="-DTEST"
+    LD=$CC
+    LDDEBUGFLAGS="-g"
+    LDFLAGS='-L. -o $(EXECUTABLE)'
+fi
+
+
+
+
+#--------------------------------------------------------------------
+#	see if --with-CC is given on the command line
+#--------------------------------------------------------------------
+
+AC_ARG_WITH(CC, [  --with-CC=PROG          use the AT&T CC compiler, optional PROG can be given instead of searching on the PATH],
+	CC=$withval, CC=NONE)
+
+if test "$CC" != "NONE"; then
+    if test "$CC" = yes; then
+        AC_PATH_PROG(CC, CC)
+        if test "$CC" = ""; then
+            AC_MSG_ERROR([could not find CC on your PATH.])
+        fi
+    fi
+
+    if test ! -f "$CC" || test ! -x "$CC"; then
+        AC_MSG_ERROR([argument '$CC' is not a file or is not executable])
+    fi
+
+    CC_NAME=CC
+
+    CCREQUIREDFLAGS="-c -ansi"
+    CCOPTFLAGS="-fast"
+    CCDEBUGFLAGS="-DTEST -g -xs"
+    LD=$CC
+    LDDEBUGFLAGS="-g"
+    LDFLAGS='-L. -o $(EXECUTABLE)'
+fi
+
+#--------------------------------------------------------------------
+# If no other compiler was given as a --with option then we use g++
+#--------------------------------------------------------------------
+
+if test "$CC_NAME" = ""; then
+    AC_PROG_CXX
+
+    CC_NAME=$CXX
+    CC=$CXX
+
+    TEST_BOOL="true"
+    CCREQUIREDFLAGS="-c -ansi"
+    CCOPTFLAGS="-O2"
+    CCDEBUGFLAGS="-DTEST -g"
+    LD=$CC
+    LDDEBUGFLAGS="-g"
+    LDFLAGS='-L. -o $(EXECUTABLE)'
+
+    if test "$GXX" != "yes"; then
+        LDFLAGS="$LDFLAGS -lm"
+    fi
+fi
+
+#--------------------------------------------------------------------
+#   see if "bool" is a builtin type
+#--------------------------------------------------------------------
+
+AC_LANG_CPLUSPLUS
+
+AC_MSG_CHECKING(builtin bool type)
+AC_TRY_COMPILE([],[
+bool some_boolean_value = true;
+], [
+CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DTYPE_bool"
+AC_MSG_RESULT(yes)
+],[
+AC_MSG_RESULT(no)
+])
+
+
+# echo the compiler we are using
+
+AC_MSG_CHECKING([for the compiler to use])
+AC_MSG_RESULT([$CC.])
+
+
+# defaults under UNIX
+
+ERASE="rm -f"
+O=o
+EXECUTABLE=jikes
+
+
+
+# Figure out what platform we are running on so that we know
+# what flags to give to the compiler
+
+
+# Keep case statements in alphabetical order.
+case "`uname -s`" in
+    AIX)
+        if test $CC_NAME = icc; then
+            CCREQUIREDFLAGS="$CCREQUIREDFLAGS -langlvl=ansi -qnotempinc -+ -qinlglue"
+            CCDEBUGFLAGS="$CCDEBUGFLAGS -g"
+        fi
+
+        CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DUNIX -DBIGENDIAN"
+        LDFLAGS="$LDFLAGS $LDDEBUGFLAGS"
+        ;;
+    FreeBSD)
+	CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DUNIX -DIEEE_DIV_0 -DGNU_LIBC5 -DNO_WCHAR_H"
+
+        if test $CC_NAME = "$CXX"; then
+            CCREQUIREDFLAGS="-funsigned-char $CCREQUIREDFLAGS"
+        fi
+
+	# FreeBSD doesn't have the wchar.h functions yet
+	CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DGNU_LIBC5 -DNO_WCHAR_H"
+
+	# Check byte-order
+        case "`uname -m`" in
+            alpha)
+                ;;
+            i?86)
+                ;;
+            *)
+                AC_MSG_ERROR([FreeBSD arch '`uname -m`' not supported.])
+                ;;
+        esac
+	;;
+    HP-UX)
+        if test $CC_NAME = "$CXX"; then
+            CCREQUIREDFLAGS="-funsigned-char $CCREQUIREDFLAGS"
+        fi
+        CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DUNIX -D_INCLUDE_POSIX_SOURCE"
+        CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DBIGENDIAN -DSTAT_POSIX_1"
+        LDFLAGS="$LDDEBUGFLAGS $LDFLAGS -lstdc++"
+        ;;
+    IRIX)
+        CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DUNIX -DBIGENDIAN"
+        if test ! $GAS = yes; then
+            CCREQUIREDFLAGS="$CCREQUIREDFLAGS -mmips-as"
+        fi
+        ;;
+    Linux)
+	CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DUNIX"
+
+        if test $CC_NAME = "$CXX"; then
+            CCREQUIREDFLAGS="-funsigned-char $CCREQUIREDFLAGS"
+        fi
+
+        case "`uname -m`" in
+            alpha)
+                ;;
+            i?86)
+                ;;
+	    mips)
+		;;
+            m68k)
+                CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DBIGENDIAN"
+                ;;
+            ppc)
+                CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DBIGENDIAN"
+                ;;
+            sparc)
+                CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DBIGENDIAN"
+                ;;
+            *)
+                AC_MSG_ERROR([Linux arch '`uname -m`' not supported.])
+                ;;
+        esac
+        
+        # test to see if we are using libc5 or gnulib5 (libc6)
+        if test -f /lib/libc.so.5 && test ! -f /lib/libc.so.6; then
+            CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DGNU_LIBC5"
+        else
+            CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DSTAT_POSIX"
+        fi
+        ;;
+    OS2)
+        if test $CC_NAME = icc; then
+           O=obj
+           CCREQUIREDFLAGS="-Tdp -G5 $CCREQUIREDFLAGS -DUNIX_FILE_SYSTEM -Dcerr=cout"
+           CCOPTFLAGS="$CCOPTFLAGS -Tdp -O -DNDEBUG"
+           CCDEBUGFLAGS="$CCDEBUGFLAGS -Ti"
+           LDDEBUGFLAGS="/Ti+"
+           LDFLAGS="$LDFLAGS /O:\$(EXECUTABLE) /PM:VIO /STACK:400000 /NOE"
+
+           # link to an obj file in the icc directory
+           TMP=$CC
+           TMP=`dirname $TMP`
+           TMP=`dirname $TMP`
+           SYSOBJECTS="$TMP\\lib\\setargv.obj"
+        fi    
+        ;;
+    OSF1)
+        CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DUNIX"
+        ;;
+    SunOS)
+        CCREQUIREDFLAGS="$CCREQUIREDFLAGS -DUNIX -DBIGENDIAN"
+
+        case "$CC_NAME" in
+            "$CXX")
+                CCREQUIREDFLAGS="-funsigned-char $CCREQUIREDFLAGS"
+                ;;
+            icc)
+                CCREQUIREDFLAGS="-langlvl=ansi -+ -qnotempinc $CCREQUIREDFLAGS"
+                CCOPTFLAGS="$CCOPTFLAGS -O3 -qstrict"
+                CCDEBUGFLAGS="$CCDEBUGFLAGS -g"
+                LDFLAGS="$LDFLAGS -Bstatic"
+                ;;
+        esac
+	;;
+    *)
+        AC_MSG_ERROR([platform '`uname -s`' is not supported.])
+        ;;
+esac
+
+
+#--------------------------------------------------------------------
+#	see if --enable-symbols was given, if so use debug symbols
+#--------------------------------------------------------------------
+
+AC_ARG_ENABLE(symbols, [  --enable-symbols        build with debugging symbols],
+    [DEBUG_SYMBOLS=$enableval], [DEBUG_SYMBOLS=no])
+
+if test "$DEBUG_SYMBOLS" = "yes"; then
+    CCFLAGS='$(CCREQUIREDFLAGS) $(CCDEBUGFLAGS)'
+else
+    CCFLAGS='$(CCREQUIREDFLAGS) $(CCOPTFLAGS)'
+    LDFLAGS="-s $LDFLAGS"
+fi
+
+
+#--------------------------------------------------------------------
+# 	Check for libc brokenness (linux libc5, maybe others?) - CSA
+#--------------------------------------------------------------------
+AC_CACHE_CHECK(for a broken wchar.h, jikes_cv_broken_wchar,
+	AC_TRY_COMPILE([#include <wchar.h>],[wint_t foo;],
+	jikes_cv_broken_wchar=no, jikes_cv_broken_wchar=yes))
+if test $jikes_cv_broken_wchar = yes; then
+	AC_TRY_COMPILE([
+#include "libc5-fix.h"
+#include <wchar.h>
+],[wint_t foo;],
+	CCREQUIREDFLAGS="$CCREQUIREDFLAGS -include libc5-fix.h",
+	AC_MSG_ERROR([Can't fix broken wchar.h]))
+fi
+
+# Subst variables into Makefile.in to produce the Makefile
+
+BUILD_DIR=`pwd`
+AC_SUBST(BUILD_DIR)
+
+AC_SUBST(CC)
+AC_SUBST(CCREQUIREDFLAGS)
+AC_SUBST(CCDEBUGFLAGS)
+AC_SUBST(CCOPTFLAGS)
+AC_SUBST(CCFLAGS)
+AC_SUBST(ERASE)
+AC_SUBST(EXECUTABLE)
+AC_SUBST(LD)
+AC_SUBST(LDFLAGS)
+AC_SUBST(O)
+AC_SUBST(SYSOBJECTS)
+
+AC_OUTPUT([Makefile])
