@@ -1,4 +1,4 @@
-// $Id: double.h,v 1.4 1999/07/06 13:49:19 shields Exp $
+// $Id: double.h,v 1.5 1999/10/27 18:07:09 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -17,89 +17,166 @@ class LongInt;
 class IEEEdouble;
 class IEEEfloat
 {
-    protected:
-        union
-        {
-            float float_value;
-            u4 word;
-        } value;
+private:
+    union
+    {
+        float float_value;
+        u4 word;
+    } value;
 
-    public:
+    enum { BIAS = 127 };
 
-        u4 &Word() { return value.word; }
-        float &FloatValue() { return value.float_value; }
+public:
 
-        IEEEfloat(float);
-        IEEEfloat(u4);
+    u4 Word() { return value.word; }
 
-        IEEEfloat(i4);
-        IEEEfloat(char *);
-        IEEEfloat(IEEEdouble a);
+    float FloatValue() { return value.float_value; }
+    float FloatRoundedValue();
 
-        inline IEEEfloat (void) {}
+    int Exponent()
+    {
+        return ((value.word >> 23) & 0x000000FF) - BIAS;
+    }
 
-        IEEEfloat  operator+  (IEEEfloat); // binary addition
-        IEEEfloat  operator+  ();         // unary plus
-        IEEEfloat& operator+= (IEEEfloat); // add and assign
+    bool IsNaN()
+    {
+        return (value.word & 0xFF800000) == 0x7F800000 && (value.word & 0x007FFFFF) > 0;
+    }
 
-        IEEEfloat  operator-  (IEEEfloat); // binary subtraction
-        IEEEfloat  operator-  ();         // unary minus
-        IEEEfloat& operator-= (IEEEfloat); // subtract and assign
+    bool IsNegative()
+    {
+        return (value.word & 0x80000000) == 0x80000000;
+    }
 
-        IEEEfloat  operator* (IEEEfloat);  // multiplication
-        IEEEfloat& operator*=(IEEEfloat);  // multiply and assign
+    bool IsNegativeZero()
+    {
+        return value.word == 0x80000000;
+    }
 
-        IEEEfloat  operator/ (IEEEfloat);  // divide
-        IEEEfloat& operator/=(IEEEfloat);  // divide and assign
+    bool IsPositiveZero()
+    {
+        return value.word == 0x00000000;
+    }
 
-        bool      operator== (IEEEfloat); // equal
-        bool      operator!= (IEEEfloat); // not equal
+    bool IsNegativeInfinity()
+    {
+        return value.word == 0xFF800000;
+    }
 
-        bool  operator<  (IEEEfloat); // less-than
-        bool  operator>  (IEEEfloat); // greater-than
-        bool  operator<= (IEEEfloat); // less-than or equal
-        bool  operator>= (IEEEfloat); // greater-than or equal
+    bool IsPositiveInfinity()
+    {
+        return value.word == 0x7F800000;
+    }
 
-        int IntValue();
-        int LongValue();
+    static inline IEEEfloat NaN()               { return  IEEEfloat(0x7FC00000); }
+    static inline IEEEfloat POSITIVE_INFINITY() { return  IEEEfloat(0x7F800000); }
+    static inline IEEEfloat NEGATIVE_INFINITY() { return  IEEEfloat(0xFF800000); }
 
-        static void Fmodulus(IEEEfloat, IEEEfloat, IEEEfloat&);
-        static void Divide(IEEEfloat, IEEEfloat, IEEEfloat &, IEEEfloat &);
-        void String(char *);
+    IEEEfloat(float);
+    IEEEfloat(u4);
+    IEEEfloat(i4);
+    IEEEfloat(char *);
+    IEEEfloat(IEEEdouble a);
+    IEEEfloat() {}
+
+    inline int IntValue() { return (int) FloatValue(); }
+
+    IEEEfloat  operator+  (IEEEfloat); // binary addition
+    IEEEfloat  operator+  ();         // unary plus
+    IEEEfloat& operator+= (IEEEfloat); // add and assign
+
+    IEEEfloat  operator-  (IEEEfloat); // binary subtraction
+    IEEEfloat  operator-  ();         // unary minus
+    IEEEfloat& operator-= (IEEEfloat); // subtract and assign
+
+    IEEEfloat  operator* (IEEEfloat);  // multiplication
+    IEEEfloat& operator*=(IEEEfloat);  // multiply and assign
+
+    IEEEfloat  operator/ (IEEEfloat);  // divide
+    IEEEfloat& operator/=(IEEEfloat);  // divide and assign
+
+    bool      operator== (IEEEfloat); // equal
+    bool      operator!= (IEEEfloat); // not equal
+
+    bool  operator<  (IEEEfloat); // less-than
+    bool  operator>  (IEEEfloat); // greater-than
+    bool  operator<= (IEEEfloat); // less-than or equal
+    bool  operator>= (IEEEfloat); // greater-than or equal
+
+    static void Fmodulus(IEEEfloat, IEEEfloat, IEEEfloat&);
+    static void Divide(IEEEfloat, IEEEfloat, IEEEfloat &, IEEEfloat &);
 };
 
 
 class IEEEdouble
 {
-protected:
+private:
     union
     {
         double double_value;
         u4 word[2];
     } value;
 
-public:
+    enum { BIAS = 1023 };
 
 #ifdef BIGENDIAN
-    u4 &HighWord() { return value.word[0]; }
-    u4 &LowWord()  { return value.word[1]; }
+    u4 &High() { return value.word[0]; }
+    u4 &Low()  { return value.word[1]; }
 #else
-    u4 &LowWord()  { return value.word[0]; }
-    u4 &HighWord() { return value.word[1]; }
+    u4 &Low()  { return value.word[0]; }
+    u4 &High() { return value.word[1]; }
 #endif
 
-    double &DoubleValue() { return value.double_value; }
+public:
+
+    u4 HighWord() { return High(); }
+    u4 LowWord()  { return Low(); }
+
+    double DoubleValue() { return value.double_value; }
+    double DoubleRoundedValue();
+
+    int Exponent() // Notice that the value returned here is unadjusted
+    {
+        return ((HighWord() >> 20) & 0x000007FF) - BIAS;
+    }
+
+    bool IsNaN()
+    {
+        u4 high = HighWord(),
+           low  = LowWord();
+        return (high & 0xFFF00000) == 0x7FF00000 && ((high & 0x000FFFFF) > 0 || low > 0);
+    }
+
+    bool IsNegative()
+    {
+        return (HighWord() & 0x80000000) == 0x80000000;
+    }
+
+    bool IsNegativeZero()
+    {
+        return HighWord() == 0x80000000 && LowWord() == 0x00000000;
+    }
+
+    bool IsPositiveZero()
+    {
+        return HighWord() == 0x00000000 && LowWord() == 0x00000000;
+    }
+
+    bool IsNegativeInfinity()
+    {
+        return HighWord() == 0xFFF00000 && LowWord() == 0x00000000;
+    }
+
+    bool IsPositiveInfinity()
+    {
+        return HighWord() == 0x7FF00000 && LowWord() == 0x00000000;
+    }
 
     static IEEEdouble min_long;
 
-    //
-    //     static inline IEEEdouble NaN()               { return  zero / zero; }
-    //     static inline IEEEdouble POSITIVE_INFINITY() { return  1.0  / zero; }
-    //     static inline IEEEdouble NEGATIVE_INFINITY() { return -1.0  / zero; }
-    //
-    static inline IEEEdouble NaN()               { return  IEEEdouble(0x7fffffff, 0xffffffff); }
-    static inline IEEEdouble POSITIVE_INFINITY() { return  IEEEdouble(0x7ff00000, 0x00000000); }
-    static inline IEEEdouble NEGATIVE_INFINITY() { return  IEEEdouble(0xfff00000, 0x00000000); }
+    static inline IEEEdouble NaN()               { return  IEEEdouble(0x7FF80000, 0x00000000); }
+    static inline IEEEdouble POSITIVE_INFINITY() { return  IEEEdouble(0x7FF00000, 0x00000000); }
+    static inline IEEEdouble NEGATIVE_INFINITY() { return  IEEEdouble(0xFFF00000, 0x00000000); }
 
     IEEEdouble(LongInt&);
     IEEEdouble(double);
@@ -108,7 +185,9 @@ public:
     IEEEdouble(IEEEfloat);
     IEEEdouble(i4);
     IEEEdouble(char *);
-    inline IEEEdouble (void) {}
+    IEEEdouble() {}
+
+    inline int IntValue() { return (int) DoubleValue(); }
 
     IEEEdouble  operator+  (IEEEdouble); // binary addition
     IEEEdouble  operator+  ();         // unary plus
@@ -130,9 +209,6 @@ public:
     bool  operator>  (IEEEdouble); // greater-than
     bool  operator<= (IEEEdouble); // less-than or equal
     bool  operator>= (IEEEdouble); // greater-than or equal
-
-    inline int IntValue() { return (int) DoubleValue(); }
-    void String(char *);
 
     static void Divide(IEEEdouble, IEEEdouble, IEEEdouble &);
     static void Fmodulus(IEEEdouble, IEEEdouble, IEEEdouble &);

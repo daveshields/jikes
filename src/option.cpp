@@ -1,4 +1,4 @@
-// $Id: option.cpp,v 1.20 1999/10/19 15:26:57 shields Exp $
+// $Id: option.cpp,v 1.23 1999/11/03 14:49:13 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -152,34 +152,42 @@ void Option::SaveCurrentDirectoryOnDisk(char c)
 
 Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                                               classpath(NULL),
-                                              makefile_name(NULL),
+#ifdef HAVE_LIB_ICU_UC
+                                              converter(NULL),
+#endif
+                                              directory(NULL),
+                                              encoding(NULL),
+                                              dependence_report_name(NULL),
+                                              nowrite(false),
+                                              deprecation(false),
+                                              O(false),
+                                              g(false),
+                                              verbose(false),
+                                              depend(false),
+                                              nowarn(false),
+                                              one_one(true),
+                                              zero_defect(false),
+                                              first_file_index(arguments.argc),
+                                              debug_trap_op(0),
                                               debug_dump_lex(false),
                                               debug_dump_ast(false),
+                                              debug_unparse_ast(false),
+                                              debug_unparse_ast_debug(false),
                                               debug_dump_class(false),
-                                              debug_trap_op(0),
+                                              nocleanup(false),
                                               applet_author(false),
                                               incremental(false),
                                               makefile(false),
+                                              dependence_report(false),
                                               bytecode(true),
                                               full_check(false),
                                               unzip(false),
                                               dump_errors(false),
                                               errors(true),
                                               ascii(false),
-                                              comments(false),
-                                              pedantic(false),
-                                              directory(NULL),
-                                              first_file_index(arguments.argc),
                                               classpath_search_order(false),
-                                              one_one(true),
-                                              g(false),
-                                              nowrite(false),
-                                              deprecation(false),
-                                              verbose(false),
-                                              depend(false),
-                                              nowarn(false),
-                                              O(false),
-                                              zero_defect(false)
+                                              comments(false),
+                                              pedantic(false)
 {
 #ifdef WIN32_FILE_SYSTEM
     for (int j = 0; j < 128; j++)
@@ -225,6 +233,20 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
             }
             else if (strcmp(arguments.argv[i], "-depend") == 0 || strcmp(arguments.argv[i], "-Xdepend") == 0)
                  depend = true;
+            else if (strcmp(arguments.argv[i], "-encoding") == 0 && ((i + 1) < arguments.argc))
+            {
+#ifdef HAVE_LIB_ICU_UC
+                encoding = new char[strlen(arguments.argv[++i]) + 1];
+                strcpy(encoding, arguments.argv[i]);
+                UErrorCode err=ZERO_ERROR;
+                converter=ucnv_open(encoding, &err);
+                if(!converter)
+                    bad_options.Next() = new OptionError(SemanticError::UNSUPPORTED_ENCODING, encoding); 
+#else
+// if compiling without ICU support, will only support one encoding (ascii).
+#endif
+                continue;
+            }
             else if (strcmp(arguments.argv[i],"-verbose") == 0)
                  verbose = true;
             else if (strcmp(arguments.argv[i],"-g") == 0)
@@ -293,6 +315,13 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                  applet_author = true;
             else if (strcmp(arguments.argv[i], "+A") == 0)
                  debug_dump_ast = true;
+            else if (strcmp(arguments.argv[i], "+u") == 0)
+                 debug_unparse_ast = true;
+            else if (strcmp(arguments.argv[i], "+ud") == 0)
+            {
+                debug_unparse_ast = true;
+                debug_unparse_ast_debug = true;
+            }
 #ifdef EBCDIC
             else if (strcmp(arguments.argv[i], "+ASCII") == 0)
                      ascii = true;
@@ -364,11 +393,12 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                  makefile = true;
                  full_check = true;
             }
-            else if (strncmp(arguments.argv[i], "+M=", 3) == 0)
+            else if (strncmp(arguments.argv[i], "+DR=", 4) == 0)
             {
                  makefile = true;
+                 dependence_report=true;
                  full_check = true;
-                 makefile_name = &arguments.argv[i][3];
+                 dependence_report_name = &arguments.argv[i][4];
             }
             else if (strcmp(arguments.argv[i], "+O") == 0)
             {
@@ -483,5 +513,3 @@ Option::~Option()
 
     return;
 }
-
-

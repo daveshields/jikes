@@ -1,4 +1,4 @@
-// $Id: decl.cpp,v 1.36 1999/10/18 19:32:03 shields Exp $
+// $Id: decl.cpp,v 1.38 1999/11/03 00:46:30 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -261,13 +261,11 @@ void Semantic::ProcessTypeNames()
                 }
                 break;
             }
-        default:
-#ifdef ERNST
-// It is an open question if the next assert is appropriate.
-// Mike Ernst will sort this out.
-        assert(false);
-#endif
-        break;
+            case Ast::EMPTY_DECLARATION:
+                 break;
+            default:
+                assert(false);
+                break;
         }
 
         //
@@ -2055,11 +2053,11 @@ void Semantic::CleanUp()
                     type = interface_declaration -> semantic_environment -> Type();
                 break;
             }
-        default:
-#ifdef ERNST
-        assert(false);
-#endif
-        break;
+            case Ast::EMPTY_DECLARATION:
+                 break;
+            default:
+                 assert(false);
+                 break;
         }
 
         if (type)
@@ -2082,6 +2080,9 @@ void Semantic::CleanUpType(TypeSymbol *type)
         type -> MethodSym(j) -> CleanUp();
 
     delete type -> local;
+    if (control.option.nocleanup)
+        return;
+
     type -> local = NULL;
 
     delete type -> non_local;

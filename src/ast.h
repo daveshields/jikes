@@ -1,4 +1,4 @@
-// $Id: ast.h,v 1.17 1999/10/15 17:41:36 shields Exp $
+// $Id: ast.h,v 1.18 1999/10/19 23:13:34 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1088,6 +1088,7 @@ public:
 
 #ifdef TEST
     virtual void Print(LexStream &);
+    virtual void Unparse(LexStream &, char * directory); // special form
     virtual void Unparse(Ostream &, LexStream &);
 #endif
 

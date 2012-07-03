@@ -1,4 +1,4 @@
-// $Id: stream.cpp,v 1.17 1999/10/18 18:16:12 shields Exp $
+// $Id: stream.cpp,v 1.19 1999/11/01 03:22:20 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -282,17 +282,11 @@ assert(locations);
 
 void LexStream::ReadInput()
 {
-#ifdef ERNST
     if (file_symbol -> buffer)
     {
-
         ProcessInput(file_symbol -> buffer, strlen(file_symbol -> buffer));
     }
-    else if (file_symbol -> IsZip())
-#else
-    if (file_symbol -> IsZip())
-#endif
-    {
+    else if (file_symbol -> IsZip()) {
         ZipFile *zipfile = new ZipFile(file_symbol);
 
         if (zipfile -> Buffer() == NULL)
@@ -351,12 +345,11 @@ void LexStream::ReadInput()
     return;
 }
 
-
 void LexStream::RereadInput()
 {
     if (input_buffer) // if input already available, do nothing
         ;
-#ifdef ERNST
+#ifdef TEST
     else if (file_symbol -> buffer)
     {
       fprintf(stderr, "chaos: Don\'t know how to RereadInput a buffer\n");
@@ -444,10 +437,150 @@ int LexStream::hexvalue(wchar_t ch)
 }
 
 //
-// Read file_size Ascii characters from srcfile, convert them to unicode, and
+// Read filesize  characters from srcfile, convert them to unicode, and
 // store them in input_buffer.
 //
 void LexStream::ProcessInput(char *buffer, long filesize)
+{
+#ifdef HAVE_LIB_ICU_UC
+    LexStream::ProcessInputUnicode(buffer,filesize);
+#else
+    LexStream::ProcessInputAscii(buffer, filesize);
+#endif
+}
+
+//
+// Read file_size Ascii characters from srcfile, convert them to unicode and
+// store them in input_buffer.
+//
+void LexStream::ProcessInputAscii(char *buffer, long filesize)
+{
+#ifdef TEST
+    file_read++;
+#endif
+
+    input_buffer = new wchar_t[filesize + 4];
+    wchar_t *input_ptr = input_buffer;
+    *input_ptr = U_LINE_FEED; // add an initial '\n';
+
+    if (buffer)
+    {
+        char *source_ptr = buffer,
+             *source_tail = &(buffer[filesize - 1]); // point to last character read from the file.
+
+        while(source_ptr <= source_tail)
+        {
+            *(++input_ptr) = (*source_ptr++) & 0x00ff; // The (& 0x00ff) guarantees that quantity is copied as unsigned value
+
+            if (*input_ptr == U_CARRIAGE_RETURN)
+            {
+                *input_ptr = U_LINE_FEED;
+                if (*source_ptr == U_LINE_FEED)
+                    source_ptr++;
+            }
+            else if (*input_ptr == U_BACKSLASH)
+            {
+                if (*source_ptr == U_BACKSLASH)
+                    *(++input_ptr) = *source_ptr++;
+                else if (*source_ptr == U_u)
+                {
+                    char *u_ptr = source_ptr;
+
+                    for (source_ptr++; source_ptr <= source_tail && *source_ptr == U_u; source_ptr++)
+                        ;
+                    *input_ptr = 0;
+                    int i;
+                    for (i = 0; source_ptr <= source_tail && isxdigit(*source_ptr) && i < 4; i++)
+                    {
+                        int multiplier[4] = {4096, 256, 16, 1};
+
+                        char ch = *source_ptr++;
+                        switch(ch)
+                        {
+                            case U_a: case U_A:
+                                *input_ptr += (10 * multiplier[i]);
+                                break;
+                            case U_b: case U_B:
+                                *input_ptr += (11 * multiplier[i]);
+                                break;
+                            case U_c: case U_C:
+                                *input_ptr += (12 * multiplier[i]);
+                                break;
+                            case U_d: case U_D:
+                                *input_ptr += (13 * multiplier[i]);
+                                break;
+                            case U_e: case U_E:
+                                *input_ptr += (14 * multiplier[i]);
+                                break;
+                            case U_f: case U_F:
+                                *input_ptr += (15 * multiplier[i]);
+                                break;
+                            default:
+                                *input_ptr += ((ch - U_0) * multiplier[i]);
+                        }
+                    }
+
+                    if (i != 4)
+                    {
+                        if (initial_reading_of_input)
+                            bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
+                                                         (unsigned) (input_ptr - input_buffer),
+                                                         (unsigned) (input_ptr - input_buffer) + (source_ptr - u_ptr));
+
+                        source_ptr = u_ptr;
+                        *input_ptr = U_BACKSLASH;
+                    }
+                    else if (*input_ptr == U_CARRIAGE_RETURN)
+                    {
+                        *input_ptr = U_LINE_FEED;
+                        if (*source_ptr == U_LINE_FEED)
+                            source_ptr++;
+                        else if (*source_ptr == U_BACKSLASH)
+                        {
+                            int i;
+                            for (i = 1; (source_ptr + i) <= source_tail && source_ptr[i] == U_u; i++)
+                                ;
+                            if (i > 1 && (source_ptr + i + 3) <= source_tail
+                                      && source_ptr[i]     == U_0
+                                      && source_ptr[i + 1] == U_0
+                                      && source_ptr[i + 2] == U_0
+                                      && source_ptr[i + 3] == U_a) // the escape sequence of \n is \u000a
+                                source_ptr += (i + 4);
+                        }
+                    }
+                }
+            }
+        }
+
+        //
+        // Remove all trailing spaces
+        //
+        while((input_ptr > input_buffer) && Code::IsSpace(*input_ptr))
+            input_ptr--;
+    }
+
+    //
+    // If the very last character is not CTL_Z then add CTL_Z
+    //
+    if (*input_ptr != U_CTL_Z)
+    {
+        if (*input_ptr != U_LINE_FEED)
+            *(++input_ptr) = U_LINE_FEED; // if the last character is not end-of-line, add end-of-line
+        *(++input_ptr) = U_CTL_Z;         // Mark end-of-file
+    }
+    *(++input_ptr) = U_NULL;              // add gate
+
+    input_buffer_length = input_ptr - input_buffer;
+
+    return;
+}
+
+#ifdef HAVE_LIB_ICU_UC
+//
+// Read file_size Ascii characters from srcfile, convert them to unicode, and
+// store them in input_buffer.
+//
+void LexStream::ProcessInputUnicode(char *buffer, long filesize)
 {
 #ifdef TEST
     file_read++;
@@ -643,6 +776,7 @@ void LexStream::ProcessInput(char *buffer, long filesize)
 
     return;
 }
+#endif
 
 //
 // This procedure uses a  quick sort algorithm to sort the stream ERRORS

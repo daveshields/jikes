@@ -846,33 +846,33 @@ void Parser::Act68(void)
             AstInterfaceDeclaration *interface_declaration;
             AstBlock *block;
 
-            if (field_declaration = root -> element -> FieldDeclarationCast())
+            if ((field_declaration = root -> element -> FieldDeclarationCast()))
             {
                 if (field_declaration -> StaticFieldCast())
                      p -> AddClassVariable(field_declaration);
                 else p -> AddInstanceVariable(field_declaration);
             }
-            else if (method_declaration = root -> element -> MethodDeclarationCast())
+            else if ((method_declaration = root -> element -> MethodDeclarationCast()))
             {
                 p -> AddMethod(method_declaration);
             }
-            else if (constructor_declaration = root -> element -> ConstructorDeclarationCast())
+            else if ((constructor_declaration = root -> element -> ConstructorDeclarationCast()))
             {
                 p -> AddConstructor(constructor_declaration);
             }
-            else if (static_initializer = root -> element -> StaticInitializerCast())
+            else if ((static_initializer = root -> element -> StaticInitializerCast()))
             {
                 p -> AddStaticInitializer(static_initializer);
             }
-            else if (class_declaration = root -> element -> ClassDeclarationCast())
+            else if ((class_declaration = root -> element -> ClassDeclarationCast()))
             {
                 p -> AddNestedClass(class_declaration);
             }
-            else if (interface_declaration = root -> element -> InterfaceDeclarationCast())
+            else if ((interface_declaration = root -> element -> InterfaceDeclarationCast()))
             {
                 p -> AddNestedInterface(interface_declaration);
             }
-            else if (block = root -> element -> BlockCast())
+            else if ((block = root -> element -> BlockCast()))
             {
                 p -> AddBlock(block);
             }
@@ -1737,19 +1737,19 @@ void Parser::Act113(void)
             AstClassDeclaration *class_declaration;
             AstInterfaceDeclaration *interface_declaration;
 
-            if (field_declaration = root -> element -> FieldDeclarationCast())
+            if ((field_declaration = root -> element -> FieldDeclarationCast()))
             {
                 p -> AddClassVariable(field_declaration);
             }
-            else if (method_declaration = root -> element -> MethodDeclarationCast())
+            else if ((method_declaration = root -> element -> MethodDeclarationCast()))
             {
                 p -> AddMethod(method_declaration);
             }
-            else if (class_declaration = root -> element -> ClassDeclarationCast())
+            else if ((class_declaration = root -> element -> ClassDeclarationCast()))
             {
                 p -> AddNestedClass(class_declaration);
             }
-            else if (interface_declaration = root -> element -> InterfaceDeclarationCast())
+            else if ((interface_declaration = root -> element -> InterfaceDeclarationCast()))
             {
                 p -> AddNestedInterface(interface_declaration);
             }

@@ -6,6 +6,62 @@
 <TABLE WIDTH=600><TR><TD>
 <h2 align=center>Jikes News</h2>
 
+<h2 align=center>3 November 1999 <font size="-2"><a href="mailto:shields@watson.ibm.com">DS</a></font></h2>
+
+<h3 align=center>Current version now 1.10</h3>
+<ul>
+<li>Fix some problems in the new Unicode support (which were all the fault of Dave Shields, and not the author,
+Vadim Zaliva).
+<li>Rename option <code>+M=</code> to <code>+DR=</code>. <code>DR</code> stands for "Dependence Report". This is
+to clear up confusion due to a poor choice of option name.
+<li>Fix a problem that caused Jikes to exit with a return code of zero even though semantic errors had
+been detected.
+<li>Update <code>jikes.html</code> to reflect recent option changes, including a description of the 
+<code>CSO</code>option.
+Update the "What is Jikes" section to include some introductory material written by 
+<a href="mailto:lgrinzo@stny.lrun.com">Lou Grinzo</a> for an article in developerWorks: 
+<a href="http://www-4.ibm.com/software/developer/library/jikes.html">Speeding up Java Development</a>. We
+thank Lou for granting us permission to use this material.
+</ul>
+
+<h2 align=center>27 October 1999 <font size="-2"><a href="mailto:shields@watson.ibm.com">DS</a></font></h2>
+
+<p>I've just posted a new snapshot with some recent changes from
+Philippe to make Jikes more closely follow Sun's format for
+converting floating-point to string. Though an improvement, this code does not yet implement the full
+algorithm, as outlined by Steele, et.al., in POPL 1990.
+
+<h2 align=center>25 October 1999 <font size="-2"><a href="mailto:shields@watson.ibm.com">DS</a></font></h2>
+
+<h3 align=center>Mandrake includes Jikes and JikesPG</h3>
+<p>Jikes and JikesPG are now included in <a href="http://www.linux-mandrake.com">Mandrake Linux</a>. We don't
+know when they were added.
+
+<h2 align=center>23 October 1999 <font size="-2"><a href="mailto:shields@watson.ibm.com">DS</a></font></h2>
+Mike Ernst and I were able to sort out the problems compiling his latest changes on Win/NT. The latest source 
+passes the modena and jck tests, and the CVS snapshot has been updated.
+
+<h2 align=center>19 October 1999 <font size="-2"><a href="mailto:shields@watson.ibm.com">DS</a></font></h2>
+
+<h3>Current version now 1.09</h3>
+<ul>
+<li>Re-enable CSO code (that I wrongly deleted in 1.08)
+</ul>
+
+<h3>Latest CVS Snapshot now available</h3>
+
+Pending resolution of problems with our open-source server, I will
+post a new snapshot whenever I make a change to the current master
+CVS tree at Research. I've added a new title line with links to the
+snapshot and to the CVSWeb and read-only mirror maintained at
+Sourcery.org.
+
+<p>
+Note that the CVSWeb mirror provided at this site is out-of-date. You need to use the one at Sourcery to view
+the latest sources.
+
+<h3>Some more info on CSO</h3>
+There's an interesting note just posted in the <a href="tasks/cso/index.html">Tasks/CSO section</a>.
 <h2 align=center>18 October 1999 <font size="-2"><a href="mailto:shields@watson.ibm.com">DS</a></font></h2>
 <h3>Current version now 1.08</h3>
 <ul>

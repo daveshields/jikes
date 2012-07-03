@@ -1,4 +1,4 @@
-// $Id: error.h,v 1.30 1999/10/18 16:51:03 shields Exp $
+// $Id: error.h,v 1.31 1999/11/01 03:22:20 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -33,6 +33,7 @@ public:
         INVALID_K_TARGET,
         INVALID_TAB_VALUE,
         INVALID_DIRECTORY,
+        UNSUPPORTED_ENCODING,
         UNSUPPORTED_OPTION,
         DISABLED_OPTION,
 
@@ -379,6 +380,7 @@ private:
     static void PrintINVALID_K_TARGET(ErrorInfo &, LexStream *, Control &);
     static void PrintINVALID_TAB_VALUE(ErrorInfo &, LexStream *, Control &);
     static void PrintINVALID_DIRECTORY(ErrorInfo &, LexStream *, Control &);
+    static void PrintUNSUPPORTED_ENCODING(ErrorInfo &, LexStream *, Control &);
     static void PrintUNSUPPORTED_OPTION(ErrorInfo &, LexStream *, Control &);
     static void PrintDISABLED_OPTION(ErrorInfo &, LexStream *, Control &);
     static void PrintNO_CURRENT_DIRECTORY(ErrorInfo &, LexStream *, Control &);

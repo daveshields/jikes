@@ -1,4 +1,4 @@
-// $Id: diagnose.h,v 1.5 1999/10/15 02:30:40 shields Exp $
+// $Id: diagnose.h,v 1.6 1999/11/03 00:46:30 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -85,7 +85,7 @@ public:
                                                                 scope_index(NULL),
                                                                 scope_position(NULL),
                                                                 state_pool(256),
-								error(control_, lex_stream_)
+                                                                error(control_, lex_stream_)
     {
         lex_stream = lex_stream_;
         memset(list, 0, NUM_SYMBOLS * sizeof(int));

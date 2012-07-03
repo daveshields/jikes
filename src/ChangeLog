@@ -1,4 +1,129 @@
+1999-11-03    <shields@jikes.watson.ibm.com>
+
+	--- Release v1.10 ---
+
+	* control.cpp:
+	* option.cpp: 
+	* option.h:
+	* jikes.cpp:
+	Rename +M= option to +DR= to avoid confusion of the experimental
+	dependence report with the +M option. Set version number and release
+	date.
+
+	* unparse.cpp: 
+	Minor edit to replace tabs with blanks and to follow our usual
+	indenting rules.
+
+1999-11-02    <shields@jikes.watson.ibm.com>
+
+	* ast.cpp: 
+	* bytecode.cpp:
+	* class.h:
+	* config.cpp:
+	* config.h:
+	* control.cpp:
+	* decl.cpp:
+	* diagnose.h:
+	* error.cpp:
+	* expr.cpp:
+	* getclass.cpp:
+	* long.cpp:
+	* option.h:
+	* stream.h:
+	Code from Philippe to remove detritus from prior updates, 
+	mostly by replacing tab characters with appropriate number of blanks.
+
+1999-11-03    <shields@jikes.watson.ibm.com>
+
+	* control.cpp:
+	Exit with error return code if semantic errors, including absence
+	of base classes (java.util, java.lang, etc.) detected. This fixes
+	a problem of special concern to the Debian folks.
+
+1999-11-01    <shields@jikes.watson.ibm.com>
+
+	* unparse.cpp: minor change needed to compile with xlC for AIX.
+
+1999-10-31    <shields@jikes.watson.ibm.com>
+
+	* error.cpp:
+	* error.h:
+	* option.cpp:
+	* stream.cpp:
+	* stream.h:
+	Fix some problems with Unicode extensions caused by recent cvs update 
+	errors on my part, and also make a few changes. The former ProcessInput
+	in stream.cpp is now ProcessInputAscii. ProcessInput now just selects
+	ProcessInputAscii or ProcessInputUnicode, the encoding version under 
+	development. Eventually ProcessInput should be represented as an array
+	of function pointers, with the default being ProcessInputAscii.
+that
+
+1999-10-28    <shields@jikes.watson.ibm.com>
+
+	* code.h: 
+	* gencode.java:
+	Drop conditional code related to EBCDIC from gencode.java, and 
+	rebuild code.h (code.cpp was unchanged). The EBCDIC support will
+	be provided by Unicode extensions.
+
+1999-10-27    <shields@jikes.watson.ibm.com>
+
+	* config.cpp: 
+	* config.h:
+	* double.cpp:
+	* double.h:
+	* long.cpp:
+	* long.h:
+	* lookup.cpp:
+	* symbol.h:
+	Changes from Philippe to revise floating point conversions to more
+	closely follow Sun's specification.
+
+1999-10-24    <shields@jikes.watson.ibm.com>
+
+	* unparse.cpp: fix from Mike Ernst
+
+1999-10-22    <shields@jikes.watson.ibm.com>
+
+	* system.cpp: More re Ernst
+
+	* symbol.h:
+	* symbol.cpp:
+	Add code from Mike Ernst to help resolve compilation problems on Win/NT.
+
+1999-10-20    <shields@jikes.watson.ibm.com>
+
+	* expr.cpp: 
+	Add another fix from Mike Ernst, part of -Wall cleanup.
+
 1999-10-19    <shields@jikes.watson.ibm.com>
+
+	Makefile.in:
+	ast.cpp:
+	ast.h:
+	body.cpp:
+	bytecode.cpp:
+	config.h:
+	configure:
+	control.cpp:
+	control.h:
+	decl.cpp:
+	error.cpp:
+	expr.cpp:
+	java.g:
+	javaact.cpp:
+	lookup.cpp:
+	lookup.h:
+	option.cpp:
+	semantic.h:
+	stream.cpp:
+	symbol.cpp:
+	symbol.h:
+	system.cpp:
+	Install patches from Mike Ernst. Patch complained about
+	the patch to option.cpp. I tried to fix it manually. Result
+	doesn't compile -- will sort out later.
 
 	--- Release v1.09 ---
 

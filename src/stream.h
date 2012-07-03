@@ -1,4 +1,4 @@
-// $Id: stream.h,v 1.12 1999/10/15 02:30:42 shields Exp $
+// $Id: stream.h,v 1.14 1999/11/03 00:46:32 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -194,7 +194,7 @@ public:
     //*
     LexStream(Control &control_, FileSymbol *file_symbol_) : file_symbol(file_symbol_),
 #ifdef TEST
-							     file_read(0),
+                                                             file_read(0),
 #endif
                                                              tokens(NULL),
                                                              columns(NULL),
@@ -207,7 +207,7 @@ public:
                                                              input_buffer(NULL),
                                                              input_buffer_length(0),
                                                              comment_buffer(NULL),
-							     control(control_)
+                                                             control(control_)
     {}
 
     bool ComputeColumns()
@@ -388,6 +388,10 @@ private:
 
     void ReadInput();
     void ProcessInput(char *, long);
+    void ProcessInputAscii(char *, long);
+#ifdef HAVE_LIB_ICU_UC
+    void ProcessInputUnicode(char *, long);
+#endif  
 
     wchar_t *KeywordName(int);
 

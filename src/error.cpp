@@ -1,4 +1,4 @@
-// $Id: error.cpp,v 1.38 1999/10/18 16:51:02 shields Exp $
+// $Id: error.cpp,v 1.41 1999/11/03 00:46:30 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -17,14 +17,13 @@
 unsigned char SemanticError::warning[SemanticError::_num_kinds] = { 0 };
 void (*SemanticError::print_message[SemanticError::_num_kinds]) (SemanticError::ErrorInfo &, LexStream *, Control &) = { NULL };
 
-SemanticError::SemanticError(Control &control_, FileSymbol *file_symbol) : control(control_),
+SemanticError::SemanticError(Control &control_, FileSymbol *file_symbol) : num_errors(0),
+                                                                           num_warnings(0),
+                                                                           control(control_),
                                                                            lex_stream(file_symbol -> lex_stream),
-
-                                                                           buffer(1024),
-                                                                           error(512),
                                                                            clone_count(0),
-                                                                           num_errors(0),
-                                                                           num_warnings(0)
+                                                                           buffer(1024),
+                                                                           error(512)
 {}
 
 //
@@ -64,15 +63,15 @@ void SemanticError::Report(SemanticErrorKind msg_code,
     error[i].msg_code = msg_code;
 
     int total_length = 0,
-        length1,
-        length2,
-        length3,
-        length4,
-        length5,
-        length6,
-        length7,
-        length8,
-        length9;
+        length1 = 0,
+        length2 = 0,
+        length3 = 0,
+        length4 = 0,
+        length5 = 0,
+        length6 = 0,
+        length7 = 0,
+        length8 = 0,
+        length9 = 0;
 
     if (insert1)
     {
@@ -245,6 +244,7 @@ void SemanticError::StaticInitializer()
 
     warning[INVALID_OPTION] = 1;
     warning[DISABLED_OPTION] = 1;
+    warning[UNSUPPORTED_ENCODING] = 1;
     warning[CANNOT_OPEN_ZIP_FILE] = 1;
     warning[CANNOT_OPEN_PATH_DIRECTORY] = 1;
 
@@ -316,6 +316,7 @@ void SemanticError::StaticInitializer()
     print_message[INVALID_TAB_VALUE] = PrintINVALID_TAB_VALUE;
     print_message[INVALID_DIRECTORY] = PrintINVALID_DIRECTORY;
     print_message[UNSUPPORTED_OPTION] = PrintUNSUPPORTED_OPTION;
+    print_message[UNSUPPORTED_ENCODING] = PrintUNSUPPORTED_ENCODING;
     print_message[DISABLED_OPTION] = PrintDISABLED_OPTION;
     print_message[NO_CURRENT_DIRECTORY] = PrintNO_CURRENT_DIRECTORY;
     print_message[CANNOT_OPEN_ZIP_FILE] = PrintCANNOT_OPEN_ZIP_FILE;
@@ -1065,6 +1066,15 @@ void SemanticError::PrintDISABLED_OPTION(ErrorInfo &err, LexStream *lex_stream, 
     return;
 }
 
+
+void SemanticError::PrintUNSUPPORTED_ENCODING(ErrorInfo &err, LexStream *lex_stream, Control &control)
+{
+    Coutput << "Unsupported encoding: \""
+            << err.insert1
+            << "\".";
+    
+    return;
+}              
 
 void SemanticError::PrintNO_CURRENT_DIRECTORY(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {

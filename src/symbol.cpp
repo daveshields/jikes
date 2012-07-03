@@ -1,4 +1,4 @@
-// $Id: symbol.cpp,v 1.29 1999/10/17 01:58:42 shields Exp $
+// $Id: symbol.cpp,v 1.31 1999/10/23 02:14:35 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
@@ -421,8 +421,8 @@ void SymbolTable::Rehash()
 }
 
 
-SymbolTable::SymbolTable(int hash_size_) : anonymous_symbol_pool(NULL),
-                                           type_symbol_pool(NULL),
+SymbolTable::SymbolTable(int hash_size_) : type_symbol_pool(NULL),
+                                           anonymous_symbol_pool(NULL),
                                            method_symbol_pool(NULL),
                                            variable_symbol_pool(NULL),
                                            other_symbol_pool(NULL),
@@ -526,7 +526,6 @@ TypeSymbol::TypeSymbol(NameSymbol *name_symbol_) : semantic_environment(NULL),
                                                    file_symbol(NULL),
                                                    file_location(NULL),
                                                    name_symbol(name_symbol_),
-                                                   external_name_symbol(NULL),
                                                    owner(NULL),
                                                    outermost_type(NULL),
                                                    super(NULL),
@@ -534,7 +533,6 @@ TypeSymbol::TypeSymbol(NameSymbol *name_symbol_) : semantic_environment(NULL),
                                                    index(CycleChecker::OMEGA),
                                                    unit_index(CycleChecker::OMEGA),
                                                    incremental_index(CycleChecker::OMEGA),
-                                                   status(0),
                                                    local(NULL),
                                                    non_local(NULL),
                                                    supertypes_closure(NULL),
@@ -546,21 +544,23 @@ TypeSymbol::TypeSymbol(NameSymbol *name_symbol_) : semantic_environment(NULL),
                                                    static_parents(new SymbolSet()),
                                                    dependents_closure(NULL),
                                                    parents_closure(NULL),
-                                                   num_dimensions(0),
-                                                   class_literal_class(NULL),
-                                                   class_literal_method(NULL),
-                                                   static_initializer_method(NULL),
-                                                   block_initializer_method(NULL),
                                                    signature(NULL),
                                                    fully_qualified_name(NULL),
-                                                   class_literal_name(NULL),
-                                                   table(NULL),
-                                                   local_shadow_map(NULL),
                                                    expanded_type_table(NULL),
                                                    expanded_field_table(NULL),
                                                    expanded_method_table(NULL),
+                                                   num_dimensions(0),
+                                                   static_initializer_method(NULL),
+                                                   block_initializer_method(NULL),
+                                                   external_name_symbol(NULL),
+                                                   table(NULL),
+                                                   local_shadow_map(NULL),
+                                                   status(0),
                                                    package(NULL),
                                                    class_name(NULL),
+                                                   class_literal_class(NULL),
+                                                   class_literal_method(NULL),
+                                                   class_literal_name(NULL),
                                                    local_constructor_call_environments(NULL),
                                                    private_access_methods(NULL),
                                                    private_access_constructors(NULL),
@@ -570,11 +570,11 @@ TypeSymbol::TypeSymbol(NameSymbol *name_symbol_) : semantic_environment(NULL),
                                                    generated_constructors(NULL),
                                                    enclosing_instances(NULL),
                                                    class_literals(NULL),
+                                                   nested_type_signatures(NULL),
                                                    nested_types(NULL),
                                                    interfaces(NULL),
                                                    anonymous_types(NULL),
-                                                   array(NULL),
-                                                   nested_type_signatures(NULL)
+                                                   array(NULL)
 {
     Symbol::_kind = TYPE;
 }
@@ -632,9 +632,9 @@ MethodSymbol::~MethodSymbol()
 }
 
 
-BlockSymbol::BlockSymbol(int hash_size) : table(hash_size > 0 ? new SymbolTable(hash_size) : (SymbolTable *) NULL),
-                                          max_variable_index(-1),
-                                          try_or_synchronized_variable_index(0)
+BlockSymbol::BlockSymbol(int hash_size) : max_variable_index(-1),
+                                          try_or_synchronized_variable_index(0),
+                                          table(hash_size > 0 ? new SymbolTable(hash_size) : (SymbolTable *) NULL)
 {
     Symbol::_kind = BLOCK;
 }
@@ -657,12 +657,12 @@ PathSymbol::~PathSymbol()
 }
 
 
-DirectorySymbol::DirectorySymbol(NameSymbol *name_symbol_, Symbol *owner_) : name_symbol(name_symbol_),
-                                                                             owner(owner_),
+DirectorySymbol::DirectorySymbol(NameSymbol *name_symbol_, Symbol *owner_) : owner(owner_),
+                                                                             name_symbol(name_symbol_),
                                                                              mtime(0),
                                                                              table(NULL),
-                                                                             directory_name(NULL),
-                                                                             entries(NULL)
+                                                                             entries(NULL),
+                                                                             directory_name(NULL)
 {
     Symbol::_kind = _DIRECTORY;
 }
@@ -851,7 +851,7 @@ void FileSymbol::SetFileName()
 {
     PathSymbol *path_symbol = this -> PathSym();
     char *directory_name = directory_symbol -> DirectoryName();
-    int directory_name_length = directory_symbol -> DirectoryNameLength();
+    size_t directory_name_length = directory_symbol -> DirectoryNameLength();
     bool dot_directory = (strcmp(directory_name, StringConstant::U8S__DO) == 0);
     this -> file_name_length = (dot_directory ? 0 : directory_name_length) +
                                this -> Utf8NameLength()   +
@@ -924,7 +924,7 @@ void FileSymbol::CleanUp()
 
 void TypeSymbol::SetClassName()
 {
-    int length;
+    size_t length;
 
     if (semantic_environment -> sem -> control.option.directory)
     {
@@ -1584,7 +1584,6 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
         assert(sem);
 
         Control &control = sem -> control;
-        LexStream *lex_stream = sem -> lex_stream;
         StoragePool *ast_pool = sem -> compilation_unit -> ast_pool;
 
         IntToWstring value(member -> Identity() == control.init_name_symbol ? this_type -> NumPrivateAccessConstructors()
@@ -1923,3 +1922,5 @@ MethodSymbol *TypeSymbol::GetWriteAccessMethod(VariableSymbol *member)
 
     return write_method;
 }
+
+

@@ -1,17 +1,15 @@
 <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
 <html>
 <head>
-<meta http-equiv="Content-Type"
-content="text/html; charset=iso-8859-1">
-<title>Frequently Asked Questions About Jikes (September 17, 1999)</title>
+<title>Frequently Asked Questions About Jikes (November 3, 1999)</title>
 </head>
 
 <body>
 
-<h2 align="center">Jikes Project</h2>
+<h2 align="center">The Jikes Project</h2>
 <h2 align="center">http://ibm.com/developerworks/opensource</h2>
 <h2 align="center">Frequently Asked Questions About Jikes</h2>
-<h2 align="center">September 17, 1999</h2>
+<h2 align="center">November 3, 1999</h2>
 <p>
 <h2>About Jikes</h2>
 
@@ -29,14 +27,14 @@ What can I do if I don't get the same results when using class files generated b
 <a href="#bugs"><b>How do I report bugs?</b></a>
 <h2>About Jikes Source</h2>
 <p>
-<a href="#whyis"><b>Why did IBM make the source available?</b></a><br>
+<a href="#whyis"><b>Why did IBM Research make the source available?</b></a><br>
 <a href="#whatcanido"><b>What can I do with the source?</b></a><br>
 <a href="#build"><b>How do I compile the source?</b></a><br>
 <a href="#test"><b>How do I test the compiler?</b></a><br>
 
-
 <h3><a name="what_is"><b>What is Jikes?
 </b></a></h3>
+
 <p>
 Jikes is a compiler that translates Java source files as
 defined in
@@ -45,36 +43,140 @@ The Java Language Specification</a>
 into the bytecoded instruction set and binary format defined in
 <a href="http://www.java.sun.com/docs/books/vmspec">
 The Java Virtual Machine Specification</a>.
-Features include:
-<ul>
-<li>strict adherence to the language specification,
-<li>extremely fast compile speed,
-<li>built-in dependence analysis, allowing incremental
-compilation and automatic makefile generation.
+
+<p>You may wonder why the world needs another Java compiler,
+considering that Sun provides javac free with its JDK. Jikes has four
+advantages that make it a valuable contribution to the Linux and Java
+communities:</p>
+
+<UL>
+
+<LI>
+
+<b>Open source</b>. Anyone can freely acquire the source code to
+Jikes and redistribute it, possibly with modifications.  This allows
+Jikes to reap the maximum benefit possible from the developer
+community, and has already resulted in Jikes being ported to several
+platforms.  In an equally important sense of openness, the Jikes team
+-- which includes members of several organizations besides IBM -- is
+eager to accept bug reports, suggestions, and changes from the
+community. Open source is good, but open source from a receptive
+development team is better.
+
+<LI>
+
+<b>Strictly Java compatible</b>. Jikes adheres to both The Java
+Language Specification and The Java Virtual Machine Specification as
+tightly as possible, and does not support subsets, supersets, or
+other variations of the language. This document describes
+some of the side effects of this strict language conformance, as well
+as links to dozens of issues the Jikes development team has raised
+with Sun regarding the interpretation of the specification.</P>
+
+<LI>
+
+<b>High performance</b>. Jikes is a high-performance compiler, making
+it ideal for use with larger projects. Compilation speed, like RAM
+and hard disk space, is one of those commodities you can't get enough
+of on development projects. Jikes provides noticeably higher
+performance for large compilations.</P>
+
+<LI>
+
+<b>Dependency analysis</b>. Jikes performs a dependency analysis on
+your code that provides two very useful features: Incremental builds
+and makefile generation. The incremental build feature is started by
+using the "++" command line option, as in: <code>jikes
+++ myprog.java</code>
+
+<p>This will compile <code>myprog.java</code> and other files, as
+needed, and leave Jikes running. You can then change <code>myprog.java</code>
+or any of the source files it depends on. Then, you simply hit enter at
+the command line to tell Jikes to re-check the dependencies and only
+recompile files as required to bring the entire project up to date.
+Jikes will stay in this "hit enter/rebuild" loop until you enter a
+<code>q</code>, which tells it to terminate.</p>
+
+<P>The makefile generation feature is invoked with the +M
+command-line option, as in: <code>jikes +M myprog.java</code>.
+
+<p>This tells Jikes to perform full dependency checking on
+<code>myprog.java</code> and create a file that lists the
+dependencies for each <code>.class</code> file that will be created
+by the compiler. By default this file has the same filename as the
+source file, with an extension of <code>u</code>.  For example, the
+dependency file for <code>myprog.java</code> would be
+<code>myprog.u</code>.
+
 </ul>
+
+<p>It's worth pointing out that Jikes is not, and is not intended to
+be, a complete development environment -- it is simply a command-line
+compiler. It shouldn't be considered a replacement for more complete
+tools, such as IBM's VisualAge for Java, which provides a
+sophisticated graphical IDE (integrated development environment) and
+offers the option of compiling Java to native binary code as well as
+<code>.class</code> files.
+
+
+<p>Increasingly, one of the easiest ways to get Jikes for Linux is
+with Linux itself -- Jikes is included in the
+<a href="http://debian.org">Debian</a>,
+<a href="http://www.freebsd.org/">FreeBSD</a>,
+<a href="http://www.linux-mandrake.com">Mandrake-Linux</a>
+and 
+<a href="http://redhat.com">Red Hat</a>
+distributions.
+
+
+<P>Most will acquire Jikes as an independent package, though.
+Like most open-source projects, Jikes is available in both 
+<a href="http://www10.software.ibm.com/developerworks/opensource/jikes/current">current</a>
+and
+<a href="http://www10.software.ibm.com/developerworks/opensource/jikes/stable">stable</a>
+releases. The pre-built binaries are available for AIX,
+Linux/x86, Windows 95/NT, and Solaris/SPARC. You can also get Jikes
+for several other platforms, thanks to ports that have been made
+available by people outside IBM and the Jikes project. </p>
+
+<P>The source code is available under IBM's Public License, which has
+recently been approved by the <a
+href="http://www.opensource.org">OSI</a> (Open Source Initiative) as
+a fully compliant open source license. The open source provides
+access to the complete CVS development tree, as well as the source
+for the Jikes test suite and the parser generator used to build
+Jikes.  </p>
+
+<P>The fact that Jikes is a high-performance, highly compatible Java
+compiler that can be used on almost any computing platform makes it
+an interesting program and worth investigating for almost any Java
+programmer. But Jikes is also notable because it lies at the center
+of two events: the adoption of open source philosophy and practice by
+large corporations, and the continued growth of Java for Linux.</p>
+
 
 <p>
-We provide the source code for Jikes, a parser generator, and a test suite under a liberal 
-<a href="license/index.htm">license</a>.
+In addition to the source code for the Jikes compiler, we also provide the source for JIKESPG, the parser generator
+used in part to build Jikes, and a test suite.
 
-<p>Two versions are available for downloading:
-<ul>
-<li> 
-<a href="http://ibm.com/developerworks/opensource">Development Jikes (developerWorks)</a>: the most recent version of the source.
-<li> 
-<a href="http://alphaWorks.ibm.com/tech/jikes">Stable Jikes (alphaWorks)</a>: an earlier development 
-version that has proven stable after use in the field.
-</ul>
-We provide pre-built binary versions for AIX, Linux Intel, Solaris Sparc,
-and Win95/NT. See
-<a href="ports.htm">ports</a> for a list of known ports to other systems; some of the authors of these ports also 
-provide binary versions.
+<p>See
+ <a href="http://www10.software.ibm.com/developerworks/opensource/jikes/project/news.html">
+Jikes News</a> for news of recent developments.
+
+<p>See <a href="ports.html">ports</a> for a list of known ports--usually
+the work of an individual -- to other systems; some of the authors of
+these ports also provide binary versions.
+See 
+<a href="distrib.html">distributions</a> for a list of software
+distributions -- usually the work of a corporation or collective -- known
+to include Jikes.
+
 <p>
 Developers, including
-<a href="contrib.htm">contributors</a>,
+<a href="contrib.html">contributors</a>,
  communicate using the
 Jikes
-<a href="subscribe/index.htm">mailing lists</a>.
+<a href="http://ibm.com/research/jikes/subscribe">mailing lists</a>.
 We also maintain the <a href="http://domino.watson.ibm.com/syssftpr/JavaTech/Jikes.nsf">Jikes Discussion Database</a>,
 which contains problem reports, suggestions, and several queries to Sun about language specification issues.
 
@@ -83,7 +185,7 @@ which contains problem reports, suggestions, and several queries to Sun about la
 The original version of Jikes, first released in binary form in April
 1997, was written by Philippe Charles and Dave Shields of the IBM T.
 J. Watson Research Center.  Since the release of the source in
-December 1998 they have continued to work on the compiler as
+December 1998 they have continued work on the compiler as
 contributors.
 
 <p>
@@ -157,11 +259,6 @@ arguments. Allowed options are:
     <dd>Do not generate <code>LineNumberTable</code> attribute.</dd>
     <dt><code>-verbose</code></dt>
     <dd>List files read and written.</dd>
-    <dt><code>-Xdepend</code> </dt>
-    <dd>Recompile all used classes.
-    </dd>
-    <dt><code>-Xdepend</code></dt>
-    <dd>Another way of writing -depend, for JDK 1.2 compatibility.</dd>
     <dt><code>-Xstdout</code></dt>
     <dd>Write error messages to standard output.</dd>
     <dt><code>++</code></dt>
@@ -173,10 +270,17 @@ arguments. Allowed options are:
     <dd>Do not generate bytecode. This is used primarily for debugging
         the compiler. <code>-nowrite</code> generates byte code but does
         not write it out.</dd>
+    <dt><code>+CSO</code></dt>
+    <dd>Select classpath search order. By default Jikes takes the first <code>class</code> or
+	<code>java</code> file found. If <code>CSO</code> is specified the Jikes behaves more like
+	<code>javac</code> searching all directories for a <code>class</code> or <code>java</code> file,
+	and then comparing their dates to determine if a recompilation is necessary.
     <dt><code>+D</code></dt>
     <dd>List errors immediately in emacs-form without buffering. This is only needed if
     Jikes is crashing and you want to see errors as soon as they are detected; ordinarily
     errors are sorted and listed at the end of the compilation.</dd>
+    <dt><code>+DR=filename</code></dt>
+    <dd>Write report of dependencies to specified file.</dd>
     <dt><code>+E</code></dt>
     <dd>List errors in a form commonly used by <em>emacs</em> to
         scan for errors. By default errors are listed in a more readable
@@ -185,8 +289,6 @@ arguments. Allowed options are:
     <dd>Do full dependence check except for Zip and Jar files.</dd>
     <dt><code>+M</code></dt>
     <dd>Generate makefiles with dependencies.</dd>
-    <dt><code>+M=filename</code></dt>
-    <dd>Write report of dependencies to specified file.</dd>
     <dt><code>+P</code></dt>
     <dd>Generate pedantic listing.</dd>
     <dt><code>+Tnn</code></dt>
@@ -194,7 +296,7 @@ arguments. Allowed options are:
     <dt><code>+U</code></dt>
     <dd>Do full dependence check including Zip and Jar files.</dd>
     <dt><code>+Z</code></dt>
-    <dd>Treat cautions as errors.</dd>
+    <dd>Treat cautons as errors.</dd>
     
 </dl>
 
@@ -279,6 +381,24 @@ its value is used when looking for a class file.
 
 <p>You should <em>almost always</em> include "." in the classpath;
 omit it only if you understand the implications.
+
+<p>The order in which the classpath is searched can also be selected using the
+<code>CSO</code> (Classpath Search Order) option. By default,
+<ul>
+<li>Jikes searches the classpath from left to right.
+<li>In a given directory, it finds the most recent <code>.java</code>
+ or <code>.class</code> file.
+<li>Jikes then uses the <code>.java/.class</code> found in the leftmost classpath entry for
+compilation purposes
+</ul>
+
+<p>If the <code>CSO</code> option is specified, Jikes provides the same
+behavior as <code>javac</code>:
+<ul>
+<li>Find the <code>.java</code> file which occurs leftmost in the classpath.
+<li>Find the <code>.class</code> file which occurs leftmost in the classpath.
+<li>Use the more recent of these for compilation purposes.
+</ul>
 
 <h3>
 <a name="listing">
@@ -404,16 +524,86 @@ incorporated only if it must be.
 If <code>+U</code> is specified, then <code>D</code> is always incorporated.
 
 <p>
-Most compilers appear to use the same behavior as provided by Jikes by default. 
+The option <code>+F</code> directs the compiler to load all other
+types that are referenced within a class file, and causes
+recompilation of such files if their source file is more up-to-date
+than the class file.  Normally, other types are loaded only if
+required for the current compilation.
 
-<p> You should only need to use <code>+F</code> and <code>+U</code>
-for special situations.  You can use <code>+F</code> to get reports
+<p> 
+The option <code>-depend</code> (which can also be written
+<code>-Xdepend</code>, for 1.2 compatibility) directs the compiler to
+always compile a source file, if one exists, instead of loading its
+class file, even if it exists and is up-to-date. 
+<p>
+Consider the following example:
+<pre>
+// file A.java:
+class A {
+  static public void main(String[] args) {
+    System.out.println("enter A");
+    B.message();
+  }
+}
+
+// file B.java:
+class B {
+  static void message() {
+    System.out.println("enter B");
+    C.message();
+  }
+}
+
+// file C.java:
+class C {
+  static void message() {
+    System.out.println("enter C");
+  }
+}
+</pre>
+
+If no class files exist, then
+<pre>
+	jikes A.java
+</pre>
+results in compilation of <code>A</code>, <code>B</code> and <code>C</code>.
+<p>
+If <code>C.java</code> (but not <code>B.java</code>) is updated, then
+<pre>
+	jikes A.java
+</pre>
+results in compilation only of <code>A</code>. <code>javac</code> does the same thing.
+<p>
+However, if <code>C.java</code> (but not <code>B.java</code>) is updated, then
+<pre>
+	jikes +F A.java
+</pre>
+results in compilation of <code>A</code> and <code>C</code>.
+
+It is always the case, independent of time-stamps of files, that
+<pre>
+	jikes -depend A.java
+</pre>
+results in compilation of <code>A</code>, <code>B</code> and <code>C</code>.
+<p>
+Note that 
+<pre>
+	jikes -depend +F ...
+</pre>
+has the same effect as
+<pre>
+	jikes -depend ...
+</pre>
+i.e., <code>+F</code> will cause no more files to be compiled than
+will <code>-depend</code>.
+
+
+<p>You can use <code>+F</code> to get reports
 of errors and warnings resulting from the use of out-of-date or
 non-existent classes, at the expense of increasing compilation time.
 By default, Jikes assumes that class files placed in Zip and Jar
 files do not reference files not contained in Zip or Jar files; the
 <code>+U</code> option should be used when this is not the case.
-
 
 <h3><a name="incremental"><b>
 What is incremental compilation?
@@ -898,16 +1088,18 @@ about it.
 
 <h3><a name="bugs"><b>How do I report bugs?</b></a></h3>
 
-<p>
-You can report bugs via the web to the Jikes Project at
-<a href="http://ibm.com/developerworks/opensource">http://ibm.com/developerworks/opensource</a>.
+<p>Use the 
+<a href="http://www10.software.ibm.com/developerworks/opensource/jikes/bugs/">
+Jikes Jitterbug site</a> to report bugs.
 
 <p>
-
 It helps if you include a small program showing the problem -- doing
 so raises the probability of a quick resolution.
 
-<h3><a name="whyis"><b>Why did IBM make the source available?</b></a></h3>
+<h3><a name="whyis"><b>Why did IBM Research make the source available?</b></a></h3>
+
+<p>We do many things here at IBM Research, the most important of
+which is -- you guessed it -- research.
 
 <p>Work on what is now known as Jikes began in January 1996 when one
 of us (Philippe) decided to study the problem of compiling Java. The
@@ -990,11 +1182,9 @@ going on here do:
     make
 </pre>
 
-<p>If you haven't yet done so, you can  download the Jikes
-Parser Generator</a> in its source form from the Jikes Project at
-<a href="http://ibm.com/developerworks/opensource">
-http://ibm.com/developerworks/opensource</a>
-, compile it, install it as
+<p>If you haven't yet done so, you can <a
+href="http://www10.software.ibm.com/developerworks/opensource/jikes/project/stable">download the Jikes
+Parser Generator</a> in its source form, compile it, install it as
 <code>jikespg</code> somewhere on your <code>PATH</code> and run
 <code>make</code> again.
 
@@ -1042,5 +1232,6 @@ and use.
 <p>The tests are intended mainly for regression testing and are by
 no means meant to be interpreted as a comprehensive test of
 compliance or conformance.
+
 </body>
 </html>

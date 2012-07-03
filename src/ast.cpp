@@ -1,4 +1,4 @@
-// $Id: ast.cpp,v 1.17 1999/10/17 01:58:39 shields Exp $
+// $Id: ast.cpp,v 1.19 1999/11/03 00:46:29 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -34,7 +34,7 @@ void VariableSymbolArray::AllocateMoreSpace()
     // reallocated.
     //
     //
-    int k = size >> log_blksize; /* which segment? */
+    size_t k = size >> log_blksize; /* which segment? */
 
     //
     // If the base is overflowed, reallocate it and initialize the new elements to NULL.
@@ -1707,6 +1707,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
             Coutput << "#" << base_opt -> id
                     << lex_stream.NameString(dot_token_opt) << " ";
         }
+        Coutput << " ";
         Coutput << lex_stream.NameString(new_token)
                 << " #" << class_type -> id
                 << " (";

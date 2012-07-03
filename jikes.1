@@ -1,4 +1,4 @@
-.TH jikes 1 "19 October 1999" 
+.TH jikes 1 "3 November 1999" 
 .SH NAME
 jikes \- java source to bytecode compiler
 .SH SYNOPSIS
@@ -18,12 +18,13 @@ jikes \- java source to bytecode compiler
 [\fB\+1.0\fP]
 [\fB\+\+\fP]
 [\fB\+B\fP]
+[\fB\+CSO\fP]
 [\fB\+D\fP]
+[\fB\+DR=\fP filename]
 [\fB\+E\fP]
 [\fB\+F\fP]
 [\fB\+K\fP]
 [\fB\+M\fP]
-[\fB\+M=\fP filename]
 [\fB\+P\fP]
 [\fB\+T\fPnn]
 [\fB\+U\fP]
@@ -84,8 +85,14 @@ compile in incremental mode
 \fB\+B
 do not invoke bytecode generator
 .TP
+\fB\+CSO
+Select to use same classpath search order as javac. 
+.TP
 \fB\+D
 report errors immediately in emacs-form without buffering
+.TP
+\fB\+DR\fP\=filename
+write report of dependencies to specified file
 .TP
 \fB\+E
 list errors in emacs-form
@@ -98,9 +105,6 @@ map name to type keyword
 .TP
 \fB\+M
 generate makefile dependencies
-.TP
-\fB\+M\fP\=filename
-write report of dependencies to specified file
 .TP
 \fB\+P
 Pedantic compilation - issues lots of warnings

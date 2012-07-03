@@ -1,4 +1,4 @@
-// $Id: config.cpp,v 1.28 1999/10/15 12:44:29 shields Exp $
+// $Id: config.cpp,v 1.30 1999/11/03 00:46:30 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -9,45 +9,515 @@
 //
 #include "config.h"
 #include "long.h"
+#include "double.h"
+
+IntToString::IntToString(int num)
+{
+    if (num == 0x80000000)
+    {
+        str = info;
+        strcpy(str, StringConstant::U8S_smallest_int);
+    }
+    else
+    {
+        str = &info[TAIL_INDEX];
+        *str = U_NULL;
+        int n = (num < 0 ? -num : num);
+        do
+        {
+            *--str = (U_0 + n % 10);
+            n /= 10;
+        } while (n != 0);
+
+        if (num < 0)
+            *--str = U_MINUS;
+    }
+
+    return;
+}
+
+
+IntToWstring::IntToWstring(int num)
+{
+    if (num == 0x80000000)
+    {
+        wstr = winfo;
+        wcscpy(wstr,  StringConstant::US_smallest_int);
+    }
+    else
+    {
+        wstr = &winfo[TAIL_INDEX];
+        *wstr = U_NULL;
+        int n = (num < 0 ? -num : num);
+        do
+        {
+            *--wstr = (U_0 + n % 10);
+            n /= 10;
+        } while (n != 0);
+
+        if (num < 0)
+            *--wstr = U_MINUS;
+    }
+
+    return;
+}
+
+
+ULongToDecString::ULongToDecString(ULongInt &num)
+{
+    str = &info[TAIL_INDEX];
+    *str = U_NULL;
+
+    ULongInt n = num; // make a copy in order to not destroy reference argument
+    do
+    {
+        *--str = U_0 + (n % 10).LowWord();
+        n /= 10;
+    } while (n != 0);
+
+    return;
+}
+
+
+LongToOctString::LongToOctString(BaseLong &num)
+{
+    str = &info[TAIL_INDEX];
+    *str = U_NULL;
+
+    ULongInt n = num; // make a copy in order to not destroy reference argument
+    do
+    {
+        *--str = U_0 + (n % 8).LowWord();
+        n /= 8;
+    } while (n != 0);
+
+    *--str = U_0;
+
+    return;
+}
+
+
+LongToHexString::LongToHexString(BaseLong &num)
+{
+    str = &info[TAIL_INDEX];
+    *str = U_NULL;
+
+    ULongInt n = num; // make a copy in order to not destroy reference argument
+    do
+    {
+        *--str = U_0 + (n % 16).LowWord();
+        n /= 16;
+    } while (n != 0);
+
+    *--str = U_x;
+    *--str = U_0;
+
+    return;
+}
+
+
+LongToDecString::LongToDecString(LongInt &num)
+{
+    if (num.HighWord() == 0x80000000 && num.LowWord() == 0x00000000)
+    {
+        str = info;
+        strcpy(str,  StringConstant::U8S_smallest_long_int);
+    }
+    else
+    {
+        str = &info[TAIL_INDEX];
+        *str = U_NULL;
+
+        ULongInt n = (num.HighWord() == 0x80000000 ? (LongInt) (-num) : num); // compute the absolute value
+
+        do
+        {
+            *--str = U_0 + (n % 10).LowWord();
+            n /= 10;
+        } while (n != 0);
+
+        if (num.HighWord() & 0x80000000)
+            *--str = U_MINUS;
+    }
+
+    return;
+}
+
+
+//
+// Convert an double to its character string representation.
+//
+FloatToString::FloatToString(IEEEfloat &num)
+{
+    if (num.IsNaN())
+    {
+         strcpy(str,"NaN");
+         length = strlen("NaN");
+    }
+    else if (num.IsNegativeInfinity())
+    {
+         strcpy(str,"-Infinity");
+         length = strlen("-Infinity");
+    }
+    else if (num.IsPositiveInfinity())
+    {
+         strcpy(str,"Infinity");
+         length = strlen("Infinity");
+    }
+    else if (num.IsNegativeZero())
+    {
+         strcpy(str,"-0.0");
+         length = strlen("-0.0");
+    }
+    else if (num.IsPositiveZero())
+    {
+         strcpy(str,"0.0");
+         length = strlen("0.0");
+    }
+    else
+    {
+        //
+        // TODO: This conversion is a temporary patch. Need volunteer to implement
+        //       better algorithm:
+        //
+        //            Burger/Dybvig, PLDI 1996
+        //            Steele/White,  PLDI 1990
+        //
+        // If the absolute value f of the number in question is outside of the range 
+        //
+        //         1E-3 <= f < 1E+7
+        //
+        // we write the number out in "computerized scientific notation".
+        // Otherwise, we write it out in standard form.
+        //
+        int decimal_exponent = 0;
+        float f = (num.IsNegative() ? -num.FloatValue() : num.FloatValue());
+        if (f < 1E-3 || f >= 1E+7)
+        {
+            //
+            // The value of the number f can be expressed as
+            //
+            //     mantissa * (2 ** num.Exponent())
+            //
+            // But we really need to express it as:
+            //
+            //     mantissa * (10 ** decimal_exponent)
+            //
+            decimal_exponent = (int) ceil(num.Exponent() * log10(2.0));
+            f *= pow(10.0, -decimal_exponent); // shift f until it has precisely one decimal digit before the dot
+            if (floor(f) == 0.0)
+            {
+                decimal_exponent--;
+                f *= 10.0;
+            }
+
+            assert(floor(f) > 0.0f && floor(f) < 10.0f); // make sure there is only one digit !!!
+        }
+
+        char *s = str;
+        if (num.IsNegative()) // if the number is negative, add the minus sign
+            *s++ = U_MINUS;
+
+        //
+        // convert whole part into its string representation
+        //
+        IntToString whole((int) f);
+
+        char *ptr = whole.String();
+        while(*ptr)
+            *s++ = *ptr++;
+        *s++ = U_DOT;
+
+        //
+        // Convert fractional part to its string representation
+        //
+        int limit = MAXIMUM_PRECISION + (num.IsNegative() ? 2 : 1);
+        float fraction = f - ((int) f);
+        do
+        {
+            fraction *= 10.0;
+            *s++ = U_0 + ((int) fraction);
+            fraction -= ((int) fraction);
+        } while((fraction > 0.0) && (s - str) < limit);
+
+        //
+        // For each leading 0, add a little more precision.
+        // There can be at most 3.
+        // 
+        char *last = s - 1;
+        for (int i = 0; i < 3 && floor(f) == 0.0 && *last != U_0; i++)
+        {
+            f *= 10.0;
+            fraction *= 10.0;
+            last = s;
+            *s++ = U_0 + ((int) fraction);
+            fraction -= ((int) fraction);
+        }
+
+        //
+        // Round if necessary
+        //
+        if (fraction >= 0.5)
+        {
+            while (*last == U_9)
+                *last-- = U_0;
+            char *dot_character = (*last == U_DOT ? last : (char *) NULL);
+            if (dot_character)
+            {
+                last--;
+                while (last >= str && *last == U_9)
+                    *last-- = U_0;
+            }
+
+            if (last < str)
+            {
+                *++dot_character = U_DOT; // move dot over 1 place
+                *str = 1;                 // place a 1 in the first position
+                *s++ = U_0;               // add an extra zero at the end.
+            }
+            else (*last)++; // increment the number in the last position
+        }
+
+        //
+        // Remove all excess trailing zeroes
+        //
+        while (*--s == U_0)
+            ;
+        s += (*s == U_DOT ? 2 : 1); // need at least one digit after the dot.
+
+        //
+        // If the number is to be written out in scientific notation, add the exponent
+        //
+        if (decimal_exponent != 0)
+        {
+            *s++ = U_E;
+            IntToString exponent(decimal_exponent);
+            char *ptr = exponent.String();
+            while (*ptr)
+                *s++ = *ptr++;
+        }
+
+        *s = U_NULL;      // close string
+        length = s - str; // compute length
+    }
+
+    assert(length <= MAXIMUM_STR_LENGTH);
+
+    return;
+}
+
+
+//
+// Convert an double to its character string representation.
+//
+DoubleToString::DoubleToString(IEEEdouble &num)
+{
+    if (num.IsNaN())
+    {
+         strcpy(str,"NaN");
+         length = strlen("NaN");
+    }
+    else if (num.IsNegativeInfinity())
+    {
+         strcpy(str,"-Infinity");
+         length = strlen("-Infinity");
+    }
+    else if (num.IsPositiveInfinity())
+    {
+         strcpy(str,"Infinity");
+         length = strlen("Infinity");
+    }
+    else if (num.IsNegativeZero())
+    {
+         strcpy(str,"-0.0");
+         length = strlen("-0.0");
+    }
+    else if (num.IsPositiveZero())
+    {
+         strcpy(str,"0.0");
+         length = strlen("0.0");
+    }
+    else
+    {
+        //
+        // TODO: This conversion is a temporary patch. Need volunteer to implement
+        //       better algorithm:
+        //
+        //            Burger/Dybvig, PLDI 1996
+        //            Steele/White,  PLDI 1990
+        //
+        // If the absolute value d of the number in question is outside of the range 
+        //
+        //         1E-3 <= d < 1E+7
+        //
+        // we write the number out in "computerized scientific notation".
+        // Otherwise, we write it out in standard form.
+        //
+        int decimal_exponent = 0;
+        double d = (num.IsNegative() ? -num.DoubleValue() : num.DoubleValue());
+        if (d < 1E-3 || d >= 1E+7)
+        {
+            //
+            // The value of the number f can be expressed as
+            //
+            //     mantissa * (2 ** num.Exponent())
+            //
+            // But we really need to express it as:
+            //
+            //     mantissa * (10 ** decimal_exponent)
+            //
+            decimal_exponent = (int) ceil(num.Exponent() * log10(2.0));
+            d *= pow(10.0, -decimal_exponent); // shift f until it has precisely one decimal digit before the dot
+            if (floor(d) == 0.0)
+            {
+                decimal_exponent--;
+                d *= 10.0;
+            }
+
+            assert(floor(d) > 0.0 && floor(d) < 10.0); // make sure there is only one digit !!!
+        }
+
+        char *s = str;
+        if (num.IsNegative()) // if the number is negative, add the minus sign
+            *s++ = U_MINUS;
+
+        //
+        // convert whole part into its string representation
+        //
+        IntToString whole((int) d);
+
+        char *ptr = whole.String();
+        while(*ptr)
+            *s++ = *ptr++;
+        *s++ = U_DOT;
+
+        //
+        // Convert fractional part to its string representation
+        //
+        int limit = MAXIMUM_PRECISION + (num.IsNegative() ? 2 : 1);
+        double fraction = d - ((int) d);
+        do
+        {
+            fraction *= 10.0;
+            *s++ = U_0 + ((int) fraction);
+            fraction -= ((int) fraction);
+        } while((fraction > 0.0) && (s - str) < limit);
+
+        //
+        // For each leading 0, add a little more precision.
+        // There can be at most 3.
+        // 
+        char *last = s - 1;
+        for (int i = 0; i < 3 && floor(d) == 0.0 && *last != U_0; i++)
+        {
+            d *= 10.0;
+            fraction *= 10.0;
+            last = s;
+            *s++ = U_0 + ((int) fraction);
+            fraction -= ((int) fraction);
+        }
+
+        //
+        // Round if necessary
+        //
+        if (fraction >= 0.5)
+        {
+            while (*last == U_9)
+                *last-- = U_0;
+            char *dot_character = (*last == U_DOT ? last : (char *) NULL);
+            if (dot_character)
+            {
+                last--;
+                while (last >= str && *last == U_9)
+                    *last-- = U_0;
+            }
+
+            if (last < str)
+            {
+                *++dot_character = U_DOT; // move dot over 1 place
+                *str = 1;                 // place a 1 in the first position
+                *s++ = U_0;               // add an extra zero at the end.
+            }
+            else (*last)++; // increment the number in the last position
+        }
+
+        //
+        // Remove all excess trailing zeroes
+        //
+        while (*--s == U_0)
+            ;
+        s += (*s == U_DOT ? 2 : 1); // need at least one digit after the dot.
+
+        //
+        // If the number is to be written out in scientific notation, add the exponent
+        //
+        if (decimal_exponent != 0)
+        {
+            *s++ = U_E;
+            IntToString exponent(decimal_exponent);
+            char *ptr = exponent.String();
+            while (*ptr)
+                *s++ = *ptr++;
+        }
+
+        *s = U_NULL;      // close string
+        length = s - str; // compute length
+    }
+
+    assert(length <= MAXIMUM_STR_LENGTH);
+
+    return;
+}
+
 
 Ostream &Ostream::operator<<(LongInt a)
 {
-    char str[25];
-
     if (os -> flags() & os -> dec)
-         a.DecString(str);
+    {
+        LongToDecString long_int(a);
+        *os << long_int.String();
+    }
     else if (os -> flags() & os -> oct)
-         a.OctString(str, os -> flags() & os -> showbase);
+    {
+        LongToOctString long_int(a);
+        *os << (os -> flags() & os -> showbase ? long_int.StringWithBase() : long_int.String());
+    }
     else if (os -> flags() & os -> hex)
-         a.HexString(str, os -> flags() & os -> showbase);
+    {
+        LongToHexString long_int(a);
+        *os << (os -> flags() & os -> showbase ? long_int.StringWithBase() : long_int.String());
+    }
     else
     {
          os -> flush();
          assert(! "know how to print signed long value in specified format yet !!!");
     }
 
-    *os << str;
-
     return *this;
 }
 
 Ostream &Ostream::operator<<(ULongInt a)
 {
-    char str[25];
-
     if (os -> flags() & os -> dec)
-        a.DecString(str);
+    {
+        ULongToDecString ulong_int(a);
+        *os << ulong_int.String();
+    }
     else if (os -> flags() & os -> oct)
-         a.OctString(str, os -> flags() & os -> showbase);
+    {
+        LongToOctString ulong_int(a);
+        *os << (os -> flags() & os -> showbase ? ulong_int.StringWithBase() : ulong_int.String());
+    }
     else if (os -> flags() & os -> hex)
-         a.HexString(str, os -> flags() & os -> showbase);
+    {
+        LongToHexString ulong_int(a);
+        *os << (os -> flags() & os -> showbase ? ulong_int.StringWithBase() : ulong_int.String());
+    }
     else
     {
-         os -> flush();
-         assert(! "know how to print unsigned long value in specified format yet !!!");
+        os -> flush();
+        assert(! "know how to print unsigned long value in specified format yet !!!");
     }
-
-    *os << str;
 
     return *this;
 }
@@ -212,7 +682,7 @@ wchar_t StringConstant::US_AND[]                        = {U_AM, U_NU}, // "&"
 
 wchar_t StringConstant::US_smallest_int[] = {U_MINUS, U_2, U_1, U_4, U_7, U_4, U_8, U_3, U_6, U_4, U_8, U_NU}; // "-2147483648"
 
-char StringConstant::U8S_command_format[] = "use: jikes [-classpath path][-d dir][-debug][-depend|-Xdepend][-deprecation] [-encoding encoding]"
+char StringConstant::U8S_command_format[] = "use: jikes [-classpath path][-d dir][-debug][-depend|-Xdepend][-deprecation]"
                                             "[-g][-nowarn][-nowrite][-O][-verbose][-Xstdout]"
                                             "[+1.0][++][+B][+D][+E][+F][+K][+M][+P][+T][+U][+Z]"
                                             " file.java...";
@@ -272,7 +742,9 @@ char StringConstant::U8S_B[] = {U_B,U_NU}, // "B"
      StringConstant::U8S_LP_Ljava_SL_lang_SL_String_SC_RP_Ljava_SL_lang_SL_StringBuffer_SC[] = {U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC, U_NU},
      StringConstant::U8S_LP_Ljava_SL_lang_SL_Object_SC_RP_Ljava_SL_lang_SL_StringBuffer_SC[] = {U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_O, U_b, U_j, U_e, U_c, U_t, U_SC, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC, U_NU};
 
-char StringConstant::U8S_smallest_int[] = {U_MINUS, U_2, U_1, U_4, U_7, U_4, U_8, U_3, U_6, U_4, U_8, U_NU}; // "-2147483648"
+char StringConstant::U8S_smallest_int[] = {U_MINUS, U_2, U_1, U_4, U_7, U_4, U_8, U_3, U_6, U_4, U_8, U_NU}, // "-2147483648"
+     StringConstant::U8S_smallest_long_int[] = {U_MINUS, U_9, U_2, U_2, U_3, U_3, U_7, U_2, U_0, U_3, U_6,
+                                                         U_8, U_5, U_4, U_7, U_7, U_5, U_8, U_0, U_8, U_NU}; // "-9223372036854775808"
 
 int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
     StringConstant::U8S_Exceptions_length = strlen(U8S_Exceptions),
@@ -491,21 +963,21 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
 int SystemMkdirhier(char *dirname)
 {
     if (::SystemIsDirectory(dirname))
-	return 0;
+        return 0;
 
     for (char *ptr = dirname; *ptr; ptr++)
-	{
-	    char delimiter = *ptr;
-	    if (delimiter == U_SLASH)
-		{
-		    *ptr = U_NULL;
+    {
+        char delimiter = *ptr;
+        if (delimiter == U_SLASH)
+        {
+            *ptr = U_NULL;
 
-		    if (! ::SystemIsDirectory(dirname))
-			::SystemMkdir(dirname);
+            if (! ::SystemIsDirectory(dirname))
+                ::SystemMkdir(dirname);
 
-		    *ptr = delimiter;
-		}
-	}
+            *ptr = delimiter;
+        }
+    }
 
     ::SystemMkdir(dirname);
     

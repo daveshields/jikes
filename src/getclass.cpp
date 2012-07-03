@@ -1,4 +1,4 @@
-// $Id: getclass.cpp,v 1.15 1999/09/17 17:52:40 shields Exp $
+// $Id: getclass.cpp,v 1.16 1999/11/03 00:46:31 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -283,7 +283,7 @@ TypeSymbol *Semantic::ProcessSignature(TypeSymbol *base_type, char *signature, L
                  while (*str != U_SEMICOLON)
                      str++;
                  type = ReadTypeFromSignature(base_type, signature, str - signature, tok);
-	     }
+             }
              break;
         case U_S:
              type = control.short_type;

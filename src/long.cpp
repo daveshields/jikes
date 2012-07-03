@@ -1,4 +1,4 @@
-// $Id: long.cpp,v 1.8 1999/10/15 02:30:41 shields Exp $
+// $Id: long.cpp,v 1.10 1999/11/03 00:46:32 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -106,18 +106,18 @@ BaseLong BaseLong::operator<< (BaseLong op)
     // That is the reason why we have the initial special check for (n == 0).
     //
 
+    //
     // gcc-2.95.1 compiler bug prevents use of this implementation.
     // return (n == 0 ? *this
-    // 	       : n < 32
-    // 		   ? BaseLong((HighWord() << n) | (LowWord() >> (32 - n)), LowWord() << n)
-    // 		   : BaseLong(LowWord() << (n - 32), 0));
-    
+    //                : n < 32
+    //                    ? BaseLong((HighWord() << n) | (LowWord() >> (32 - n)), LowWord() << n)
+    //                    : BaseLong(LowWord() << (n - 32), 0));
+    //
     if (n == 0)
-	return *this;
+         return *this;
     else if (n < 32)
-	return BaseLong((HighWord() << n) | (LowWord() >> (32 - n)), LowWord() << n);
-    else
-	return BaseLong(LowWord() << (n - 32), 0);
+         return BaseLong((HighWord() << n) | (LowWord() >> (32 - n)), LowWord() << n);
+    else return BaseLong(LowWord() << (n - 32), 0);
 }
 
 BaseLong& BaseLong::operator<<= (BaseLong op)
@@ -258,25 +258,25 @@ BaseLong& BaseLong::operator*= (BaseLong op)
 
 BaseLong::BaseLong(u4 a, u4 b)
 {
-    HighWord() = a;
-    LowWord() = b;
+    High() = a;
+    Low() = b;
 }
 
 BaseLong::BaseLong(u4 a)
 {
-    HighWord() = 0;
-    LowWord() = a;
+    High() = 0;
+    Low() = a;
 }
 
 BaseLong::BaseLong(i4 a)
 {
-    LowWord() = a;
+    Low() = a;
     //
     // Since the carry is not guaranteed to ripple, we cannot use this code.
     //
     //        HighWord() = a >> 31;
     //
-    HighWord() = (a < 0 ? 0xFFFFFFFF : 0x00000000);
+    High() = (a < 0 ? 0xFFFFFFFF : 0x00000000);
 }
 
 
@@ -302,7 +302,7 @@ void BaseLong::Divide(BaseLong dividend, BaseLong divisor, BaseLong &quotient, B
     for (int j = 0; j < 32; j++)
     {
         remainder <<= 1;
-        remainder.LowWord() |= (low >> 31);
+        remainder.Low() |= (low >> 31);
         low <<= 1;
         if ((ULongInt) divisor <= remainder)
         {
@@ -316,135 +316,6 @@ void BaseLong::Divide(BaseLong dividend, BaseLong divisor, BaseLong &quotient, B
     return;
 }
 
-
-void ULongInt::OctString(char *result, bool show_base)
-{
-    ULongInt val = *this;
-    char *ptr = result;
-
-    do
-    {
-        *ptr++ = '0' + (val % 8).LowWord();
-        val /= 8;
-    } while (val != 0);
-
-    if (show_base)
-        *ptr++ = '0';
-
-    *ptr = U_NULL;
-
-    for (char *tail = ptr - 1; tail > result; tail--, result++)
-    {
-        char c = *tail;
-        *tail = *result;
-        *result = c;
-    }
-
-    return;
-}
-
-
-void ULongInt::DecString(char *result)
-{
-    ULongInt val = *this;
-    char *ptr = result;
-
-    do
-    {
-        *ptr++ = '0' + (val % 10).LowWord();
-        val /= 10;
-    } while (val != 0);
-
-    *ptr = U_NULL;
-
-    for (char *tail = ptr - 1; tail > result; tail--, result++)
-    {
-        char c = *tail;
-        *tail = *result;
-        *result = c;
-    }
-
-    return;
-}
-
-
-void ULongInt::HexString(char *result, bool show_base)
-{
-    ULongInt val = *this;
-    char *ptr = result;
-
-    do
-    {
-        *ptr++ = '0' + (val % 16).LowWord();
-        val /= 16;
-    } while (val != 0);
-
-    if (show_base)
-    {
-        *ptr++ = 'x';
-        *ptr++ = '0';
-    }
-
-    *ptr = U_NULL;
-
-    for (char *tail = ptr - 1; tail > result; tail--, result++)
-    {
-        char c = *tail;
-        *tail = *result;
-        *result = c;
-    }
-
-    return;
-}
-
-
-void LongInt::OctString(char *result, bool show_base)
-{
-    ULongInt val;
-
-    if (HighWord() & 0x80000000)
-    {
-        *result++ = '-';
-        val = -(*this);
-    }
-    else val = *this;
-
-    val.OctString(result, show_base);
-
-    return;
-}
-
-void LongInt::DecString(char *result)
-{
-    ULongInt val;
-
-    if (HighWord() & 0x80000000)
-    {
-        *result++ = '-';
-        val = -(*this);
-    }
-    else val = *this;
-
-    val.DecString(result);
-
-    return;
-}
-
-void LongInt::HexString(char *result, bool show_base)
-{
-    ULongInt val;
-
-    if (HighWord() & 0x80000000)
-    {
-        *result++ = '-';
-        val = -(*this);
-    }
-    else val = *this;
-
-    val.HexString(result, show_base);
-
-    return;
-}
 
 ULongInt& ULongInt::operator/= (ULongInt op)
 {
@@ -495,19 +366,18 @@ ULongInt ULongInt::operator>> (ULongInt op)
     // That is the reason why we have the initial special check for (n == 0).
     //
 
+    //
     // gcc-2.95.1 compiler bug prevents this implementation
     // return (n == 0 ? *this
-    // 	       : n < 32
-    // 		   ? ULongInt(HighWord() >> n, (HighWord() << (32 - n)) | (LowWord() >> n))
-    // 		   : ULongInt(0, HighWord() >> (n - 32)));
-
+    //                : n < 32
+    //                    ? ULongInt(HighWord() >> n, (HighWord() << (32 - n)) | (LowWord() >> n))
+    //                    : ULongInt(0, HighWord() >> (n - 32)));
+    //
     if (n == 0)
-	return *this;
+         return *this;
     else if (n < 32)
-	return ULongInt(HighWord() >> n, (HighWord() << (32 - n)) | (LowWord() >> n));
-    else
-	return ULongInt(0, HighWord() >> (n - 32));
-
+         return ULongInt(HighWord() >> n, (HighWord() << (32 - n)) | (LowWord() >> n));
+    else return ULongInt(0, HighWord() >> (n - 32));
 }
 
 ULongInt& ULongInt::operator>>= (ULongInt op)
@@ -543,8 +413,8 @@ LongInt::LongInt(IEEEfloat a) : BaseLong(0,0)
 {
     IEEEdouble value = IEEEdouble(a);
     LongInt lvalue = LongInt(value);
-    HighWord() = lvalue.HighWord();
-    LowWord() = lvalue.LowWord();
+    High() = lvalue.HighWord();
+    Low() = lvalue.LowWord();
     return;
 }
 
@@ -553,22 +423,22 @@ LongInt::LongInt(IEEEdouble a) : BaseLong (0,0)
     if (a.HighWord() == 0x7fffffff && a.LowWord() == 0xffffffff) // if NaN
         ; // *this is already initialized to 0
     else if (a.HighWord() == 0xfff00000 && a.LowWord() == 0x00000000) // if NEGATIVE_INFINITY())
-        HighWord() = 0x80000000;
+        High() = 0x80000000;
     else if (a.HighWord() == 0x7ff00000 && a.LowWord() == 0x00000000) // if POSITIVE_INFINITY())
     {
-        HighWord() = 0x7FFFFFFF;
-        LowWord()  = 0xFFFFFFFF;
+        High() = 0x7FFFFFFF;
+        Low()  = 0xFFFFFFFF;
     }
     else
     {
         double b = floor(a.DoubleValue() < 0.0 ? -a.DoubleValue() : a.DoubleValue()); // DSDouble
 
         if (b < IEEEdouble::min_long.DoubleValue())
-            HighWord() = 0x80000000;
+            High() = 0x80000000;
         else if (-b <= IEEEdouble::min_long.DoubleValue())
         {
-            HighWord() = 0x7FFFFFFF;
-            LowWord()  = 0xFFFFFFFF;
+            High() = 0x7FFFFFFF;
+            Low()  = 0xFFFFFFFF;
         }
         else
         {
@@ -653,18 +523,18 @@ LongInt LongInt::operator>> (LongInt op)
     // used to compile it would shift a 32-bit signed integer.
     //
 
+    //
     // gcc-2.95.1 compiler bug prevents use of this implementation
     // return (n == 0 ? *this
-    // 	       : n < 32
-    // 		   ? LongInt(((i4) HighWord()) >> n, (HighWord() << (32 - n)) | (LowWord() >> n))
-    // 		   : LongInt(((i4) HighWord()) >> 31, ((i4) HighWord()) >> (n - 32)));
-
+    //                : n < 32
+    //                    ? LongInt(((i4) HighWord()) >> n, (HighWord() << (32 - n)) | (LowWord() >> n))
+    //                    : LongInt(((i4) HighWord()) >> 31, ((i4) HighWord()) >> (n - 32)));
+    //
     if (n == 0)
-	return *this;
+         return *this;
     else if (n < 32)
-	return LongInt(((i4) HighWord()) >> n, (HighWord() << (32 - n)) | (LowWord() >> n));
-    else 
-	return LongInt(((i4) HighWord()) >> 31, ((i4) HighWord()) >> (n - 32));
+         return LongInt(((i4) HighWord()) >> n, (HighWord() << (32 - n)) | (LowWord() >> n));
+    else return LongInt(((i4) HighWord()) >> 31, ((i4) HighWord()) >> (n - 32));
 }
 
 LongInt& LongInt::operator>>= (LongInt op)

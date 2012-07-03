@@ -1,4 +1,4 @@
-// $Id: option.h,v 1.12 1999/10/18 18:16:12 shields Exp $
+// $Id: option.h,v 1.14 1999/11/03 14:49:13 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -112,7 +112,7 @@ public:
     char *default_path,
          *classpath,
          *directory,
-         *makefile_name,
+         *dependence_report_name,
          *encoding;
 
 #ifdef HAVE_LIB_ICU_UC
@@ -141,15 +141,16 @@ public:
          debug_unparse_ast,
          debug_unparse_ast_debug,
          debug_dump_class,
-	 nocleanup,
+         nocleanup,
          applet_author,
          incremental,
          makefile,
+	 dependence_report,
          bytecode,
          full_check,
          unzip,
          dump_errors,
-	 ascii,
+         ascii,
          errors,
          comments,
          pedantic;

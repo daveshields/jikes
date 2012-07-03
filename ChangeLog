@@ -1,3 +1,15 @@
+1999-11-03    <shields@jikes.watson.ibm.com>
+
+	* jikes.1: 
+	* jikes.html:
+	* jikes.spec:
+	Revise for version 1.10. Update option description to include CSO
+	and DR (former +M=). Also include in the "What is Jikes" part of
+	jikes.html, some introductory material from an article written
+	for developerWorks by Lou Grinzo (lgrinzo@stny.lrun.com). Thanks
+	for Lou for permitting us to use this material.
+	
+
 1999-10-19    <shields@jikes.watson.ibm.com>
 
 	-- Release 1.09 --

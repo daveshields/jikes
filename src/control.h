@@ -1,4 +1,4 @@
-// $Id: control.h,v 1.22 1999/10/19 15:26:57 shields Exp $
+// $Id: control.h,v 1.23 1999/10/19 23:13:35 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -34,6 +34,7 @@ public:
                 external_table;
 
     PackageSymbol *system_package,
+                  *java_util_package,
                   *unnamed_package;
     int dot_classpath_index;
     Tuple<PathSymbol *> classpath;
@@ -243,6 +244,11 @@ public:
     inline TypeSymbol *Error()
     {
         return (Error_type ? Error_type : Error_type = GetType(system_package, StringConstant::US_Error));
+    }
+
+    inline TypeSymbol *Vector()
+    {
+        return (Vector_type ? Vector_type : Vector_type = GetType(java_util_package, StringConstant::US_Vector));
     }
 
     void InitNoClassDefFoundErrorInfo();
@@ -504,6 +510,11 @@ public:
         return (type == long_type || type == double_type);
     }
 
+    inline bool IsPrimitive(TypeSymbol *type)
+    {
+        return (IsNumeric(type) || type == boolean_type);
+    }
+
     inline void ProcessBadType(TypeSymbol *type_symbol)
     {
         type_trash_bin.Next() = type_symbol;
@@ -548,6 +559,7 @@ private:
                *RuntimeException_type,
                *ClassNotFoundException_type,
                *Error_type,
+               *Vector_type,
                *NoClassDefFoundError_type,
                *StringBuffer_type;
 

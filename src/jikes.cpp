@@ -1,4 +1,4 @@
-// $Id: jikes.cpp,v 1.59 1999/10/19 15:26:57 shields Exp $
+// $Id: jikes.cpp,v 1.61 1999/11/03 19:00:59 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -45,7 +45,6 @@ int main(int argc, char *argv[])
         "\n\n"
         "-classpath path    use path for CLASSPATH\n"
         "-d dir             write class files in directory dir\n"
-        "-encoding encoding specify character encoding used by source files\n"
         "-debug             no effect (recognized for compatibility)\n"
         "-depend | -Xdepend recompile all used classes\n"
         "-deprecation       report uses of deprecated features\n"
@@ -61,20 +60,21 @@ int main(int argc, char *argv[])
         "+B                 do not invoke bytecode generator\n"
         "+CSO               search for both java and classfile in classpath\n"
         "+D                 report errors immediately in emacs-form without buffering\n"
+        "+DR=filename       generate dependence report in filename\n"
         "+E                 list errors in emacs-form\n"
         "+F                 do full dependence check except for Zip and Jar files\n"
         "+Kname=TypeKeyWord map name to type keyword\n"
         "+M                 generate makefile dependencies\n"
-        "+M=filename        generate makefile dependencies information in filename\n"
         "+P                 Pedantic compilation - issues lots of warnings\n"
         "+Td...d            set value of tab d...d spaces; each d is a decimal digit\n"
         "+U                 do full dependence check including Zip and Jar files\n"
         "+Z                 treat cautions as errors\n"
-        "\nVersion 1.09 (19 Oct 99)\n"
-        "Originally written by Philippe Charles and David Shields, IBM Research,\n"
-        "Jikes is now maintained and refined by the\n"
+        "\nVersion 1.10 (3 Nov 99)\n"
+        "Originally written by Philippe Charles and David Shields \n"
+        "of IBM Research, Jikes is now maintained and refined by the\n"
         "Jikes Project at http://ibm.com/developerworks/opensource.\n"
-        "Please use the above URL to report problems.\n");
+        "Please consult this URL for more information and to learn \n"
+        "how to report problems.\n");
 
         return_code = 1;
     }

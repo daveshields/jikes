@@ -1,4 +1,4 @@
-# $Id: Makefile.in,v 1.10 1999/10/15 02:30:38 shields Exp $
+# $Id: Makefile.in,v 1.11 1999/10/19 23:13:34 shields Exp $
 
 # This software is subject to the terms of the IBM Jikes Compiler
 # License Agreement available at the following URL:
@@ -39,10 +39,12 @@ all:  $(EXECUTABLE)
 clean:
 	$(ERASE) $(EXECUTABLE)
 	$(ERASE) $(OBJECTS)
+	$(ERASE) core
 
 distclean: clean
 	$(ERASE) config.cache config.log config.status
 	$(ERASE) Makefile TAGS
+	$(ERASE) *~
 
 install: all
 	mkdir -p $(prefix)/bin

@@ -1,4 +1,4 @@
-// $Id: class.h,v 1.13 1999/10/15 02:30:39 shields Exp $
+// $Id: class.h,v 1.14 1999/11/03 00:46:30 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -625,7 +625,7 @@ class Code_attribute : public attribute_info
 public:
 
     Code_attribute(u2 _name_index, u2 _max_locals) : attribute_info(Code, _name_index),
-						     attribute_length(0),
+                                                     attribute_length(0),
                                                      max_stack(0),
                                                      max_locals(_max_locals),
                                                      code(8, 4),

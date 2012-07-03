@@ -1,4 +1,4 @@
-// $Id: body.cpp,v 1.26 1999/10/17 01:58:39 shields Exp $
+// $Id: body.cpp,v 1.27 1999/10/19 23:13:34 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1467,8 +1467,6 @@ void Semantic::ProcessClassDeclaration(Ast *stmt)
 
     CheckNestedTypeDuplication(state_stack.Top(), class_declaration -> identifier_token);
 
-    NameSymbol *name_symbol = lex_stream -> NameSymbol(class_declaration -> identifier_token);
-
     TypeSymbol *inner_type = GetLocalType(class_declaration);
     inner_type -> outermost_type = ThisType() -> outermost_type;
     inner_type -> supertypes_closure = new SymbolSet;
@@ -1859,7 +1857,6 @@ void Semantic::ProcessMethodBody(AstMethodDeclaration *method_declaration)
     for (int k = 0; k < method_declaration -> NumThrows(); k++)
         CheckThrow(method_declaration -> Throw(k));
 
-    AstMethodDeclarator *method_declarator = method_declaration -> method_declarator;
 
     if (! method_declaration -> method_body -> EmptyStatementCast())
     {
@@ -1978,8 +1975,6 @@ void Semantic::ProcessConstructorBody(AstConstructorDeclaration *constructor_dec
 
     for (int k = 0; k < constructor_declaration -> NumThrows(); k++)
         CheckThrow(constructor_declaration -> Throw(k));
-
-    AstMethodDeclarator *constructor_declarator = constructor_declaration -> constructor_declarator;
 
     //
     // The block that is the body of a constructor is reachable

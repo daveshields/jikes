@@ -1,4 +1,4 @@
-// $Id: long.h,v 1.5 1999/08/20 14:44:21 shields Exp $
+// $Id: long.h,v 1.6 1999/10/27 18:07:10 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -28,17 +28,20 @@ protected:
         u4 word[2];
     } value;
 
-public:
-
 #ifdef BIGENDIAN
-    u4 &HighWord() { return value.word[0]; }
-    u4 &LowWord()  { return value.word[1]; }
+    u4 &High() { return value.word[0]; }
+    u4 &Low()  { return value.word[1]; }
 #else
-    u4 &LowWord()  { return value.word[0]; }
-    u4 &HighWord() { return value.word[1]; }
+    u4 &Low()  { return value.word[0]; }
+    u4 &High() { return value.word[1]; }
 #endif
 
-    double &DoubleView() { return value.double_words; }
+public:
+
+    u4 HighWord() { return High(); }
+    u4 LowWord()  { return Low(); }
+
+    double DoubleView() { return value.double_words; }
 
     BaseLong(u4 a, u4 b);
     BaseLong(u4 a);
@@ -111,10 +114,6 @@ public:
     bool  operator>= (LongInt); // greater-than or equal
 
     double Double();           // convert ULongInt value to a double value
-
-    void OctString(char *, bool = false); // convert LongInt value to its character string representation in octal format
-    void DecString(char *);               // convert LongInt value to its character string representation in decimal format
-    void HexString(char *, bool = false); // convert LongInt value to its character string representation in hexadecimal format
 };
 
 
@@ -142,10 +141,6 @@ public:
     bool   operator>= (ULongInt); // greater-than or equal
 
     double Double();      // convert LongInt value to a double value
-
-    void OctString(char *, bool = false); // convert ULongInt value to its character string representation in octal format
-    void DecString(char *);               // convert ULongInt value to its character string representation in decimal format
-    void HexString(char *, bool = false); // convert ULongInt value to its character string representation in hexadecimal format
 };
 
 

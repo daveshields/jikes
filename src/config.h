@@ -1,4 +1,4 @@
-// $Id: config.h,v 1.25 1999/10/15 12:44:29 shields Exp $
+// $Id: config.h,v 1.28 1999/11/03 00:46:30 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -117,8 +117,8 @@ enum U_chars
     U_RIGHT_PARENTHESIS = 41, U_RP = U_RIGHT_PARENTHESIS, // L')'
     U_STAR = 42,              U_ST = U_STAR,              // L'*'
     U_PLUS = 43,              U_PL = U_PLUS,              // L'+'
-    U_COMMA = 44,             U_CM = U_COMMA,             // L'-'
-    U_MINUS = 45,             U_MI = U_MINUS,             // L','
+    U_MINUS = 45,             U_MI = U_MINUS,             // L'-'
+    U_COMMA = 44,             U_CM = U_COMMA,             // L','
     U_DOT = 46,               U_DO = U_DOT,               // L'.'
     U_SLASH = 47,             U_SL = U_SLASH,             // L'/'
 
@@ -446,7 +446,8 @@ public:
                 U8S_LP_Ljava_SL_lang_SL_String_SC_RP_Ljava_SL_lang_SL_StringBuffer_SC[], // "(Ljava/lang/String;)Ljava/lang/StringBuffer;"
                 U8S_LP_Ljava_SL_lang_SL_Object_SC_RP_Ljava_SL_lang_SL_StringBuffer_SC[]; // "(Ljava/lang/Object;)Ljava/lang/StringBuffer;"
 
-    static char U8S_smallest_int[]; // "-2147483648"
+    static char U8S_smallest_int[],      // "-2147483648"
+                U8S_smallest_long_int[]; // "-9223372036854775808"
 };
 
 
@@ -456,35 +457,115 @@ public:
 class IntToString
 {
 public:
-    IntToString(int num)
-    {
-        if (num == (int)0x80000000)
-        {
-            str = info;
-            strcpy(str, StringConstant::U8S_smallest_int);
-        }
-        else
-        {
-            str = &info[11];
-            *str = U_NULL;
-            int n = (num < 0 ? -num : num);
-            do
-            {
-                *--str = (U_0 + n % 10);
-                n /= 10;
-            } while (n != 0);
-
-            if (num < 0)
-                *--str = '-';
-        }
-    }
+    IntToString(int);
 
     char *String() { return str; }
-    int Length()   { return (&info[11]) - str; }
+    int Length()   { return (&info[TAIL_INDEX]) - str; }
 
 private:
+    enum { TAIL_INDEX = 1 + 10 }; // 1 for sign, +10 significant digits
 
-    char info[12],
+    char info[TAIL_INDEX + 1], // +1 for '\0'
+         *str;
+};
+
+
+//
+// Same as IntToString for wide strings
+//
+class IntToWstring
+{
+public:
+    IntToWstring(int);
+
+    wchar_t *String() { return wstr; }
+    int Length()      { return (&winfo[TAIL_INDEX]) - wstr; }
+
+private:
+    enum { TAIL_INDEX = 1 + 10 }; // 1 for sign, +10 significant digits
+
+    wchar_t winfo[TAIL_INDEX + 1], // 1 for sign, +10 significant digits + '\0'
+            *wstr;
+};
+
+
+//
+// Convert an unsigned Long integer to its character string representation in decimal.
+//
+class ULongInt;
+class ULongToDecString
+{
+public:
+    ULongToDecString(ULongInt &);
+
+    char *String() { return str; }
+    int Length()   { return (&info[TAIL_INDEX]) - str; }
+
+private:
+    enum { TAIL_INDEX = 20 }; // 20 significant digits
+
+    char info[TAIL_INDEX + 1], // +1 for '\0'
+         *str;
+};
+
+
+//
+// Convert a signed or unsigned Long integer to its character string representation in octal.
+//
+class BaseLong;
+class LongToOctString
+{
+public:
+    LongToOctString(BaseLong &);
+
+    char *String() { return str + 1; } // +1 to skip initial '0'
+    char *StringWithBase() { return str; }
+    int Length()   { return (&info[TAIL_INDEX]) - str; }
+
+private:
+    enum { TAIL_INDEX = 1 + 22 }; // 1 for initial '0', +22 significant digits
+
+    char info[TAIL_INDEX + 1], // + 1 for '\0'
+         *str;
+};
+
+
+//
+// Convert a signed or unsigned Long integer to its character string representation in hexadecimal.
+//
+class LongToHexString
+{
+public:
+    LongToHexString(BaseLong &);
+
+    char *String() { return str + 2; } // +2 to skip initial "0x"
+    char *StringWithBase() { return str; }
+    int Length()   { return (&info[TAIL_INDEX]) - str; }
+
+private:
+    enum { TAIL_INDEX = 1 + 1 + 16 }; // 1 for initial '0', +1 for 'x', + 16 significant digits
+
+    char info[TAIL_INDEX + 1], // +1 for '\0'
+         *str;
+};
+
+
+//
+// Convert a signed Long integer to its character string representation in decimal.
+//
+class LongInt;
+class LongToDecString
+{
+public:
+    LongToDecString(LongInt &);
+
+    char *String() { return str; }
+    int Length()   { return (&info[TAIL_INDEX]) - str; }
+
+private:
+    enum { TAIL_INDEX = 1 + 19 }; // 1 for sign, +19 significant digits
+
+    char info[TAIL_INDEX + 1], // + 1 for '\0'
          *str;
 };
 
@@ -506,43 +587,50 @@ private:
 
 
 //
-// Same as IntToString for wide strings
+// Convert an double to its character string representation.
 //
-class IntToWstring
+class IEEEdouble;
+class DoubleToString
 {
 public:
-    IntToWstring(int num)
-    {
-        if (num == (int)0x80000000)
-        {
-            wstr = winfo;
-            wcscpy(wstr,  StringConstant::US_smallest_int);
-        }
-        else
-        {
-            wstr = &winfo[11];
-            *wstr = U_NULL;
-            int n = (num < 0 ? -num : num);
-            do
-            {
-                *--wstr = (U_0 + n % 10);
-                n /= 10;
-            } while (n != 0);
+    DoubleToString(IEEEdouble &);
 
-            if (num < 0)
-                *--wstr = '-';
-        }
-    }
-
-    wchar_t *String() { return wstr; }
-    int Length()      { return (&winfo[11]) - wstr; }
+    char *String() { return str; }
+    int Length()   { return length; }
 
 private:
+    enum
+    {
+        MAXIMUM_PRECISION = 16,
+        MAXIMUM_STR_LENGTH = 1 + MAXIMUM_PRECISION + 1 + 4 // +1 for sign, +16 significant digits +1 for ".", +4 for exponent
+    };
 
-    wchar_t winfo[12],
-            *wstr;
+    char str[MAXIMUM_STR_LENGTH + 1]; // +1 for '\0'
+    int length;
 };
 
+//
+// Convert an float to its character string representation.
+//
+class IEEEfloat;
+class FloatToString
+{
+public:
+    FloatToString(IEEEfloat &);
+
+    char *String() { return str; }
+    int Length()   { return length; }
+
+private:
+    enum
+    {
+        MAXIMUM_PRECISION = 8,
+        MAXIMUM_STR_LENGTH = 1 + MAXIMUM_PRECISION + 1 + 4 // +1 for sign, +8 significant digits +1 for ".", +4 for exponent
+    };
+
+    char str[MAXIMUM_STR_LENGTH + 1]; // +1 for '\0'
+    int length;
+};
 
 //
 // If the system runs out of memory, this function is invoked.
@@ -576,6 +664,10 @@ extern int SystemIsDirectory(char *name);
 #ifdef UNIX
 #define UNIX_FILE_SYSTEM
 #endif
+extern int SystemMkdirhier(char *);
+
+extern char * strcat3(const char *, const char *, const char *);
+extern char * wstring2string(wchar_t * in);
 
 //
 // The symbol used in this environment for separating argument in a system string. E.g., in a unix system
@@ -621,7 +713,7 @@ public:
     {}
 
     Ostream(ostream *_os) : os(_os),
-	                    expand_wchar(false)
+                            expand_wchar(false)
     {}
 
     void StandardOutput() { os = &cout; }
