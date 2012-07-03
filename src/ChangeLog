@@ -1,6 +1,17 @@
+1999-10-19    <shields@jikes.watson.ibm.com>
+
+	--- Release v1.09 ---
+
+	* control.h: 
+	* jikes.cpp:
+	* option.cpp:
+	* system.cpp:
+	Re-install code to support CSO option that was wrongly deleted.
+
 1999-10-18    <shields@jikes.watson.ibm.com>
 
 	--- Release v1.08 ---
+
 	* jikes.cpp: Set version to 1.08 and release date
 	* lookup.cpp: Plug a memory leak.
 

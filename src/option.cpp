@@ -1,4 +1,4 @@
-// $Id: option.cpp,v 1.19 1999/10/18 16:51:03 shields Exp $
+// $Id: option.cpp,v 1.20 1999/10/19 15:26:57 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -170,6 +170,7 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                                               pedantic(false),
                                               directory(NULL),
                                               first_file_index(arguments.argc),
+                                              classpath_search_order(false),
                                               one_one(true),
                                               g(false),
                                               nowrite(false),
@@ -302,6 +303,8 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                  comments = true;
             else if (strcmp(arguments.argv[i], "+C") == 0)
                  debug_dump_class = true;
+            else if (strcmp(arguments.argv[i], "+CSO") == 0)
+                 classpath_search_order = true;
             else if (strcmp(arguments.argv[i],"+D") == 0)
             {
                  dump_errors = true;

@@ -1,4 +1,4 @@
-// $Id: jikes.cpp,v 1.58 1999/10/18 19:37:43 shields Exp $
+// $Id: jikes.cpp,v 1.59 1999/10/19 15:26:57 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
         "+Td...d            set value of tab d...d spaces; each d is a decimal digit\n"
         "+U                 do full dependence check including Zip and Jar files\n"
         "+Z                 treat cautions as errors\n"
-        "\nVersion 1.08 (18 Oct 99)\n"
+        "\nVersion 1.09 (19 Oct 99)\n"
         "Originally written by Philippe Charles and David Shields, IBM Research,\n"
         "Jikes is now maintained and refined by the\n"
         "Jikes Project at http://ibm.com/developerworks/opensource.\n"
