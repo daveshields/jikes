@@ -1,4 +1,4 @@
-// $Id: control.h,v 1.18 1999/09/13 14:21:15 shields Exp $
+// $Id: control.h,v 1.19 1999/10/12 12:46:10 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -472,6 +472,8 @@ public:
     static DirectorySymbol *GetOutputDirectory(FileSymbol *);
     static FileSymbol *GetJavaFile(PackageSymbol *, NameSymbol *);
     static FileSymbol *GetFile(Control &, PackageSymbol *, NameSymbol *);
+    static FileSymbol *GetFileBoth(Control &, PackageSymbol *, NameSymbol *);
+    static FileSymbol *GetFileFirst(Control &, PackageSymbol *, NameSymbol *);
 
     PackageSymbol *FindOrInsertPackage(LexStream *, AstExpression *);
     void ProcessPackageDeclaration(FileSymbol *, AstPackageDeclaration *);

@@ -1,4 +1,4 @@
-// $Id: body.cpp,v 1.23 1999/09/13 14:21:14 shields Exp $
+// $Id: body.cpp,v 1.24 1999/10/13 16:17:41 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -277,21 +277,28 @@ void Semantic::ProcessSynchronizedStatement(Ast *stmt)
              *block_body = synchronized_statement -> block;
 
     //
-    // Guess that the number of elements will not exceed the number of statements + 3.
-    //
-    BlockSymbol *block = LocalSymbolTable().Top() -> InsertBlockSymbol(block_body -> NumStatements() + 3);
-    //
     // "synchronized" blocks require two more local variable slots for synchronization,
     // plus one extra variable slot if the containing method returns a value, plus an
     // additional slot if the value returned is double or long.
     //
-    block -> synchronized_variable_index = enclosing_block -> block_symbol -> max_variable_index;
-    block -> max_variable_index = block -> synchronized_variable_index + 2;
-    if (control.IsDoubleWordType(ThisMethod() -> Type()))
-         block -> max_variable_index += 2;
-    else if (ThisMethod() -> Type() != control.void_type)
-         block -> max_variable_index++;
+    BlockSymbol *enclosing_block_symbol = enclosing_block -> block_symbol;
+    if (enclosing_block_symbol -> try_or_synchronized_variable_index == 0) // first such statement encountered in enclosing block?
+    {
+        enclosing_block_symbol -> try_or_synchronized_variable_index = enclosing_block_symbol -> max_variable_index;
+        enclosing_block_symbol -> max_variable_index += 2;
+        if (ThisMethod() -> Type() != control.void_type)
+        {
+             if (control.IsDoubleWordType(ThisMethod() -> Type()))
+                  enclosing_block_symbol -> max_variable_index += 2;
+             else enclosing_block_symbol -> max_variable_index += 1;
+        }
+    }
 
+    //
+    // Guess that the number of elements will not exceed the number of statements + 3.
+    //
+    BlockSymbol *block = LocalSymbolTable().Top() -> InsertBlockSymbol(block_body -> NumStatements() + 3);
+    block -> max_variable_index = enclosing_block_symbol -> max_variable_index;
     LocalSymbolTable().Push(block -> Table());
 
     block_body -> block_symbol = block;
@@ -1125,16 +1132,16 @@ void Semantic::ProcessTryStatement(Ast *stmt)
     AstBlock *enclosing_block = LocalBlockStack().TopBlock();
     if (try_statement -> finally_clause_opt)
     {
-        BlockSymbol *block = enclosing_block -> block_symbol;
-        if (block -> try_variable_index == 0) // first try_statement encountered in enclosing block?
+        BlockSymbol *enclosing_block_symbol = enclosing_block -> block_symbol;
+        if (enclosing_block_symbol -> try_or_synchronized_variable_index == 0) // first such statement encountered in enclosing block?
         {
-            block -> try_variable_index = block -> max_variable_index;
-            block -> max_variable_index += 2;
+            enclosing_block_symbol -> try_or_synchronized_variable_index = enclosing_block_symbol -> max_variable_index;
+            enclosing_block_symbol -> max_variable_index += 2;
             if (ThisMethod() -> Type() != control.void_type)
             {
                  if (control.IsDoubleWordType(ThisMethod() -> Type()))
-                      block -> max_variable_index += 2;
-                 else block -> max_variable_index += 1;
+                      enclosing_block_symbol -> max_variable_index += 2;
+                 else enclosing_block_symbol -> max_variable_index += 1;
             }
         }
 
@@ -2068,9 +2075,6 @@ void Semantic::ProcessConstructorBody(AstConstructorDeclaration *constructor_dec
     //
     int table_size = block_body -> NumStatements();
     BlockSymbol *block = LocalSymbolTable().Top() -> InsertBlockSymbol(table_size);
-    //
-    // enclosing_block is not present only when we are processing the block of a static initializer
-    //
     block -> max_variable_index = this_method -> block_symbol -> max_variable_index;
     LocalSymbolTable().Push(block -> Table());
 

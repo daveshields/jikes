@@ -4,7 +4,7 @@
 %options nogoto-default
 %options single-productions
 %options la=2,names=max
--- $Id: java.g,v 1.9 1999/08/26 15:26:14 shields Exp $
+-- $Id: java.g,v 1.10 1999/10/09 15:38:32 shields Exp $
 -- This software is subject to the terms of the IBM Jikes Compiler
 -- License Agreement available at the following URL:
 -- http://www.ibm.com/research/jikes.
@@ -3394,6 +3394,8 @@ void Parser::Act$rule_number(void)
     p -> synchronized_token = Token(1);
     p -> expression         = (AstExpression *) Sym(3);
     p -> block              = (AstBlock *) Sym(5);
+    p -> block -> block_tag = AstBlock::SYNCHRONIZED;
+
     Sym(1) = p;
 }
 ./
@@ -3406,6 +3408,7 @@ void Parser::Act$rule_number(void)
     AstTryStatement *p = ast_pool -> NewTryStatement();
     p -> try_token          = Token(1);
     p -> block              = (AstBlock *) Sym(2);
+
     //
     // The list of modifiers is guaranteed not empty
     //
@@ -3433,6 +3436,8 @@ void Parser::Act$rule_number(void)
     AstTryStatement *p = ast_pool -> NewTryStatement();
     p -> try_token      = Token(1);
     p -> block          = (AstBlock *) Sym(2);
+    p -> block -> block_tag = AstBlock::TRY_CLAUSE_WITH_FINALLY;
+
     if (Sym(3) != NULL)
     {
         AstListNode *tail = (AstListNode *) Sym(3);
@@ -3445,7 +3450,12 @@ void Parser::Act$rule_number(void)
         } while(root != tail);
         FreeCircularList(tail);
     }
+
+    for (int i = 0; i < p -> NumCatchClauses(); i++)
+        p -> CatchClause(i) -> block -> block_tag = AstBlock::TRY_CLAUSE_WITH_FINALLY;
+
     p -> finally_clause_opt = (AstFinallyClause *) Sym(4);
+
     Sym(1) = p;
 }
 ./
@@ -3497,6 +3507,7 @@ void Parser::Act$rule_number(void)
     p -> catch_token      = Token(1);
     p -> formal_parameter = (AstFormalParameter *) Sym(3);
     p -> block            = (AstBlock *) Sym(5);
+
     Sym(1) = p;
 }
 ./
@@ -3506,9 +3517,11 @@ Finally ::= 'finally' Block
 /.$location
 void Parser::Act$rule_number(void)
 {
-    AstFinallyClause *p = ast_pool -> NewFinallyClause();
-    p -> finally_token = Token(1);
-    p -> block         = (AstBlock *) Sym(2);
+    AstFinallyClause *p     = ast_pool -> NewFinallyClause();
+    p -> finally_token      = Token(1);
+    p -> block              = (AstBlock *) Sym(2);
+    p -> block -> block_tag = AstBlock::FINALLY;
+
     Sym(1) = p;
 }
 ./
@@ -4575,7 +4588,7 @@ AssignmentOperator ::= '='
 /.$location
 void Parser::Act$rule_number(void)
 {
-    Sym(1) = ast_pool -> NewAssignmentExpression(AstAssignmentExpression::EQUAL, Token(1));
+    Sym(1) = ast_pool -> NewAssignmentExpression(AstAssignmentExpression::SIMPLE_EQUAL, Token(1));
 }
 ./
 

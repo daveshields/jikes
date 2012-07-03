@@ -1,3 +1,170 @@
+1999-10-13    <shields@jikes.watson.ibm.com>
+
+	* stream.h: Delete extraneous ",' that causes AIX xlC to complain
+
+	* jikes.cpp: 
+	Update version to 1.07, and revise descriptive text printed when Jikes is
+	invoked with no arguments.
+
+	* expr.cpp: 
+	* symbol.cpp:
+	* symbol.h:
+	pc1013b: add infrastructure needed for upcoming revison of access
+	functions for protected (Philippe Charles).
+
+	* stream.cpp: 
+	vz1013a: code from Vadim, who writes: 
+	Attached is modified version of stream.cpp. It handles very rare situation
+	when one code page character could be repesented by more that one unicode
+	chars.
+
+	One of situations, when this could happen is when character is represented
+	by UNICODE "surrogates"*
+
+	Anyway, even though not tested, I suggest to include this code. It will not make
+	current implementation worse (currently it dumps core if such character
+	will be used in source).
+
+
+
+
+	* class.h: 
+	* pc1013b: add code that should have been in pc1013a.
+
+	* ast.cpp: 
+	* ast.h:
+	* body.cpp:
+	* bytecode.cpp:
+	* bytecode.h:
+	* definite.cpp:
+	* error.cpp:
+	* error.h:
+	* expr.cpp:
+	* jikes.cpp: (version number, date)
+	* symbol.cpp:
+	* symbol.h:
+	pc1013a: more code from Philippe for unified block stack, and
+	also a number of bug fixes (though Philippe forgot to record just
+	what was fixed).
+	
+
+1999-10-12    <shields@jikes.watson.ibm.com>
+
+	* control.h: 
+	* jikes.cpp:
+	* option.cpp:
+	* option.h:
+	* system.cpp:
+	Add Joe Berkovitz's (joeb@atg.com) classpath search order code, as
+	method FindFileBoth in system.cpp. Dave added option +CSO with default
+	to maintain current behavior, while selecting the option enables Joes's
+	code.
+
+1999-10-11    <shields@jikes.watson.ibm.com>
+	* bytecode.cpp: 
+	* bytecode.h
+	* pc1011a, more mods from Philippe for unified block stack.
+
+1999-10-11    <shields@jikes.watson.ibm.com>
+	* code.h: 
+	* stream.cpp:
+	* vz1011a: more unicode code from Vadim.
+
+1999-10-10    <shields@jikes.watson.ibm.com>
+
+	* option.cpp: Fix compilation error by adding conditional defines for ICU
+
+	* stream.cpp: 
+	Fix typos: TRUE->true, FALSE->false
+	
+1999-10-10  Dave Shields	shields@watson.ibm.com
+	Incorporate recent changes from Vadim, including some that I forgot
+	to include in vz1009a changes. Mark this set vz1010a.
+
+1999-10-08  Vadim Zaliva  <lord@crocodile.org>
+
+	All EBCEDIC code removed.
+	* stream.cpp (ProcessInput): Tested and now in conformance with JLS.
+	* code.h (class Code): aIsAlpha, IsDigit etc, checks now using ICU.
+
+1999-10-07  Vadim Zaliva  <lord@crocodile.org>
+
+	* stream.cpp (ProcessInput): reimplemented to facilitate ICU for code page conversion.
+	* option.cpp (Option): added test for unsupported encoding end error reporting.
+
+1999-10-06  Vadim Zaliva  <lord@crocodile.org>
+
+	* option.h (class Option): 
+	* option.cpp (Option): 
+	* config.cpp: 
+	* jikes.cpp (main): Added -encoding option
+	* Makefile.in (LIBS): added LIBS variable to link with extra libraries (detected by autoconf).
+	* configure.in (LDFLAGS): Added checks for "IBM Classes for Unicode" library.
+
+=======
+1990-10-09  Dave Shields  <shields@watson.ibm.com>
+	* Makefile.in:
+	* code.cpp 
+	* code.h
+	* configure.in: 
+	* depend.cpp:
+	* diagnose.cpp:
+	* dump.cpp:
+	* error.cpp: 
+	* error.h:
+	* option.cpp:
+	* option.h:
+	* scanner.cpp:
+	* stream.cpp:
+	* stream.h: 
+	Merge in some, but not all, of Vadim's recent Unicode work.
+	All this code is Vadim's. The working tag is vz1009a.
+
+1999-10-08  Vadim Zaliva  <lord@crocodile.org>
+
+	All EBCEDIC code removed.
+	* stream.cpp (ProcessInput): Tested and now in conformance with JLS.
+	* code.h (class Code): aIsAlpha, IsDigit etc, checks now using ICU.
+
+1999-10-07  Vadim Zaliva  <lord@crocodile.org>
+
+	* stream.cpp (ProcessInput): reimplemented to facilitate ICU for code page conversion.
+	* option.cpp (Option): added test for unsupported encoding end error reporting.
+
+1999-10-06  Vadim Zaliva  <lord@crocodile.org>
+
+	* option.h (class Option): 
+	* option.cpp (Option): 
+	* config.cpp: 
+	* jikes.cpp (main): Added -encoding option
+	* Makefile.in (LIBS): added LIBS variable to link with extra libraries (detected by autoconf).
+	* configure.in (LDFLAGS): Added checks for "IBM Classes for Unicode" library.
+
+1999-10-09    <shields@jikes.watson.ibm.com>
+
+	* ast.cpp:
+	* ast.h:
+	* bytecode.cpp:
+	* bytecode.h:
+	* class.h:
+	* config.cpp:
+	* control.cpp:
+	* decl.cpp:
+	* definite.cpp:
+	* expr.cpp:
+	* java.g:
+	* javaact.cpp:
+	* jikes.cpp:
+	* semantic.h:
+	* set.h:
+	* symbol.h:
+	Install Phillipe's current updates as 'pc1009a'. This code fixes a
+	known problem in generating the LocalVariableTable, needed for -g, and
+	also contains part, but not all, of the changes needed to install a 
+	unified block stack. This version is known to fail some tests; we are
+	working on this.
+
+>>>>>>> 1.89
 1999-09-17    <shields@jikes.watson.ibm.com>
 
 	* jikes.cpp:

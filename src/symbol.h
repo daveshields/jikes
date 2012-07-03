@@ -1,4 +1,4 @@
-// $Id: symbol.h,v 1.23 1999/09/01 14:58:26 shields Exp $
+// $Id: symbol.h,v 1.25 1999/10/13 17:56:44 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -414,9 +414,7 @@ public:
         initializer_constructors -> Next() = method;
     }
 
-    int max_block_depth,
-        constant_pool_index,
-        constant_pool_class;
+    int max_block_depth;
 
     //
     // If this method is a method that permits access to a private member of an
@@ -442,8 +440,6 @@ public:
                                              header(NULL),
                                              max_block_depth(1), // there must be at least one block in a method
                                                                  // this default is useful for default constructors.
-                                             constant_pool_index(0),
-                                             constant_pool_class(0),
                                              local_constructor(NULL),
                                              accessed_member(NULL),
                                              formal_parameters(NULL),
@@ -826,9 +822,9 @@ public:
     VariableSymbol *FindOrInsertClassLiteral(TypeSymbol *);
     VariableSymbol *FindOrInsertLocalShadow(VariableSymbol *);
 
-    static MethodSymbol *GetReadAccessMethod(MethodSymbol *);
-    static MethodSymbol *GetReadAccessMethod(VariableSymbol *);
-    static MethodSymbol *GetWriteAccessMethod(VariableSymbol *);
+    MethodSymbol *GetReadAccessMethod(MethodSymbol *);
+    MethodSymbol *GetReadAccessMethod(VariableSymbol *);
+    MethodSymbol *GetWriteAccessMethod(VariableSymbol *);
 
     bool IsArray() { return (num_dimensions > 0); }
 
@@ -1172,9 +1168,6 @@ public:
     NameSymbol *name_symbol;
     Symbol     *owner;
     LiteralValue *initial_value;
-    int constant_pool_index,
-        constant_pool_class,
-        local_program_counter;
 
     VariableSymbol *accessed_local;
 
@@ -1216,9 +1209,6 @@ public:
                                                signature_string(NULL),
                                                initial_value(NULL),
                                                local_variable_index_(-1),
-                                               constant_pool_index(0),
-                                               constant_pool_class(0),
-                                               local_program_counter(0),
                                                accessed_local(NULL),
                                                status(0)
     {
@@ -1302,8 +1292,7 @@ class BlockSymbol : public Symbol
 {
 public:
     int max_variable_index,
-        synchronized_variable_index,
-        try_variable_index;
+        try_or_synchronized_variable_index;
 
     BlockSymbol(int hash_size);
     virtual ~BlockSymbol();
@@ -1519,17 +1508,15 @@ public:
 
 
 inline int TypeSymbol::NumVariableSymbols() { return (table ? table -> NumVariableSymbols() : 0); }
-inline int BlockSymbol::NumVariableSymbols() { return (table ? table -> NumVariableSymbols() : 0); }
-
 inline VariableSymbol *TypeSymbol::VariableSym(int i) { return table -> VariableSym(i); }
+
+inline int BlockSymbol::NumVariableSymbols() { return (table ? table -> NumVariableSymbols() : 0); }
 inline VariableSymbol *BlockSymbol::VariableSym(int i) { return table -> VariableSym(i); }
 
 inline int TypeSymbol::NumMethodSymbols() { return (table ? table -> NumMethodSymbols() : 0); }
-
 inline MethodSymbol *TypeSymbol::MethodSym(int i) { return table -> MethodSym(i); }
 
 inline int TypeSymbol::NumTypeSymbols() { return (table ? table -> NumTypeSymbols() : 0); }
-
 inline TypeSymbol *TypeSymbol::TypeSym(int i) { return table -> TypeSym(i); }
 
 inline void TypeSymbol::CompressSpace() { if (table) table -> CompressSpace(); }

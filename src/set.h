@@ -1,4 +1,4 @@
-// $Id: set.h,v 1.7 1999/09/01 15:04:29 shields Exp $
+// $Id: set.h,v 1.8 1999/10/09 15:38:33 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -524,19 +524,14 @@ public:
     // Return a boolean value indicating whether or not the element i
     // is in the bitset in question.
     //
-    int operator[](const int i)
+    bool operator[](const int i)
     {
         assert(i >= 0 && i < set_size);
 
-        //
-        // Note that no check is made here to ensure that 0 <= i < set_size.
-        // Such a check might be useful for debugging and a range exception
-        // should be thrown if it yields TRUE.
-        //
-        return s[i / cell_size] &
-               ((i + cell_size) % cell_size
-                         ? (CELL) 1 << ((i + cell_size) % cell_size)
-                         : (CELL) 1);
+        return (s[i / cell_size] &
+                ((i + cell_size) % cell_size
+                          ? (CELL) 1 << ((i + cell_size) % cell_size)
+                          : (CELL) 1)) != 0;
     }
 
     //

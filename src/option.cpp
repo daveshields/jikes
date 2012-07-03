@@ -1,4 +1,4 @@
-// $Id: option.cpp,v 1.14 1999/09/17 20:44:24 shields Exp $
+// $Id: option.cpp,v 1.17 1999/10/12 12:46:10 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -152,6 +152,10 @@ void Option::SaveCurrentDirectoryOnDisk(char c)
 
 Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                                               classpath(NULL),
+                                              encoding(NULL),
+#ifdef HAVE_LIB_ICU_UC
+                                              converter(NULL),
+#endif
                                               makefile_name(NULL),
                                               debug_dump_lex(false),
                                               debug_dump_ast(false),
@@ -165,7 +169,6 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                                               unzip(false),
                                               dump_errors(false),
                                               errors(true),
-                                              ascii(false),
                                               comments(false),
                                               pedantic(false),
                                               directory(NULL),
@@ -177,6 +180,7 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                                               verbose(false),
                                               depend(false),
                                               nowarn(false),
+                                              classpath_search_order(false),
                                               O(false),
                                               zero_defect(false)
 {
@@ -214,13 +218,6 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
             if (strcmp(arguments.argv[i],"-classpath") == 0 && ((i + 1) < arguments.argc))
             {
                 classpath = arguments.argv[++i];
-#ifdef EBCDIC
-                //
-                //  Maintain CLASSPATH in ASCII and translate back to EBCDIC when building file name
-                //
-                for (int k = 0; k < strlen(classpath); k++)
-                    classpath[k] = Code::ToASCII(classpath[k]);
-#endif
             }
             else if (strcmp(arguments.argv[i], "-depend") == 0 || strcmp(arguments.argv[i], "-Xdepend") == 0)
                  depend = true;
@@ -238,6 +235,21 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                  nowarn = true;
             else if (strcmp(arguments.argv[i],"-Xstdout") == 0)
                  Coutput.StandardOutput();
+            else if (strcmp(arguments.argv[i], "-encoding") == 0 && ((i + 1) < arguments.argc))
+            {
+#ifdef HAVE_LIB_ICU_UC
+                encoding = new char[strlen(arguments.argv[++i]) + 1];
+                strcpy(encoding, arguments.argv[i]);
+                UErrorCode err=ZERO_ERROR;
+                converter=ucnv_open(encoding, &err);
+                if(!converter)
+                    bad_options.Next() = new OptionError(SemanticError::UNSUPPORTED_ENCODING, encoding); 
+#else
+#warning "Compiling without ICU library, '-encoding' option will be disabled"
+                bad_options.Next() = new OptionError(SemanticError::DISABLED_OPTION, arguments.argv[i++]); 
+#endif
+                continue;
+            }
             else if (strcmp(arguments.argv[i], "-d") == 0 && ((i + 1) < arguments.argc))
             {
                 ++i;
@@ -271,13 +283,6 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                 if (! directory)
                     bad_options.Next() = new OptionError(SemanticError::INVALID_DIRECTORY, arguments.argv[i]);
 #endif
-#ifdef EBCDIC
-                //
-                // need to translate directory name to ASCII
-                //
-                for (int k = 0; k < directory_length; k++)
-                    directory[k] = Code::ToASCII(directory[k]);
-#endif
                 if (directory)
                 {
                     for (char *ptr = directory; *ptr; ptr++)
@@ -292,16 +297,14 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
                  applet_author = true;
             else if (strcmp(arguments.argv[i], "+A") == 0)
                  debug_dump_ast = true;
-#ifdef EBCDIC
-            else if (strcmp(arguments.argv[i], "+ASCII") == 0)
-                     ascii = true;
-#endif
             else if (strcmp(arguments.argv[i], "+B") == 0)
                  bytecode = false;
             else if (strcmp(arguments.argv[i], "+c") == 0)
                  comments = true;
             else if (strcmp(arguments.argv[i], "+C") == 0)
                  debug_dump_class = true;
+            else if (strcmp(arguments.argv[i], "+CSO") == 0)
+                classpath_search_order = true;
             else if (strcmp(arguments.argv[i],"+D") == 0)
             {
                  dump_errors = true;
@@ -422,13 +425,6 @@ Option::Option(ArgumentExpander &arguments) : default_path(NULL),
 
         if (classpath)
         {
-#ifdef EBCDIC
-            //
-            //  Maintain CLASSPATH in ASCII and translate back to EBCDIC when building file name
-            //
-            for (int k = 0; k < strlen(classpath); k++)
-                classpath[k] = Code::ToASCII(classpath[k]);
-#endif
             while (isspace(*classpath))
                 classpath++;
 

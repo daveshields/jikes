@@ -1,4 +1,4 @@
-// $Id: symbol.cpp,v 1.24 1999/09/17 17:48:37 shields Exp $
+// $Id: symbol.cpp,v 1.26 1999/10/13 17:56:44 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
@@ -634,7 +634,7 @@ MethodSymbol::~MethodSymbol()
 
 BlockSymbol::BlockSymbol(int hash_size) : table(hash_size > 0 ? new SymbolTable(hash_size) : (SymbolTable *) NULL),
                                           max_variable_index(-1),
-                                          try_variable_index(0)
+                                          try_or_synchronized_variable_index(0)
 {
     Symbol::_kind = BLOCK;
 }
@@ -1570,15 +1570,16 @@ inline MethodSymbol *TypeSymbol::WriteMethod(VariableSymbol *symbol)
 
 MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
 {
-    assert(member -> ACC_PRIVATE());
+    TypeSymbol *this_type = (TypeSymbol *) this,
+               *containing_type = member -> containing_type;
 
-    TypeSymbol *type = member -> containing_type;
+    assert((member -> ACC_PRIVATE() && this_type == containing_type) || (member -> ACC_PROTECTED() && this_type != containing_type));
 
-    MethodSymbol *read_method = type -> ReadMethod(member);
+    MethodSymbol *read_method = this_type -> ReadMethod(member);
 
     if (! read_method)
     {
-        Semantic *sem = type -> semantic_environment -> sem;
+        Semantic *sem = this_type -> semantic_environment -> sem;
 
         assert(sem);
 
@@ -1586,8 +1587,8 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
         LexStream *lex_stream = sem -> lex_stream;
         StoragePool *ast_pool = sem -> compilation_unit -> ast_pool;
 
-        IntToWstring value(member -> Identity() == control.init_name_symbol ? type -> NumPrivateAccessConstructors()
-                                                                            : type -> NumPrivateAccessMethods());
+        IntToWstring value(member -> Identity() == control.init_name_symbol ? this_type -> NumPrivateAccessConstructors()
+                                                                            : this_type -> NumPrivateAccessMethods());
 
         int length = 7 + value.Length(); // +7 for access$
         wchar_t *name = new wchar_t[length + 1]; // +1 for '\0';
@@ -1596,10 +1597,10 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
 
         BlockSymbol *block_symbol = new BlockSymbol(member -> NumFormalParameters() + 3);
 
-        read_method = type -> InsertMethodSymbol(control.FindOrInsertName(name, length));
+        read_method = this_type -> InsertMethodSymbol(control.FindOrInsertName(name, length));
         read_method -> MarkSynthetic();
         read_method -> SetType(member -> Type());
-        read_method -> SetContainingType(type);
+        read_method -> SetContainingType(this_type);
         read_method -> SetBlockSymbol(block_symbol);
 
         for (int i = 0; i < member -> NumThrows(); i++)
@@ -1617,7 +1618,7 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
             {
                 VariableSymbol *instance = block_symbol -> InsertVariableSymbol(control.MakeParameter(1));
                 instance -> MarkSynthetic();
-                instance -> SetType(type);
+                instance -> SetType(this_type);
                 instance -> SetOwner(read_method);
                 instance -> SetLocalVariableIndex(block_symbol -> max_variable_index++);
                 read_method -> AddFormalParameter(instance);
@@ -1637,7 +1638,7 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
             read_method -> SetSignature(control);
             // A read access method has no throws clause !
 
-            type -> AddPrivateAccessMethod(read_method);
+            this_type -> AddPrivateAccessMethod(read_method);
         }
         else
         {
@@ -1645,7 +1646,7 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
             // A constructor in a local class already has a "LocalConstructor()" associated
             // with it that can be used as a read access method.
             //
-            assert(! type -> IsLocal());
+            assert(! this_type -> IsLocal());
 
             //
             //
@@ -1699,11 +1700,11 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
             this_call -> symbol = member;
 
             VariableSymbol *this0_variable = NULL;
-            if (type -> IsInner())
+            if (this_type -> IsInner())
             {
                 this0_variable = block_symbol -> InsertVariableSymbol(control.this0_name_symbol);
                 this0_variable -> MarkSynthetic();
-                this0_variable -> SetType(type -> ContainingType());
+                this0_variable -> SetType(this_type -> ContainingType());
                 this0_variable -> SetOwner(read_method);
                 this0_variable -> SetLocalVariableIndex(block_symbol -> max_variable_index++);
             }
@@ -1775,11 +1776,11 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
             constructor_declaration -> constructor_symbol = read_method;
             read_method -> method_or_constructor_declaration = constructor_declaration;
 
-            type -> AddPrivateAccessConstructor(read_method);
+            this_type -> AddPrivateAccessConstructor(read_method);
         }
 
         read_method -> accessed_member = member;
-        type -> MapSymbolToReadMethod(member, read_method);
+        this_type -> MapSymbolToReadMethod(member, read_method);
 
         delete [] name;
     }
@@ -1790,31 +1791,34 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
 
 MethodSymbol *TypeSymbol::GetReadAccessMethod(VariableSymbol *member)
 {
-    TypeSymbol *type = member -> owner -> TypeCast();
-    assert(member -> ACC_PRIVATE() && type);
+    TypeSymbol *this_type = (TypeSymbol *) this,
+               *containing_type = member -> owner -> TypeCast();
 
-    MethodSymbol *read_method = type -> ReadMethod(member);
+    assert((member -> ACC_PRIVATE() && this_type == containing_type) || (member -> ACC_PROTECTED() && this_type != containing_type));
+
+
+    MethodSymbol *read_method = this_type -> ReadMethod(member);
 
     if (! read_method)
     {
-        Semantic *sem = type -> semantic_environment -> sem;
+        Semantic *sem = this_type -> semantic_environment -> sem;
 
         assert(sem);
 
         Control &control = sem -> control;
 
-        IntToWstring value(type -> NumPrivateAccessMethods());
+        IntToWstring value(this_type -> NumPrivateAccessMethods());
 
         int length = 7 + value.Length(); // +7 for access$
         wchar_t *name = new wchar_t[length + 1]; // +1 for '\0';
         wcscpy(name, StringConstant::US__access_DOLLAR);
         wcscat(name, value.String());
 
-        read_method = type -> InsertMethodSymbol(control.FindOrInsertName(name, length));
+        read_method = this_type -> InsertMethodSymbol(control.FindOrInsertName(name, length));
         read_method -> MarkSynthetic();
         read_method -> SetType(member -> Type());
         read_method -> SetACC_STATIC();
-        read_method -> SetContainingType(type);
+        read_method -> SetContainingType(this_type);
 
         //
         // A read access method for a field has 1 formal parameter if the member in question is not static
@@ -1827,7 +1831,7 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(VariableSymbol *member)
         {
             VariableSymbol *instance = block_symbol -> InsertVariableSymbol(control.MakeParameter(1));
             instance -> MarkSynthetic();
-            instance -> SetType(type);
+            instance -> SetType(this_type);
             instance -> SetOwner(read_method);
             instance -> SetLocalVariableIndex(block_symbol -> max_variable_index++);
             read_method -> AddFormalParameter(instance);
@@ -1837,8 +1841,8 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(VariableSymbol *member)
         // A read access method has no throws clause !
 
         read_method -> accessed_member = member;
-        type -> MapSymbolToReadMethod(member, read_method);
-        type -> AddPrivateAccessMethod(read_method);
+        this_type -> MapSymbolToReadMethod(member, read_method);
+        this_type -> AddPrivateAccessMethod(read_method);
 
         delete [] name;
     }
@@ -1849,31 +1853,33 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(VariableSymbol *member)
 
 MethodSymbol *TypeSymbol::GetWriteAccessMethod(VariableSymbol *member)
 {
-    TypeSymbol *type = member -> owner -> TypeCast();
-    assert(member -> ACC_PRIVATE() && type);
+    TypeSymbol *this_type = (TypeSymbol *) this,
+               *containing_type = member -> owner -> TypeCast();
 
-    MethodSymbol *write_method = type -> WriteMethod(member);
+    assert((member -> ACC_PRIVATE() && this_type == containing_type) || (member -> ACC_PROTECTED() && this_type != containing_type));
+
+    MethodSymbol *write_method = this_type -> WriteMethod(member);
 
     if (! write_method)
     {
-        Semantic *sem = type -> semantic_environment -> sem;
+        Semantic *sem = this_type -> semantic_environment -> sem;
 
         assert(sem);
 
         Control &control = sem -> control;
 
-        IntToWstring value(type -> NumPrivateAccessMethods());
+        IntToWstring value(this_type -> NumPrivateAccessMethods());
 
         int length = 7 + value.Length(); // +7 for access$
         wchar_t *name = new wchar_t[length + 1]; // +1 for '\0';
         wcscpy(name, StringConstant::US__access_DOLLAR);
         wcscat(name, value.String());
 
-        write_method = type -> InsertMethodSymbol(control.FindOrInsertName(name, length));
+        write_method = this_type -> InsertMethodSymbol(control.FindOrInsertName(name, length));
         write_method -> MarkSynthetic();
         write_method -> SetType(sem -> control.void_type);
         write_method -> SetACC_STATIC();
-        write_method -> SetContainingType(type);
+        write_method -> SetContainingType(this_type);
 
         BlockSymbol *block_symbol = new BlockSymbol(3);
         block_symbol -> max_variable_index = 0;
@@ -1891,7 +1897,7 @@ MethodSymbol *TypeSymbol::GetWriteAccessMethod(VariableSymbol *member)
         {
             VariableSymbol *instance = block_symbol -> InsertVariableSymbol(control.MakeParameter(1));
             instance -> MarkSynthetic();
-            instance -> SetType(type);
+            instance -> SetType(this_type);
             instance -> SetOwner(write_method);
             instance -> SetLocalVariableIndex(block_symbol -> max_variable_index++);
             write_method -> AddFormalParameter(instance);
@@ -1909,8 +1915,8 @@ MethodSymbol *TypeSymbol::GetWriteAccessMethod(VariableSymbol *member)
         // A write access method has no throws clause !
 
         write_method -> accessed_member = member;
-        type -> MapSymbolToWriteMethod(member, write_method);
-        type -> AddPrivateAccessMethod(write_method);
+        this_type -> MapSymbolToWriteMethod(member, write_method);
+        this_type -> AddPrivateAccessMethod(write_method);
 
         delete [] name;
     }

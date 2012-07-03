@@ -1,4 +1,4 @@
-// $Id: ast.h,v 1.13 1999/08/26 15:34:01 shields Exp $
+// $Id: ast.h,v 1.15 1999/10/13 16:17:41 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -17,9 +17,88 @@
 #include <stdlib.h>
 #include "stream.h"
 #include "symbol.h"
+#include "set.h"
 
 class Parser;
 class SemanticEnvironment;
+class StoragePool;
+
+class VariableSymbolArray
+{
+    typedef VariableSymbol * T;
+
+    T **base;
+    int base_size,
+        top,
+        size;
+    StoragePool *pool;
+    unsigned short log_blksize,
+                   base_increment;
+
+    inline size_t Blksize() { return (1 << log_blksize); }
+
+    //
+    // Allocate another block of storage for the VariableSymbol array.
+    //
+    void AllocateMoreSpace();
+
+public:
+
+    //
+    // This function is used to reset the size of a VariableSymbol array without
+    // allocating or deallocting space. It may be invoked with an integer
+    // argument n which indicates the new size or with no argument which
+    // indicates that the size should be reset to 0.
+    //
+    void Reset(const int n = 0)
+    {
+        if (n < 0 || n > size)
+            assert(false);
+        top = n;
+    }
+
+    //
+    // Return length of the VariableSymbol array.
+    //
+    int Length() { return top; }
+
+    //
+    // Return a reference to the ith element of the VariableSymbol array.
+    //
+    // Note that no check is made here to ensure that 0 <= i < top.
+    // Such a check might be useful for debugging and a range exception
+    // should be thrown if it yields true.
+    //
+    T& operator[](const int i) { return base[i >> log_blksize][i]; }
+
+    //
+    // Add an element to the VariableSymbol array and return the top index.
+    //
+    int NextIndex()
+    {
+        int i = top++;
+        if (i == size)
+            AllocateMoreSpace();
+        return i;
+    }
+
+    //
+    // Add an element to the VariableSymbol array and return a reference to
+    // that new element.
+    //
+    T& Next() { int i = NextIndex(); return base[i >> log_blksize][i]; }
+
+    //
+    // Constructor of a VariableSymbol array.
+    //
+    VariableSymbolArray(StoragePool *, unsigned);
+
+    //
+    // Destructor of an VariableSymbol array.
+    //
+    ~VariableSymbolArray() { assert(false); }
+};
+
 
 //
 // Global function used when the space for a dynamic object is
@@ -156,8 +235,6 @@ class AstConditionalExpression;
 class AstAssignmentExpression;
 
 class CaseElement;
-
-class StoragePool;
 
 //
 // The Ast base node.
@@ -471,8 +548,8 @@ public:
 
     virtual Ast *Clone(StoragePool *);
 
-    virtual LexStream::TokenIndex LeftToken()  { return 0; }
-    virtual LexStream::TokenIndex RightToken() { return 0; }
+    virtual LexStream::TokenIndex LeftToken()  { assert(0); return 0; }
+    virtual LexStream::TokenIndex RightToken() { assert(0); return 0; }
 };
 
 
@@ -582,12 +659,21 @@ public:
     }
 
     ~AstListNode() {}
+
+    virtual LexStream::TokenIndex LeftToken()  { return element -> LeftToken(); }
+    virtual LexStream::TokenIndex RightToken() { return element -> RightToken(); }
 };
 
 
 class AstStatement : public Ast
 {
+protected:
+
+    StoragePool *pool;
+    VariableSymbolArray *defined_variables;
+
 public:
+
     bool is_reachable,
          can_complete_normally;
 
@@ -596,13 +682,19 @@ public:
     // Therefore, subclasses that are derived from AstStatement are expected to
     // initialize the fields is_reachable and can_complete_normally appropriately.
     //
-
+    // Note also that an AstStatement is never constructed directly!
+    //
     virtual ~AstStatement();
 
     virtual Ast *Clone(StoragePool *) { return (Ast *) NULL; }
 
-    virtual LexStream::TokenIndex LeftToken()  { return 0; }
-    virtual LexStream::TokenIndex RightToken() { return 0; }
+    inline VariableSymbol *&DefinedVariable(int i) { return (*defined_variables)[i]; }
+    inline int NumDefinedVariables() { return (defined_variables ? defined_variables -> Length() : 0); }
+    inline void AllocateDefinedVariables(int estimate = 0);
+    inline void AddDefinedVariable(VariableSymbol *);
+
+    virtual LexStream::TokenIndex LeftToken()  { assert(0); return 0; }
+    virtual LexStream::TokenIndex RightToken() { assert(0); return 0; }
 };
 
 
@@ -641,8 +733,8 @@ public:
 
     virtual Ast *Clone(StoragePool *) { return (Ast *) NULL; }
 
-    virtual LexStream::TokenIndex LeftToken()  { return 0; }
-    virtual LexStream::TokenIndex RightToken() { return 0; }
+    virtual LexStream::TokenIndex LeftToken()  { assert(0); return 0; }
+    virtual LexStream::TokenIndex RightToken() { assert(0); return 0; }
 };
 
 
@@ -656,30 +748,40 @@ class AstBlock : public AstStatement
 {
 private:
 
-    StoragePool *pool;
     AstArray<LexStream::TokenIndex> *labels;
     AstArray<Ast *> *block_statements;
+    VariableSymbolArray *locally_defined_variables;
 
 public:
+    enum BlockTag
+    {
+        NONE,
+        TRY_CLAUSE_WITH_FINALLY,
+        FINALLY,
+        SYNCHRONIZED
+    };
+    BlockTag block_tag;
+
     BlockSymbol *block_symbol;
 
     int nesting_level;
     LexStream::TokenIndex left_brace_token;
     LexStream::TokenIndex right_brace_token;
 
-    AstBlock(StoragePool *pool_) : pool(pool_),
-                                   labels(NULL),
+    AstBlock(StoragePool *pool_) : labels(NULL),
                                    block_statements(NULL),
+                                   locally_defined_variables(NULL),
+                                   block_tag(NONE),
                                    block_symbol(NULL),
                                    nesting_level(0)
     {
         Ast::kind = Ast::BLOCK;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
-
-        return;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstBlock();
@@ -693,6 +795,13 @@ public:
     inline int NumLabels() { return (labels ? labels -> Length() : 0); }
     inline void AllocateLabels(int estimate = 4);
     inline void AddLabel(LexStream::TokenIndex);
+
+    inline VariableSymbol *&LocallyDefinedVariable(int i) { return (*locally_defined_variables)[i]; }
+    inline int NumLocallyDefinedVariables() { return (locally_defined_variables ? locally_defined_variables -> Length() : 0); }
+    inline void AllocateLocallyDefinedVariables(int estimate = 0);
+    inline void AddLocallyDefinedVariable(VariableSymbol *);
+
+    inline void TransferLocallyDefinedVariablesTo(AstSwitchBlockStatement *);
 
 #ifdef TEST
     virtual void Print(LexStream &);
@@ -1188,7 +1297,6 @@ public:
 //
 class AstClassDeclaration : public AstStatement
 {
-    StoragePool *pool;
     AstArray<AstModifier *> *class_modifiers;
     AstArray<AstExpression *> *interfaces;
 
@@ -1200,14 +1308,14 @@ public:
     Ast *super_opt;
     AstClassBody *class_body;
 
-    AstClassDeclaration(StoragePool *pool_) : pool(pool_),
-                                              class_modifiers(NULL),
+    AstClassDeclaration(StoragePool *pool_) : class_modifiers(NULL),
                                               interfaces(NULL),
                                               semantic_environment(NULL)
     {
         Ast::kind = Ast::CLASS;
         Ast::class_tag = Ast::NO_TAG;
         Ast::generated = 0;
+	AstStatement::pool = pool_;
     }
 
     virtual ~AstClassDeclaration();
@@ -1219,6 +1327,7 @@ public:
         Ast::class_tag = Ast::STATEMENT;
         AstStatement::is_reachable = true;
         AstStatement::can_complete_normally = true;
+        AstStatement::defined_variables = NULL;
     }
 
     inline AstModifier *&ClassModifier(int i) { return (*class_modifiers)[i]; }
@@ -1618,7 +1727,6 @@ class AstThisCall : public AstStatement
 {
 private:
 
-    StoragePool *pool;
     AstArray<AstExpression *> *arguments;
     AstArray<AstExpression *> *local_arguments_opt; // used only for local classes that use enclosed local variables
 
@@ -1632,16 +1740,17 @@ public:
     LexStream::TokenIndex right_parenthesis_token;
     LexStream::TokenIndex semicolon_token;
 
-    AstThisCall(StoragePool *pool_) : pool(pool_),
-                                      arguments(NULL),
+    AstThisCall(StoragePool *pool_) : arguments(NULL),
                                       local_arguments_opt(NULL),
                                       symbol(NULL)
     {
         Ast::kind = Ast::THIS_CALL;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstThisCall();
@@ -1675,7 +1784,6 @@ class AstSuperCall : public AstStatement
 {
 private:
 
-    StoragePool *pool;
     AstArray<AstExpression *> *arguments;
     AstArray<AstExpression *> *local_arguments_opt; // used only for local classes that use enclosed local variables
 
@@ -1691,8 +1799,7 @@ public:
     LexStream::TokenIndex right_parenthesis_token;
     LexStream::TokenIndex semicolon_token;
 
-    AstSuperCall(StoragePool *pool_) : pool(pool_),
-                                       arguments(NULL),
+    AstSuperCall(StoragePool *pool_) : arguments(NULL),
                                        local_arguments_opt(NULL),
                                        add_null_argument(false),
                                        symbol(NULL)
@@ -1700,8 +1807,10 @@ public:
         Ast::kind = Ast::SUPER_CALL;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstSuperCall();
@@ -1745,7 +1854,6 @@ class AstConstructorBlock : public AstStatement
 {
 private:
 
-    StoragePool *pool;
     AstArray<AstStatement *> *local_init_statements;
 
 public:
@@ -1758,16 +1866,17 @@ public:
 
     AstExpressionStatement *original_constructor_invocation;
 
-    AstConstructorBlock(StoragePool *pool_) : pool(pool_),
-                                              local_init_statements(NULL),
+    AstConstructorBlock(StoragePool *pool_) : local_init_statements(NULL),
                                               block_symbol(NULL),
                                               original_constructor_invocation(NULL)
     {
         Ast::kind = Ast::CONSTRUCTOR_BLOCK;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstConstructorBlock();
@@ -1968,7 +2077,6 @@ public:
 //
 class AstLocalVariableDeclarationStatement : public AstStatement
 {
-    StoragePool *pool;
     AstArray<AstModifier *> *local_modifiers;
     AstArray<AstVariableDeclarator *> *variable_declarators;
 
@@ -1976,15 +2084,16 @@ public:
     Ast *type;
     LexStream::TokenIndex semicolon_token_opt;
 
-    AstLocalVariableDeclarationStatement(StoragePool *pool_) : pool(pool_),
-                                                               local_modifiers(NULL),
+    AstLocalVariableDeclarationStatement(StoragePool *pool_) : local_modifiers(NULL),
                                                                variable_declarators(NULL)
     {
         Ast::kind = Ast::LOCAL_VARIABLE_DECLARATION;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstLocalVariableDeclarationStatement();
@@ -2047,13 +2156,15 @@ public:
     AstStatement *true_statement;
     AstStatement *false_statement_opt;
 
-    AstIfStatement() : expression(NULL)
+    AstIfStatement(StoragePool *pool_) : expression(NULL)
     {
         Ast::kind = Ast::IF;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstIfStatement();
@@ -2084,13 +2195,15 @@ class AstEmptyStatement : public AstStatement
 public:
     LexStream::TokenIndex semicolon_token;
 
-    AstEmptyStatement(LexStream::TokenIndex token_) : semicolon_token(token_)
+    AstEmptyStatement(StoragePool *pool_, LexStream::TokenIndex token_) : semicolon_token(token_)
     {
         Ast::kind = Ast::EMPTY_STATEMENT;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstEmptyStatement();
@@ -2118,13 +2231,15 @@ public:
     AstExpression *expression;
     LexStream::TokenIndex semicolon_token_opt;
 
-    AstExpressionStatement()
+    AstExpressionStatement(StoragePool *pool_)
     {
         Ast::kind = Ast::EXPRESSION_STATEMENT;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstExpressionStatement();
@@ -2219,12 +2334,15 @@ private:
 
     AstArray<AstStatement *> *block_statements;
     AstArray<Ast *> *switch_labels;
+    VariableSymbolArray *locally_defined_variables;
+
+    friend AstBlock;
 
 public:
-
     AstSwitchBlockStatement(StoragePool *pool_) : pool(pool_),
                                                   block_statements(NULL),
-                                                  switch_labels(NULL)
+                                                  switch_labels(NULL),
+                                                  locally_defined_variables(NULL)
     {
         Ast::kind = Ast::SWITCH_BLOCK;
         Ast::class_tag = Ast::NO_TAG;
@@ -2242,6 +2360,9 @@ public:
     inline int NumSwitchLabels() { return (switch_labels ? switch_labels -> Length() : 0); }
     inline void AllocateSwitchLabels(int estimate = 0);
     inline void AddSwitchLabel(Ast *);
+
+    inline VariableSymbol *&LocallyDefinedVariable(int i) { return (*locally_defined_variables)[i]; }
+    inline int NumLocallyDefinedVariables() { return (locally_defined_variables ? locally_defined_variables -> Length() : 0); }
 
 #ifdef TEST
     virtual void Print(LexStream &);
@@ -2268,9 +2389,6 @@ public:
     int index;
 
     int Value() { return ((IntLiteralValue *) (expression -> value)) -> value; }
-
-    inline AstStatement *&Statement(int i) { return switch_block_statement -> Statement(i); }
-    inline int NumStatements() { return switch_block_statement -> NumStatements(); }
 };
 
 //
@@ -2278,7 +2396,6 @@ public:
 //
 class AstSwitchStatement : public AstStatement
 {
-    StoragePool *pool;
     AstArray<CaseElement *> *cases;
 
 public:
@@ -2288,14 +2405,15 @@ public:
     AstExpression *expression;
     AstBlock *switch_block;
 
-    AstSwitchStatement(StoragePool *pool_) : pool(pool_),
-                                             cases(NULL)
+    AstSwitchStatement(StoragePool *pool_) : cases(NULL)
     {
         Ast::kind = Ast::SWITCH;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstSwitchStatement();
@@ -2331,13 +2449,15 @@ public:
     AstExpression *expression;
     AstStatement *statement;
 
-    AstWhileStatement()
+    AstWhileStatement(StoragePool *pool_)
     {
         Ast::kind = Ast::WHILE;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstWhileStatement();
@@ -2368,13 +2488,15 @@ public:
     AstExpression *expression;
     LexStream::TokenIndex semicolon_token;
 
-    AstDoStatement()
+    AstDoStatement(StoragePool *pool_)
     {
         Ast::kind = Ast::DO;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstDoStatement();
@@ -2405,7 +2527,6 @@ class AstForStatement : public AstStatement
 {
 private:
 
-    StoragePool *pool;
     AstArray<AstStatement *> *for_init_statements;
     AstArray<AstExpressionStatement *> *for_update_statements;
 
@@ -2414,15 +2535,16 @@ public:
     AstExpression *end_expression_opt;
     AstStatement *statement;
 
-    AstForStatement(StoragePool *pool_) : pool(pool_),
-                                          for_init_statements(NULL),
+    AstForStatement(StoragePool *pool_) : for_init_statements(NULL),
                                           for_update_statements(NULL)
     {
         Ast::kind = Ast::FOR;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstForStatement();
@@ -2462,13 +2584,15 @@ public:
     LexStream::TokenIndex semicolon_token;
     int nesting_level;
 
-    AstBreakStatement()
+    AstBreakStatement(StoragePool *pool_)
     {
         Ast::kind = Ast::BREAK;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstBreakStatement();
@@ -2497,13 +2621,15 @@ public:
     LexStream::TokenIndex semicolon_token;
     int nesting_level;
 
-    AstContinueStatement()
+    AstContinueStatement(StoragePool *pool_)
     {
         Ast::kind = Ast::CONTINUE;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstContinueStatement();
@@ -2532,13 +2658,15 @@ public:
     AstExpression *expression_opt;
     LexStream::TokenIndex semicolon_token;
 
-    AstReturnStatement()
+    AstReturnStatement(StoragePool *pool_)
     {
         Ast::kind = Ast::RETURN;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstReturnStatement();
@@ -2567,13 +2695,15 @@ public:
     AstExpression *expression;
     LexStream::TokenIndex semicolon_token;
 
-    AstThrowStatement()
+    AstThrowStatement(StoragePool *pool_)
     {
         Ast::kind = Ast::THROW;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstThrowStatement();
@@ -2602,13 +2732,15 @@ public:
     AstExpression *expression;
     AstBlock *block;
 
-    AstSynchronizedStatement()
+    AstSynchronizedStatement(StoragePool *pool_)
     {
         Ast::kind = Ast::SYNCHRONIZED_STATEMENT;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstSynchronizedStatement();
@@ -2695,7 +2827,6 @@ class AstTryStatement : public AstStatement
 {
 private:
 
-    StoragePool *pool;
     AstArray<AstCatchClause *> *catch_clauses;
 
 public:
@@ -2703,14 +2834,15 @@ public:
     AstBlock *block;
     AstFinallyClause *finally_clause_opt;
 
-    AstTryStatement(StoragePool *pool_) : pool(pool_),
-                                          catch_clauses(NULL)
+    AstTryStatement(StoragePool *pool_) : catch_clauses(NULL)
     {
         Ast::kind = Ast::TRY;
         Ast::class_tag = Ast::STATEMENT;
         Ast::generated = 0;
+        AstStatement::pool = pool_;
         AstStatement::is_reachable = false;
         AstStatement::can_complete_normally = false;
+        AstStatement::defined_variables = NULL;
     }
 
     virtual ~AstTryStatement();
@@ -3767,7 +3899,8 @@ public:
     enum AssignmentExpressionTag
     {
         NONE,
-        EQUAL,
+        SIMPLE_EQUAL,
+        DEFINITE_EQUAL,
         STAR_EQUAL,
         SLASH_EQUAL,
         MOD_EQUAL,
@@ -3809,6 +3942,8 @@ public:
     }
 
     virtual ~AstAssignmentExpression();
+
+    inline bool SimpleAssignment() { return (assignment_tag == SIMPLE_EQUAL || assignment_tag == DEFINITE_EQUAL); }
 
 #ifdef TEST
     virtual void Print(LexStream &);
@@ -4098,6 +4233,11 @@ public:
 
     // ********************************************************************************************** //
 
+    inline VariableSymbolArray *NewVariableSymbolArray(unsigned size = 0)
+    {
+        return new (Alloc(sizeof(VariableSymbolArray))) VariableSymbolArray((StoragePool *) this, size);
+    }
+
     inline AstArray<LexStream::TokenIndex> *NewTokenIndexArray(unsigned size = 0)
     {
         return new (Alloc(sizeof(AstArray<LexStream::TokenIndex>))) AstArray<LexStream::TokenIndex>((StoragePool *) this, size);
@@ -4250,17 +4390,17 @@ public:
 
     inline AstIfStatement *NewIfStatement()
     {
-        return new (Alloc(sizeof(AstIfStatement))) AstIfStatement();
+        return new (Alloc(sizeof(AstIfStatement))) AstIfStatement((StoragePool *) this);
     }
 
     inline AstEmptyStatement *NewEmptyStatement(LexStream::TokenIndex token)
     {
-        return new (Alloc(sizeof(AstEmptyStatement))) AstEmptyStatement(token);
+        return new (Alloc(sizeof(AstEmptyStatement))) AstEmptyStatement((StoragePool *) this, token);
     }
 
     inline AstExpressionStatement *NewExpressionStatement()
     {
-        return new (Alloc(sizeof(AstExpressionStatement))) AstExpressionStatement();
+        return new (Alloc(sizeof(AstExpressionStatement))) AstExpressionStatement((StoragePool *) this);
     }
 
     inline AstCaseLabel *NewCaseLabel()
@@ -4285,12 +4425,12 @@ public:
 
     inline AstWhileStatement *NewWhileStatement()
     {
-        return new (Alloc(sizeof(AstWhileStatement))) AstWhileStatement();
+        return new (Alloc(sizeof(AstWhileStatement))) AstWhileStatement((StoragePool *) this);
     }
 
     inline AstDoStatement *NewDoStatement()
     {
-        return new (Alloc(sizeof(AstDoStatement))) AstDoStatement();
+        return new (Alloc(sizeof(AstDoStatement))) AstDoStatement((StoragePool *) this);
     }
 
     inline AstForStatement *NewForStatement()
@@ -4300,27 +4440,27 @@ public:
 
     inline AstBreakStatement *NewBreakStatement()
     {
-        return new (Alloc(sizeof(AstBreakStatement))) AstBreakStatement();
+        return new (Alloc(sizeof(AstBreakStatement))) AstBreakStatement((StoragePool *) this);
     }
 
     inline AstContinueStatement *NewContinueStatement()
     {
-        return new (Alloc(sizeof(AstContinueStatement))) AstContinueStatement();
+        return new (Alloc(sizeof(AstContinueStatement))) AstContinueStatement((StoragePool *) this);
     }
 
     inline AstReturnStatement *NewReturnStatement()
     {
-        return new (Alloc(sizeof(AstReturnStatement))) AstReturnStatement();
+        return new (Alloc(sizeof(AstReturnStatement))) AstReturnStatement((StoragePool *) this);
     }
 
     inline AstThrowStatement *NewThrowStatement()
     {
-        return new (Alloc(sizeof(AstThrowStatement))) AstThrowStatement();
+        return new (Alloc(sizeof(AstThrowStatement))) AstThrowStatement((StoragePool *) this);
     }
 
     inline AstSynchronizedStatement *NewSynchronizedStatement()
     {
-        return new (Alloc(sizeof(AstSynchronizedStatement))) AstSynchronizedStatement();
+        return new (Alloc(sizeof(AstSynchronizedStatement))) AstSynchronizedStatement((StoragePool *) this);
     }
 
     inline AstCatchClause *NewCatchClause()
@@ -4958,7 +5098,6 @@ public:
         return p;
     }
 
-
     // ********************************************************************************************** //
 
     //
@@ -5275,6 +5414,38 @@ inline void AstBlock::AddLabel(LexStream::TokenIndex label_token_index)
     if (! labels)
         AllocateLabels();
     labels -> Next() = label_token_index;
+}
+
+inline void AstBlock::AllocateLocallyDefinedVariables(int estimate)
+{
+    if (! locally_defined_variables)
+        locally_defined_variables = pool -> NewVariableSymbolArray(estimate);
+}
+
+inline void AstBlock::AddLocallyDefinedVariable(VariableSymbol *variable_symbol)
+{
+    if (! locally_defined_variables)
+        AllocateLocallyDefinedVariables();
+    locally_defined_variables -> Next() = variable_symbol;
+}
+
+inline void AstBlock::TransferLocallyDefinedVariablesTo(AstSwitchBlockStatement *switch_block_statement)
+{
+    switch_block_statement -> locally_defined_variables = this -> locally_defined_variables;
+    this -> locally_defined_variables = NULL;
+}
+
+inline void AstStatement::AllocateDefinedVariables(int estimate)
+{
+    if (! defined_variables)
+        defined_variables = pool -> NewVariableSymbolArray(estimate);
+}
+
+inline void AstStatement::AddDefinedVariable(VariableSymbol *variable_symbol)
+{
+    if (! defined_variables)
+        AllocateDefinedVariables();
+    defined_variables -> Next() = variable_symbol;
 }
 
 inline void AstSwitchBlockStatement::AllocateBlockStatements(int estimate)
@@ -5692,6 +5863,7 @@ inline void AstCompilationUnit::AddTypeDeclaration(Ast *type_declaration)
         AllocateTypeDeclarations();
     type_declarations -> Next() = type_declaration;
 }
+
 
 //
 // Allocate another block of storage for the ast array.

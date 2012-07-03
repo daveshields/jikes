@@ -1,4 +1,4 @@
-// $Id: scanner.cpp,v 1.9 1999/08/26 15:34:09 shields Exp $
+// $Id: scanner.cpp,v 1.10 1999/10/09 16:34:08 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1567,9 +1567,9 @@ void Scanner::ClassifyQuestion()
 void Scanner::ClassifyNonAsciiUnicode()
 {
     if (Code::IsAlpha(*cursor)) // Some kind of non-ascii unicode letter
-         ClassifyId();
-    else ClassifyBadToken();
-
+        ClassifyId();
+    else 
+        ClassifyBadToken();
     return;
 }
 

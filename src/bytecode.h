@@ -1,4 +1,4 @@
-// $Id: bytecode.h,v 1.13 1999/08/26 15:34:03 shields Exp $
+// $Id: bytecode.h,v 1.16 1999/10/13 16:17:41 shields Exp $
 //
 // License Agreement available at the following URL:
 // http://www.ibm.com/research/jikes.
@@ -23,27 +23,169 @@ class TypeSymbol;
 class Control;
 class Semantic;
 
-class LabelUse
-{
-public:
-    int use_length, // length of use (2 or 4 bytes)
-        op_offset,  // length of use from opcode starting instruction
-        use_offset; // offset in code stream of use
-
-    LabelUse() : use_length(0), op_offset(0), use_offset(0) {}
-
-    LabelUse(int _length, int _op_offset, int _use) : use_length(_length), op_offset(_op_offset), use_offset(_use) {}
-};
-
-
 class Label
 {
 public:
-    bool defined;    // boolean, set when value is known
+
+    class LabelUse
+    {
+    public:
+        int use_length, // length of use (2 or 4 bytes)
+            op_offset,  // length of use from opcode starting instruction
+            use_offset; // offset in code stream of use
+
+        LabelUse() : use_length(0), op_offset(0), use_offset(0) {}
+
+        LabelUse(int _length, int _op_offset, int _use) : use_length(_length), op_offset(_op_offset), use_offset(_use) {}
+    };
+
+    bool defined;   // boolean, set when value is known
     int definition; // offset of definition point of label
     Tuple<LabelUse> uses;
 
     Label() : defined(false), definition(0) {}
+
+    void Reset()
+    {
+       uses.Reset();
+       defined = false;
+       definition = 0;
+    }
+};
+
+
+//
+//
+//
+class MethodStack
+{
+public:
+
+    void Push(AstBlock *block)
+    {
+        assert(block -> nesting_level < stack_size &&
+              (top_index == 0 || ((block -> nesting_level - 1) == nesting_level[top_index - 1])));
+
+        nesting_level[top_index] = block -> nesting_level;
+        break_labels[block -> nesting_level].uses.Reset();
+        continue_labels[block -> nesting_level].uses.Reset();
+        finally_labels[block -> nesting_level].uses.Reset();
+        monitor_labels[block -> nesting_level].uses.Reset();
+        blocks[block -> nesting_level] = block;
+
+#ifdef TEST
+        (void) memset(local_variables_start_pc[block -> nesting_level], 0xFF, size * sizeof(u2));
+#endif
+        top_index++;
+    }
+
+    void Pop()
+    {
+        if (top_index > 0)
+        {
+            top_index--;
+#ifdef TEST
+            int level = nesting_level[top_index];
+
+            nesting_level[top_index] = 0;
+            break_labels[level].Reset();
+            continue_labels[level].Reset();
+            finally_labels[level].Reset();
+            monitor_labels[level].Reset();
+            blocks[level] = NULL;
+            (void) memset(local_variables_start_pc[level], 0xFF, size * sizeof(u2));
+#endif
+        }
+        else assert(false);
+    }
+
+    int Size() { return top_index; }
+
+#ifdef TEST
+    void AssertIndex(int k)
+    {
+        for (int i = 0; i < Size(); i++)
+            if (nesting_level[i] == k)
+                return;
+        assert(0);
+    }
+#else
+#define AssertIndex(x)
+#endif
+
+    int TopNestingLevel()   { assert(top_index > 0); return nesting_level[top_index - 1]; }
+    int NestingLevel(int i) { AssertIndex(i); return nesting_level[i]; }
+
+    Label &TopBreakLabel()    { return break_labels[TopNestingLevel()]; }
+    Label &BreakLabel(int i)  { AssertIndex(i); return break_labels[i]; }
+
+    Label &TopContinueLabel()   { return continue_labels[TopNestingLevel()]; }
+    Label &ContinueLabel(int i) { AssertIndex(i); return continue_labels[i]; }
+
+    Label &TopFinallyLabel()    { return finally_labels[TopNestingLevel()]; }
+    Label &FinallyLabel(int i)  { AssertIndex(i); return finally_labels[i]; }
+
+    Label &TopMonitorLabel()   { return monitor_labels[TopNestingLevel()]; }
+    Label &MonitorLabel(int i) { AssertIndex(i); return monitor_labels[i]; }
+
+    AstBlock *TopBlock()   { return blocks[TopNestingLevel()]; }
+    AstBlock *Block(int i) { AssertIndex(i); return blocks[i]; }
+
+    //
+    //
+    //
+    u2 *TopLocalVariablesStartPc() { return (u2 *) local_variables_start_pc[TopNestingLevel()]; }
+    u2 &StartPc(VariableSymbol *variable)
+    {
+        assert(variable -> LocalVariableIndex() >= 0 && variable -> LocalVariableIndex() < size);
+        return TopLocalVariablesStartPc()[variable -> LocalVariableIndex()];
+    }
+
+    MethodStack(int stack_size_, int size_) : stack_size(stack_size_),
+                                              size(size_),
+                                              top_index(0)
+    {
+        nesting_level = new int[stack_size];
+        break_labels = new Label[stack_size];
+        continue_labels = new Label[stack_size];
+        finally_labels = new Label[stack_size];
+        monitor_labels = new Label[stack_size];
+        blocks = new AstBlock *[stack_size];
+
+        local_variables_start_pc = new u2*[stack_size];
+        for (int i = 0; i < stack_size; i++)
+            local_variables_start_pc[i] = new u2[size];
+    }
+    ~MethodStack()
+    {
+        delete [] nesting_level;
+
+        delete [] break_labels;
+        delete [] continue_labels;
+        delete [] finally_labels;
+        delete [] monitor_labels;
+
+        delete [] blocks;
+
+        for (int i = 0; i < stack_size; i++)
+            delete [] local_variables_start_pc[i];
+        delete [] local_variables_start_pc;
+    }
+
+private:
+    int *nesting_level;
+
+    Label *break_labels,
+          *continue_labels,
+          *finally_labels,
+          *monitor_labels;
+
+    AstBlock **blocks; // block symbols for current block
+
+    u2 **local_variables_start_pc;
+    int stack_size,
+        size,
+        top_index;
 };
 
 
@@ -59,11 +201,11 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
         last_label_pc,        // pc for last (closest to end) label
         last_op_pc,           // pc of last operation emitted
         last_op_nop,          // set if last operation was NOP.
-        this_block_depth,     // depth of current block
         stack_depth,          // current stack depth;
         max_stack,
         max_block_depth,
         last_parameter_index; // set to local variable index of last parameter
+    MethodStack *method_stack;
 
     bool string_overflow,
          library_method_not_found;
@@ -78,7 +220,6 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
         last_label_pc = 0;
         last_op_pc = 0;
         last_op_nop = 0;
-        this_block_depth = 0;
 
         stack_depth = 0;
 
@@ -87,65 +228,7 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
         return;
     }
 
-    Label *begin_labels,
-          *break_labels,
-          *continue_labels,
-          *final_labels,
-          *monitor_labels,
-          *test_labels;
-
-    int *has_finally_clause;
-    bool *is_synchronized;
-
-    BlockSymbol **block_symbols; // block symbols for current block
-
-    int synchronized_blocks, // number of outstanding synchronized blocks
-        finally_blocks,      // number of outstanding synchronized blocks
-        block_depth;             // need to reset at start of each method
-    TypeSymbol *method_type;     // return type of method being compiled
-
-    void AllocateMethodInfo(int max_block_depth_)
-    {
-        max_block_depth = max_block_depth_;
-
-        begin_labels = new Label[max_block_depth + 1];
-        break_labels = new Label[max_block_depth + 1];
-        continue_labels = new Label[max_block_depth + 1];
-        final_labels = new Label[max_block_depth + 1];
-        monitor_labels = new Label[max_block_depth + 1];
-        test_labels = new Label[max_block_depth + 1];
-
-        has_finally_clause = new int[max_block_depth + 1];
-        is_synchronized = new bool[max_block_depth + 1];
-        for (int i = 0; i < max_block_depth; i++)
-        {
-            has_finally_clause[i] = 0;  // reset has_finally_clause
-            is_synchronized[i] = false; // reset is_synchronized
-        }
-
-        block_symbols = new BlockSymbol *[max_block_depth+1];
-
-        return;
-    }
-
-    void FreeMethodInfo()
-    {
-        delete [] begin_labels;
-        delete [] break_labels;
-        delete [] continue_labels;
-        delete [] final_labels;
-        delete [] monitor_labels;
-        delete [] test_labels;
-
-        delete [] has_finally_clause;
-        delete [] is_synchronized;
-
-        delete [] block_symbols;
-
-        return;
-    }
-
-    void    ProcessAbruptExit(int);
+    void    ProcessAbruptExit(int, TypeSymbol * = NULL);
     void    CompleteLabel(Label &lab);
     void    DefineLabel(Label &lab);
     void    UseLabel(Label &lab, int length, int op_offset);
@@ -250,7 +333,6 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
     // methods to load and store values
     //
     void LoadLocal(int varno, TypeSymbol *);
-    void StoreLocalVariable(VariableSymbol *);
     void StoreLocal(int varno, TypeSymbol *);
     void LoadReference(AstExpression *);
     void LoadLiteral(LiteralValue *, TypeSymbol *);
@@ -631,10 +713,9 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
     void EmitStatement(AstStatement *);
     void EmitReturnStatement(AstReturnStatement *);
     void EmitSynchronizedStatement(AstSynchronizedStatement *);
-    void EmitBlockStatement(AstBlock *, bool);
+    void EmitBlockStatement(AstBlock *);
     void EmitStatementExpression(AstExpression *);
     void EmitSwitchStatement(AstSwitchStatement *);
-    void UpdateBlockInfo(BlockSymbol *);
     void EmitTryStatement(AstTryStatement *);
     void EmitBranchIfExpression(AstExpression *, bool, Label &);
     void CompleteCall(MethodSymbol *, int, TypeSymbol * = NULL);

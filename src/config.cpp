@@ -1,4 +1,4 @@
-// $Id: config.cpp,v 1.23 1999/09/17 17:48:36 shields Exp $
+// $Id: config.cpp,v 1.26 1999/10/10 17:32:53 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -210,8 +210,8 @@ wchar_t StringConstant::US_AND[]                        = {U_AM, U_NU}, // "&"
 
 wchar_t StringConstant::US_smallest_int[] = {U_MINUS, U_2, U_1, U_4, U_7, U_4, U_8, U_3, U_6, U_4, U_8, U_NU}; // "-2147483648"
 
-char StringConstant::U8S_command_format[] = "use: jikes [-classpath path][-d dir][-debug][-depend|-Xdepend][-deprecation]"
-                                            "[-g][-nowarn][-nowrite][-O][-verbose][-Xdepend][-Xstdout]"
+char StringConstant::U8S_command_format[] = "use: jikes [-classpath path][-d dir][-debug][-depend|-Xdepend][-deprecation] [-encoding encoding]"
+                                            "[-g][-nowarn][-nowrite][-O][-verbose][-Xstdout]"
                                             "[+1.0][++][+B][+D][+E][+F][+K][+M][+P][+T][+U][+Z]"
                                             " file.java...";
 
@@ -334,16 +334,6 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
     void FloatingPointCheck() {}
 #endif
 
-#ifdef EBCDIC
-//
-// variants of system functions requiring EBCDIC translation
-// are declared here and defined in code.cpp
-//
-    int SystemStat(const char *name, struct stat *stat_struct) { /* TODO: */ return 0; }
-    FILE *SystemFopen(char *name, char *mode) { /* TODO: */ return NULL; }
-    size_t SystemFread(char *ptr, size_t element_size, size_t count, FILE *stream,int ascii_option) { /* TODO: */ return 0; }
-    int SystemIsDirectory(char *name) { /* TODO: */ return 0; }
-#else
     int SystemStat(const char *name, struct stat *stat_struct)
     {
         return stat(name, stat_struct);
@@ -352,7 +342,7 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
     {
         return fopen(name, mode);
     }
-    size_t SystemFread(char *ptr, size_t element_size, size_t count, FILE *stream, int ascii_option)
+    size_t SystemFread(char *ptr, size_t element_size, size_t count, FILE *stream)
     {
         return fread(ptr, element_size, count, stream);
     }
@@ -361,8 +351,6 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
         struct stat status;
         return (((::SystemStat(name, &status) == 0) && (status.st_mode & STAT_S_IFDIR)) ? 1 : 0);
     }
-#endif
-
 
 #if defined(GNU_LIBC5)
 #include <sys/stat.h>
@@ -456,19 +444,7 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
 
     int SystemMkdir(char *dirname)
     {
-#ifdef EBCDIC
-        // must translate dirname to EBCDIC before mkdir call
-        int n = strlen(dirname) + 1;
-        char *ebcdic_name = new char[n];
-
-        for (int i = 0; i <= n; i++)
-             ebcdic_name[i] = dirname[i];
-        int rc = mkdir(ebcdic_name, S_IRWXU | S_IRWXG | S_IRWXO);
-        delete[] ebcdic_name;
-        return rc;
-#else
         return mkdir(dirname, S_IRWXU | S_IRWXG | S_IRWXO);
-#endif
     }
 #else
     char PathSeparator() { return U_SEMICOLON; } // ";"

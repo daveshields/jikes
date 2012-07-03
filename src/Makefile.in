@@ -1,4 +1,4 @@
-# $Id: Makefile.in,v 1.8 1999/09/14 18:32:51 shields Exp $
+# $Id: Makefile.in,v 1.9 1999/10/09 16:34:05 shields Exp $
 
 CC=@CC@
 CCREQUIREDFLAGS=@CCREQUIREDFLAGS@ -I@srcdir@
@@ -9,6 +9,7 @@ ERASE=@ERASE@
 EXECUTABLE=@EXECUTABLE@
 LD=@LD@
 LDFLAGS=@LDFLAGS@
+LIBS=@LIBS@
 SYSOBJECTS=@SYSOBJECTS@
 
 
@@ -51,7 +52,7 @@ OBJECTS=jikes.@O@ scanner.@O@ code.@O@ zip.@O@ unzip.@O@ \
         incrmnt.@O@ case.@O@ tab.@O@ segment.@O@
 
 $(EXECUTABLE):	$(OBJECTS)
-	$(LD) $(LDFLAGS)  $(OBJECTS) $(SYSOBJECTS)
+	$(LD) $(LDFLAGS)  $(OBJECTS) $(SYSOBJECTS) $(LIBS)
 
 
 javasym.h: $(srcdir)/java.g

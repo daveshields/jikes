@@ -1,4 +1,4 @@
-// $Id: stream.h,v 1.9 1999/08/26 15:34:10 shields Exp $
+// $Id: stream.h,v 1.11 1999/10/13 23:47:42 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -289,6 +289,19 @@ void LexStream::Dump(); // temporary function used to dump token stream.
 
 private:
 
+    int hexvalue(wchar_t ch);
+    
+    enum UnicodeLexerState
+    {
+        RAW,
+        CR,
+        QUOTE,
+        UNICODE_ESCAPE,
+        UNICODE_ESCAPE_DIGIT_0,
+        UNICODE_ESCAPE_DIGIT_1,
+        UNICODE_ESCAPE_DIGIT_2
+    };
+    
     friend class Scanner;
 
     class Token

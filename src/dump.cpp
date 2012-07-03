@@ -1,4 +1,4 @@
-// $Id: dump.cpp,v 1.6 1999/07/06 13:49:19 shields Exp $
+// $Id: dump.cpp,v 1.7 1999/10/09 16:34:07 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -261,24 +261,12 @@ void LexStream::Dump()
     {
         fprintf(tokfile, "*%5d ", com);
         // print file name
-#ifdef EBCDIC
-        int ei;
-        char * file_name;
-        file_name = FileName();
-        for (ei=0; ei < FileNameLength(); ei++)
-             fprintf(tokfile, "%c", Code::ToEBCDIC(file_name[ei]));
-#else
         fprintf(tokfile, "%s",FileName());
-#endif
         fprintf(tokfile, ", line %d.%d: ",
                          FindLine(comments[com].location),
                          FindColumn(comments[com].location));
         for (wchar_t *s = CommentString(com); *s != U_NULL; s++)
-#ifdef EBCDIC
-            fprintf(tokfile, "%c", Code::ToEBCDIC(*s));
-#else
             fprintf(tokfile, "%c", *s);
-#endif
         fprintf(tokfile, "\n");
     }
 
@@ -287,16 +275,7 @@ void LexStream::Dump()
         tok = Gettoken();
 
         fprintf(tokfile, "%6d ", tok);
-#ifdef EBCDIC
-        char *file_name;
-        // need to print out FileName() below in EBCDIC TODO
-        file_name = FileName();
-        int ei;
-        for (ei=0; ei < FileNameLength(); ei++)
-             fprintf(tokfile, "%c", Code::ToEBCDIC(file_name[ei]));
-#else
         fprintf(tokfile, " %s",FileName());
-#endif
         fprintf(tokfile, ", %cline %d.%d: %s %s  ",
                          (AfterEol(tok) ? '*' : ' '),
                          Line(tok),
@@ -304,33 +283,18 @@ void LexStream::Dump()
                          token_type(Kind(tok)),
                          (IsDeprecated(Previous(tok)) ? "(d)" : " "));
         for (wchar_t *s = NameString(tok); *s != U_NULL; s++)
-#ifdef EBCDIC
-            fprintf(tokfile, "%c", Code::ToEBCDIC(*s));
-#else
             fprintf(tokfile, "%c", *s);
-#endif
         fprintf(tokfile, "\n");
 
         for (LexStream::CommentIndex com = FirstComment(tok); com < NumComments() && PrecedingToken(com) == tok; com++)
         {
             fprintf(tokfile, "*%5d ",com);
-#ifdef EBCDIC
-        // need to print out FileName() below in EBCDIC TODO
-        file_name = FileName();
-        for (ei=0; ei < FileNameLength(); ei++)
-            fprintf(tokfile, "%c", Code::ToEBCDIC(file_name[ei]));
-#else
         fprintf(tokfile, " %s",FileName());
-#endif
             fprintf(tokfile, ", line %d.%d: ",
                              FindLine(comments[com].location),
                              FindColumn(comments[com].location));
             for (wchar_t *s = CommentString(com); *s != U_NULL; s++)
-#ifdef EBCDIC
-            fprintf(tokfile, "%c", Code::ToEBCDIC(*s));
-#else
             fprintf(tokfile, "%c", *s);
-#endif
             fprintf(tokfile, "\n");
         }
     } while (Kind(tok) != TK_EOF);
@@ -343,11 +307,7 @@ void LexStream::Dump()
     {
         fprintf(tokfile, "%4d ", i);
         for (wchar_t *s = control.name_table.symbol_pool[i].name(); *s != U_NULL; s++)
-#ifdef EBCDIC
-            fprintf(tokfile, "%c", Code::ToEBCDIC(*s));
-#else
             fprintf(tokfile, "%c", *s);
-#endif
         fprintf(tokfile, "\n");
     }
 #endif

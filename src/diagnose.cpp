@@ -1,4 +1,4 @@
-// $Id: diagnose.cpp,v 1.10 1999/09/12 17:48:51 shields Exp $
+// $Id: diagnose.cpp,v 1.11 1999/10/09 16:34:06 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -563,9 +563,6 @@ bool DiagnoseParser::MergeCandidate(int state, int buffer_position)
                 while (*p0 != U_NULL)
                 {
                     wchar_t c = *(p3++);
-#ifdef EBCDIC
-                    c = Code::ToASCII(c);
-#endif
 
                     if (Case::ToAsciiLower(*p0) != Case::ToAsciiLower(c))
                         break;
@@ -1171,9 +1168,6 @@ int DiagnoseParser::Misspell(int sym, TokenObject tok)
     for (int i = name_start[terminal_index[sym]], j = 0; j < len; i++, j++)
     {
         wchar_t c = string_buffer[i];
-#ifdef EBCDIC
-        c = Code::ToASCII(c);
-#endif
         keyword[j] = c;
     }
     keyword[len] = U_NULL;

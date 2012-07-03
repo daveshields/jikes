@@ -1,4 +1,4 @@
-// $Id: decl.cpp,v 1.31 1999/09/17 17:48:36 shields Exp $
+// $Id: decl.cpp,v 1.32 1999/10/09 15:38:31 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:

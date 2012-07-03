@@ -1,4 +1,4 @@
-// $Id: stream.cpp,v 1.11 1999/08/26 15:34:10 shields Exp $
+// $Id: stream.cpp,v 1.15 1999/10/13 16:33:23 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -15,6 +15,10 @@
 #include "symbol.h"
 #include "control.h"
 #include "semantic.h"
+
+#ifdef HAVE_LIB_ICU_UC
+# include <ucnv.h>
+#endif
 
 wchar_t *LexStream::KeywordName(int kind)
 {
@@ -308,7 +312,7 @@ void LexStream::ReadInput()
         if (srcfile != NULL)
         {
             char *buffer = new char[status.st_size];
-            size_t file_size = ::SystemFread(buffer, sizeof(char), status.st_size, srcfile, control.option.ascii);
+            size_t file_size = ::SystemFread(buffer, sizeof(char), status.st_size, srcfile);
             fclose(srcfile);
             ProcessInput(buffer, file_size);
             delete [] buffer;
@@ -368,7 +372,7 @@ void LexStream::RereadInput()
             if (srcfile != NULL)
             {
                 char *buffer = new char[status.st_size];
-                size_t file_size = ::SystemFread(buffer, sizeof(char), status.st_size, srcfile, control.option.ascii);
+                size_t file_size = ::SystemFread(buffer, sizeof(char), status.st_size, srcfile);
                 fclose(srcfile);
                 ProcessInput(buffer, file_size);
                 delete [] buffer;
@@ -403,6 +407,27 @@ void LexStream::RereadInput()
 }
 
 
+int LexStream::hexvalue(wchar_t ch)
+{
+    switch(ch)
+    {
+    case U_a: case U_A:
+        return 10;
+    case U_b: case U_B:
+        return 11;
+    case U_c: case U_C:
+        return 12;
+    case U_d: case U_D:
+        return 13;
+    case U_e: case U_E:
+        return 14;
+    case U_f: case U_F:
+        return 15;
+    default:
+        return ch - U_0;
+    }
+}
+
 //
 // Read file_size Ascii characters from srcfile, convert them to unicode and
 // store them in input_buffer.
@@ -413,104 +438,179 @@ void LexStream::ProcessInput(char *buffer, long filesize)
     file_read++;
 #endif
 
+#ifdef HAVE_LIB_ICU_UC
+    input_buffer       = new wchar_t[filesize + 4 + 2];
+    wchar_t *input_tail = input_buffer + filesize;
+#else
     input_buffer = new wchar_t[filesize + 4];
+#endif
+    
     wchar_t *input_ptr = input_buffer;
     *input_ptr = U_LINE_FEED; // add an initial '\n';
-
-    if (buffer)
+    
+    if(buffer)
     {
-        char *source_ptr = buffer,
-             *source_tail = &(buffer[filesize - 1]); // point to last character read from the file.
+        int      escape_value;
+        wchar_t *escape_ptr;
+        const char *source_ptr = buffer,
+            *source_tail = &(buffer[filesize - 1]); // point to last character read from the file.
+        
+        UnicodeLexerState saved_state;
+        UnicodeLexerState state=RAW;
+        bool oncemore=false;
 
-        while(source_ptr <= source_tail)
+#ifdef HAVE_LIB_ICU_UC
+        UErrorCode err = ZERO_ERROR;
+#endif
+
+        while((source_ptr <= source_tail) || oncemore)
         {
-            *(++input_ptr) = (*source_ptr++) & 0x00ff; // The (& 0x00ff) guarantees that quantity is copied as unsigned value
-
-            if (*input_ptr == U_CARRIAGE_RETURN)
+#ifdef HAVE_LIB_ICU_UC
+            // On each iteration we advance input_ptr maximun 2 postions.
+            // Here we check if we are close to the end of input_buffer
+            if(input_ptr>=input_tail)
             {
-                *input_ptr = U_LINE_FEED;
-                if (*source_ptr == U_LINE_FEED)
-                    source_ptr++;
+                // If this happen, reallocate it with some more space.
+                // This is very rare case, which could happen if
+                // one code page character is represened by several 
+                // unicode characters. One of exaples of such
+                // situation is unicode "surrogates".
+                //
+                // If such reallocation will be required, it will indeed
+                // slow down compilation a bit.
+                size_t cursize = input_ptr-input_buffer;
+                size_t newsize = cursize+cursize/10; // add 10%
+                wchar_t *tmp   = new wchar_t[newsize]; 
+                memcpy(tmp, input_buffer, newsize*sizeof(wchar_t));
+                delete input_buffer;
+                input_buffer = tmp;
+                input_tail = input_buffer + newsize;
+                input_ptr  = input_buffer+cursize;
             }
-            else if (*input_ptr == U_BACKSLASH)
+#endif
+            
+            wchar_t ch;
+            
+            if(!oncemore)
             {
-                if (*source_ptr == U_BACKSLASH)
-                    *(++input_ptr) = *source_ptr++;
-                else if (*source_ptr == U_u)
+#ifdef HAVE_LIB_ICU_UC
+                if(control.option.converter)
+                    ch=ucnv_getNextUChar (control.option.converter,
+                                          &source_ptr,
+                                          source_tail,
+                                          &err);
+                else
+                    ch=*source_ptr++;
+                if(err!=ZERO_ERROR)
+                    break;
+#else
+                ch=*source_ptr++;
+#endif
+            } else oncemore = false;
+      
+            switch(state)
+            {
+            case QUOTE:
+                if(ch==U_BACKSLASH)
                 {
-                    char *u_ptr = source_ptr;
-
-                    for (source_ptr++; source_ptr <= source_tail && *source_ptr == U_u; source_ptr++)
-                        ;
-                    *input_ptr = 0;
-                    int i;
-                    for (i = 0; source_ptr <= source_tail && isxdigit(*source_ptr) && i < 4; i++)
-                    {
-                        int multiplier[4] = {4096, 256, 16, 1};
-
-                        char ch = *source_ptr++;
-                        switch(ch)
-                        {
-                            case U_a: case U_A:
-                                *input_ptr += (10 * multiplier[i]);
-                                break;
-                            case U_b: case U_B:
-                                *input_ptr += (11 * multiplier[i]);
-                                break;
-                            case U_c: case U_C:
-                                *input_ptr += (12 * multiplier[i]);
-                                break;
-                            case U_d: case U_D:
-                                *input_ptr += (13 * multiplier[i]);
-                                break;
-                            case U_e: case U_E:
-                                *input_ptr += (14 * multiplier[i]);
-                                break;
-                            case U_f: case U_F:
-                                *input_ptr += (15 * multiplier[i]);
-                                break;
-                            default:
-                                *input_ptr += ((ch - U_0) * multiplier[i]);
-                        }
-                    }
-
-                    if (i != 4)
-                    {
-                        if (initial_reading_of_input)
-                            bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
-                                                         (unsigned) (input_ptr - input_buffer),
-                                                         (unsigned) (input_ptr - input_buffer) + (source_ptr - u_ptr));
-
-                        source_ptr = u_ptr;
-                        *input_ptr = U_BACKSLASH;
-                    }
-                    else if (*input_ptr == U_CARRIAGE_RETURN)
-                    {
-                        *input_ptr = U_LINE_FEED;
-                        if (*source_ptr == U_LINE_FEED)
-                            source_ptr++;
-                        else if (*source_ptr == U_BACKSLASH)
-                        {
-                            int i;
-                            for (i = 1; (source_ptr + i) <= source_tail && source_ptr[i] == U_u; i++)
-                                ;
-                            if (i > 1 && (source_ptr + i + 3) <= source_tail
-                                      && source_ptr[i]     == U_0
-                                      && source_ptr[i + 1] == U_0
-                                      && source_ptr[i + 2] == U_0
-                                      && source_ptr[i + 3] == U_a) // the escape sequence of \n is \u000a
-                                source_ptr += (i + 4);
-                        }
-                    }
+                    *(++input_ptr) = U_BACKSLASH;
+                    *(++input_ptr) = U_BACKSLASH;
+                    state          = RAW;
+                } else if(ch==U_u)
+                {
+                    escape_ptr = input_ptr;
+                    state      = UNICODE_ESCAPE;
+                } else
+                {
+                    *(++input_ptr )= U_BACKSLASH;
+                    state          = RAW;
+                    oncemore       = true;
                 }
+                break;
+            case UNICODE_ESCAPE:
+                if(isxdigit(ch))
+                {
+                    state=UNICODE_ESCAPE_DIGIT_0;
+                    escape_value=hexvalue(ch)*16*16*16;
+                } else if(ch!=U_u)
+                {
+                    if(initial_reading_of_input)
+                        bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
+                                                     (unsigned) (escape_ptr - input_buffer),
+                                                     (unsigned) (input_ptr - input_buffer));
+                }
+                break;
+            case UNICODE_ESCAPE_DIGIT_0:
+                if(isxdigit(ch))
+                {
+                    state=UNICODE_ESCAPE_DIGIT_1;
+                    escape_value+=hexvalue(ch)*16*16;
+                } else  
+                {
+                    if(initial_reading_of_input)
+                        bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
+                                                     (unsigned) (escape_ptr - input_buffer),
+                                                     (unsigned) (input_ptr - input_buffer));
+                }
+                break;
+            case UNICODE_ESCAPE_DIGIT_1:
+                if(isxdigit(ch))
+                {
+                    state=UNICODE_ESCAPE_DIGIT_2;
+                    escape_value+=hexvalue(ch)*16;
+                } else  
+                {
+                    if(initial_reading_of_input)
+                        bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
+                                                     (unsigned) (escape_ptr - input_buffer),
+                                                     (unsigned) (input_ptr - input_buffer));
+                }
+                break;
+            case UNICODE_ESCAPE_DIGIT_2:
+                if(isxdigit(ch))
+                {
+                    ch       = escape_value+hexvalue(ch);
+                    state    = saved_state;
+                    saved_state = UNICODE_ESCAPE_DIGIT_2;
+                    oncemore = true;
+                } else  
+                {
+                    if(initial_reading_of_input)
+                        bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
+                                                     (unsigned) (escape_ptr - input_buffer),
+                                                     (unsigned) (input_ptr - input_buffer));
+                }
+                break;
+            case CR:
+                if(ch==U_LINE_FEED)
+                {
+                    state = RAW;
+                } else if(ch==U_BACKSLASH && saved_state != UNICODE_ESCAPE_DIGIT_2)
+                {
+                    saved_state = CR;
+                    state       = QUOTE;
+                } else
+                {
+                    state = RAW;
+                    *(++input_ptr)=ch;                    
+                }
+                break;
+            case RAW:
+                if(ch==U_BACKSLASH && saved_state != UNICODE_ESCAPE_DIGIT_2)
+                {
+                    state       = QUOTE;
+                } else if(ch == U_CARRIAGE_RETURN)
+                {
+                    state = CR;
+                    *(++input_ptr) = U_LINE_FEED;
+                } else
+                {
+                    *(++input_ptr)=ch;                    
+                }
+                saved_state = RAW;
+                break;
             }
         }
-
-        //
-        // Remove all trailing spaces
-        //
-        while((input_ptr > input_buffer) && Code::IsSpace(*input_ptr))
-            input_ptr--;
     }
 
     //
@@ -523,12 +623,11 @@ void LexStream::ProcessInput(char *buffer, long filesize)
         *(++input_ptr) = U_CTL_Z;         // Mark end-of-file
     }
     *(++input_ptr) = U_NULL;              // add gate
-
+    
     input_buffer_length = input_ptr - input_buffer;
 
     return;
 }
-
 
 //
 // This procedure uses a  quick sort algorithm to sort the stream ERRORS

@@ -1,4 +1,4 @@
-// $Id: definite.cpp,v 1.11 1999/08/26 15:34:07 shields Exp $
+// $Id: definite.cpp,v 1.13 1999/10/13 16:17:41 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -773,8 +773,32 @@ DefiniteAssignmentSet *Semantic::DefiniteAssignmentExpression(AstExpression *exp
     {
         if (variable -> IsLocal(ThisMethod()) || variable -> IsFinal(ThisType()))
         {
-            if (assignment_expression -> assignment_tag != AstAssignmentExpression::EQUAL &&
+            //
+            // If the debug option "g" is set and we have a simple assignment
+            // statement whose left-hand side is a local variable that has not
+            // yet been defined, mark this assignment as a definition assignment.
+            //
+            if (control.option.g &&
+                assignment_expression -> assignment_tag == AstAssignmentExpression::SIMPLE_EQUAL &&
+                variable -> IsLocal(ThisMethod()) &&
                 (! set[variable -> LocalVariableIndex()]))
+            {
+                assignment_expression -> assignment_tag = AstAssignmentExpression::DEFINITE_EQUAL;
+                definite_block_stack -> TopLocallyDefinedVariables() -> AddElement(variable -> LocalVariableIndex());
+                AstBlock *block = definite_block_stack -> TopBlock();
+                block -> AddLocallyDefinedVariable(variable);
+#ifdef DUMP
+Coutput << "(1) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
+        << "\" is defined at line " << lex_stream -> Line(assignment_expression -> LeftToken())
+        << "\n";
+#endif
+            }
+
+            //
+            // If we have a compound assignment then the variable must have
+            // been set prior to such an assignment. otherwise, an error occurs.
+            //
+            if (! (assignment_expression -> SimpleAssignment() || set[variable -> LocalVariableIndex()]))
             {
                 ReportSemError(SemanticError::VARIABLE_NOT_DEFINITELY_ASSIGNED,
                                assignment_expression -> left_hand_side -> LeftToken(),
@@ -786,7 +810,7 @@ DefiniteAssignmentSet *Semantic::DefiniteAssignmentExpression(AstExpression *exp
                 //
                 // If the final variable may have already been initialized, issue an error.
                 //
-                if ((assignment_expression -> assignment_tag != AstAssignmentExpression::EQUAL) ||
+                if ((! assignment_expression -> SimpleAssignment()) ||
                     ((*possibly_assigned_finals) [variable -> LocalVariableIndex()]))
                 {
                     ReportSemError(SemanticError::TARGET_VARIABLE_IS_FINAL,
@@ -958,14 +982,61 @@ inline void Semantic::DefiniteVariableInitializer(AstVariableDeclarator *variabl
 }
 
 
+inline void Semantic::DefiniteStatement(Ast *ast)
+{
+    (this ->* DefiniteStmt[ast -> kind])(ast);
+
+    return;
+}
+
 inline void Semantic::DefiniteBlockStatements(AstBlock *block_body)
 {
-    for (int i = 0; i < block_body -> NumStatements(); i++)
+    if (control.option.g && block_body -> NumStatements() > 0)
     {
-        AstStatement *statement = (AstStatement *) block_body -> Statement(i);
-        if (statement -> is_reachable)
-             DefiniteStatement(statement);
-        else break;
+        AstStatement *statement = (AstStatement *) block_body -> Statement(0);
+        DefiniteStatement(statement);
+        for (int i = 1; i < block_body -> NumStatements(); i++)
+        {
+            statement = (AstStatement *) block_body -> Statement(i);
+            if (statement -> is_reachable)
+            {
+                //
+                // All variables that were assigned a value in the previous
+                // statement must be defined
+                BitSet &locally_defined_variables = *definite_block_stack -> TopLocallyDefinedVariables();
+                for (int k = 0; k < definitely_assigned_variables -> Size(); k++)
+                {
+                    VariableSymbol *variable = definite_block_stack -> TopLocalVariables()[k];
+                    if (variable) // a variable that is visible in this block? (i.e. not one declare in a non-enclosing block)
+                    {
+                        if ((*definitely_assigned_variables)[k] && (! locally_defined_variables[k]))
+                        {
+#ifdef DUMP
+Coutput << "(2) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
+        << "\" is defined at line " << lex_stream -> Line(statement -> LeftToken())
+        << "\n";
+#endif
+                            statement -> AddDefinedVariable(variable);
+                            locally_defined_variables.AddElement(k);
+                            block_body -> AddLocallyDefinedVariable(variable);
+                        }
+                    }
+                }
+
+                DefiniteStatement(statement);
+            }
+            else break;
+        }
+    }
+    else
+    {
+        for (int i = 0; i < block_body -> NumStatements(); i++)
+        {
+            AstStatement *statement = (AstStatement *) block_body -> Statement(i);
+            if (statement -> is_reachable)
+                 DefiniteStatement(statement);
+            else break;
+        }
     }
 
     return;
@@ -982,12 +1053,23 @@ void Semantic::DefiniteBlock(Ast *stmt)
     {
         VariableSymbol *variable = block_body -> block_symbol -> VariableSym(i);
 
+        possibly_assigned_finals -> RemoveElement(variable -> LocalVariableIndex());
         definitely_assigned_variables -> RemoveElement(variable -> LocalVariableIndex());
+
         definite_visible_variables -> AddElement(variable);
     }
 
     DefiniteBlockStatements(block_body);
 
+#ifdef DUMP
+if (control.option.g && block_body -> NumLocallyDefinedVariables() > 0)
+{
+Coutput << "(3) At Line " << lex_stream -> Line(block_body -> RightToken())
+        << " the range for the following variables end:\n\n";
+for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
+Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\n";
+}
+#endif
     for (int k = 0; k < block_body -> block_symbol -> NumVariableSymbols(); k++)
         definite_visible_variables -> RemoveElement(block_body -> block_symbol -> VariableSym(k));
 
@@ -1015,12 +1097,35 @@ void Semantic::DefiniteLocalVariableDeclarationStatement(Ast *stmt)
         VariableSymbol *variable_symbol = variable_declarator -> symbol;
         if (variable_symbol)
         {
+            if (control.option.g)
+            {
+                assert(definite_block_stack -> TopLocalVariables()[variable_symbol -> LocalVariableIndex()] == NULL);
+#ifdef DUMP
+Coutput << "(3.5) Local Variable \"" << variable_symbol -> Name() << " #" << variable_symbol -> LocalVariableIndex()
+        << "\" is declared at line " << lex_stream -> Line(variable_declarator -> LeftToken())
+        << "\n";
+#endif
+                definite_block_stack -> TopLocalVariables()[variable_symbol -> LocalVariableIndex()] = variable_symbol;
+            }
+
             if (variable_declarator -> variable_initializer_opt)
             {
                 DefiniteVariableInitializer(variable_declarator);
                 definitely_assigned_variables -> AddElement(variable_symbol -> LocalVariableIndex());
                 if (variable_symbol -> ACC_FINAL())
                     possibly_assigned_finals -> AddElement(variable_symbol -> LocalVariableIndex());
+
+                if (control.option.g)
+                {
+                    definite_block_stack -> TopLocallyDefinedVariables() -> AddElement(variable_symbol -> LocalVariableIndex());
+                    AstBlock *block = definite_block_stack -> TopBlock();
+                    block -> AddLocallyDefinedVariable(variable_symbol);
+#ifdef DUMP
+Coutput << "(4) Variable \"" << variable_symbol -> Name() << " #" << variable_symbol -> LocalVariableIndex()
+        << "\" is defined at line " << lex_stream -> Line(variable_declarator -> LeftToken())
+        << "\n";
+#endif
+                }
             }
             else definitely_assigned_variables -> RemoveElement(variable_symbol -> LocalVariableIndex());
         }
@@ -1222,8 +1327,49 @@ void Semantic::DefiniteForStatement(Ast *stmt)
     //     for (int i = 0; i < 10; i++);
     //     for (int i = 10; i < 20; i++);
     //
-    for (int i = 0; i < for_statement -> NumForInitStatements(); i++)
-        DefiniteStatement(for_statement -> ForInitStatement(i));
+    if (control.option.g && for_statement -> NumForInitStatements() > 0)
+    {
+        AstStatement *statement = (AstStatement *) for_statement -> ForInitStatement(0);
+        DefiniteStatement(statement);
+        for (int i = 1; i < for_statement -> NumForInitStatements(); i++)
+        {
+            statement = (AstStatement *) for_statement -> ForInitStatement(i);
+
+            //
+            // All variables that were assigned a value in the previous
+            // statement must be defined
+            //
+            BitSet &locally_defined_variables = *definite_block_stack -> TopLocallyDefinedVariables();
+            for (int k = 0; k < definitely_assigned_variables -> Size(); k++)
+            {
+                VariableSymbol *variable = definite_block_stack -> TopLocalVariables()[k];
+                if (variable) // a variable that is visible in this block? (i.e. not one declare in a non-enclosing block)
+                {
+                    if ((*definitely_assigned_variables)[k] && (! locally_defined_variables[k]))
+                    {
+#ifdef DUMP
+Coutput << "(5) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
+        << "\" is defined at line " << lex_stream -> Line(statement -> LeftToken())
+        << "\n";
+#endif
+                        statement -> AddDefinedVariable(variable);
+                        locally_defined_variables.AddElement(k);
+                        AstBlock *block = definite_block_stack -> TopBlock();
+                        block -> AddLocallyDefinedVariable(variable);
+                    }
+                }
+            }
+
+            DefiniteStatement(statement);
+        }
+    }
+    else
+    {
+        for (int i = 0; i < for_statement -> NumForInitStatements(); i++)
+        {
+            DefiniteStatement(for_statement -> ForInitStatement(i));
+        }
+    }
 
     BreakableStatementStack().Push(definite_block_stack -> TopBlock());
     ContinuableStatementStack().Push(stmt);
@@ -1354,12 +1500,73 @@ void Semantic::DefiniteSwitchStatement(Ast *stmt)
         *definitely_assigned_variables = starting_set;
         *possibly_assigned_finals = after_expr_finals;
 
-        for (int k = 0; k < switch_block_statement -> NumStatements(); k++)
+        if (control.option.g && switch_block_statement -> NumStatements() > 0)
         {
-            AstStatement *statement = (AstStatement *) switch_block_statement -> Statement(k);
-            if (statement -> is_reachable)
-                 DefiniteStatement(statement);
-            else break;
+            BitSet &locally_defined_variables = *definite_block_stack -> TopLocallyDefinedVariables();
+            AstStatement *statement = (AstStatement *) switch_block_statement -> Statement(0);
+            DefiniteStatement(statement);
+            for (int i = 1; i < switch_block_statement -> NumStatements(); i++)
+            {
+                statement = (AstStatement *) switch_block_statement -> Statement(i);
+                if (statement -> is_reachable)
+                {
+                    //
+                    // All variables that were assigned a value in the previous
+                    // statement must be defined
+                    //
+                    for (int k = 0; k < definitely_assigned_variables -> Size(); k++)
+                    {
+                        VariableSymbol *variable = definite_block_stack -> TopLocalVariables()[k];
+                        if (variable) // a variable that is visible in this block? (i.e. not one declare in a non-enclosing block)
+                        {
+                            if ((*definitely_assigned_variables)[k] && (! locally_defined_variables[k]))
+                            {
+#ifdef DUMP
+Coutput << "Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
+        << "\" is defined at line " << lex_stream -> Line(statement -> LeftToken())
+        << "\n";
+#endif
+                                statement -> AddDefinedVariable(variable);
+                                locally_defined_variables.AddElement(k);
+                                block_body -> AddLocallyDefinedVariable(variable);
+                            }
+                        }
+                    }
+
+                    DefiniteStatement(statement);
+                }
+                else break;
+            }
+
+#ifdef DUMP
+if (control.option.g && block_body -> NumLocallyDefinedVariables() > 0)
+{
+Coutput << "(5.5) At Line " << lex_stream -> Line(statement -> RightToken())
+        << " the range for the following variables end:\n\n";
+for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
+Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\n";
+}
+#endif
+            //
+            // At the end of a switch block statement, we always close the range of all local
+            // variables that have been defined. That's because even if this switch block statement
+            // entends into the next block, it is not the only entry point into that block. Therefore,
+            // in order for a variable to be definitely defined at the starting point of a switch
+            // block statement, it must have been defined prior to the switch statement.
+            //
+            for (int k = 0; k < block_body -> NumLocallyDefinedVariables(); k++)
+                locally_defined_variables.RemoveElement(block_body -> LocallyDefinedVariable(k) -> LocalVariableIndex());
+            block_body -> TransferLocallyDefinedVariablesTo(switch_block_statement);
+        }
+        else
+        {
+            for (int i = 0; i < switch_block_statement -> NumStatements(); i++)
+            {
+                AstStatement *statement = (AstStatement *) switch_block_statement -> Statement(i);
+                if (statement -> is_reachable)
+                     DefiniteStatement(statement);
+                else break;
+            }
         }
 
         //
@@ -1620,6 +1827,7 @@ void Semantic::DefiniteTryStatement(Ast *stmt)
     {
         VariableSymbol *variable = try_block_body -> block_symbol -> VariableSym(j);
 
+        possibly_assigned_finals -> RemoveElement(variable -> LocalVariableIndex());
         definitely_assigned_variables -> RemoveElement(variable -> LocalVariableIndex());
         definite_visible_variables -> AddElement(variable);
     }
@@ -1628,6 +1836,15 @@ void Semantic::DefiniteTryStatement(Ast *stmt)
 
     DefiniteBlockStatements(try_block_body);
 
+#ifdef DUMP
+if (control.option.g && try_block_body -> NumLocallyDefinedVariables() > 0)
+{
+Coutput << "(6) At Line " << lex_stream -> Line(try_block_body -> RightToken())
+        << " the range for the following variables end:\n\n";
+for (int k = 0; k < try_block_body -> NumLocallyDefinedVariables(); k++)
+Coutput << "    \"" << try_block_body -> LocallyDefinedVariable(k) -> Name() << "\"\n";
+}
+#endif
     BitSet &exit_set = definite_block_stack -> TopFinalExitSet(*possibly_assigned_finals),
            before_catch_finals(exit_set),
            possibly_finals_union(exit_set);
@@ -1672,6 +1889,7 @@ void Semantic::DefiniteTryStatement(Ast *stmt)
         {
             VariableSymbol *variable = clause_block_body -> block_symbol -> VariableSym(j);
 
+            possibly_assigned_finals -> RemoveElement(variable -> LocalVariableIndex());
             definitely_assigned_variables -> RemoveElement(variable -> LocalVariableIndex());
             definite_visible_variables -> AddElement(variable);
         }
@@ -1681,12 +1899,31 @@ void Semantic::DefiniteTryStatement(Ast *stmt)
         // from the set !!!
         //
         definitely_assigned_variables -> AddElement(clause -> parameter_symbol -> LocalVariableIndex());
+        if (control.option.g)
+        {
+            VariableSymbol *variable = clause -> parameter_symbol;
+            definite_block_stack -> TopLocallyDefinedVariables() -> AddElement(variable -> LocalVariableIndex());
+#ifdef DUMP
+Coutput << "(7) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
+        << "\" is defined at line " << lex_stream -> Line(clause -> formal_parameter -> LeftToken())
+        << "\n";
+#endif
+        }
         *possibly_assigned_finals = before_catch_finals;
         if (clause -> parameter_symbol -> ACC_FINAL())
             possibly_assigned_finals -> AddElement(clause -> parameter_symbol -> LocalVariableIndex());
 
         DefiniteBlockStatements(clause_block_body);
 
+#ifdef DUMP
+if (control.option.g && clause_block_body -> NumLocallyDefinedVariables() > 0)
+{
+Coutput << "(8) At Line " << lex_stream -> Line(clause_block_body -> RightToken())
+        << " the range for the following variables end:\n\n";
+for (int l = 0; l < clause_block_body -> NumLocallyDefinedVariables(); l++)
+Coutput << "    \"" << clause_block_body -> LocallyDefinedVariable(l) -> Name() << "\"\n";
+}
+#endif
         //
         // Once we are done with a block, its enclosed local variables are no longer visible.
         //
@@ -1747,11 +1984,19 @@ void Semantic::DefiniteMethodBody(AstMethodDeclaration *method_declaration, Tupl
 {
     if (! method_declaration -> method_body -> EmptyStatementCast())
     {
+#ifdef DUMP
+if (control.option.g)
+Coutput << "(9) Processing method \"" << method_declaration -> method_symbol -> Name()
+        << "\" in " << ThisType() -> ContainingPackage() -> PackageName() << "/"
+        << ThisType() -> ExternalName() << "\n";
+#endif
         AstConstructorBlock *constructor_block = method_declaration -> method_body -> ConstructorBlockCast();
         AstBlock *block_body = (constructor_block ? constructor_block -> block : (AstBlock *) method_declaration -> method_body);
 
         universe = new BitSet(block_body -> block_symbol -> max_variable_index + finals.Length(), BitSet::UNIVERSE);
-        definite_block_stack = new DefiniteBlockStack(method_declaration -> method_symbol -> max_block_depth, universe -> Size());
+        definite_block_stack = new DefiniteBlockStack(control,
+                                                      method_declaration -> method_symbol -> max_block_depth,
+                                                      universe -> Size());
         definite_try_stack = new DefiniteTryStack(method_declaration -> method_symbol -> max_block_depth);
         definite_final_assignment_stack =  new DefiniteFinalAssignmentStack();
         definite_visible_variables = new SymbolSet(universe -> Size());
@@ -1773,16 +2018,39 @@ void Semantic::DefiniteMethodBody(AstMethodDeclaration *method_declaration, Tupl
         {
             AstVariableDeclarator *formal_declarator = method_declarator -> FormalParameter(k) -> formal_declarator;
             definitely_assigned_variables -> AddElement(formal_declarator -> symbol -> LocalVariableIndex());
+            if (control.option.g)
+            {
+                VariableSymbol *variable = formal_declarator -> symbol;
+                definite_block_stack -> TopLocallyDefinedVariables() -> AddElement(variable -> LocalVariableIndex());
+#ifdef DUMP
+Coutput << "(10) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
+        << "\" is defined at line " << lex_stream -> Line(formal_declarator -> LeftToken())
+        << "\n";
+#endif
+            }
+
             if (formal_declarator -> symbol -> ACC_FINAL())
                 possibly_assigned_finals -> AddElement(formal_declarator -> symbol -> LocalVariableIndex());
             definite_visible_variables -> AddElement(formal_declarator -> symbol);
         }
 
         for (int l = 0; l < block_body -> block_symbol -> NumVariableSymbols(); l++)
-            definite_visible_variables -> AddElement(block_body -> block_symbol -> VariableSym(l));
+        {
+            VariableSymbol *variable = block_body -> block_symbol -> VariableSym(l);
+            definite_visible_variables -> AddElement(variable);
+        }
 
         DefiniteBlockStatements(block_body);
 
+#ifdef DUMP
+if (control.option.g && block_body -> NumLocallyDefinedVariables() > 0)
+{
+Coutput << "(11) At Line " << lex_stream -> Line(block_body -> RightToken())
+        << " the range for the following variables end:\n\n";
+for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
+Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\n";
+}
+#endif
         definite_block_stack -> Pop();
 
         delete universe;
@@ -1800,11 +2068,18 @@ void Semantic::DefiniteMethodBody(AstMethodDeclaration *method_declaration, Tupl
 
 void Semantic::DefiniteConstructorBody(AstConstructorDeclaration *constructor_declaration, Tuple<VariableSymbol *> &finals)
 {
+#ifdef DUMP
+if (control.option.g)
+Coutput << "(12) Processing constructor \"" << constructor_declaration -> constructor_symbol -> Name()
+        << "\" in " << ThisType() -> ContainingPackage() -> PackageName() << "/"
+        << ThisType() -> ExternalName() << "\n";
+#endif
     AstConstructorBlock *constructor_block = constructor_declaration -> constructor_body;
     AstBlock *block_body = constructor_block -> block;
 
     universe = new BitSet(block_body -> block_symbol -> max_variable_index + finals.Length(), BitSet::UNIVERSE);
-    definite_block_stack = new DefiniteBlockStack(constructor_declaration -> constructor_symbol -> max_block_depth,
+    definite_block_stack = new DefiniteBlockStack(control,
+                                                  constructor_declaration -> constructor_symbol -> max_block_depth,
                                                   universe -> Size());
     definite_try_stack = new DefiniteTryStack(constructor_declaration -> constructor_symbol -> max_block_depth);
     definite_final_assignment_stack =  new DefiniteFinalAssignmentStack();
@@ -1839,23 +2114,58 @@ void Semantic::DefiniteConstructorBody(AstConstructorDeclaration *constructor_de
     //
 
     definite_block_stack -> Push(block_body);
+    if (control.option.g)
+    {
+        //
+        // We need this initialization to prevent debug info from being generated for 
+        // final fields (since they are not truly local variables).
+        //
+        BitSet &locally_defined_variables = *definite_block_stack -> TopLocallyDefinedVariables();
+        for (int i = 0; i < finals.Length(); i++) // Assume that all final instance variables have been assigned a value.
+        {
+            int index = block_body -> block_symbol -> max_variable_index + i;
+            locally_defined_variables.AddElement(index);
+        }
+    }
 
     AstMethodDeclarator *constructor_declarator = constructor_declaration -> constructor_declarator;
     for (int j = 0; j < constructor_declarator -> NumFormalParameters(); j++)
     {
         AstVariableDeclarator *formal_declarator = constructor_declarator -> FormalParameter(j) -> formal_declarator;
         definitely_assigned_variables -> AddElement(formal_declarator -> symbol -> LocalVariableIndex());
+        if (control.option.g)
+        {
+            VariableSymbol *variable = formal_declarator -> symbol;
+            definite_block_stack -> TopLocallyDefinedVariables() -> AddElement(variable -> LocalVariableIndex());
+#ifdef DUMP
+Coutput << "(13) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
+        << "\" is defined at line " << lex_stream -> Line(formal_declarator -> LeftToken())
+        << "\n";
+#endif
+        }
+
         if (formal_declarator -> symbol -> ACC_FINAL())
             possibly_assigned_finals -> AddElement(formal_declarator -> symbol -> LocalVariableIndex());
         definite_visible_variables -> AddElement(formal_declarator -> symbol);
     }
 
     for (int l = 0; l < block_body -> block_symbol -> NumVariableSymbols(); l++)
-        definite_visible_variables -> AddElement(block_body -> block_symbol -> VariableSym(l));
+    {
+        VariableSymbol *variable = block_body -> block_symbol -> VariableSym(l);
+        definite_visible_variables -> AddElement(variable);
+    }
 
     DefiniteBlockStatements(block_body);
 
-
+#ifdef DUMP
+if (control.option.g && block_body -> NumLocallyDefinedVariables() > 0)
+{
+Coutput << "(14) At Line " << lex_stream -> Line(block_body -> RightToken())
+        << " the range for the following variables end:\n\n";
+for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
+Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\n";
+}
+#endif
     //
     // Compute the set of finals that has definitely been assigned in this constructor
     //
@@ -1883,8 +2193,14 @@ void Semantic::DefiniteConstructorBody(AstConstructorDeclaration *constructor_de
 
 void Semantic::DefiniteBlockInitializer(AstBlock *block_body, int stack_size, Tuple<VariableSymbol *> &finals)
 {
+#ifdef DUMP
+if (control.option.g)
+Coutput << "(15) Processing Initializer block "
+        << " in " << ThisType() -> ContainingPackage() -> PackageName() << "/"
+        << ThisType() -> ExternalName() << "\n";
+#endif
     universe = new BitSet(block_body -> block_symbol -> max_variable_index + finals.Length(), BitSet::UNIVERSE);
-    definite_block_stack = new DefiniteBlockStack(stack_size + 1, universe -> Size()); // +1 to simulate enclosing method block
+    definite_block_stack = new DefiniteBlockStack(control, stack_size + 1, universe -> Size()); // +1 for absent method block
     definite_try_stack = new DefiniteTryStack(stack_size + 1);
     definite_final_assignment_stack =  new DefiniteFinalAssignmentStack();
     definite_visible_variables = new SymbolSet(universe -> Size());
@@ -1907,12 +2223,37 @@ void Semantic::DefiniteBlockInitializer(AstBlock *block_body, int stack_size, Tu
 
     definite_block_stack -> Push(NULL); // No method available
     definite_block_stack -> Push(block_body);
+    if (control.option.g)
+    {
+        //
+        // We need this initialization to prevent debug info from being generated for 
+        // final fields (since they are not truly local variables).
+        //
+        BitSet &locally_defined_variables = *definite_block_stack -> TopLocallyDefinedVariables();
+        for (int i = 0; i < finals.Length(); i++) // Assume that all final instance variables have been assigned a value.
+        {
+            int index = block_body -> block_symbol -> max_variable_index + i;
+            locally_defined_variables.AddElement(index);
+        }
+    }
 
     for (int j = 0; j < block_body -> block_symbol -> NumVariableSymbols(); j++)
-        definite_visible_variables -> AddElement(block_body -> block_symbol -> VariableSym(j));
+    {
+        VariableSymbol *variable = block_body -> block_symbol -> VariableSym(j);
+        definite_visible_variables -> AddElement(variable);
+    }
 
     DefiniteBlockStatements(block_body);
 
+#ifdef DUMP
+if (control.option.g && block_body -> NumLocallyDefinedVariables() > 0)
+{
+Coutput << "(16) At Line " << lex_stream -> Line(block_body -> RightToken())
+        << " the range for the following variables end:\n\n";
+for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
+Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\n";
+}
+#endif
     //
     // For each final that has definitely been assigned a value in this block,
     // mark it appropriately.

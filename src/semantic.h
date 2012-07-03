@@ -1,4 +1,4 @@
-// $Id: semantic.h,v 1.23 1999/09/17 17:52:40 shields Exp $
+// $Id: semantic.h,v 1.24 1999/10/09 15:38:33 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -229,6 +229,22 @@ public:
         definite_sets[top_index] -> UniverseInit();
         final_sets[top_index] -> EmptyInit();
 
+        if (locally_defined_variables)
+        {
+            if (top_index == 0)
+            {
+                memset(local_variables[top_index], 0, locally_defined_variables[top_index] -> Size() * sizeof(VariableSymbol *));
+                locally_defined_variables[top_index] -> SetEmpty();
+            }
+            else
+            {
+                memmove(local_variables[top_index],
+                        local_variables[top_index - 1],
+                        locally_defined_variables[top_index] -> Size() * sizeof(VariableSymbol *));
+                *locally_defined_variables[top_index] = *locally_defined_variables[top_index - 1];
+            }
+        }
+
         block[top_index] = block_;
         top_index++;
     }
@@ -243,6 +259,9 @@ public:
     int Size()                 { return top_index; }
     AstBlock *Block(int i)     { return block[i]; }
     AstBlock *TopBlock()       { assert(top_index > 0); return block[top_index - 1]; }
+
+    VariableSymbol **TopLocalVariables() { assert(top_index > 0 && local_variables); return local_variables[top_index - 1]; }
+    BitSet *TopLocallyDefinedVariables() { assert(top_index > 0 && locally_defined_variables); return locally_defined_variables[top_index - 1]; }
 
     BitSet &BreakSet(int i)    { return definite_sets[i] -> break_set; }
     BitSet &ContinueSet(int i) { return definite_sets[i] -> continue_set; }
@@ -290,32 +309,46 @@ public:
         return exit_set;
     }
 
-    DefiniteBlockStack(int stack_size_, int set_size) : stack_size(stack_size_),
-                                                        top_index(0),
-                                                        exit_set(set_size)
+    DefiniteBlockStack(Control &control, int stack_size_, int set_size) : stack_size(stack_size_),
+                                                                          top_index(0),
+                                                                          exit_set(set_size)
     {
         block = new AstBlock*[stack_size];
         definite_sets = new DefiniteSets*[stack_size];
         final_sets = new DefiniteSets*[stack_size];
+        local_variables = (VariableSymbol ***) (control.option.g ? new VariableSymbol**[stack_size] : NULL);
+        locally_defined_variables = (BitSet **) (control.option.g ? new BitSet*[stack_size] : NULL);
 
         for (int i = 0; i < stack_size; i++)
         {
             definite_sets[i] = new DefiniteSets(set_size);
             final_sets[i] = new DefiniteSets(set_size);
+            if (local_variables)
+            {
+                local_variables[i] = new VariableSymbol*[set_size];
+                locally_defined_variables[i] = new BitSet(set_size);
+            }
         }
     }
 
     ~DefiniteBlockStack()
     {
-        delete [] block;
         for (int i = 0; i < stack_size; i++)
         {
             delete definite_sets[i];
             delete final_sets[i];
+            if (local_variables)
+            {
+                delete [] local_variables[i];
+                delete locally_defined_variables[i];
+            }
         }
 
+        delete [] block;
         delete [] definite_sets;
         delete [] final_sets;
+        delete [] local_variables;
+        delete [] locally_defined_variables;
     }
 
 private:
@@ -326,6 +359,9 @@ private:
 
     DefiniteSets **definite_sets,
                  **final_sets;
+
+    BitSet **locally_defined_variables;
+    VariableSymbol ***local_variables;
 
     BitSet exit_set;
 };
@@ -959,10 +995,7 @@ private:
     void BinaryNumericPromotion(AstConditionalExpression *);
 
     void (Semantic::*DefiniteStmt[Ast::_num_kinds])(Ast *);
-    inline void DefiniteStatement(Ast *ast)
-    {
-        (this ->* DefiniteStmt[ast -> kind])(ast);
-    }
+    inline void DefiniteStatement(Ast *);
 
     void DefiniteLoopBody(AstStatement *);
 

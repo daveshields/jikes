@@ -1,4 +1,4 @@
-// $Id: option.h,v 1.8 1999/07/06 13:49:24 shields Exp $
+// $Id: option.h,v 1.10 1999/10/12 12:46:10 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -17,6 +17,10 @@
 #include <ctype.h>
 #include "code.h"
 #include "tuple.h"
+
+#ifdef HAVE_LIB_ICU_UC
+# include <ucnv.h>
+#endif
 
 class ArgumentExpander
 {
@@ -108,8 +112,13 @@ public:
     char *default_path,
          *classpath,
          *directory,
-         *makefile_name;
+         *makefile_name,
+         *encoding;
 
+#ifdef HAVE_LIB_ICU_UC
+         UConverter *converter;
+#endif
+         
     Tuple<KeywordMap> keyword_map;
     Tuple<OptionError *> bad_options;
 
@@ -120,6 +129,7 @@ public:
          verbose,
          depend,
          nowarn,
+         classpath_search_order,
          one_one,
          zero_defect;
     int first_file_index;
@@ -137,7 +147,6 @@ public:
          unzip,
          dump_errors,
          errors,
-         ascii, // used on EBCDIC systems to AVOID input translation from EBCDIC to ASCII
          comments,
          pedantic;
 

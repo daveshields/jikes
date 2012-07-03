@@ -1,4 +1,4 @@
-// $Id: error.h,v 1.24 1999/09/17 20:44:24 shields Exp $
+// $Id: error.h,v 1.26 1999/10/13 16:17:42 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -291,6 +291,8 @@ public:
         INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER,
         ILLEGAL_THIS_FIELD_ACCESS,
         CONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS,
+        ENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION,
+        ENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION,
         ENCLOSING_INSTANCE_NOT_ACCESSIBLE,
         INVALID_ENCLOSING_INSTANCE,
 
@@ -634,6 +636,8 @@ private:
     static void PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER(ErrorInfo &, LexStream *, Control &);
     static void PrintILLEGAL_THIS_FIELD_ACCESS(ErrorInfo &, LexStream *, Control &);
     static void PrintCONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS(ErrorInfo &, LexStream *, Control &);
+    static void PrintENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);
+    static void PrintENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION(ErrorInfo &, LexStream *, Control &);
     static void PrintENCLOSING_INSTANCE_NOT_ACCESSIBLE(ErrorInfo &, LexStream *, Control &);
     static void PrintINVALID_ENCLOSING_INSTANCE(ErrorInfo &, LexStream *, Control &);
     static void PrintZERO_DIVIDE(ErrorInfo &, LexStream *, Control &);

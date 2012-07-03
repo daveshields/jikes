@@ -1,5 +1,5 @@
 
-// $Id: code.cpp,v 1.5 1999/08/26 15:34:03 shields Exp $
+// $Id: code.cpp,v 1.6 1999/10/09 16:34:05 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12057,71 +12057,3 @@ char *Code::base[512] =
     &code[38272] - 64512,  &code[38400] - 64640,  &code[38528] - 64768,  &code[38656] - 64896,
     &code[38784] - 65024,  &code[38912] - 65152,  &code[39040] - 65280,  &code[39168] - 65408,
 };
-#ifdef EBCDIC
-char Code::to_ascii[256] = {
-      0
-     //Marius, insert ebcdic to ascii translation table here
-};
-
-char Code::to_ebcdic[256] = {
-      0
-     //Marius, insert ascii to ebcdic translation table here
-};
-// variants of system functions requiring EBCDIC translation
-
-#include <stdio.h>
-#include <sys/stat.h>
-
-int system_stat(const char * name, struct stat * stat_struct)
-{
-    int n = strlen(name) + 1;
-    int rc;
-    char *ebcdic_name = new char[n];
-
-    for (int i = 0; i <= n; i++)
-        ebcdic_name[i] = Code::ToEBCDIC(name[i]);
-    rc = stat(ebcdic_name, stat_struct);
-    delete[] ebcdic_name;
-
-    return rc;
-}
-
-FILE * system_fopen(char *name, char * mode)
-{
-    int n = strlen(name) + 1;
-    FILE * fp;
-    char *ebcdic_name = new char[n];
-
-    for (int i = 0; i <= n; i++)
-        ebcdic_name[i] = Code::ToEBCDIC(name[i]);
-    fp = fopen(ebcdic_name, mode);
-    delete[] ebcdic_name;
-
-    return fp;
-}
-
-size_t system_fread(char *ptr, size_t element_size, size_t count, FILE *stream)
-{
-    size_t rc;
-    rc = fread(ptr, element_size, count, stream);
-    for (int i = 0; i <= count; i++)
-        ptr[i] = Code::ToEBCDIC(ptr[i]);
-
-    return rc;
-}
-
-int system_is_directory(char * name)
-{
-    char *ebcdic_name = new char[n];
-    int rc;
-    struct stat status;
-    for (int i = 0; i <= n; i++)
-        ebcdic_name[i] = Code::ToEBCDIC(name[i]);
-        Marius, insert proper OPEN_EDITION name for STAT_S_IFDIR below
-        rc =  ((system_stat(name, &status) == 0) && (status.st_mode & STAT_S_IFDIR)) ? 1: 0;
-    delete[] ebcdic_name;
-
-    return rc;
-}
-
-#endif

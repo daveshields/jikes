@@ -1,4 +1,4 @@
-// $Id: bytecode.cpp,v 1.34 1999/09/14 16:10:40 shields Exp $
+// $Id: bytecode.cpp,v 1.37 1999/10/13 16:17:41 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -160,7 +160,10 @@ void ByteCode::CompileClass()
                     method_symbol -> ProcessMethodSignature(&this_semantic, class_decl -> identifier_token);
                 method_symbol -> ProcessMethodThrows(&this_semantic, class_decl -> identifier_token);
 
-                BeginMethod(methods.NextIndex(), method_symbol);
+                int method_index = methods.NextIndex();
+
+                BeginMethod(method_index, method_symbol);
+                EndMethod(method_index, method_symbol);
             }
         }
     }
@@ -265,8 +268,6 @@ void ByteCode::CompileClass()
             int method_index = methods.NextIndex(); // index for method
             BeginMethod(method_index, this_constructor_symbol);
 
-            UpdateBlockInfo(this_constructor_symbol -> block_symbol);
-
             assert(constructor_block -> explicit_constructor_invocation_opt);
 
             EmitStatement((AstStatement *) constructor_block -> explicit_constructor_invocation_opt);
@@ -290,7 +291,7 @@ void ByteCode::CompileClass()
                     PutU2(RegisterFieldref(this0_parameter));
                 }
 
-                if (class_body -> this_block) // compile explicit 'this' call if present
+                if (class_body -> this_block)
                 {
                     AstBlock *block = class_body -> this_block;
                     for (int si = 0; si < block -> NumStatements(); si++)
@@ -348,8 +349,7 @@ void ByteCode::CompileClass()
             method_index = methods.NextIndex(); // index for method
             BeginMethod(method_index, local_constructor_symbol);  // is constructor
 
-            for (int k = 0; k < constructor_block -> block -> NumStatements(); k++)
-                EmitStatement((AstStatement *) constructor_block -> block -> Statement(k));
+            EmitStatement(constructor_block -> block);
 
             EndMethod(method_index, local_constructor_symbol);
         }
@@ -503,7 +503,12 @@ void ByteCode::CompileInterface()
         {
             AstMethodDeclaration *method = interface_decl -> Method(i);
             if (method -> method_symbol)
-                BeginMethod(methods.NextIndex(), method -> method_symbol);
+            {
+                int method_index = methods.NextIndex();
+
+                BeginMethod(method_index, method -> method_symbol);
+                EndMethod(method_index, method -> method_symbol);
+            }
         }
     }
 
@@ -560,8 +565,6 @@ void ByteCode::CompileConstructor(AstConstructorDeclaration *constructor, Tuple<
 
     int method_index = methods.NextIndex(); // index for method
     BeginMethod(method_index, method_symbol);
-
-    UpdateBlockInfo(method_symbol -> block_symbol);
 
     AstConstructorBlock *constructor_block = constructor -> constructor_body -> ConstructorBlockCast();
     if (constructor_block -> explicit_constructor_invocation_opt)
@@ -757,8 +760,16 @@ void ByteCode::BeginMethod(int method_index, MethodSymbol *msym)
 {
     assert(msym);
 
+#ifdef DUMP
+if (this_control.option.g)
+{
+Coutput << "(51) Generating code for method \"" << msym -> Name()
+        << "\" in " << unit_type -> ContainingPackage() -> PackageName() << "/"
+        << unit_type -> ExternalName() << "\n";
+Coutput.flush();
+}
+#endif
     MethodInitialization();
-    method_type = msym -> Type(); // save the type of the method being compiled
 
     methods[method_index].SetNameIndex(RegisterUtf8(msym -> ExternalIdentity() -> Utf8_literal));
     methods[method_index].SetDescriptorIndex(RegisterUtf8(msym -> signature));
@@ -791,17 +802,18 @@ void ByteCode::BeginMethod(int method_index, MethodSymbol *msym)
     //
     // here if need code and associated attributes.
     //
-    if (this_control.option.g)
-        local_variable_table_attribute = new LocalVariableTable_attribute(RegisterUtf8(this_control.LocalVariableTable_literal));
-
     if (! (msym -> ACC_ABSTRACT() || msym -> ACC_NATIVE()))
     {
-        AllocateMethodInfo(msym -> max_block_depth);
+        method_stack = new MethodStack(msym -> max_block_depth, msym -> block_symbol -> max_variable_index);
 
         code_attribute = new Code_attribute(RegisterUtf8(this_control.Code_literal), msym -> block_symbol -> max_variable_index);
 
         line_number = 0;
         line_number_table_attribute = new LineNumberTable_attribute(RegisterUtf8(this_control.LineNumberTable_literal));
+
+        local_variable_table_attribute = (this_control.option.g
+                                            ? new LocalVariableTable_attribute(RegisterUtf8(this_control.LocalVariableTable_literal))
+                                            : (LocalVariableTable_attribute *) NULL);
     }
 
     VariableSymbol *last_parameter = (msym -> NumFormalParameters() ? msym -> FormalParameter(msym -> NumFormalParameters() - 1)
@@ -905,7 +917,7 @@ void ByteCode::EndMethod(int method_index, MethodSymbol *msym)
             }
 
             //
-            // For an ordinary method or constructor...
+            // For a normal constructor or method.
             //
             for (int i = 0; i < msym -> NumFormalParameters(); i++)
             {
@@ -924,7 +936,7 @@ void ByteCode::EndMethod(int method_index, MethodSymbol *msym)
 
         methods[method_index].AddAttribute(code_attribute);
 
-        FreeMethodInfo();
+        delete method_stack;
     }
 
     return;
@@ -1031,9 +1043,6 @@ void ByteCode::InitializeArray(TypeSymbol *type, AstArrayInitializer *array_init
 //
 void ByteCode::DeclareLocalVariable(AstVariableDeclarator *declarator)
 {
-    if (this_control.option.g)
-        declarator -> symbol -> local_program_counter = code_attribute -> CodeLength();
-
     if (declarator -> symbol -> initial_value)
         LoadLiteral(declarator -> symbol -> initial_value, declarator -> symbol -> Type());
     else if (declarator -> variable_initializer_opt)
@@ -1048,7 +1057,21 @@ void ByteCode::DeclareLocalVariable(AstVariableDeclarator *declarator)
     }
     else return; // if nothing to initialize
 
-    StoreLocalVariable(declarator -> symbol);
+    StoreLocal(declarator -> symbol -> LocalVariableIndex(), declarator -> symbol -> Type());
+
+    if (this_control.option.g)
+    {
+#ifdef TEST
+        assert(method_stack -> StartPc(declarator -> symbol) == 0xFFFF); // must be uninitialized
+#endif
+#ifdef DUMP
+Coutput << "(53) Variable \"" << declarator -> symbol -> Name()
+        << "\" numbered " << declarator -> symbol -> LocalVariableIndex()
+        << " was processed\n";
+Coutput.flush();
+#endif
+        method_stack -> StartPc(declarator -> symbol) = code_attribute -> CodeLength();
+    }
 
     return;
 }
@@ -1076,12 +1099,30 @@ void ByteCode::EmitStatement(AstStatement *statement)
                                                      this_semantic.lex_stream -> Line(statement -> LeftToken()));
     }
 
+    if (this_control.option.g)
+    {
+        for (int i = 0; i < statement -> NumDefinedVariables(); i++)
+        {
+            VariableSymbol *variable = statement -> DefinedVariable(i);
+#ifdef TEST
+            assert(method_stack -> StartPc(variable) == 0xFFFF); // must be uninitialized
+#endif
+#ifdef DUMP
+Coutput << "(55) Variable \"" << variable -> Name()
+        << "\" numbered " << variable -> LocalVariableIndex()
+        << " was processed\n";
+Coutput.flush();
+#endif
+            method_stack -> StartPc(variable) = code_attribute -> CodeLength();
+        }
+    }
+
     stack_depth = 0; // stack empty at start of statement
 
     switch (statement -> kind)
     {
         case Ast::BLOCK: // JLS 13.2
-             EmitBlockStatement((AstBlock *) statement, false);
+             EmitBlockStatement((AstBlock *) statement);
              break;
         case Ast::LOCAL_VARIABLE_DECLARATION: // JLS 13.3
              {
@@ -1153,17 +1194,16 @@ void ByteCode::EmitStatement(AstStatement *statement)
         case Ast::WHILE: // JLS 13.10
              {
                  AstWhileStatement *wp = statement -> WhileStatementCast();
-                 int while_depth = this_block_depth;
-
                  //
-                 // branch to continuation test. This test is placed after the
+                 // Branch to continuation test. This test is placed after the
                  // body of the loop we can fall through into it after each
                  // loop iteration without the need for an additional branch.
                  //
-                 EmitBranch(OP_GOTO, continue_labels[while_depth]);
-                 DefineLabel(begin_labels[while_depth]);
+                 EmitBranch(OP_GOTO, method_stack -> TopContinueLabel());
+                 Label begin_label;
+                 DefineLabel(begin_label);
                  EmitStatement(wp -> statement);
-                 DefineLabel(continue_labels[while_depth]);
+                 DefineLabel(method_stack -> TopContinueLabel());
                  stack_depth = 0;
 
                  //
@@ -1172,18 +1212,18 @@ void ByteCode::EmitStatement(AstStatement *statement)
                  line_number_table_attribute -> AddLineNumber(code_attribute -> CodeLength(),
                                                               this_semantic.lex_stream -> Line(wp -> expression -> LeftToken()));
 
-                 EmitBranchIfExpression(wp -> expression, true, begin_labels[while_depth]);
-                 CompleteLabel(begin_labels[while_depth]);
-                 CompleteLabel(continue_labels[while_depth]);
+                 EmitBranchIfExpression(wp -> expression, true, begin_label);
+                 CompleteLabel(begin_label);
+                 CompleteLabel(method_stack -> TopContinueLabel());
              }
              break;
         case Ast::DO: // JLS 13.11
              {
                  AstDoStatement *sp = statement -> DoStatementCast();
-                 int do_depth = this_block_depth;
-                 DefineLabel(begin_labels[do_depth]);
+                 Label begin_label;
+                 DefineLabel(begin_label);
                  EmitStatement(sp -> statement);
-                 DefineLabel(continue_labels[do_depth]);
+                 DefineLabel(method_stack -> TopContinueLabel());
                  stack_depth = 0;
 
                  //
@@ -1192,24 +1232,25 @@ void ByteCode::EmitStatement(AstStatement *statement)
                  line_number_table_attribute -> AddLineNumber(code_attribute -> CodeLength(),
                                                               this_semantic.lex_stream -> Line(sp -> expression -> LeftToken()));
 
-                 EmitBranchIfExpression(sp -> expression, true, begin_labels[do_depth]);
-                 CompleteLabel(begin_labels[do_depth]);
-                 CompleteLabel(continue_labels[do_depth]);
+                 EmitBranchIfExpression(sp -> expression, true, begin_label);
+                 CompleteLabel(begin_label);
+                 CompleteLabel(method_stack -> TopContinueLabel());
              }
              break;
         case Ast::FOR: // JLS 13.12
              {
                  AstForStatement *for_statement = statement -> ForStatementCast();
-                 int for_depth = this_block_depth;
                  for (int i = 0; i < for_statement -> NumForInitStatements(); i++)
                      EmitStatement(for_statement -> ForInitStatement(i));
-                 EmitBranch(OP_GOTO, test_labels[for_depth]);
-                 DefineLabel(begin_labels[for_depth]);
+                 Label begin_label,
+                       test_label;
+                 EmitBranch(OP_GOTO, test_label);
+                 DefineLabel(begin_label);
                  EmitStatement(for_statement -> statement);
-                 DefineLabel(continue_labels[for_depth]);
+                 DefineLabel(method_stack -> TopContinueLabel());
                  for (int j = 0; j < for_statement -> NumForUpdateStatements(); j++)
                      EmitStatement(for_statement -> ForUpdateStatement(j));
-                 DefineLabel(test_labels[for_depth]);
+                 DefineLabel(test_label);
 
                  AstExpression *end_expr = for_statement -> end_expression_opt;
                  if (end_expr)
@@ -1222,22 +1263,22 @@ void ByteCode::EmitStatement(AstStatement *statement)
                      line_number_table_attribute -> AddLineNumber(code_attribute -> CodeLength(),
                                                                   this_semantic.lex_stream -> Line(end_expr -> LeftToken()));
 
-                     EmitBranchIfExpression(end_expr, true, begin_labels[for_depth]);
+                     EmitBranchIfExpression(end_expr, true, begin_label);
                  }
-                 else EmitBranch(OP_GOTO, begin_labels[for_depth]);
+                 else EmitBranch(OP_GOTO, begin_label);
 
-                 CompleteLabel(begin_labels[for_depth]);
-                 CompleteLabel(test_labels[for_depth]);
-                 CompleteLabel(continue_labels[for_depth]);
+                 CompleteLabel(begin_label);
+                 CompleteLabel(test_label);
+                 CompleteLabel(method_stack -> TopContinueLabel());
              }
              break;
         case Ast::BREAK: // JLS 13.13
              ProcessAbruptExit(statement -> BreakStatementCast() -> nesting_level);
-             EmitBranch(OP_GOTO, break_labels[statement -> BreakStatementCast() -> nesting_level]);
+             EmitBranch(OP_GOTO, method_stack -> BreakLabel(statement -> BreakStatementCast() -> nesting_level));
              break;
         case Ast::CONTINUE: // JLS 13.14
              ProcessAbruptExit(statement -> ContinueStatementCast() -> nesting_level);
-             EmitBranch(OP_GOTO, continue_labels[statement -> ContinueStatementCast() -> nesting_level]);
+             EmitBranch(OP_GOTO, method_stack -> ContinueLabel(statement -> ContinueStatementCast() -> nesting_level));
              break;
         case Ast::RETURN: // JLS 13.15
              EmitReturnStatement(statement -> ReturnStatementCast());
@@ -1278,117 +1319,69 @@ void ByteCode::EmitStatement(AstStatement *statement)
 
 void ByteCode::EmitReturnStatement(AstReturnStatement *statement)
 {
-    if (! statement -> expression_opt)
+    AstExpression *expression = statement -> expression_opt;
+
+    if (! expression)
     {
-        ProcessAbruptExit(0);
+        ProcessAbruptExit(method_stack -> NestingLevel(0));
         PutOp(OP_RETURN);
-        return;
     }
-
-    EmitExpression(statement -> expression_opt);
-
-    //
-    // if any outstanding synchronized blocks,
-    // find the index of the innermost enclosing block that is
-    // synchronized. This block will have the variables allocated
-    // for saving synchronization information.
-    //
-    int var_index = -1;
-    if (synchronized_blocks)
+    else
     {
-        int synch_index = 0;
-        for (int i = this_block_depth; i >= 0; i--)
-        {
-            if (is_synchronized[i])
-            {
-                synch_index = i;
-                break;
-            }
-        }
+        TypeSymbol *type = expression -> Type();
+        assert(type != this_control.void_type);
 
-        assert(synch_index > 0); // unable to find synchronization block: block #0 is method block.
+        EmitExpression(expression);
 
-        var_index = block_symbols[synch_index] -> synchronized_variable_index + 2;
+        ProcessAbruptExit(method_stack -> NestingLevel(0), type);
+
+        GenerateReturn(type);
     }
-    else if (finally_blocks)
-    {
-        int finally_index = 0;
-        for (int i = this_block_depth; i >= 0; i--)
-        {
-            if (has_finally_clause[i] > 0)
-            {
-                finally_index = i;
-                break;
-            }
-        }
-
-        assert(finally_index > 0); // unable to find finally block: block #0 is method block
-
-        var_index = (has_finally_clause[finally_index] - 1) + 2; // +2 to move to start of area to save value
-    }
-
-    if (var_index >= 0) // if need to save before abrupt exit
-    {
-        StoreLocal(var_index, method_type);
-        ProcessAbruptExit(0);
-        LoadLocal(var_index, method_type);
-    }
-
-    if (method_type != this_control.void_type)
-        GenerateReturn(method_type);
 
     return;
 }
 
 
-void ByteCode::EmitBlockStatement(AstBlock *block, bool synchronized)
+void ByteCode::EmitBlockStatement(AstBlock *block)
 {
-    int save_depth = this_block_depth; // save the depth level upon entry...
-
-    BlockSymbol *block_symbol = block -> block_symbol;
-    int nesting_level = block -> nesting_level;
-
-    this_block_depth = nesting_level;
-    is_synchronized[nesting_level] = synchronized;
-    synchronized_blocks += (synchronized ? 1 : 0);
-    block_symbols[nesting_level] = block_symbol;
-
     stack_depth = 0; // stack empty at start of statement
 
-    if (nesting_level > max_block_depth)
-    {
-        Coutput << "nesting_level "
-                << nesting_level
-                << "max "
-                << max_block_depth
-                << "\n";
-        assert(false && "loops too deeply nested");
-    }
+    method_stack -> Push(block);
 
     for (int i = 0; i < block -> NumStatements(); i++)
         EmitStatement((AstStatement *) block -> Statement(i));
 
-    assert(this_block_depth == nesting_level); // block depth out of synch!
-
     //
-    // Always define LABEL_BREAK at this point, and complete definition
-    // of other labels
+    // Always define LABEL_BREAK at this point, and complete its definition.
     //
-    if (IsLabelUsed(break_labels[nesting_level])) // need define only if used
-        DefineLabel(break_labels[nesting_level]);
+    if (IsLabelUsed(method_stack -> TopBreakLabel())) // need define only if used
+        DefineLabel(method_stack -> TopBreakLabel());
+    CompleteLabel(method_stack -> TopBreakLabel());
 
-    CompleteLabel(begin_labels[nesting_level]);
-    CompleteLabel(break_labels[nesting_level]);
-    CompleteLabel(continue_labels[nesting_level]);
-    CompleteLabel(test_labels[nesting_level]);
-    CompleteLabel(begin_labels[nesting_level]);
+    if (this_control.option.g)
+    {
+        for (int i = 0; i < block -> NumLocallyDefinedVariables(); i++)
+        {
+            VariableSymbol *variable = block -> LocallyDefinedVariable(i);
 
-    if (is_synchronized[nesting_level])
-        synchronized_blocks--;
+#ifdef TEST
+            assert(method_stack -> StartPc(variable) != 0xFFFF);
+#endif
+#ifdef DUMP
+Coutput << "(56) The symbol \"" << variable -> Name()
+        << "\" numbered " << variable -> LocalVariableIndex()
+        << " was released\n";
+Coutput.flush();
+#endif
+            local_variable_table_attribute -> AddLocalVariable(method_stack -> StartPc(variable),
+                                                               code_attribute -> CodeLength(),
+                                                               RegisterUtf8(variable -> ExternalIdentity() -> Utf8_literal),
+                                                               RegisterUtf8(variable -> Type() -> signature),
+                                                               variable -> LocalVariableIndex());
+        }
+    }
 
-    UpdateBlockInfo(block_symbol);
-
-    this_block_depth = save_depth; // restore the original depth level upon entry.
+    method_stack -> Pop();
 
     return;
 }
@@ -1453,28 +1446,25 @@ void ByteCode::EmitStatementExpression(AstExpression *expression)
 //  default: defact;
 // }
 //
-void ByteCode::EmitSwitchStatement(AstSwitchStatement *sws)
+void ByteCode::EmitSwitchStatement(AstSwitchStatement *switch_statement)
 {
-    bool use_lookup = true; // set if using LOOKUPSWITCH opcode
+    AstBlock *switch_block = switch_statement -> switch_block;
 
-    AstBlock *switch_block = sws -> switch_block;
-
-    int switch_depth = sws -> switch_block -> nesting_level;
-
-    EmitBlockStatement(switch_block, false);
+    stack_depth = 0; // stack empty at start of statement
 
     //
     // Use tableswitch if have exact match or size of tableswitch
     // case is no more than 30 bytes more code than lookup case
     //
-    int ncases = sws -> NumCases(),
+    bool use_lookup = true; // set if using LOOKUPSWITCH opcode
+    int ncases = switch_statement -> NumCases(),
         nlabels = ncases,
         high = 0,
         low = 0;
     if (ncases > 0)
     {
-        low = sws -> Case(0) -> Value();
-        high = sws -> Case(ncases - 1) -> Value();
+        low = switch_statement -> Case(0) -> Value();
+        high = switch_statement -> Case(ncases - 1) -> Value();
 
         //
         // want to compute
@@ -1498,8 +1488,8 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *sws)
     // Reset the line number before evaluating the expression
     //
     line_number_table_attribute -> AddLineNumber(code_attribute -> CodeLength(),
-                                                 this_semantic.lex_stream -> Line(sws -> expression -> LeftToken()));
-    EmitExpression(sws -> expression);
+                                                 this_semantic.lex_stream -> Line(switch_statement -> expression -> LeftToken()));
+    EmitExpression(switch_statement -> expression);
 
     stack_depth = 0;
     PutOp(use_lookup ? OP_LOOKUPSWITCH : OP_TABLESWITCH);
@@ -1512,27 +1502,32 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *sws)
         PutNop(0);
 
     //
+    // Set up the environment for the switch block.
+    //
+    method_stack -> Push(switch_block);
+
+    //
     // Note that if no default clause in switch statement, must allocate
     // one that corresponds to do nothing and branches to start of next
     // statement.
     //
-    Label default_label;
-    UseLabel(sws -> default_case.switch_block_statement ? default_label : break_labels[switch_depth],
+    Label *case_labels = new Label[(use_lookup ? ncases : nlabels) + 1],
+          default_label;
+    UseLabel(switch_statement -> default_case.switch_block_statement ? default_label : method_stack -> TopBreakLabel(),
              4,
              code_attribute -> CodeLength() - op_start);
 
     //
     //
     //
-    Label *case_labels = new Label[(use_lookup ? ncases : nlabels) + 1];
     if (use_lookup)
     {
         PutU4(ncases);
 
         for (int i = 0; i < ncases; i++)
         {
-            PutU4(sws -> Case(i) -> Value());
-            UseLabel(case_labels[sws -> Case(i) -> index], 4, code_attribute -> CodeLength() - op_start);
+            PutU4(switch_statement -> Case(i) -> Value());
+            UseLabel(case_labels[switch_statement -> Case(i) -> index], 4, code_attribute -> CodeLength() - op_start);
         }
     }
     else
@@ -1548,19 +1543,19 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *sws)
         //
         // mark cases for which no case tag available, i.e., default cases
         //
-        for (int j = 0; j < sws -> switch_block -> NumStatements(); j++)
+        for (int j = 0; j < switch_block -> NumStatements(); j++)
         {
-            AstSwitchBlockStatement *sbs = (AstSwitchBlockStatement *) sws -> switch_block -> Statement(j);
+            AstSwitchBlockStatement *switch_block_statement = (AstSwitchBlockStatement *) switch_block -> Statement(j);
 
             //
             // process labels for this block
             //
-            for (int li = 0; li < sbs -> NumSwitchLabels(); li++)
+            for (int li = 0; li < switch_block_statement -> NumSwitchLabels(); li++)
             {
-                AstCaseLabel *case_label = sbs -> SwitchLabel(li) -> CaseLabelCast();
+                AstCaseLabel *case_label = switch_block_statement -> SwitchLabel(li) -> CaseLabelCast();
                 if (case_label)
                 {
-                    int label_index = sws -> Case(case_label -> map_index) -> Value() - low;
+                    int label_index = switch_statement -> Case(case_label -> map_index) -> Value() - low;
                     has_tag[label_index] = true;
                 }
             }
@@ -1572,9 +1567,9 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *sws)
         for (int k = 0; k < nlabels; k++)
         {
             UseLabel(has_tag[k] ? case_labels[k]
-                                : sws -> default_case.switch_block_statement
+                                : switch_statement -> default_case.switch_block_statement
                                        ? default_label
-                                       : break_labels[switch_depth],
+                                       : method_stack -> TopBreakLabel(),
                      4,
                      code_attribute -> CodeLength() - op_start);
         }
@@ -1588,16 +1583,16 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *sws)
     // so that blocks lacking a terminal break fall through to the
     // proper place.
     //
-    for (int i = 0; i < sws -> switch_block -> NumStatements(); i++)
+    for (int i = 0; i < switch_block -> NumStatements(); i++)
     {
-        AstSwitchBlockStatement *sbs = (AstSwitchBlockStatement *) sws -> switch_block -> Statement(i);
+        AstSwitchBlockStatement *switch_block_statement = (AstSwitchBlockStatement *) switch_block -> Statement(i);
 
         //
         // process labels for this block
         //
-        for (int li = 0; li < sbs -> NumSwitchLabels(); li++)
+        for (int li = 0; li < switch_block_statement -> NumSwitchLabels(); li++)
         {
-            AstCaseLabel *case_label = sbs -> SwitchLabel(li) -> CaseLabelCast();
+            AstCaseLabel *case_label = switch_block_statement -> SwitchLabel(li) -> CaseLabelCast();
             if (case_label)
             {
                 int map_index = case_label -> map_index;
@@ -1609,11 +1604,11 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *sws)
                     //
                     // TODO: Do this more efficiently ???!!!
                     //
-                    for (int di = 0; di < sws -> NumCases(); di++)
+                    for (int di = 0; di < switch_statement -> NumCases(); di++)
                     {
-                        if (sws -> Case(di) -> index == map_index)
+                        if (switch_statement -> Case(di) -> index == map_index)
                         {
-                            int ci = sws -> Case(di) -> Value() - low;
+                            int ci = switch_statement -> Case(di) -> Value() - low;
                             DefineLabel(case_labels[ci]);
                             break;
                         }
@@ -1622,8 +1617,8 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *sws)
             }
             else
             {
-                assert(sbs -> SwitchLabel(li) -> DefaultLabelCast());
-                assert(sws -> default_case.switch_block_statement);
+                assert(switch_block_statement -> SwitchLabel(li) -> DefaultLabelCast());
+                assert(switch_statement -> default_case.switch_block_statement);
 
                 DefineLabel(default_label);
             }
@@ -1632,44 +1627,104 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *sws)
         //
         // compile code for this case
         //
-        for (int si = 0; si < sbs -> NumStatements(); si++)
-            EmitStatement(sbs -> Statement(si) -> StatementCast());
+        for (int si = 0; si < switch_block_statement -> NumStatements(); si++)
+            EmitStatement(switch_block_statement -> Statement(si) -> StatementCast());
+
+        //
+        // If this switch block statement does not terminate normally,
+        // close the range of the locally defined variables here and
+        // reset their StartPc
+        //
+        if (this_control.option.g)
+        {
+            for (int i = 0; i < switch_block_statement -> NumLocallyDefinedVariables(); i++)
+            {
+                VariableSymbol *variable = switch_block_statement -> LocallyDefinedVariable(i);
+
+#ifdef TEST
+                assert(method_stack -> StartPc(variable) != 0xFFFF);
+#endif
+#ifdef DUMP
+Coutput << "(57) The symbol \"" << variable -> Name()
+        << "\" numbered " << variable -> LocalVariableIndex()
+        << " was released\n";
+Coutput.flush();
+#endif
+                local_variable_table_attribute -> AddLocalVariable(method_stack -> StartPc(variable),
+                                                                   code_attribute -> CodeLength(),
+                                                                   RegisterUtf8(variable -> ExternalIdentity() -> Utf8_literal),
+                                                                   RegisterUtf8(variable -> Type() -> signature),
+                                                                   variable -> LocalVariableIndex());
+#ifdef TEST
+                method_stack -> StartPc(variable) = 0xFFFF;
+#endif
+            }
+        }
+    }
+
+    //
+    // If the last statement in the switch block terminates normally,
+    // close the range of the locally defined variables that have
+    // been defined but not yet processsed.
+    //
+    if (this_control.option.g)
+    {
+        for (int i = 0; i < switch_block -> NumLocallyDefinedVariables(); i++)
+        {
+            VariableSymbol *variable = switch_block -> LocallyDefinedVariable(i);
+
+#ifdef TEST
+            assert(method_stack -> StartPc(variable) != 0xFFFF);
+#endif
+#ifdef DUMP
+Coutput << "(58) The symbol \"" << variable -> Name()
+        << "\" numbered " << variable -> LocalVariableIndex()
+        << " was released\n";
+Coutput.flush();
+#endif
+            local_variable_table_attribute -> AddLocalVariable(method_stack -> StartPc(variable),
+                                                               code_attribute -> CodeLength(),
+                                                               RegisterUtf8(variable -> ExternalIdentity() -> Utf8_literal),
+                                                               RegisterUtf8(variable -> Type() -> signature),
+                                                               variable -> LocalVariableIndex());
+        }
     }
 
     //
     //
     //
-    UpdateBlockInfo(switch_block -> block_symbol);
-
     for (int j = 0; j < nlabels; j++)
     {
         if ((case_labels[j].uses.Length() > 0) && (! case_labels[j].defined))
         {
             case_labels[j].defined = true;
-            case_labels[j].definition = (sws -> default_case.switch_block_statement ? default_label.definition
-                                                                                    : break_labels[switch_depth].definition);
+            case_labels[j].definition = (switch_statement -> default_case.switch_block_statement
+                                                           ? default_label.definition
+                                                           : method_stack -> TopBreakLabel().definition);
         }
 
         CompleteLabel(case_labels[j]);
     }
 
-    if (sws -> default_case.switch_block_statement)
-        CompleteLabel(default_label);
-
-    // define target of break label
-    if (IsLabelUsed(break_labels[switch_depth])) // need define only if used
-        DefineLabel(break_labels[switch_depth]);
-
-    if (sws -> default_case.switch_block_statement)
+    //
+    // If the switch statement contains a default case, we clean up
+    // the default label here.
+    //
+    if (switch_statement -> default_case.switch_block_statement)
         CompleteLabel(default_label);
 
     //
-    // define target of break label
+    // If this switch statement can be "broken", we define the break label here.
     //
-    if (IsLabelUsed(break_labels[switch_depth])) // need define only if used
-        CompleteLabel(break_labels[switch_depth]);
+    if (IsLabelUsed(method_stack -> TopBreakLabel())) // need define only if used
+    {
+        DefineLabel(method_stack -> TopBreakLabel());
+        CompleteLabel(method_stack -> TopBreakLabel());
+    }
 
     delete [] case_labels;
+
+    method_stack -> Pop();
 
     return;
 }
@@ -1680,21 +1735,18 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *sws)
 //
 void ByteCode::EmitTryStatement(AstTryStatement *statement)
 {
-    int final_depth = statement -> block -> nesting_level,
-        start_pc = code_attribute -> CodeLength(); // start pc
+    //
+    // If the finally label in the surrounding block is used by a try statement,
+    // it is cleared after the finally block associated with the try statement
+    // has been processed.
+    //
+    assert(method_stack -> TopFinallyLabel().uses.Length() == 0);
+    assert(method_stack -> TopFinallyLabel().defined == false);
+    assert(method_stack -> TopFinallyLabel().definition == 0);
 
-    if (statement -> finally_clause_opt)
-    {
-        // Initialize for processing finally clause.
-        assert(block_symbols[final_depth - 1]);
+    int start_try_block_pc = code_attribute -> CodeLength(); // start pc
 
-        BlockSymbol *block_symbol = block_symbols[final_depth - 1] -> BlockCast();
-        AstFinallyClause *finally_clause = statement -> finally_clause_opt;
-        has_finally_clause[final_depth] = 1 + block_symbol -> try_variable_index;
-        finally_blocks++;
-    }
-
-    EmitStatement(statement -> block);
+    EmitBlockStatement(statement -> block);
 
     //
     // increment max_stack in case exception thrown while stack at greatest depth
@@ -1702,113 +1754,130 @@ void ByteCode::EmitTryStatement(AstTryStatement *statement)
     max_stack++;
 
     //
-    // The computation of end_pc, the instruction following the last instruction in the body of the
-    // try block, does not include the code, if any, needed to call a finally block or skip to the
-    // end of the try statement.
+    // The computation of end_try_block_pc, the instruction following the last instruction in the
+    // body of the try block, does not include the code, if any, needed to call a finally block or
+    // skip to the end of the try statement.
     //
-    int end_pc = code_attribute -> CodeLength(),
-        special_end_pc = end_pc; // end_pc for "special" handler
-    Label end_label;
+    int end_try_block_pc = code_attribute -> CodeLength(),
+        special_end_pc = end_try_block_pc; // end_pc for "special" handler
+
+    Label &finally_label = method_stack -> TopFinallyLabel(), // use the label in the block immediately enclosing try statement.
+          end_label;
     if (statement -> block -> can_complete_normally)
     {
         if (statement -> finally_clause_opt)
         {
+            //
             // Call finally block if have finally handler.
+            //
             PutOp(OP_JSR);
-            UseLabel(final_labels[final_depth], 2, 1);
+            UseLabel(finally_label, 2, 1);
         }
-        // There must be at least one catch (or finally) block following
-        // this try block. Branch around that code to the next statement.
+
         EmitBranch(OP_GOTO, end_label);
     }
 
     //
-    // process catch clauses, but only if try block is not empty
+    // Process catch clauses, but only if try block is not empty.
     //
-    for (int i = 0; start_pc != end_pc && i < statement -> NumCatchClauses(); i++)
+    if (start_try_block_pc != end_try_block_pc)
     {
-        int handler_pc = code_attribute -> CodeLength();
-
-        AstCatchClause *catch_clause = statement -> CatchClause(i);
-        VariableSymbol *parameter_symbol = catch_clause -> parameter_symbol;
-        StoreLocalVariable(parameter_symbol);
-        EmitStatement(catch_clause -> block);
-
-        code_attribute -> AddException(start_pc,
-                                       end_pc,
-                                       handler_pc,
-                                       RegisterClass(parameter_symbol -> Type() -> fully_qualified_name));
-
-        special_end_pc = code_attribute -> CodeLength();
-
-        if (statement -> finally_clause_opt) // call finally block if have finally handler
+        for (int i = 0; i < statement -> NumCatchClauses(); i++)
         {
+            int handler_pc = code_attribute -> CodeLength();
+
+            AstCatchClause *catch_clause = statement -> CatchClause(i);
+            VariableSymbol *parameter_symbol = catch_clause -> parameter_symbol;
+
+            StoreLocal(parameter_symbol -> LocalVariableIndex(), parameter_symbol -> Type());
+
+            EmitBlockStatement(catch_clause -> block);
+
+            if (this_control.option.g)
+            {
+                local_variable_table_attribute -> AddLocalVariable(handler_pc,
+                                                                   code_attribute -> CodeLength(),
+                                                                   RegisterUtf8(parameter_symbol -> ExternalIdentity() -> Utf8_literal),
+                                                                   RegisterUtf8(parameter_symbol -> Type() -> signature),
+                                                                   parameter_symbol -> LocalVariableIndex());
+            }
+
+            code_attribute -> AddException(start_try_block_pc,
+                                           end_try_block_pc,
+                                           handler_pc,
+                                           RegisterClass(parameter_symbol -> Type() -> fully_qualified_name));
+
+            special_end_pc = code_attribute -> CodeLength();
+
             if (catch_clause -> block -> can_complete_normally)
             {
-                PutOp(OP_JSR);
-                UseLabel(final_labels[final_depth], 2, 1);
-            }
-        }
+                if (statement -> finally_clause_opt)
+                {
+                    //
+                    // Call finally block if have finally handler.
+                    //
+                    PutOp(OP_JSR);
+                    UseLabel(finally_label, 2, 1);
+                }
 
-        if (catch_clause -> block -> can_complete_normally)
-        {
-            //
-            // If there are more catch clauses, or a finally clause, then emit branch to
-            // skip over their code and on to the next statement.
-            //
-            if (statement -> finally_clause_opt || i < (statement -> NumCatchClauses() - 1))
-                EmitBranch(OP_GOTO, end_label);
+                //
+                // If there are more catch clauses, or a finally clause, then emit branch to
+                // skip over their code and on to the next statement.
+                //
+                if (statement -> finally_clause_opt || i < (statement -> NumCatchClauses() - 1))
+                    EmitBranch(OP_GOTO, end_label);
+            }
         }
     }
 
+    //
+    // If this try statement contains a finally clause, then ...
+    //
     if (statement -> finally_clause_opt)
     {
-        has_finally_clause[final_depth] = 0; // reset once finally clause processed
-        finally_blocks--;
+        int variable_index = method_stack -> TopBlock() -> block_symbol -> try_or_synchronized_variable_index;
 
-        BlockSymbol *block_symbol = block_symbols[final_depth - 1] -> BlockCast();
-
+        //
         // Emit code for "special" handler to make sure finally clause is
         // invoked in case an otherwise uncaught exception is thrown in the
         // try block, or an exception is thrown from within a catch block.
-
+        //
         // No special handler is needed if the try block is empty.
-        if (start_pc != end_pc) // If try-block not empty
+        if (start_try_block_pc != end_try_block_pc) // If try-block not empty
         {
-            code_attribute -> AddException(start_pc,
+            code_attribute -> AddException(start_try_block_pc,
                                            special_end_pc,
                                            code_attribute -> CodeLength(),
                                            0);
-            StoreLocal(block_symbol -> try_variable_index, this_control.Object()); // Save exception
+            StoreLocal(variable_index, this_control.Object()); // Save exception
             PutOp(OP_JSR); // Jump to finally block.
-            UseLabel(final_labels[final_depth], 2, 1);
-            LoadLocal(block_symbol -> try_variable_index, this_control.Object()); // Reload exception,
+            UseLabel(finally_label, 2, 1);
+            LoadLocal(variable_index, this_control.Object()); // Reload exception,
             PutOp(OP_ATHROW); // and rethrow it.
         }
 
         //
         // Generate code for finally clause.
         //
-        DefineLabel(final_labels[final_depth]);
-        CompleteLabel(final_labels[final_depth]);
+        DefineLabel(finally_label);
+        CompleteLabel(finally_label);
+
+        //
+        // If the finally block can complete normally, save the return address.
+        // Otherwise, we pop the return address from the stack.
+        //
         if (statement -> finally_clause_opt -> block -> can_complete_normally)
-        {
-            // Finally block can complete normally, so save the return address.
-            StoreLocal(block_symbol -> try_variable_index + 1, this_control.Object());
-        }
-        else
-        {
-            // Finally block cannot complete normally, so don't need the return address.
-            // Pop it from stack.
-            PutOp(OP_POP);
-        }
-        EmitStatement(statement -> finally_clause_opt -> block);
+             StoreLocal(variable_index + 1, this_control.Object());
+        else PutOp(OP_POP);
+
+        EmitBlockStatement(statement -> finally_clause_opt -> block);
+
+        //
+        // If a finally block can complete normally, after executing itsbody, we return
+        // to the caller using the return address saved earlier.
+        //
         if (statement -> finally_clause_opt -> block -> can_complete_normally)
-        {
-            // Finally can complete normally, so return to caller using the
-            // saved return address.
-            PutOpWide(OP_RET, block_symbol -> try_variable_index + 1);
-        }
+            PutOpWide(OP_RET, variable_index + 1);
     }
 
     if (IsLabelUsed(end_label))
@@ -1819,47 +1888,55 @@ void ByteCode::EmitTryStatement(AstTryStatement *statement)
 }
 
 
-void ByteCode::UpdateBlockInfo(BlockSymbol *block_symbol)
-{
-    assert(block_symbol);
-
-    if (this_control.option.g) // compute local variable table
-    {
-        for (int i = 0; i < block_symbol -> NumVariableSymbols(); i++)
-        {
-            VariableSymbol *sym = block_symbol -> VariableSym(i);
-
-            if (last_op_pc > sym -> local_program_counter) // only make entry if defined within range
-            {
-                local_variable_table_attribute -> AddLocalVariable(sym -> local_program_counter,
-                                                                   last_op_pc - sym -> local_program_counter,
-                                                                   RegisterUtf8(sym -> ExternalIdentity() -> Utf8_literal),
-                                                                   RegisterUtf8(sym -> Type() -> signature),
-                                                                   sym -> LocalVariableIndex());
-            }
-        }
-    }
-
-    return;
-}
-
-
 //
 // Exit to block at level lev, freeing monitor locks and invoking finally clauses as appropriate
 //
-void ByteCode::ProcessAbruptExit(int to_lev)
+void ByteCode::ProcessAbruptExit(int to_lev, TypeSymbol *return_type)
 {
-    for (int lev = this_block_depth; lev > to_lev; lev--)
+    for (int i = method_stack -> Size() - 1; i > 0 && method_stack -> NestingLevel(i) != to_lev; i--)
     {
-        if (has_finally_clause[lev] > 0)
+        int nesting_level = method_stack -> NestingLevel(i),
+            enclosing_level = method_stack -> NestingLevel(i - 1);
+        AstBlock *block = method_stack -> Block(nesting_level);
+        if (block -> block_tag == AstBlock::TRY_CLAUSE_WITH_FINALLY)
         {
-            PutOp(OP_JSR);
-            UseLabel(final_labels[lev], 2, 1);
+            if (return_type)
+            {
+                Label &finally_label = method_stack -> FinallyLabel(enclosing_level);
+                int variable_index = method_stack -> Block(enclosing_level) -> block_symbol -> try_or_synchronized_variable_index + 2;
+
+                StoreLocal(variable_index, return_type);
+
+                PutOp(OP_JSR);
+                UseLabel(finally_label, 2, 1);
+
+                LoadLocal(variable_index, return_type);
+            }
+            else
+            {
+                PutOp(OP_JSR);
+                UseLabel(method_stack -> FinallyLabel(enclosing_level), 2, 1);
+            }
         }
-        else if (is_synchronized[lev])
+        else if (block -> block_tag == AstBlock::SYNCHRONIZED)
         {
-            PutOp(OP_JSR);
-            UseLabel(monitor_labels[lev], 2, 1);
+            if (return_type)
+            {
+                Label &monitor_label = method_stack -> MonitorLabel(enclosing_level);
+                int variable_index = method_stack -> Block(enclosing_level) -> block_symbol -> try_or_synchronized_variable_index + 2;
+
+                StoreLocal(variable_index, return_type);
+
+                PutOp(OP_JSR);
+                UseLabel(monitor_label, 2, 1);
+
+                LoadLocal(variable_index, return_type);
+            }
+            else
+            {
+                PutOp(OP_JSR);
+                UseLabel(method_stack -> MonitorLabel(enclosing_level), 2, 1);
+            }
         }
     }
 
@@ -2317,20 +2394,23 @@ void ByteCode::EmitSynchronizedStatement(AstSynchronizedStatement *statement)
 {
     EmitExpression(statement -> expression);
 
-    int var_index = statement -> block -> block_symbol -> synchronized_variable_index; // variable index to save address of object
+    int variable_index = method_stack -> TopBlock() -> block_symbol -> try_or_synchronized_variable_index;
 
-    StoreLocal(var_index, this_control.Object()); // save address of object
-    LoadLocal(var_index, this_control.Object()); // load address of object onto stack
+    StoreLocal(variable_index, this_control.Object()); // save address of object
+    LoadLocal(variable_index, this_control.Object()); // load address of object onto stack
 
     PutOp(OP_MONITORENTER); // enter monitor associated with object
 
-    int start_pc = code_attribute -> CodeLength(); // start pc
+    int start_synchronized_pc = code_attribute -> CodeLength(); // start pc
 
-    EmitBlockStatement(statement -> block, true);
-    LoadLocal(var_index, this_control.Object()); // load address of object onto stack
+    EmitBlockStatement(statement -> block);
+
+    int end_synchronized_pc = code_attribute -> CodeLength(); // end pc
+
+    LoadLocal(variable_index, this_control.Object()); // load address of object onto stack
     PutOp(OP_MONITOREXIT);
 
-    if (statement -> block -> NumStatements() > 0)
+    if (start_synchronized_pc != end_synchronized_pc) // if the synchronized block is not empty.
     {
         int end_pc = last_op_pc;
 
@@ -2342,18 +2422,18 @@ void ByteCode::EmitSynchronizedStatement(AstSynchronizedStatement *statement)
         //
         max_stack++;
         int handler_pc = code_attribute -> CodeLength();
-        LoadLocal(var_index, this_control.Object()); // load address of object onto stack
+        LoadLocal(variable_index, this_control.Object()); // load address of object onto stack
         PutOp(OP_MONITOREXIT);
         PutOp(OP_ATHROW);
 
-        code_attribute -> AddException(start_pc, handler_pc, handler_pc, 0);
+        code_attribute -> AddException(start_synchronized_pc, handler_pc, handler_pc, 0);
 
-        DefineLabel(monitor_labels[statement -> block -> nesting_level]);
-        CompleteLabel(monitor_labels[statement -> block -> nesting_level]);
+        DefineLabel(method_stack -> TopMonitorLabel());
+        CompleteLabel(method_stack -> TopMonitorLabel());
 
-        int loc_index = var_index + 1; // local variable index to save address
+        int loc_index = variable_index + 1; // local variable index to save return  address
         StoreLocal(loc_index, this_control.Object()); // save return address
-        LoadLocal(var_index, this_control.Object()); // load address of object onto stack
+        LoadLocal(variable_index, this_control.Object()); // load address of object onto stack
         PutOp(OP_MONITOREXIT);
         PutOpWide(OP_RET, loc_index);  // return using saved address
 
@@ -2761,7 +2841,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
                                                    ? assignment_expression -> write_method -> accessed_member -> VariableCast()
                                                    : (VariableSymbol *) NULL);
 
-    if (assignment_expression -> assignment_tag == AstAssignmentExpression::EQUAL)
+    if (assignment_expression -> SimpleAssignment())
     {
         switch(kind)
         {
@@ -3070,6 +3150,22 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
             break;
         default:
             break;
+    }
+
+    if (this_control.option.g && assignment_expression -> assignment_tag == AstAssignmentExpression::DEFINITE_EQUAL)
+    {
+        VariableSymbol *variable = assignment_expression -> left_hand_side -> symbol -> VariableCast();
+        assert(variable);
+#ifdef TEST
+        assert(method_stack -> StartPc(variable) == 0xFFFF); // must be uninitialized
+#endif
+#ifdef DUMP
+Coutput << "(59) Variable \"" << variable -> Name()
+        << "\" numbered " << variable -> LocalVariableIndex()
+        << " was processed\n";
+Coutput.flush();
+#endif
+        method_stack -> StartPc(variable) = code_attribute -> CodeLength();
     }
 
     return GetTypeWords(assignment_expression -> Type());
@@ -4451,10 +4547,7 @@ ByteCode::ByteCode(TypeSymbol *unit_type) : ClassFile(unit_type),
                                             methodref_constant_pool_index(NULL),
 
                                             string_overflow(false),
-                                            library_method_not_found(false),
-
-                                            synchronized_blocks(0),
-                                            finally_blocks(0)
+                                            library_method_not_found(false)
 {
 #ifdef TEST
     if (! this_control.option.nowrite)
@@ -4541,15 +4634,12 @@ void ByteCode::CompleteLabel(Label& lab)
             }
             else assert(false &&  "label use length not 2 or 4");
         }
-
-        lab.uses.Reset();
     }
 
     //
     // reset in case label is used again.
     //
-    lab.definition = 0;
-    lab.defined = false;
+    lab.Reset();
 
     return;
 }
@@ -4887,22 +4977,6 @@ void ByteCode::StoreField(AstExpression *expression)
 }
 
 
-void ByteCode::StoreLocalVariable(VariableSymbol *var)
-{
-    StoreLocal(var -> LocalVariableIndex(), var -> Type());
-    if (this_control.option.g && var -> LocalVariableIndex() > last_parameter_index)
-    {
-        //
-        // here to update point of first assignment, marking point at which value is
-        // available to be displayed by debugger.
-        //
-        if (var -> local_program_counter == 0)
-            var -> local_program_counter = code_attribute -> CodeLength();
-    }
-
-    return;
-}
-
 void ByteCode::StoreLocal(int varno, TypeSymbol *type)
 {
     if (this_control.IsSimpleIntegerValueType(type) || type == this_control.boolean_type)
@@ -4946,7 +5020,7 @@ void ByteCode::StoreVariable(int kind, AstExpression *expr)
     switch (kind)
     {
         case LHS_LOCAL:
-             StoreLocalVariable(sym);
+             StoreLocal(sym -> LocalVariableIndex(), sym -> Type());
              break;
         case LHS_FIELD:
         case LHS_STATIC:
