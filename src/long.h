@@ -1,4 +1,4 @@
-// $Id: long.h,v 1.6 1999/10/27 18:07:10 shields Exp $
+// $Id: long.h,v 1.7 2000/01/06 06:46:47 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -28,7 +28,7 @@ protected:
         u4 word[2];
     } value;
 
-#ifdef BIGENDIAN
+#ifdef WORDS_BIGENDIAN
     u4 &High() { return value.word[0]; }
     u4 &Low()  { return value.word[1]; }
 #else

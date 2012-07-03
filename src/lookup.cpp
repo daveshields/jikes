@@ -1,4 +1,4 @@
-// $Id: lookup.cpp,v 1.20 1999/10/27 18:07:10 shields Exp $
+// $Id: lookup.cpp,v 1.21 1999/11/18 03:37:23 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1630,7 +1630,7 @@ bool Utf8LiteralTable::IsConstant(AstExpression *expression)
     AstBinaryExpression *binary_expression;
     AstCastExpression *cast_expression;
     AstParenthesizedExpression *parenthesized_expression;
-    if (binary_expression = expression -> BinaryExpressionCast())
+    if ((binary_expression = expression -> BinaryExpressionCast()))
     {
         int left_start_marker = expr -> Length();
 
@@ -1652,9 +1652,9 @@ bool Utf8LiteralTable::IsConstant(AstExpression *expression)
 
         expr -> Reset(left_start_marker);
     }
-    else if (cast_expression = expression -> CastExpressionCast())
+    else if ((cast_expression = expression -> CastExpressionCast()))
          return IsConstant(cast_expression -> expression);
-    else if (parenthesized_expression = expression -> ParenthesizedExpressionCast())
+    else if ((parenthesized_expression = expression -> ParenthesizedExpressionCast()))
          return IsConstant(parenthesized_expression -> expression);
 
     return false; // Not a constant String expression

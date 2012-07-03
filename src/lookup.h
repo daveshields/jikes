@@ -1,4 +1,4 @@
-// $Id: lookup.h,v 1.14 1999/10/19 23:13:38 shields Exp $
+// $Id: lookup.h,v 1.15 2000/01/06 06:46:47 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,7 +11,9 @@
 #define lookup_INCLUDED
 
 #include "config.h"
-#include <wchar.h>
+#ifdef HAVE_WCHAR_H
+# include <wchar.h>
+#endif
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>

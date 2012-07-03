@@ -1,4 +1,4 @@
-// $Id: control.cpp,v 1.27 1999/11/03 14:49:13 shields Exp $
+// $Id: control.cpp,v 1.28 1999/11/18 03:37:22 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -392,6 +392,7 @@ Control::Control(ArgumentExpander &arguments, Option &option_) : return_code(0),
                 // Clean up all the files that have just been compiled in this new batch.
                 //
                 for (file_symbol = (FileSymbol *) input_java_file_set.FirstElement();
+                    // delete file_symbol
                      file_symbol;
                      file_symbol = (FileSymbol *) input_java_file_set.NextElement())
                 {

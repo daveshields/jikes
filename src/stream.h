@@ -1,4 +1,4 @@
-// $Id: stream.h,v 1.14 1999/11/03 00:46:32 shields Exp $
+// $Id: stream.h,v 1.15 2000/01/07 00:25:53 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -70,7 +70,7 @@ public:
     typedef int TypeIndex;
     typedef int TokenIndex;
     typedef int CommentIndex;
-    enum { INFINITY = INT_MAX }; // the largest possible value for TokenIndex
+    enum { LEX_INFINITY = INT_MAX }; // the largest possible value for TokenIndex
 
     FileSymbol *file_symbol;
 

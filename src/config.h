@@ -1,4 +1,4 @@
-// $Id: config.h,v 1.28 1999/11/03 00:46:30 shields Exp $
+// $Id: config.h,v 1.32 2000/01/06 08:45:44 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,13 +10,20 @@
 #ifndef config_INCLUDED
 #define config_INCLUDED
 
-#include <wchar.h>
+#ifdef HAVE_WCHAR_H
+# include <wchar.h>
+#endif
+
+#ifndef HAVE_WINT_T
+    /* On some systems the type wint_t is not defined in wchar.h */
+    typedef unsigned int wint_t;
+#endif
 #include <new.h>
 #include <iostream.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "string.h"
+#include <string.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -56,6 +63,16 @@
 // always be reviewed.
 //
 #include <limits.h>
+
+#ifdef BROKEN_USHRT_MAX
+    /* There is a bug in mingwin's limits.h file we need to work around */
+# undef USHRT_MAX
+# ifdef SHRT_MAX
+#  define USHRT_MAX (2U * SHRT_MAX + 1)
+# else
+#  define USHRT_MAX 0xFFFF
+# endif
+#endif
 
 #if ! (UINT_MAX == 0xFFFFFFFF)
 #error unsigned int does not store values in the range 0..4294967295 in this system
@@ -569,19 +586,31 @@ private:
          *str;
 };
 
+//
+// The configure script check each of these to see if we need our own implementation
+//
 
-#if defined(GNU_LIBC5)
+#ifndef HAVE_WCSLEN
     extern size_t wcslen(wchar_t *);
-    extern wchar_t *wcscpy(wchar_t *, wchar_t *);
-    extern wchar_t *wcsncpy(wchar_t *, wchar_t *, int);
-    extern wchar_t *wcscat(wchar_t *, wchar_t *);
-    extern int wcscmp(wchar_t *, wchar_t *);
-    extern int wcsncmp(wchar_t *, wchar_t *, int);
 #endif
 
-#if defined(CYGWIN)
+#ifndef HAVE_WCSCPY
     extern wchar_t *wcscpy(wchar_t *, wchar_t *);
+#endif
+
+#ifndef HAVE_WCSNCPY
+    extern wchar_t *wcsncpy(wchar_t *, wchar_t *, int);
+#endif
+
+#ifndef HAVE_WCSCAT
     extern wchar_t *wcscat(wchar_t *, wchar_t *);
+#endif
+
+#ifndef HAVE_WCSCMP
+    extern int wcscmp(wchar_t *, wchar_t *);
+#endif
+
+#ifndef HAVE_WCSNCMP
     extern int wcsncmp(wchar_t *, wchar_t *, int);
 #endif
 
@@ -664,10 +693,6 @@ extern int SystemIsDirectory(char *name);
 #ifdef UNIX
 #define UNIX_FILE_SYSTEM
 #endif
-extern int SystemMkdirhier(char *);
-
-extern char * strcat3(const char *, const char *, const char *);
-extern char * wstring2string(wchar_t * in);
 
 //
 // The symbol used in this environment for separating argument in a system string. E.g., in a unix system
@@ -684,7 +709,7 @@ extern char * wstring2string(wchar_t * in);
 // Some compilers do not correctly predefine the primitive type "bool"
 // and its possible values: "false" and "true"
 //
-#ifndef TYPE_bool
+#ifndef HAVE_BOOL
 //======================================================================
 // We define the type "bool" and the constants "false" and "true".
 // The type bool as well as the constants false and true are expected

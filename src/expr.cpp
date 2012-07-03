@@ -1,4 +1,4 @@
-// $Id: expr.cpp,v 1.48 1999/11/03 00:46:30 shields Exp $
+// $Id: expr.cpp,v 1.50 2000/01/06 08:24:30 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -93,7 +93,7 @@ void Semantic::ReportMethodNotFound(Ast *ast, wchar_t *name)
     AstExpression **argument;
 
     AstMethodInvocation *method_call;
-    if (method_call = ast -> MethodInvocationCast())
+    if ((method_call = ast -> MethodInvocationCast()))
     {
         kind = SemanticError::METHOD_NOT_FOUND;
         num_arguments = method_call -> NumArguments();
@@ -203,14 +203,14 @@ MethodSymbol *Semantic::FindConstructor(TypeSymbol *containing_type, Ast *ast,
     AstClassInstanceCreationExpression *class_creation;
     AstSuperCall *super_call;
 
-    if (class_creation = ast -> ClassInstanceCreationExpressionCast())
+    if ((class_creation = ast -> ClassInstanceCreationExpressionCast()))
     {
         num_arguments = class_creation -> NumArguments();
         argument = new AstExpression*[num_arguments + 1];
         for (int i = 0; i < num_arguments; i++)
             argument[i] = class_creation -> Argument(i);
     }
-    else if (super_call = ast -> SuperCallCast())
+    else if ((super_call = ast -> SuperCallCast()))
     {
         num_arguments = super_call -> NumArguments();
         argument = new AstExpression*[num_arguments + 1];
@@ -2300,13 +2300,6 @@ void Semantic::ProcessAmbiguousName(Ast *name)
 
         if (field_access -> IsClassAccess())
         {
-            if (! control.option.one_one)
-            {
-                ReportSemError(SemanticError::ONE_ONE_FEATURE,
-                               field_access -> LeftToken(),
-                               field_access -> RightToken());
-            }
-
             AddDependence(this_type, control.NoClassDefFoundError(), field_access -> identifier_token);
             AddDependence(this_type, control.ClassNotFoundException(), field_access -> identifier_token);
 
@@ -2469,13 +2462,6 @@ void Semantic::ProcessAmbiguousName(Ast *name)
 
             if (field_access -> IsThisAccess() || field_access -> IsSuperAccess())
             {
-                if (! control.option.one_one)
-                {
-                    ReportSemError(SemanticError::ONE_ONE_FEATURE,
-                                   field_access -> LeftToken(),
-                                   field_access -> RightToken());
-                }
-
                 TypeSymbol *enclosing_type = symbol -> TypeCast();
                 if (enclosing_type == control.no_type)
                     field_access -> symbol = control.no_type;
@@ -3121,7 +3107,7 @@ void Semantic::ProcessMethodName(AstMethodInvocation *method_call)
     }
 
     AstSimpleName *simple_name;
-    if (simple_name = method_call -> method -> SimpleNameCast())
+    if ((simple_name = method_call -> method -> SimpleNameCast()))
     {
         SemanticEnvironment *where_found;
         MethodSymbol *method = FindMethodInEnvironment(where_found, state_stack.Top(), method_call);
@@ -4319,16 +4305,6 @@ void Semantic::ProcessClassInstanceCreationExpression(Ast *expr)
 {
     AstClassInstanceCreationExpression *class_creation = (AstClassInstanceCreationExpression *) expr;
 
-    if (class_creation -> base_opt || class_creation -> class_body_opt)
-    {
-        if (! control.option.one_one)
-        {
-            ReportSemError(SemanticError::ONE_ONE_FEATURE,
-                           class_creation -> LeftToken(),
-                           class_creation -> RightToken());
-        }
-    }
-
     //
     // TODO: Is this needed ?
     //
@@ -4585,13 +4561,6 @@ void Semantic::ProcessArrayCreationExpression(Ast *expr)
 
     if ((array_type = array_creation -> array_type -> ArrayTypeCast()))
     {
-        if (! control.option.one_one)
-        {
-            ReportSemError(SemanticError::ONE_ONE_FEATURE,
-                           array_creation -> LeftToken(),
-                           array_creation -> RightToken());
-        }
-
         AstPrimitiveType *primitive_type = array_type -> type -> PrimitiveTypeCast();
         type = (primitive_type ? FindPrimitiveType(primitive_type) : MustFindType(array_type -> type));
     }
@@ -4699,7 +4668,7 @@ void Semantic::ProcessMINUS(AstPreUnaryExpression *expr)
     AstIntegerLiteral *int_literal;
     AstLongLiteral *long_literal;
 
-    if (int_literal = expr -> expression -> IntegerLiteralCast())
+    if ((int_literal = expr -> expression -> IntegerLiteralCast()))
     {
         LiteralSymbol *literal = lex_stream -> LiteralSymbol(int_literal -> integer_literal_token);
 
@@ -4713,7 +4682,7 @@ void Semantic::ProcessMINUS(AstPreUnaryExpression *expr)
         }
         else expr -> symbol = control.int_type;
     }
-    else if (long_literal = expr -> expression -> LongLiteralCast())
+    else if ((long_literal = expr -> expression -> LongLiteralCast()))
     {
         LiteralSymbol *literal = lex_stream -> LiteralSymbol(long_literal -> long_literal_token);
 
@@ -4962,7 +4931,7 @@ bool Semantic::CanMethodInvocationConvert(TypeSymbol *target_type, TypeSymbol *s
                     //
                     // TODO: This is an undocumented feature, but this fix appears to make sense.
                     //
-                    (control.option.one_one && target_type == control.Serializable() && source_type -> Implements(target_type)));
+                    (target_type == control.Serializable() && source_type -> Implements(target_type)));
         }
         else if (source_type -> ACC_INTERFACE())
         {
@@ -5037,7 +5006,7 @@ bool Semantic::CanCastConvert(TypeSymbol *target_type, TypeSymbol *source_type, 
                     //
                     // TODO: This is an undocumented feature, but this fix appears to make sense.
                     //
-                    (control.option.one_one && target_type == control.Serializable() && source_type -> Implements(target_type)));
+                    (target_type == control.Serializable() && source_type -> Implements(target_type)));
         }
         else if (source_type -> ACC_INTERFACE())
         {

@@ -1,4 +1,4 @@
-// $Id: jikes.cpp,v 1.61 1999/11/03 19:00:59 shields Exp $
+// $Id: jikes.cpp,v 1.65 2000/01/11 02:50:15 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -37,8 +37,8 @@ int main(int argc, char *argv[])
     else
     {
         fprintf(stderr,
-        "\nIBM Jikes Compiler"
-        "\n(C) Copyright IBM Corp. 1997, 1999.\n"
+        "\nJikes Compiler"
+        "\n(C) Copyright IBM Corp. 1997, 2000.\n"
         "- Licensed Materials - Program Property of IBM - All Rights Reserved.\n\n");
         fprintf(stderr, "%s", StringConstant::U8S_command_format);
         fprintf(stderr,
@@ -55,9 +55,9 @@ int main(int argc, char *argv[])
         "-O                 do not write LineNumberTable\n"
         "-verbose           list files read and written\n"
         "-Xstdout           redirect output listings to stdout\n"
-        "+1.0               recognize only 1.0.2 language\n"
         "++                 compile in incremental mode\n"
         "+B                 do not invoke bytecode generator\n"
+        "+c                 do not discard comments from lexer output\n"
         "+CSO               search for both java and classfile in classpath\n"
         "+D                 report errors immediately in emacs-form without buffering\n"
         "+DR=filename       generate dependence report in filename\n"
@@ -65,11 +65,20 @@ int main(int argc, char *argv[])
         "+F                 do full dependence check except for Zip and Jar files\n"
         "+Kname=TypeKeyWord map name to type keyword\n"
         "+M                 generate makefile dependencies\n"
-        "+P                 Pedantic compilation - issues lots of warnings\n"
+        "+P                 pedantic compilation - issues lots of warnings\n"
         "+Td...d            set value of tab d...d spaces; each d is a decimal digit\n"
         "+U                 do full dependence check including Zip and Jar files\n"
         "+Z                 treat cautions as errors\n"
-        "\nVersion 1.10 (3 Nov 99)\n"
+#ifdef TEST
+        "Debugging options:\n"
+        "+A                 dump AST to standard output\n"
+        "+C                 dump bytecodes to standard output\n"
+        "+L                 dump lexer output (stream of tokens)\n"
+        "+O numbytes        call no-op op_trap() for bytecodes of the given length\n"
+        "+u                 unparse AST; produces Java code for the AST\n"
+        "+ud                unparse AST, with extra debugging information\n"
+#endif
+        "\nVersion 1.11 (10 Jan 2000)\n"
         "Originally written by Philippe Charles and David Shields \n"
         "of IBM Research, Jikes is now maintained and refined by the\n"
         "Jikes Project at http://ibm.com/developerworks/opensource.\n"

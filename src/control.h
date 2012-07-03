@@ -1,4 +1,4 @@
-// $Id: control.h,v 1.23 1999/10/19 23:13:35 shields Exp $
+// $Id: control.h,v 1.24 2000/01/06 08:24:30 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -111,7 +111,7 @@ public:
 
     inline TypeSymbol *Serializable()
     {
-        if ((! Serializable_type) && option.one_one)
+        if (! Serializable_type)
         {
             PackageSymbol *io_package = ProcessPackage(StringConstant::US_java_SL_io);
             FindPathsToDirectory(io_package);

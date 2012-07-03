@@ -1,4 +1,4 @@
-// $Id: system.cpp,v 1.22 1999/10/23 02:52:56 shields Exp $
+// $Id: system.cpp,v 1.23 1999/11/18 03:37:23 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -477,7 +477,9 @@ void Control::ProcessPath()
         wchar_t *path_name = new wchar_t[max_path_name_length + 1]; // +1 for '\0'
 
         wchar_t *input_name = NULL;
+#ifdef WIN32_FILE_SYSTEM
         char * full_directory_name = NULL;
+#endif
 
         for (char *path = option.classpath, *path_tail = &path[strlen(path)]; path < path_tail; path++)
         {

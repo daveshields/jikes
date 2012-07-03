@@ -1,4 +1,4 @@
-// $Id: depend.cpp,v 1.13 1999/10/09 16:34:06 shields Exp $
+// $Id: depend.cpp,v 1.15 2000/01/07 00:25:53 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -104,7 +104,7 @@ void TypeCycleChecker::ProcessSubtypes(TypeSymbol *type)
         do
         {
             scc_subtype = stack.Top();
-            scc_subtype -> index = INFINITY;
+            scc_subtype -> index = CYCLE_INFINITY;
             *(scc_subtype -> subtypes_closure) = *(type -> subtypes_closure);
             type_list.Next() = scc_subtype;
             stack.Pop();
@@ -161,7 +161,7 @@ void ConstructorCycleChecker::CheckConstructorCycles(AstConstructorDeclaration *
         if (constructor_declaration == stack.Top() && constructor_declaration != called_constructor_declaration)
         {
             stack.Pop();
-            constructor_declaration -> index = INFINITY;
+            constructor_declaration -> index = CYCLE_INFINITY;
         }
         //
         // Otherwise, all elements in the stack up to (and including) constructor_declaration form an SCC.
@@ -173,7 +173,7 @@ void ConstructorCycleChecker::CheckConstructorCycles(AstConstructorDeclaration *
             {
                 called_constructor_declaration = stack.Top();
                 stack.Pop();
-                called_constructor_declaration -> index = INFINITY;
+                called_constructor_declaration -> index = CYCLE_INFINITY;
 
                 constructor_block = (AstConstructorBlock *) called_constructor_declaration -> constructor_body;
                 AstMethodDeclarator *constructor_declarator = called_constructor_declaration -> constructor_declarator;
@@ -245,7 +245,7 @@ void TypeDependenceChecker::ProcessType(TypeSymbol *type)
         do
         {
             scc_dependent = stack.Top();
-            scc_dependent -> incremental_index = INFINITY;
+            scc_dependent -> incremental_index = CYCLE_INFINITY;
             *(scc_dependent -> dependents_closure) = *(type -> dependents_closure);
             type_list.Next() = scc_dependent;
             stack.Pop();
@@ -295,9 +295,40 @@ void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
     //
     //
     //
-    char *name = file_symbol -> FileName();
-    int length = file_symbol -> FileNameLength() - (file_symbol -> IsJava() ? FileSymbol::java_suffix_length
-                                                                            : FileSymbol::class_suffix_length);
+    char *name;
+    char *buf;
+    int length;
+
+    if (control -> option.directory == NULL)
+    {
+        name = file_symbol -> FileName();
+        length = file_symbol -> FileNameLength() - (file_symbol -> IsJava() ? FileSymbol::java_suffix_length
+                                                                                : FileSymbol::class_suffix_length);
+    }
+    else
+    {
+        name = file_symbol -> Utf8Name();
+        length = strlen(name);
+
+        DirectorySymbol *dir_symbol = file_symbol -> OutputDirectory();
+        char *dir_name = dir_symbol -> DirectoryName();
+        int dir_length = strlen(dir_name);
+        
+        buf = new char[length + FileSymbol::class_suffix_length + dir_length + 2];
+        strcpy(buf, dir_name);
+
+#ifdef UNIX_FILE_SYSTEM
+        buf[dir_length] = (char)U_SLASH;
+#elif defined(WIN32_FILE_SYSTEM)
+        buf[dir_length] = (char)U_BACKSLASH;
+#endif
+
+        strcpy(&buf[dir_length+1], name);
+        name = buf;
+        length = dir_length + 1 + length;
+    }
+
+
 
     char *output_name = new char[length + FileSymbol::class_suffix_length + 1],
          *u_name = new char[length + strlen(StringConstant::U8S__DO_u) + 1];
@@ -344,6 +375,8 @@ void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
 
     delete [] output_name;
     delete [] u_name;
+    if (control -> option.directory)
+        delete [] buf;
 
     return;
 }

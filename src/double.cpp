@@ -1,4 +1,4 @@
-// $Id: double.cpp,v 1.7 1999/10/27 18:07:09 shields Exp $
+// $Id: double.cpp,v 1.9 2000/01/06 07:47:24 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -122,7 +122,7 @@ IEEEfloat IEEEfloat::operator/ (IEEEfloat op)
     return (op.value.float_value == 0.0
                                   ? (value.float_value < 0.0
                                                        ? NEGATIVE_INFINITY()
-                                                       : value.float_value == 0.0
+                                                       : (value.float_value == 0.0
                                                                             ? NaN()
                                                                             : POSITIVE_INFINITY()))
                                   : IEEEfloat(value.float_value / op.value.float_value));
@@ -135,7 +135,7 @@ IEEEfloat& IEEEfloat::operator/= (IEEEfloat op)
     *this = *this / op;
 #else /* IEEE_DIV_0 */
     *this = (op.value.float_value == 0.0
-                                   ? (*this < (float) 0.0
+                                   ? (IEEEfloat) (*this < (float) 0.0
                                             ? NEGATIVE_INFINITY()
                                             : *this == (float) 0.0
                                                      ? NaN()
@@ -326,13 +326,13 @@ void IEEEdouble::Divide(IEEEdouble dividend, IEEEdouble divisor, IEEEdouble &quo
 #ifndef IEEE_DIV_0
     quotient = dividend.value.double_value / divisor.value.double_value;
 #else /* IEEE_DIV_0 */
-    quotient = (divisor.value.double_value == 0
+    quotient = (divisor.value.double_value == 0.0
                                             ? (dividend.value.double_value < 0.0
                                                                            ? NEGATIVE_INFINITY()
                                                                            : dividend.value.double_value == 0.0
                                                                                                           ? NaN()
                                                                                                           : POSITIVE_INFINITY())
-                                            : dividend.value.double_value / divisor.value.double_value);
+                                            : IEEEdouble(dividend.value.double_value / divisor.value.double_value));
 #endif /* IEEE_DIV_0 */
 
     return;

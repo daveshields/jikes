@@ -1,4 +1,4 @@
-// $Id: stream.cpp,v 1.19 1999/11/01 03:22:20 shields Exp $
+// $Id: stream.cpp,v 1.20 1999/12/14 17:31:53 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -608,7 +608,7 @@ void LexStream::ProcessInputUnicode(char *buffer, long filesize)
         bool oncemore=false;
 
 #ifdef HAVE_LIB_ICU_UC
-        UErrorCode err = ZERO_ERROR;
+        UErrorCode err = U_ZERO_ERROR;
 #endif
 
         while((source_ptr <= source_tail) || oncemore)
@@ -649,7 +649,7 @@ void LexStream::ProcessInputUnicode(char *buffer, long filesize)
                                           &err);
                 else
                     ch=*source_ptr++;
-                if(err!=ZERO_ERROR)
+                if(err!=U_ZERO_ERROR)
                     break;
 #else
                 ch=*source_ptr++;

@@ -42,7 +42,7 @@ class gencode
 
             if (a == '\n' || a == '\r')
                  base[BaseIndex(i)][DataIndex(i)] = NEWLINE_CODE;
-            else if (Character.isWhitespace(a))
+            else if (a==' ' || a=='\t' || a=='\f')
                  base[BaseIndex(i)][DataIndex(i)] = SPACE_CODE;
             else if (a < 128 && Character.isLowerCase(a)) // Ascii lower case
                  base[BaseIndex(i)][DataIndex(i)] = LOWER_CODE;

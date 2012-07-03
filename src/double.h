@@ -1,4 +1,4 @@
-// $Id: double.h,v 1.5 1999/10/27 18:07:09 shields Exp $
+// $Id: double.h,v 1.6 2000/01/06 06:46:47 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -119,7 +119,7 @@ private:
 
     enum { BIAS = 1023 };
 
-#ifdef BIGENDIAN
+#ifdef WORDS_BIGENDIAN
     u4 &High() { return value.word[0]; }
     u4 &Low()  { return value.word[1]; }
 #else

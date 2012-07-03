@@ -1,4 +1,4 @@
-// $Id: body.cpp,v 1.27 1999/10/19 23:13:34 shields Exp $
+// $Id: body.cpp,v 1.28 2000/01/06 08:24:30 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -170,12 +170,6 @@ void Semantic::ProcessLocalVariableDeclarationStatement(Ast *stmt)
     AstArrayType *array_type = local_decl -> type -> ArrayTypeCast();
     Ast *actual_type = (array_type ? array_type -> type : local_decl -> type);
 
-    if ((! control.option.one_one) && local_decl -> NumLocalModifiers() > 0)
-    {
-        ReportSemError(SemanticError::ONE_ONE_FEATURE,
-                       local_decl -> LocalModifier(0) -> LeftToken(),
-                       local_decl -> LocalModifier(local_decl -> NumLocalModifiers() - 1) -> RightToken());
-    }
     AccessFlags access_flags = ProcessLocalModifiers(local_decl);
 
     AstPrimitiveType *primitive_type = actual_type -> PrimitiveTypeCast();
@@ -1220,12 +1214,6 @@ void Semantic::ProcessTryStatement(Ast *stmt)
         block -> max_variable_index = enclosing_block -> block_symbol -> max_variable_index;
         LocalSymbolTable().Push(block -> Table());
 
-        if ((! control.option.one_one) && parameter -> NumParameterModifiers() > 0)
-        {
-            ReportSemError(SemanticError::ONE_ONE_FEATURE,
-                           parameter -> ParameterModifier(0) -> LeftToken(),
-                           parameter -> ParameterModifier(0) -> RightToken());
-        }
         AccessFlags access_flags = ProcessFormalModifiers(parameter);
 
         VariableSymbol *symbol = LocalSymbolTable().Top() -> InsertVariableSymbol(name_symbol);
@@ -1458,13 +1446,6 @@ void Semantic::ProcessClassDeclaration(Ast *stmt)
     AstClassBody *class_body = class_declaration -> class_body;
 
     class_declaration -> MarkLocal(); // identify class as "statement" and assert that it is "reachable" and "can_complete_normally"
-    if (! control.option.one_one)
-    {
-        ReportSemError(SemanticError::ONE_ONE_FEATURE,
-                       class_declaration -> LeftToken(),
-                       class_declaration -> RightToken());
-    }
-
     CheckNestedTypeDuplication(state_stack.Top(), class_declaration -> identifier_token);
 
     TypeSymbol *inner_type = GetLocalType(class_declaration);
@@ -1515,13 +1496,6 @@ void Semantic::ProcessThisCall(AstThisCall *this_call)
 
     if (this_call -> base_opt)
     {
-        if (! control.option.one_one)
-        {
-            ReportSemError(SemanticError::ONE_ONE_FEATURE,
-                           this_call -> base_opt -> LeftToken(),
-                           this_call -> dot_token_opt);
-        }
-
         ProcessExpression(this_call -> base_opt);
 
         TypeSymbol *expr_type = this_call -> base_opt -> Type();
@@ -1630,13 +1604,6 @@ void Semantic::ProcessSuperCall(AstSuperCall *super_call)
 
     if (super_call -> base_opt)
     {
-        if (! control.option.one_one)
-        {
-            ReportSemError(SemanticError::ONE_ONE_FEATURE,
-                           super_call -> base_opt -> LeftToken(),
-                           super_call -> dot_token_opt);
-        }
-
         ProcessExpression(super_call -> base_opt);
 
         TypeSymbol *expr_type = super_call -> base_opt -> Type();

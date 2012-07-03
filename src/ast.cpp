@@ -1,4 +1,4 @@
-// $Id: ast.cpp,v 1.19 1999/11/03 00:46:29 shields Exp $
+// $Id: ast.cpp,v 1.20 1999/11/18 03:37:22 shields Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1035,7 +1035,8 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
             for (int k = 0; k < this -> NumStatements(); k++)
                 this -> Statement(k) -> Print(lex_stream);
         }
-        else Coutput <<"\n";
+        else
+	     Coutput <<"\n";
     }
 
     void AstPrimitiveType::Print(LexStream& lex_stream)

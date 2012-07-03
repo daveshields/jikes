@@ -1,4 +1,4 @@
-// $Id: tab.h,v 1.4 1999/02/12 14:39:13 shields Exp $
+// $Id: tab.h,v 1.5 2000/01/06 06:46:47 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,7 +11,9 @@
 #define tab_INCLUDED
 
 #include "config.h"
-#include <wchar.h>
+#ifdef HAVE_WCHAR_H
+# include <wchar.h>
+#endif
 #include <string.h>
 
 class Tab

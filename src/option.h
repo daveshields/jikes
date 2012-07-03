@@ -1,4 +1,4 @@
-// $Id: option.h,v 1.14 1999/11/03 14:49:13 shields Exp $
+// $Id: option.h,v 1.18 2000/01/07 21:23:58 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -29,7 +29,7 @@ public:
     int argc;
     char **argv;
 
-    ArgumentExpander::ArgumentExpander(int, char **);
+    ArgumentExpander(int, char **);
 
     ArgumentExpander(Tuple<char> &);
 
@@ -130,7 +130,6 @@ public:
          depend,
          nowarn,
          classpath_search_order,
-         one_one,
          zero_defect;
     int first_file_index;
 
@@ -142,7 +141,6 @@ public:
          debug_unparse_ast_debug,
          debug_dump_class,
          nocleanup,
-         applet_author,
          incremental,
          makefile,
 	 dependence_report,
@@ -150,7 +148,6 @@ public:
          full_check,
          unzip,
          dump_errors,
-         ascii,
          errors,
          comments,
          pedantic;

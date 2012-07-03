@@ -1,4 +1,4 @@
-// $Id: long.cpp,v 1.10 1999/11/03 00:46:32 shields Exp $
+// $Id: long.cpp,v 1.12 2000/01/07 21:23:58 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -153,6 +153,11 @@ BaseLong BaseLong::operator++ ()
 {
     *this += 1;
     return *this;
+}
+
+BaseLong BaseLong::operator+ ()
+{
+    return(*this);
 }
 
 BaseLong BaseLong::operator- ()
@@ -464,8 +469,8 @@ LongInt LongInt::operator/ (LongInt op)
     bool negative_dividend = ((HighWord() & 0x80000000) != 0),
          negative_divisor  = ((op.HighWord() & 0x80000000) != 0);
 
-    BaseLong a = (negative_dividend ? -(*this) : (BaseLong) *this),
-             b = (negative_divisor  ? -(op)    : (BaseLong) op),
+    BaseLong a = (negative_dividend ? -(*this) : +(*this)),
+             b = (negative_divisor  ? -(op)    : +(op)),
              quotient,
              remainder;
 
@@ -485,8 +490,8 @@ LongInt LongInt::operator% (LongInt op)
     bool negative_dividend = ((HighWord() & 0x80000000) != 0),
     negative_divisor  = ((op.HighWord() & 0x80000000) != 0);
 
-    BaseLong a = (negative_dividend ? -(*this) : (BaseLong) *this),
-             b = (negative_divisor  ? -(op)    : (BaseLong) op),
+    BaseLong a = (negative_dividend ? -(*this) : +(*this)),
+             b = (negative_divisor  ? -(op)    : +(op)),
              quotient,
              remainder;
 

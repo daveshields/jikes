@@ -1,4 +1,4 @@
-// $Id: parser.h,v 1.5 1999/10/15 02:30:42 shields Exp $
+// $Id: parser.h,v 1.6 2000/01/06 06:46:47 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -13,7 +13,9 @@
 #include "config.h"
 #include <limits.h>
 #include <ctype.h>
-#include <wchar.h>
+#ifdef HAVE_WCHAR_H
+# include <wchar.h>
+#endif
 #include <string.h>
 #include <stdio.h>
 #include "lpginput.h"

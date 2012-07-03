@@ -1,4 +1,4 @@
-# $Id: Makefile.hand,v 1.3 1999/10/18 18:16:12 shields Exp $
+# $Id: Makefile.hand,v 1.4 2000/01/11 02:47:33 lord Exp $
 #
 # This software is subject to the terms of the IBM Jikes Compiler Open
 # Source License Agreement available at the following URL:
@@ -187,7 +187,7 @@
 # Win95/NT definitions for Microsoft Visual C++ (cl) compiler
 # There are known problems with IEEE if use this compiler
 #CC=cl
-#CCREQUIREDFLAGS=-DWIN32_FILE_SYSTEM -DMICROSOFT -DTYPE_bool 
+#CXXREQUIREDFLAGS= -DHAVE_BOOL -DHAVE_WINT_T -DHAVE_WCSLEN -DHAVE_WCSCPY -DHAVE_WCSNCPY -DHAVE_WCSCAT -DHAVE_WCSCMP -DHAVE_WCSNCMP CCREQUIREDFLAGS=-DWIN32_FILE_SYSTEM -DMICROSOFT -DTYPE_bool $(CXXREQUIREDFLAGS)
 #CCDEBUGFLAGS=-DTEST /Zi
 #CCOPTFLAGS=-O -DNDEBUG 
 #CCFLAGS=$(CCREQUIREDFLAGS) $(CCOPTFLAGS)

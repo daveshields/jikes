@@ -1,4 +1,4 @@
-// $Id: error.cpp,v 1.41 1999/11/03 00:46:30 shields Exp $
+// $Id: error.cpp,v 1.42 2000/01/06 08:24:30 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -558,7 +558,6 @@ void SemanticError::StaticInitializer()
     print_message[INVALID_CLASS_FILE] = PrintINVALID_CLASS_FILE;
     print_message[CANNOT_OPEN_CLASS_FILE] = PrintCANNOT_OPEN_CLASS_FILE;
 
-    print_message[ONE_ONE_FEATURE] = PrintONE_ONE_FEATURE;
     print_message[STATIC_NOT_INNER_CLASS] = PrintSTATIC_NOT_INNER_CLASS;
     print_message[TYPE_NOT_INNER_CLASS] = PrintTYPE_NOT_INNER_CLASS;
     print_message[SUPER_TYPE_NOT_INNER_CLASS] = PrintSUPER_TYPE_NOT_INNER_CLASS;
@@ -4382,14 +4381,6 @@ void SemanticError::PrintCANNOT_OPEN_CLASS_FILE(ErrorInfo &err, LexStream *lex_s
     }
     Coutput << err.insert2
             << "\".";
-
-    return;
-}
-
-
-void SemanticError::PrintONE_ONE_FEATURE(ErrorInfo &err, LexStream *lex_stream, Control &control)
-{
-    Coutput << "This is a 1.1 feature.";
 
     return;
 }

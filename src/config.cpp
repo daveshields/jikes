@@ -1,4 +1,4 @@
-// $Id: config.cpp,v 1.30 1999/11/03 00:46:30 shields Exp $
+// $Id: config.cpp,v 1.33 2000/01/06 06:46:47 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -834,6 +834,21 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
         return mkdir(dirname, S_IRWXU);
     }
 #endif
+
+#elif defined(WIN32_FILE_SYSTEM)
+#include <direct.h>
+    int SystemMkdir(char *dirname)
+    {
+        return mkdir(dirname);
+    }
+#endif
+
+
+//
+// The configure script check each of these to see if we need our own implementation
+//
+
+#ifndef HAVE_WCSLEN
     size_t wcslen(wchar_t *cs)
     {
         int n = 0;
@@ -842,7 +857,9 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
 
         return n;
     }
+#endif
 
+#ifndef HAVE_WCSCPY
     wchar_t *wcscpy(wchar_t *s, wchar_t *ct)
     {
         wchar_t *ptr;
@@ -852,7 +869,9 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
 
         return s;
     }
+#endif
 
+#ifndef HAVE_WCSNCPY
     wchar_t *wcsncpy(wchar_t *s, wchar_t *ct, int n)
     {
         wchar_t *ptr;
@@ -863,7 +882,9 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
 
         return s;
     }
+#endif
 
+#ifndef HAVE_WCSCAT
     wchar_t *wcscat(wchar_t *s, wchar_t *ct)
     {
         wchar_t *ptr = s;
@@ -874,7 +895,9 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
 
         return s;
     }
+#endif
 
+#ifndef HAVE_WCSCMP
     int wcscmp(wchar_t *cs, wchar_t *ct)
     {
         while (*cs == *ct && *cs && *ct)
@@ -885,48 +908,9 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
 
         return (*cs == *ct ? 0 : (*cs < *ct ? -1 : 1));
     }
-
-    int wcsncmp(wchar_t *cs, wchar_t *ct, int n)
-    {
-        while (*cs == *ct && *cs && *ct && n-- > 0)
-        {
-            cs++;
-            ct++;
-        }
-
-        return (n <= 0 || *cs == *ct ? 0 : (*cs < *ct ? -1 : 1));
-    }
-#elif WIN32_FILE_SYSTEM
-#include <direct.h>
-    int SystemMkdir(char *dirname)
-    {
-        return mkdir(dirname);
-    }
 #endif
 
-#ifdef CYGWIN
-
-    wchar_t *wcscpy(wchar_t *s, wchar_t *ct)
-    {
-        wchar_t *ptr;
-        for (ptr = s; *ct; ptr++, ct++)
-            *ptr = *ct;
-        *ptr = U_NULL;
-
-        return s;
-    }
-
-    wchar_t *wcscat(wchar_t *s, wchar_t *ct)
-    {
-        wchar_t *ptr = s;
-
-        while (*ptr)
-            ptr++;
-        wcscpy(ptr, ct);
-
-        return s;
-    }
-
+#ifndef HAVE_WCSNCMP
     int wcsncmp(wchar_t *cs, wchar_t *ct, int n)
     {
         while (*cs == *ct && *cs && *ct && n-- > 0)
@@ -937,7 +921,6 @@ int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
 
         return (n <= 0 || *cs == *ct ? 0 : (*cs < *ct ? -1 : 1));
     }
-
 #endif
 
 #ifdef __OS2__

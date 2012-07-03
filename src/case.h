@@ -1,4 +1,4 @@
-// $Id: case.h,v 1.5 1999/08/26 15:34:03 shields Exp $
+// $Id: case.h,v 1.6 2000/01/06 06:46:47 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,7 +12,9 @@
 #define case_INCLUDED
 
 #include "config.h"
-#include <wchar.h>
+#ifdef HAVE_WCHAR_H
+# include <wchar.h>
+#endif
 
 //
 // NOTE that this class is hard-wired to work on an ASCII machine.

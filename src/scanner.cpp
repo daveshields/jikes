@@ -1,4 +1,4 @@
-// $Id: scanner.cpp,v 1.10 1999/10/09 16:34:08 shields Exp $
+// $Id: scanner.cpp,v 1.11 2000/01/06 08:24:30 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -50,7 +50,7 @@ Scanner::Scanner(Control &control_) : control(control_)
     // For version 1.1 or above a $ may not be used as part of an identifier name
     // unless the user specifically requests that it be allowed.
     //
-    //    if (control.option.one_one && (! control.option.dollar))
+    //    if (! control.option.dollar)
     //        Code::SetBadCode(U_DOLLAR);
     //
 

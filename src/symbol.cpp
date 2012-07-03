@@ -1,4 +1,4 @@
-// $Id: symbol.cpp,v 1.31 1999/10/23 02:14:35 shields Exp $
+// $Id: symbol.cpp,v 1.32 2000/01/06 08:24:30 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
@@ -270,8 +270,7 @@ TypeSymbol *TypeSymbol::GetArrayType(Semantic *sem, int num_dimensions_)
         // All arrays implement the interfaces java.io.Serializable and
         // java.io.Cloneable
         //
-        if (sem -> control.option.one_one)
-            type -> AddInterface(sem -> control.Serializable());
+        type -> AddInterface(sem -> control.Serializable());
         type -> AddInterface(sem -> control.Cloneable());
         type -> base_type = this;
         type -> num_dimensions = num;

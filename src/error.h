@@ -1,4 +1,4 @@
-// $Id: error.h,v 1.31 1999/11/01 03:22:20 shields Exp $
+// $Id: error.h,v 1.32 2000/01/06 08:24:30 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -277,7 +277,6 @@ public:
         INVALID_CLASS_FILE,
         CANNOT_OPEN_CLASS_FILE,
 
-        ONE_ONE_FEATURE,
         STATIC_NOT_INNER_CLASS,
         TYPE_NOT_INNER_CLASS,
         SUPER_TYPE_NOT_INNER_CLASS,
@@ -624,7 +623,6 @@ private:
     static void PrintINVALID_CLASS_FILE(ErrorInfo &, LexStream *, Control &);
     static void PrintCANNOT_OPEN_CLASS_FILE(ErrorInfo &, LexStream *, Control &);
 
-    static void PrintONE_ONE_FEATURE(ErrorInfo &, LexStream *, Control &);
     static void PrintSTATIC_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
     static void PrintTYPE_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
     static void PrintSUPER_TYPE_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);

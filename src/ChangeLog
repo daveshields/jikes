@@ -1,3 +1,167 @@
+2000-01-07 Vadim Zaliva  <lord@crocodile.org>
+
+	* long.cpp: Changed "(BaseLong)*this" into "+(*this)"
+        This compiles fine under CodeWarrior.
+        It also makes it look logical as a bonus :-)
+	(suggested by Martin York <myork@oxmol.co.uk>).
+
+	* option.h:  CodeWarrior does not cope well with the definition
+        as it stands. I have commented out the bit it does not
+        like. This should not effect the meaning of the code.
+	(suggested by Martin York <myork@oxmol.co.uk>).
+
+
+2000-01-06  Vadim Zaliva  <lord@crocodile.org>
+
+	* long.cpp (operator+): implemented already declared operator.
+	(suggested by Martin York <myork@oxmol.co.uk>).
+
+	* depend.h (class CycleChecker): the macro INFINITY is defined in
+ 	the standard headers of Standard Libraries used on the MAC. Thus
+ 	it causes chaos when it hits the enum INFINITY values used in
+ 	Jikes. Jikes macro renamed to CYCLE_INFINITY.
+	(suggested by Martin York <myork@oxmol.co.uk>).
+
+	* stream.h (class LexStream): The macro INFINITY is defined in the
+ 	standard headers of Standard Libraries used on the MAC. Thus it
+ 	causes chaos when it hits the enum INFINITY values used in Jikes.
+	Jikes macro renamed to LEX_INFINITY.
+	(suggested by Martin York <myork@oxmol.co.uk>).
+
+	* config.h: 
+	* configure.in: 
+	More accurate check for broken USHRT_MAX as proposed
+	by Moses DeJong <mdejong@cygnus.com>.
+
+	* +1.0 command line option and all related code and
+	documentation removed (approved by David Shields).
+
+2000-01-06  Vadim Zaliva  <lord@freefall.freebsd.org>
+
+	* semantic.h: check for wchar.h header presense.
+
+	* double.cpp (operator/): Added extra () to avoid error 
+	message under FreeBSD.
+	(Divide): Added type casts suggested by 
+	Archie Cobbs <archie@whistle.com> to compile under FreeBSD.
+
+2000-01-05  Vadim Zaliva  <lord@crocodile.org>
+
+	* configure.in: 
+	* Makefile.in:
+	autoconf modified to use CXX, not CC macro
+ 	everywhere. Using standard macros to check headers presence and
+ 	endianess. Autoconf detected macros naming convention unified to
+ 	be HAVE_something instead of NEED_something. Check for wint_t and
+	w* functions now aware of possible absence of wchar.h (for FreeBSD 
+	compatibility).
+	* libc5-fix: removed as obsoleted by last patch from Mo DeJong
+
+1999-12-27    <mdejong@cygnus.com>
+	* option.cpp:
+	* option.h:
+	Fix handling of CLASSPATH under cygwin. This required using
+	a dynamically allocated array for the classpath and getting
+	rid of the instance variable default_path. I added this
+	cygwin specific code in #ifdef CYGWIN blocks.
+
+1999-12-27    <mdejong@cygnus.com>
+	* configure.in:
+	* Makefile.in:
+	Moved building of code.cpp and code.h into configure. The
+	current method of building code.h and code.cpp is broken under
+	unix and windows. I changed it so that these files would be
+	regenerated when ./configure is run if both java and javac
+	can be found. It now works under both unix and windows.
+
+1999-12-27    <mdejong@cygnus.com>
+	* configure.in:
+	* config.h:
+	* config.cpp:
+	* libc5-fix.h:
+	Added cygnus mingwin32 build support. Mingwin uses the native
+	win32 API with the gcc compiler. When built with mingwin, the
+	executable will not require a cygwin dll to run. The new flag
+	to configure is --with-mingwin. A number of automatic tests
+	for wide string functions like wcslen() were also added to the
+	configure script. The configure.in script was also changed so
+	that is uses C++ as the default language when doing tests, this
+	gets rid of the need to check for both gcc and g++. The fix for
+	problems with the wint_t type has been moved from libc5-fix.h
+	into config.h, so the libc5-fix.h file is no longer needed.
+	There were also a number of places where I reformatted the
+	configure script so that it had the correct number of spaces.
+
+2000-01-04  Vadim Zaliva  <lord@crocodile.org>
+
+	* configure.in (EXECUTABLE): patch provided by 
+	Igor Khavkine <i_khavki@alcor.concordia.ca> will enable 
+        Jikes to build successfully on Debian GNU/Hurd.
+
+	* jikes.cpp (main): version changed to 1.11
+
+	* bytecode.cpp, decl.cpp: some bug fixes from Phillippe.
+
+1999-12-08    <shields@jikes.watson.ibm.com>
+	This is a test (just a year and a day since Jikes went open-source)
+
+1999-11-24    <shields@jikes.watson.ibm.com>
+
+	* jikes.cpp: 
+	Install patch from Mike Ernst to provide more up to date listing
+	of program options.
+
+	* option.cpp: 
+	* option.h:
+	Drop 'ascii' option fields. This option is no longer supported.
+	Drop 'applet_author' option fields. Also no longer supported.
+
+1999-11-17    <shields@jikes.watson.ibm.com>
+	* ast.cpp:
+	* config.h:
+	* control.cpp:
+	* expr.cpp:
+	* lookup.cpp:
+	* option.cpp:
+	* symbol.h:
+	* system.cpp:	
+	Patches from Mike Ernst that correct a few minor problems with Jikes 1.10:
+	 * some formatting
+	 * repeated declarations
+	 * parenthesize assignments used as conditionals, to flag that use and to
+	   suppress gcc -Wall warnings
+	 * reorder constructor initializers, to put them in the same order as the
+	   declarations.  This makes them easier to read and suppresses gcc -Wall
+	   warnings.
+	 * a couple of comments
+	 * add #ifdef around a declaration used only under Win32
+
+1999-11-15    <shields@jikes.watson.ibm.com>
+
+	* config.cpp: 
+	Add fix in conditional definition so can compile with Microsoft
+	VC++. This based on Jitterbug #27 filed by John Bley, jbley@cs.cmu.edu.
+
+	* depend.cpp: 
+	Add code from Brian Jones (cbj@gnu.org) so that use of +M and -d
+	causes generated Makefiles to be written to the -d directory.
+
+	* Makefile.in: 
+	* configure:
+	* configure.in:
+	* code.cpp:
+	* gencode.java:
+	Add changes from Vadim Zaliva to provide interpretation of whitespace
+	based on Java Language Specification (Jul 96) and not the use 
+	of isWhiteSpace library procedure.
+	
+
+1999-11-08    <shields@jikes.watson.ibm.com>
+
+	* double.cpp: 
+	Add patch from Gregory Steuck (greg@nest.cx) to allow Jikes to
+	compile under the old version of egcs used by OpenBSD. 
+
 1999-11-03    <shields@jikes.watson.ibm.com>
 
 	--- Release v1.10 ---

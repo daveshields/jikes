@@ -1,4 +1,4 @@
-// $Id: unparse.cpp,v 1.4 1999/11/03 14:05:42 shields Exp $
+// $Id: unparse.cpp,v 1.5 1999/12/14 17:31:53 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -42,7 +42,7 @@ void AstCompilationUnit::Unparse(LexStream& lex_stream, char *directory)
     {
         Ostream() << "Cannot open output file " << out_file_name << "\n";
         abort();
-
+    }
     Ostream os(&os_base);
     this -> Unparse(os, lex_stream);
     delete[] out_file_name;

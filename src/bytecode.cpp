@@ -1,4 +1,4 @@
-// $Id: bytecode.cpp,v 1.41 1999/11/03 00:46:29 shields Exp $
+// $Id: bytecode.cpp,v 1.43 2000/01/06 06:46:47 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -20,7 +20,10 @@
 #include "table.h"
 #include <iostream.h>
 #include <string.h>
-#include <wchar.h>
+
+#ifdef HAVE_WCHAR_H
+# include <wchar.h>
+#endif
 
 #ifdef WIN32_FILE_SYSTEM
 #include <windows.h>
@@ -2577,17 +2580,14 @@ TypeSymbol *ByteCode::VariableTypeResolution(AstExpression *expression, Variable
     TypeSymbol *owner_type = sym -> owner -> TypeCast(),
                *base_type = (field ? field -> base -> Type() : unit_type);
 
+    // If the real owner of the field is either public or contained in
+    // the same package as the current unit then the type used in the
+    // fieldref should be the owner. Otherwise, the base_type is used.
     //
-    // If the real owner of the field is Object or an interface that is
-    // either public or contained in the same package as the current unit
-    // then the type used in the fieldref should be the owner. Otherwise,
-    // the base_type is used.
-    //
-    return ((base_type -> ACC_INTERFACE() && owner_type == this_control.Object()) ||
-            (owner_type -> ACC_INTERFACE() &&
-              (owner_type -> ACC_PUBLIC() || owner_type -> ContainingPackage() == unit_type -> ContainingPackage()))
-                                           ? owner_type
-                                           : base_type);
+    return (owner_type -> ACC_PUBLIC() || owner_type -> ContainingPackage() == unit_type -> ContainingPackage()
+            ? owner_type
+            : base_type);
+
 }
 
 
@@ -2601,12 +2601,18 @@ TypeSymbol *ByteCode::MethodTypeResolution(AstExpression *method_name, MethodSym
                *base_type = (field ? field -> base -> Type()
                                    : (simple_name -> resolution_opt ? simple_name -> resolution_opt -> Type() : owner_type));
 
-    //
-    // If the real owner of the method is Object or an array type,
-    // then Object is used in the methodref. Otherwise, the base_type
-    // is used.
-    //
-    return ((owner_type == this_control.Object() || owner_type -> IsArray()) ? this_control.Object() : base_type);
+
+     //
+     // If the real owner of the method is an array type then Object
+     // is used in the methodref. Otherwise, if the owner is public
+     // or it is contained in the same package as the current unit
+     // then the base_type is used.
+     //
+    return (owner_type -> IsArray()
+            ? this_control.Object()
+            : owner_type -> ACC_PUBLIC() || owner_type -> ContainingPackage() == unit_type -> ContainingPackage()
+            ? owner_type
+            : base_type);
 }
 
 

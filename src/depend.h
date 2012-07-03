@@ -1,4 +1,4 @@
-// $Id: depend.h,v 1.6 1999/10/15 02:30:39 shields Exp $
+// $Id: depend.h,v 1.7 2000/01/07 00:25:53 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -23,7 +23,7 @@ class SymbolSet;
 class CycleChecker
 {
 public:
-    enum { OMEGA = -1, INFINITY = INT_MAX };
+    enum { OMEGA = -1, CYCLE_INFINITY = INT_MAX };
 
     inline int Min(int x, int y) { return (x < y ? x : y); }
 };

@@ -1,4 +1,4 @@
-// $Id: semantic.h,v 1.27 1999/10/19 23:13:38 shields Exp $
+// $Id: semantic.h,v 1.28 2000/01/06 07:47:24 lord Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,7 +11,9 @@
 #define semantic_INCLUDED
 
 #include "config.h"
-#include <wchar.h>
+#ifdef HAVE_WCHAR_H
+# include <wchar.h>
+#endif
 #include "ast.h"
 #include "diagnose.h"
 #include "error.h"
