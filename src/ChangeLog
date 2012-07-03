@@ -1,3 +1,11 @@
+1999-09-15    <shields@jikes.watson.ibm.com>
+
+	* expr.cpp: 
+	Fix for Problem Report 483.
+
+	* jikes.cpp: 
+	Update version number to 1.05, change URLs to devloperworks.
+
 1999-09-14    <shields@jikes.watson.ibm.com>
 
 	* Makefile.in: 

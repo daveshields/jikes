@@ -1,4 +1,4 @@
-.TH jikes 1 "14 September 1999" 
+.TH jikes 1 "16 September 1999" 
 .SH NAME
 jikes \- java source to bytecode compiler
 .SH SYNOPSIS
@@ -32,7 +32,8 @@ file.java
 .SH DESCRIPTION
 \fBJikes\fP translates Java(TM) source files to bytecode. Features
 include strict adherence to the language specification, automatic
-makefile generation and incremental compilation.
+makefile generation and incremental compilation. It is maintained
+by the Jikes Project, \fIhttp://ibm.com/developerworks/opensource\fP.
 
 .SH OPTIONS
 \fBJikes\fP may be invoked with the following command-line options:
@@ -116,21 +117,21 @@ then interpreted as an argument, except that lines beginning with
 .SH FILES
 \fBJikes\fP requires a colon-separated list of directories or files
 that tell it where to look for any needed class or source files, for
-example ".:/java/lib/classes.zip".  A definition given with the
+example ".:$HOME/java/lib/classes.zip".  A definition given with the
 environment variable \fIJIKESPATH\fP takes precedence over one given
 with \fICLASSPATH\fP; a definition using the \fI-classpath\fP option
 takes precedence over any value specified via the environment. 
 .SH "SEE ALSO"
 .TP
-\fIhttp://ibm.com/research/jikes\fP
-the home page of the Jikes Project, for news of recent developments,
+\fIhttp://ibm.com/developerworks/opensource\fP
+See the Jikes section, for news of recent developments,
 to download new versions, to report bugs, or to learn how to participate in the
 development process.
 .TP
 \fIjikes.htm\fP
 for a more complete description in FAQ format. This file is
 distributed with the program as part of its documentation, and is
-also available from the URL above.
+also available from the Jikes Project URL.
 
 .SH COPYRIGHT
 Copyright \(co 1996, 1999,
@@ -138,17 +139,10 @@ International Business Machines Corporation and others. All Rights Reserved.
 .PP
 \fBJikes\fP is licensed under the \fIIBM Public License\fP, included
 in the file \fIlicense.htm\fP distributed with the program, and also
-available at \fIhttp://ibm.com/research/jikes/license/\fP.
-
-.SH BUGS
-Please report bugs using the bug reporting and tracking system
-maintained at \fIhttp://ibm.com/research/jikes\fP
+available at the Jikes Project URL given above.
 
 .SH NOTES
 Java is a registered trademark of Sun Microsystems, Inc.
-
-
-
 
 
 
