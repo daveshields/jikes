@@ -1,23 +1,20 @@
-// $Id: depend.cpp,v 1.21 2001/01/10 16:49:44 mdejong Exp $
+// $Id: depend.cpp,v 1.24 2001/09/14 05:31:33 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #include "depend.h"
 #include "control.h"
 #include "ast.h"
 #include "semantic.h"
 
-#ifdef HAVE_TIME_H
-#include <time.h>
-#endif
-
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 //
@@ -373,7 +370,7 @@ void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
 
     FILE *outfile = SystemFopen(u_name, "w");
     if (outfile == NULL)
-        Coutput << "*** Cannot open file " << u_name << "\n";
+        Coutput << "*** Cannot open file " << u_name << endl;
     else
     {
         OutputMake(outfile, output_name, file_list);
@@ -478,7 +475,7 @@ TopologicalSort::~TopologicalSort()
     delete pending;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

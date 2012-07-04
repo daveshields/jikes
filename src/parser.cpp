@@ -1,17 +1,18 @@
-// $Id: parser.cpp,v 1.12 2001/01/10 16:49:45 mdejong Exp $
+// $Id: parser.cpp,v 1.14 2001/09/14 05:31:34 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #include "parser.h"
 #include "ast.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 void Parser::ReallocateStacks()
@@ -194,7 +195,7 @@ Ast *Parser::HeaderParse()
             state_stack_top -= (rhs[act] - 1);
             (this ->* rule_action[act])();
             act = nt_action(stack[state_stack_top], lhs[act]);
-        } while(act <= NUM_RULES);
+        } while (act <= NUM_RULES);
     } /* process_terminal */
 
     if (act == ERROR_ACTION)
@@ -514,7 +515,7 @@ Ast *Parser::ParseSegment(TokenObject start_token)
             state_stack_top -= (rhs[act] - 1);
             (this ->* rule_action[act])();
             act = nt_action(stack[state_stack_top], lhs[act]);
-        } while(act <= NUM_RULES);
+        } while (act <= NUM_RULES);
     } /* process_terminal */
 
     if (act == ERROR_ACTION)
@@ -610,7 +611,7 @@ void Parser::RepairParse(TokenObject curtok)
                 state_stack_top -= (rhs[act] - 1);
                 (this ->* rule_action[act])();
                 act = nt_action(stack[state_stack_top], lhs[act]);
-            } while(act <= NUM_RULES);
+            } while (act <= NUM_RULES);
         } /* process_terminal */
     }
 
@@ -777,7 +778,7 @@ int Parser::ParseCheck(int stck[], int stack_top, int first_token, int buffer_po
                                   ? temp_stack[temp_stack_top]
                                   : stck[temp_stack_top]);
             act = nt_action(act, lhs_symbol);
-        } while(act <= NUM_RULES);
+        } while (act <= NUM_RULES);
 
         max_pos = Min(max_pos, temp_stack_top);
     } // process_terminal;
@@ -785,7 +786,7 @@ int Parser::ParseCheck(int stck[], int stack_top, int first_token, int buffer_po
     return 0;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

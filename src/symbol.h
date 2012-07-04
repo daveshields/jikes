@@ -1,12 +1,13 @@
-// $Id: symbol.h,v 1.41 2001/04/28 19:34:37 cabbey Exp $
+// $Id: symbol.h,v 1.46 2001/09/14 14:41:13 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #ifndef symbol_INCLUDED
 #define symbol_INCLUDED
 
@@ -20,8 +21,8 @@
 #include "tuple.h"
 #include "case.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 class Semantic;
@@ -185,9 +186,8 @@ public:
     time_t mtime;
 
     //
-    // These fields are used for buffer "files".
+    // This field is used for buffer "files".
     //
-
     // FIXME: This field does not seem to be set anywhere,
     // but it is read in symbol.cpp and stream.cpp
     char *buffer;
@@ -434,6 +434,7 @@ public:
     // enclosing type then accessed_member identifies the member in question.
     //
     Symbol *accessed_member;
+    inline bool AccessesInstanceMember();
 
     virtual wchar_t *Name() { return name_symbol -> Name(); }
     virtual size_t NameLength() { return name_symbol -> NameLength(); }
@@ -626,7 +627,7 @@ public:
     FileLocation *file_location;
     NameSymbol *name_symbol;
     Symbol *owner;
-    TypeSymbol *outermost_type; // An nested class identifies the outer most type that contains it.
+    TypeSymbol *outermost_type; // A nested class identifies the outer most type that contains it.
                                 // If a class is not nested then it identifies itself as its outer
                                 // most type.
     TypeSymbol *super,
@@ -930,9 +931,15 @@ public:
 
     bool IsNested() { return outermost_type != this; }
 
-    bool IsTopLevel() { return (! IsNested()) || this -> ACC_STATIC(); }
-
-    bool IsInner() { return (! IsTopLevel()); }
+    //
+    // FIXME: Technically, JLS2 8.1.2 states that ALL local and anonymous
+    // classes are inner classes, even when they occur in a static context.
+    // However, other locations in jikes currently rely on the current broken
+    // behavior of IsInner returning false if the class is in a static
+    // context; this should be fixed after jikes 1.15.
+    //
+    bool IsInner() { return /*IsLocal() || Anonymous() || */
+                         (IsNested() && (! ACC_STATIC())); }
 
     bool IsLocal()
     {
@@ -1520,6 +1527,11 @@ public:
     MethodSymbol *FindOverloadMethod(MethodSymbol *, AstMethodDeclarator *);
 };
 
+inline bool MethodSymbol::AccessesInstanceMember() {
+    return accessed_member &&
+        ((accessed_member -> MethodCast() && ! accessed_member -> MethodCast() -> ACC_STATIC()) ||
+         (accessed_member -> VariableCast() && ! accessed_member -> VariableCast() -> ACC_STATIC()));
+}
 
 inline int TypeSymbol::NumVariableSymbols() { return (table ? table -> NumVariableSymbols() : 0); }
 inline VariableSymbol *TypeSymbol::VariableSym(int i) { return table -> VariableSym(i); }
@@ -2311,11 +2323,11 @@ inline SymbolTable *BlockSymbol::Table()
     {
         return Case::StringSegmentEqual(suffix, java_suffix, java_suffix_length);
     }
+#endif // WIN32_FILE_SYSTEM
+
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
-#endif
-
-#endif // ifndef symbol_INCLUDED
+#endif // symbol_INCLUDED
 

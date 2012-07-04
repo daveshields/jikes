@@ -1,12 +1,13 @@
-// $Id: symbol.cpp,v 1.40 2001/04/28 19:34:37 cabbey Exp $
+// $Id: symbol.cpp,v 1.44 2001/09/14 05:31:34 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #include "symbol.h"
 #include "stream.h"
 #include "control.h"
@@ -17,8 +18,8 @@
 #include "set.h"
 #include "case.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 char *FileSymbol::java_suffix = StringConstant::U8S__DO_java;
@@ -153,7 +154,7 @@ MethodSymbol *SymbolTable::FindOverloadMethod(MethodSymbol *base_method, AstMeth
         }
     }
 
-    return(MethodSymbol *)  NULL;
+    return (MethodSymbol *) NULL;
 }
 
 
@@ -762,7 +763,7 @@ void DirectorySymbol::ReadDirectory()
     if (! entries)
     {
         entries = new DirectoryTable();
-	
+
 //FIXME: these need to go into platform.cpp
 #ifdef UNIX_FILE_SYSTEM
         DIR *directory = opendir(this -> DirectoryName());
@@ -1412,7 +1413,7 @@ Utf8LiteralValue *TypeSymbol::FindOrInsertClassLiteralName(Control &control)
 
 VariableSymbol *TypeSymbol::FindOrInsertClassLiteral(TypeSymbol *type)
 {
-    assert(IsTopLevel() && (! type -> Primitive()));
+    assert((! IsInner()) && (! type -> Primitive()));
 
     Semantic *sem = semantic_environment -> sem;
     Control &control = sem -> control;
@@ -1692,7 +1693,6 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member)
             method_declarator -> right_parenthesis_token = declarator -> RightToken();
 
             AstThisCall *this_call = ast_pool -> GenThisCall();
-            this_call -> base_opt                = NULL;
             this_call -> this_token              = loc;
             this_call -> left_parenthesis_token  = loc;
             this_call -> right_parenthesis_token = loc;
@@ -1924,7 +1924,7 @@ MethodSymbol *TypeSymbol::GetWriteAccessMethod(VariableSymbol *member)
     return write_method;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

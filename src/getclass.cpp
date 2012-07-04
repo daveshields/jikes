@@ -1,10 +1,10 @@
-// $Id: getclass.cpp,v 1.24 2001/01/10 16:49:45 mdejong Exp $
+// $Id: getclass.cpp,v 1.28 2001/09/14 05:31:33 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -15,8 +15,8 @@
 #include "zip.h"
 #include "jikesapi.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 inline u1 Semantic::GetU1(const char *buffer)
@@ -257,7 +257,7 @@ TypeSymbol *Semantic::ProcessSignature(TypeSymbol *base_type, const char *signat
     for (; *signature == U_LEFT_BRACKET; signature++)
         num_dimensions++;
 
-    switch(*signature)
+    switch (*signature)
     {
         case U_B:
              type = control.byte_type;
@@ -299,7 +299,7 @@ TypeSymbol *Semantic::ProcessSignature(TypeSymbol *base_type, const char *signat
              type = control.void_type;
              break;
         default:
-            assert(! "KNOW WHAT TO DO WITH SIGNATURE");
+            assert(false && "don't know what to do with signature");
             break;
     }
 
@@ -346,7 +346,7 @@ void Semantic::ReadClassFile(TypeSymbol *type, LexStream::TokenIndex tok)
     if (control.option.verbose)  {
         Coutput << "[read "
                 << file_symbol -> FileName()
-                << "]\n";
+                << "]" << endl;
     }
 
     if (file_symbol -> IsZip())
@@ -375,7 +375,7 @@ void Semantic::ReadClassFile(TypeSymbol *type, LexStream::TokenIndex tok)
     }
     else
     {
-		// Get a ReadObject from the API that contains the filew data.
+        // Get a ReadObject from the API that contains the filew data.
         JikesAPI::FileReader  *classFile   = JikesAPI::getInstance()->read(file_symbol->FileName());
         if (classFile == NULL)
         {
@@ -394,7 +394,7 @@ void Semantic::ReadClassFile(TypeSymbol *type, LexStream::TokenIndex tok)
 
         else
         {
-        	// Process the file data.
+            // Process the file data.
             size_t   size  = classFile->getBufferSize();
 
 #if defined(WIN32_FILE_SYSTEM)
@@ -468,7 +468,7 @@ bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer, int buffer_
             ++i; // skip the next entry for eight-byte constants
 
         u2 length;
-        switch(tag)
+        switch (tag)
         {
             case Cp_Info::CONSTANT_Utf8:
                  if (! InRange(buffer, buffer_tail, 2))
@@ -1101,7 +1101,7 @@ fflush(stderr);
     return true;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

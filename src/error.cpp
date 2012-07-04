@@ -1,10 +1,10 @@
-// $Id: error.cpp,v 1.60 2001/02/15 10:36:05 mdejong Exp $
+// $Id: error.cpp,v 1.66 2001/09/14 05:31:33 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -13,8 +13,8 @@
 #include "semantic.h"
 #include "ast.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 unsigned char SemanticError::warning[SemanticError::_num_kinds] = { 0 };
@@ -37,7 +37,7 @@ void ErrorInfo::Initialize(LexStream *l, wchar_t  *m, JikesErrorSeverity s)
      * (lord)
      *
      
-     if(right_column_no != 0) // could not compute a column number
+     if (right_column_no != 0) // could not compute a column number
      right_column_no += (right_string_length - 1); // point to last character in right token
      
     */
@@ -76,25 +76,24 @@ const wchar_t *ErrorInfo::getErrorMessage()
     return msg;
 }
 
-bool ErrorInfo::emacs_style_report=false;
+bool ErrorInfo::emacs_style_report = false;
 
 const wchar_t *ErrorInfo::getErrorReport() 
 {
-    return emacs_style_report?emacsErrorString():regularErrorString();
+    return emacs_style_report ? emacsErrorString() : regularErrorString();
 }
 
 wchar_t *ErrorInfo::regularErrorString() 
 {
     ErrorString s;
 
-    if(left_token < right_token)
+    if (left_token < right_token)
         PrintLargeSource(s);
     else 
         PrintSmallSource(s);
     
     s << "\n*** " << getSeverityString() << ": "
-      << getErrorMessage()
-      << '\n';
+      << getErrorMessage();
     
     return s.Array();
 }
@@ -110,7 +109,7 @@ void ErrorInfo::PrintLargeSource(ErrorString &s)
     if (left_line_no == right_line_no)
     {
         if (left_line_no == 0)
-            s << "\n";
+            s << '\n';
         else
         {
             s << "\n\n";
@@ -136,7 +135,7 @@ void ErrorInfo::PrintLargeSource(ErrorString &s)
 
         s.width(lex_stream -> LineSegmentLength(left_token));
         s.fill('-');
-        s << "\n";
+        s << '\n';
         s.fill(' ');
 
         s.width(6);
@@ -174,7 +173,7 @@ void ErrorInfo::PrintLargeSource(ErrorString &s)
 void ErrorInfo::PrintSmallSource(ErrorString &s)
 {
     if (left_line_no == 0)
-        s << "\n";
+        s << '\n';
     else
     {
         s << "\n\n";
@@ -208,7 +207,7 @@ wchar_t *ErrorInfo::emacsErrorString()
       << ':' << left_line_no  << ':' << left_column_no
       << ':' << right_line_no << ':' << right_column_no
       << ": " << getSeverityString() << ": " 
-      << getErrorMessage() << '\n';
+      << getErrorMessage();
     
     return s.Array();
 }
@@ -589,6 +588,7 @@ void SemanticError::StaticInitializer()
     print_message[MISMATCHED_INHERITED_METHOD_EXTERNALLY] = PrintMISMATCHED_INHERITED_METHOD_EXTERNALLY;
     print_message[MISMATCHED_INHERITED_METHODS_IN_BASE] = PrintMISMATCHED_INHERITED_METHODS_IN_BASE;
     print_message[DUPLICATE_FORMAL_PARAMETER] = PrintDUPLICATE_FORMAL_PARAMETER;
+    print_message[MISSPELLED_CONSTRUCTOR_NAME] = PrintMISSPELLED_CONSTRUCTOR_NAME;
     print_message[MISMATCHED_CONSTRUCTOR_NAME] = PrintMISMATCHED_CONSTRUCTOR_NAME;
     print_message[METHOD_WITH_CONSTRUCTOR_NAME] = PrintMETHOD_WITH_CONSTRUCTOR_NAME;
     print_message[DUPLICATE_LOCAL_VARIABLE_DECLARATION] = PrintDUPLICATE_LOCAL_VARIABLE_DECLARATION;
@@ -702,6 +702,7 @@ void SemanticError::StaticInitializer()
     print_message[PARAMETER_REDECLARED] = PrintPARAMETER_REDECLARED;
     print_message[BAD_ABSTRACT_METHOD_MODIFIER] = PrintBAD_ABSTRACT_METHOD_MODIFIER;
     print_message[ABSTRACT_METHOD_MODIFIER_CONFLICT] = PrintABSTRACT_METHOD_MODIFIER_CONFLICT;
+    print_message[STRICTFP_NATIVE_METHOD] = PrintSTRICTFP_NATIVE_METHOD;
     print_message[ABSTRACT_METHOD_INVOCATION] = PrintABSTRACT_METHOD_INVOCATION;
     print_message[FINAL_METHOD_OVERRIDE] = PrintFINAL_METHOD_OVERRIDE;
     print_message[FINAL_METHOD_OVERRIDE_EXTERNALLY] = PrintFINAL_METHOD_OVERRIDE_EXTERNALLY;
@@ -760,7 +761,8 @@ void SemanticError::StaticInitializer()
     print_message[STATIC_NOT_INNER_CLASS] = PrintSTATIC_NOT_INNER_CLASS;
     print_message[TYPE_NOT_INNER_CLASS] = PrintTYPE_NOT_INNER_CLASS;
     print_message[SUPER_TYPE_NOT_INNER_CLASS] = PrintSUPER_TYPE_NOT_INNER_CLASS;
-    print_message[STATIC_FIELD_IN_INNER_CLASS] = PrintSTATIC_FIELD_IN_INNER_CLASS;
+    print_message[STATIC_FIELD_IN_INNER_CLASS_NOT_FINAL] = PrintSTATIC_FIELD_IN_INNER_CLASS_NOT_FINAL;
+    print_message[STATIC_FIELD_IN_INNER_CLASS_NOT_CONSTANT] = PrintSTATIC_FIELD_IN_INNER_CLASS_NOT_CONSTANT;
     print_message[STATIC_METHOD_IN_INNER_CLASS] = PrintSTATIC_METHOD_IN_INNER_CLASS;
     print_message[STATIC_TYPE_IN_INNER_CLASS] = PrintSTATIC_TYPE_IN_INNER_CLASS;
     print_message[STATIC_INITIALIZER_IN_INNER_CLASS] = PrintSTATIC_INITIALIZER_IN_INNER_CLASS;
@@ -810,13 +812,13 @@ void SemanticError::SortMessages()
      lostack[top] = 0;
      histack[top] = error.Length() - 1;
 
-     while(top >= 0)
+     while (top >= 0)
      {
          lower = lostack[top];
          upper = histack[top];
          top--;
 
-         while(upper > lower)
+         while (upper > lower)
          {
              //
              // The array is most-likely almost sorted. Therefore,
@@ -910,14 +912,14 @@ int SemanticError::PrintMessages()
                 if (control.option.nowarn) // we only had warnings and they should not be reported
                     return return_code;
 
-                Coutput << "\nIssued "
+                Coutput << endl << "Issued "
                         << num_warnings
                         << (lex_stream -> file_symbol -> semantic == control.system_semantic ? " system" : " semantic")
                         << " warning" << (num_warnings <= 1 ? "" : "s");
             }
             else // we had some errors, and possibly warnings as well
             {
-                Coutput << "\nFound "
+                Coutput << endl << "Found "
                         << num_errors
                         << (lex_stream -> file_symbol -> semantic == control.system_semantic ? " system" : " semantic")
                         << " error" << (num_errors <= 1 ? "" : "s");
@@ -1197,15 +1199,14 @@ wchar_t *SemanticError::PrintPACKAGE_NOT_FOUND(ErrorInfo &err, LexStream *lex_st
 
     s << "Could not find package \""
       << err.insert1
-      << "\" in:\n" ;
+      << "\" in:\n";
 
     for (int i = 1; i < control.classpath.Length(); i++)
     {
         PathSymbol *path_symbol = control.classpath[i];
         wchar_t *path = path_symbol -> Name();
         s << "                "
-          << path
-          << "\n";
+          << path << '\n';
     }
 
     return s.Array();
@@ -1764,7 +1765,7 @@ wchar_t *SemanticError::PrintDUPLICATE_MODIFIER(ErrorInfo &err, LexStream *lex_s
 {
     ErrorString s;
     
-    s << "Duplicate specification of this modifier.";
+    s << "Duplicate specification of the modifier \"" << err.insert1 << "\".";
 
     return s.Array();
 }
@@ -1785,8 +1786,8 @@ wchar_t *SemanticError::PrintINVALID_TOP_LEVEL_CLASS_MODIFIER(ErrorInfo &err, Le
 {
     ErrorString s;
     
-    s << err.insert1
-            << " is not a valid modifier for a top-level class.";
+    s << "\"" << err.insert1
+            << "\" is not a valid modifier for a top-level class.";
 
     return s.Array();
 }
@@ -1796,8 +1797,8 @@ wchar_t *SemanticError::PrintINVALID_INNER_CLASS_MODIFIER(ErrorInfo &err, LexStr
 {
     ErrorString s;
     
-    s << err.insert1
-            << " is not a valid modifier for an inner class.";
+    s << "\"" << err.insert1
+            << "\" is not a valid modifier for an inner class.";
 
     return s.Array();
 }
@@ -1807,8 +1808,8 @@ wchar_t *SemanticError::PrintINVALID_STATIC_INNER_CLASS_MODIFIER(ErrorInfo &err,
 {
     ErrorString s;
     
-    s << err.insert1
-            << " is not a valid modifier for an inner class that is enclosed in an interface.";
+    s << "\"" << err.insert1
+            << "\" is not a valid modifier for an inner class that is enclosed in an interface.";
 
     return s.Array();
 }
@@ -1818,8 +1819,8 @@ wchar_t *SemanticError::PrintINVALID_LOCAL_CLASS_MODIFIER(ErrorInfo &err, LexStr
 {
     ErrorString s;
     
-    s << err.insert1
-            << " is not a valid modifier for a local inner class.";
+    s << "\"" << err.insert1
+            << "\" is not a valid modifier for a local inner class.";
 
     return s.Array();
 }
@@ -1839,8 +1840,8 @@ wchar_t *SemanticError::PrintINVALID_INTERFACE_MODIFIER(ErrorInfo &err, LexStrea
 {
     ErrorString s;
     
-    s << err.insert1
-            << " is not a valid interface modifier.";
+    s << "\"" << err.insert1
+            << "\" is not a valid interface modifier.";
 
     return s.Array();
 }
@@ -1870,8 +1871,8 @@ wchar_t *SemanticError::PrintINVALID_FIELD_MODIFIER(ErrorInfo &err, LexStream *l
 {
     ErrorString s;
     
-    s << err.insert1
-            << " is not a valid field modifier.";
+    s << "\"" << err.insert1
+            << "\" is not a valid field modifier.";
 
     return s.Array();
 }
@@ -1881,8 +1882,8 @@ wchar_t *SemanticError::PrintINVALID_LOCAL_MODIFIER(ErrorInfo &err, LexStream *l
 {
     ErrorString s;
     
-    s << err.insert1
-            << " is not a valid local variable or parameter modifier.";
+    s << "\"" << err.insert1
+            << "\" is not a valid local variable or parameter modifier.";
 
     return s.Array();
 }
@@ -1892,8 +1893,8 @@ wchar_t *SemanticError::PrintINVALID_METHOD_MODIFIER(ErrorInfo &err, LexStream *
 {
     ErrorString s;
     
-    s << err.insert1
-            << " is not a valid method modifier.";
+    s << "\"" << err.insert1
+            << "\" is not a valid method modifier.";
 
     return s.Array();
 }
@@ -1903,8 +1904,8 @@ wchar_t *SemanticError::PrintINVALID_SIGNATURE_MODIFIER(ErrorInfo &err, LexStrea
 {
     ErrorString s;
     
-    s << err.insert1
-            << " is not a valid signature modifier.";
+    s << "\"" << err.insert1
+            << "\" is not a valid signature modifier.";
 
     return s.Array();
 }
@@ -1914,8 +1915,8 @@ wchar_t *SemanticError::PrintINVALID_CONSTRUCTOR_MODIFIER(ErrorInfo &err, LexStr
 {
     ErrorString s;
     
-    s << err.insert1
-            << " is not a valid constructor modifier.";
+    s << "\"" << err.insert1
+            << "\" is not a valid constructor modifier.";
 
     return s.Array();
 }
@@ -1925,8 +1926,8 @@ wchar_t *SemanticError::PrintINVALID_CONSTANT_MODIFIER(ErrorInfo &err, LexStream
 {
     ErrorString s;
     
-    s << err.insert1
-            << " is not a valid constant modifier.";
+    s << "\"" << err.insert1
+            << "\" is not a valid interface field modifier.";
 
     return s.Array();
 }
@@ -2213,9 +2214,23 @@ wchar_t *SemanticError::PrintDUPLICATE_CONSTRUCTOR(ErrorInfo &err, LexStream *le
 {
     ErrorString s;
     
-    s << "Duplicate declaration of this constructor in type \""
+    s << "Duplicate declaration of this constructor signature in type \""
             << err.insert1
             << "\".";
+
+    return s.Array();
+}
+
+
+wchar_t *SemanticError::PrintMISSPELLED_CONSTRUCTOR_NAME(ErrorInfo &err, LexStream *lex_stream, Control &control)
+{
+    ErrorString s;
+    
+    s << "The name of the constructor \""
+            << err.insert1
+            << "\" does not match the name of the class \""
+            << err.insert2
+            << "\". Assuming it is misspelled.";
 
     return s.Array();
 }
@@ -2229,7 +2244,7 @@ wchar_t *SemanticError::PrintMISMATCHED_CONSTRUCTOR_NAME(ErrorInfo &err, LexStre
             << err.insert1
             << "\" does not match the name of the class \""
             << err.insert2
-            << "\".";
+            << "\". Assuming it is a method with missing return type.";
 
     return s.Array();
 }
@@ -4000,8 +4015,8 @@ wchar_t *SemanticError::PrintBAD_ABSTRACT_METHOD_MODIFIER(ErrorInfo &err, LexStr
 {
     ErrorString s;
     
-    s << "A method declaration that contains the keyword \"abstract\" may not also contain one of the keywords: "
-               "\"private\", \"static\", \"final\", \"native\" or \"synchronized\".";
+    s << "A method declaration that contains the keyword \"abstract\" may not contain any of the keywords: "
+               "\"private\", \"static\", \"final\", \"native\", \"strictfp\" or \"synchronized\".";
 
     return s.Array();
 }
@@ -4011,9 +4026,19 @@ wchar_t *SemanticError::PrintABSTRACT_METHOD_MODIFIER_CONFLICT(ErrorInfo &err, L
 {
     ErrorString s;
     
-    s << "An abstract method may not also contain the keyword \""
+    s << "An \"abstract\" method may not also contain the keyword \""
             << err.insert1
             << "\".";
+
+    return s.Array();
+}
+
+
+wchar_t *SemanticError::PrintSTRICTFP_NATIVE_METHOD(ErrorInfo &err, LexStream *lex_stream, Control &control)
+{
+    ErrorString s;
+    
+    s << "A \"native\" method method may not also be \"strictfp\".";
 
     return s.Array();
 }
@@ -5035,11 +5060,31 @@ wchar_t *SemanticError::PrintSUPER_TYPE_NOT_INNER_CLASS(ErrorInfo &err, LexStrea
 }
 
 
-wchar_t *SemanticError::PrintSTATIC_FIELD_IN_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+wchar_t *SemanticError::PrintSTATIC_FIELD_IN_INNER_CLASS_NOT_FINAL(ErrorInfo &err, LexStream *lex_stream, Control &control)
 {
     ErrorString s;
     
-    s << "An inner class may not contain a static field that is not final.";
+    s << "This static variable declaration is invalid, because it is not final, but is enclosed in an inner class, \""
+            << err.insert1
+            << "\", located at "
+            << err.insert2
+            << '.';
+
+    return s.Array();
+}
+
+
+wchar_t *SemanticError::PrintSTATIC_FIELD_IN_INNER_CLASS_NOT_CONSTANT(ErrorInfo &err, LexStream *lex_stream, Control &control)
+{
+    ErrorString s;
+    
+    s << "The static final field \""
+            << err.insert1
+            << "\" is invalid, because it does not represent a compile-time constant, but is enclosed in an inner class, \""
+            << err.insert2
+            << "\", located at "
+            << err.insert3
+            << '.';
 
     return s.Array();
 }
@@ -5049,7 +5094,13 @@ wchar_t *SemanticError::PrintSTATIC_METHOD_IN_INNER_CLASS(ErrorInfo &err, LexStr
 {
     ErrorString s;
     
-    s << "Inner class may not contain static method.";
+    s << "The static method \""
+            << err.insert1
+            << "\" is invalid, because it is enclosed in an inner class, \""
+            << err.insert2
+            << "\", located at "
+            << err.insert3
+            << '.';
 
     return s.Array();
 }
@@ -5061,7 +5112,7 @@ wchar_t *SemanticError::PrintSTATIC_TYPE_IN_INNER_CLASS(ErrorInfo &err, LexStrea
     
     s << "The static type \""
             << err.insert1
-            << "\" is enclosed in an inner class, \""
+            << "\" is invalid, because it is enclosed in an inner class, \""
             << err.insert2
             << "\", located at "
             << err.insert3
@@ -5075,7 +5126,7 @@ wchar_t *SemanticError::PrintSTATIC_INITIALIZER_IN_INNER_CLASS(ErrorInfo &err, L
 {
     ErrorString s;
     
-    s << "This static initializer is enclosed in an inner class, \""
+    s << "This static initializer is invalid, because it is enclosed in an inner class, \""
             << err.insert1
             << "\", located at "
             << err.insert2
@@ -5351,12 +5402,14 @@ wchar_t *SemanticError::PrintCONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS(ErrorInfo &err
 {
     ErrorString s;
     
-    s << "An anonymous class cannot have a constructor.";
+    s << "An anonymous class cannot have a constructor. Assuming that \""
+            << err.insert1
+            << "\" is a method with missing return type.";
 
     return s.Array();
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

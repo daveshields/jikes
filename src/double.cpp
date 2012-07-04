@@ -1,10 +1,10 @@
-// $Id: double.cpp,v 1.19 2001/04/19 13:52:32 cabbey Exp $
+// $Id: double.cpp,v 1.22 2001/09/21 05:06:07 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 //
@@ -61,8 +61,8 @@
 #include "double.h"
 #include "long.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 #ifndef HAVE_MEMBER_CONSTANTS
@@ -108,7 +108,7 @@ IEEEfloat::IEEEfloat(i4 a)
 #ifdef HAVE_IEEE754
     value.float_value = (float) a;
 #else
-    int	sign = 0;
+    int sign = 0;
 
     if (a < 0)
     {
@@ -125,18 +125,18 @@ IEEEfloat::IEEEfloat(i4 a)
 IEEEfloat::IEEEfloat(const LongInt &a)
 {
 #ifdef HAVE_IEEE754
-# ifdef HAVE_UNSIGNED_LONG_LONG
+# ifdef HAVE_64BIT_TYPES
     value.float_value = (float)(i8) a.Words();
 # else
     value.float_value = ((float)(i4) a.HighWord() * (float) 0x40000000 * 4.0f)
         + (float) a.LowWord();
-# endif // HAVE_UNSIGNED_LONG_LONG
+# endif // HAVE_64BIT_TYPES
 #else
     //
     // Unfortunately, we cannot recycle the LongInt.DoubleValue() method, since
     // in rare cases the double rounding puts us off by one bit.
     //
-    int	sign = 0;
+    int sign = 0;
     LongInt l = a;
 
     if (a < 0)
@@ -184,17 +184,17 @@ IEEEfloat::IEEEfloat(const IEEEdouble &d)
         else if (d.IsNaN())
             *this = NaN();
         else 
-	{
+        {
             //
             // A regular, normalized number - do work on the parts
             // Shift to 26th position, add implicit msb, rounding bits
             //
             LongInt fract = d.Fraction() << 5;
-	    u4 fraction = fract.HighWord() | (fract.LowWord() ? 0x02000001
+            u4 fraction = fract.HighWord() | (fract.LowWord() ? 0x02000001
                                                               : 0x02000000);
 
-	    *this = Normalize(d.Sign(), d.Exponent() - 2, fraction);
-	}
+            *this = Normalize(d.Sign(), d.Exponent() - 2, fraction);
+        }
     }
 #endif // HAVE_IEEE754
 }
@@ -224,7 +224,7 @@ bool IEEEfloat::Adjust(const BigInt &delta, const BigInt &bs, const bool dsign)
         {
             //
             // special case - mantissa is power of 2
-            //				 
+            //
             if (aadj < 1.0f)
                 aadj = 0.5f;
             else
@@ -481,7 +481,7 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
         nd = MAX_DIGITS;
     }
     e1 = e -= nf;
-	
+
     // 
     // Now we have nd0 digits, starting at s0, followed by a
     // decimal point, followed by nd-nd0 digits.  The number we're
@@ -528,7 +528,7 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
         }
     }
     e1 += nd - k;
-	
+
     // 
     // Get starting approximation: *this * 10**e1
     //
@@ -588,7 +588,7 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
                     *this /= bigtens[j];
             //
             // The last multiplication could underflow.
-            //			 
+            //
             IEEEfloat tmp(*this);
             *this /= bigtens[j];
             if (IsZero())
@@ -607,7 +607,7 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
         }
     }
 
-    //	 
+    //
     // Now the hard part -- adjusting *this to the correct value.
     // Put digits into bd: true value = bd * 10^e
     // 
@@ -678,7 +678,7 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
                 break;
             delta <<= 1;
             if (delta.compareTo(bs) > 0)
-		// boundary case -- decrement exponent
+                // boundary case -- decrement exponent
                 value.word--;
             break;
         }
@@ -711,7 +711,7 @@ i4 IEEEfloat::IntValue() const
     if (IsNaN())
         return 0;
             
-    int	sign = Sign(),
+    int sign = Sign(),
         exponent = Exponent();
 
     if (IsInfinite())
@@ -724,9 +724,9 @@ i4 IEEEfloat::IntValue() const
     i4 result = Fraction();
 
     if (exponent > FRACT_SIZE)
-	result <<= (exponent - FRACT_SIZE);
+        result <<= (exponent - FRACT_SIZE);
     else if (exponent < FRACT_SIZE)
-	result >>= (FRACT_SIZE - exponent);
+        result >>= (FRACT_SIZE - exponent);
 
     return sign ? -result : result;
 }
@@ -736,7 +736,7 @@ LongInt IEEEfloat::LongValue() const
     if (IsNaN())
         return LongInt(0);
             
-    int	sign = Sign(),
+    int sign = Sign(),
         exponent = Exponent();
 
     if (IsInfinite())
@@ -749,9 +749,9 @@ LongInt IEEEfloat::LongValue() const
     LongInt result(Fraction());
 
     if (exponent > FRACT_SIZE)
-	result <<= (exponent - FRACT_SIZE);
+        result <<= (exponent - FRACT_SIZE);
     else if (exponent < FRACT_SIZE)
-	result >>= (FRACT_SIZE - exponent);
+        result >>= (FRACT_SIZE - exponent);
 
     return sign ? (LongInt) -result : result;
 }
@@ -767,35 +767,35 @@ IEEEfloat IEEEfloat::Normalize(int sign, int exponent, u4 fraction)
     //
     if (fraction >= MAX_FRACT)
     {
-	while (fraction >= MAX_FRACT)
-	{
-	    sticky |= round;
-	    round = (fraction & 1) != 0;
-	    fraction >>= 1;
-	    exponent++;
-	}
-	if (round && (sticky || (fraction & 1)) && exponent > -BIAS)
+        while (fraction >= MAX_FRACT)
+        {
+            sticky |= round;
+            round = (fraction & 1) != 0;
+            fraction >>= 1;
+            exponent++;
+        }
+        if (round && (sticky || (fraction & 1)) && exponent > -BIAS)
             //
             // Capture any overflow caused by rounding. No other checks are
             // required because if overflow occurred, the the low order bit
             // was guaranteed to be zero. Do not round denorms yet.
             //
-	    if (++fraction >= MAX_FRACT)
-	    {
-		fraction >>= 1;
-		exponent++;
-	    }
+            if (++fraction >= MAX_FRACT)
+            {
+                fraction >>= 1;
+                exponent++;
+            }
     }
 
     //
     // Normalize left.  Shift until value >= MIN_FRACT.
     //
     else
-	while (fraction < MIN_FRACT)
-	{
-	    fraction <<= 1;
-	    exponent--;
-	}
+        while (fraction < MIN_FRACT)
+        {
+            fraction <<= 1;
+            exponent--;
+        }
 
     //
     // Check and respond to overflow
@@ -808,20 +808,20 @@ IEEEfloat IEEEfloat::Normalize(int sign, int exponent, u4 fraction)
     //
     if (exponent <= -BIAS)
     {
-	while (exponent <= -BIAS)
-	{
-	    sticky |= round;
-	    round = (fraction & 1) != 0;
-	    fraction >>= 1;
-	    exponent++;
-	}
+        while (exponent <= -BIAS)
+        {
+            sticky |= round;
+            round = (fraction & 1) != 0;
+            fraction >>= 1;
+            exponent++;
+        }
 
-	if (round && (sticky || (fraction & 1)))
-	    fraction++;
+        if (round && (sticky || (fraction & 1)))
+            fraction++;
 
-	exponent = -BIAS;
+        exponent = -BIAS;
 
-	if (fraction == 0)
+        if (fraction == 0)
             return sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
     }
 
@@ -839,12 +839,12 @@ int IEEEfloat::SplitInto(u4 &fraction) const
 
     if (exponent == -BIAS)
     {
-	exponent++;
-	while (fraction < MIN_FRACT)
-	{
-	    fraction <<= 1;
-	    exponent--;
-	}
+        exponent++;
+        while (fraction < MIN_FRACT)
+        {
+            fraction <<= 1;
+            exponent--;
+        }
     }
 
     return exponent;
@@ -1170,8 +1170,8 @@ IEEEfloat IEEEfloat::operator/ (const IEEEfloat op) const
 
     if (x < y)
     {
-	x <<= 1;
-	exponent--;
+        x <<= 1;
+        exponent--;
     }
 
     //
@@ -1181,13 +1181,13 @@ IEEEfloat IEEEfloat::operator/ (const IEEEfloat op) const
     //
     while (mask)
     {
-	if (x >= y)
-	{
-	    result += mask;
-	    x -= y;
-	    if (x == 0)
-		break;
-	}
+        if (x >= y)
+        {
+            result += mask;
+            x -= y;
+            if (x == 0)
+                break;
+        }
         x <<= 1;
         mask >>= 1;
     }
@@ -1263,16 +1263,16 @@ IEEEdouble::IEEEdouble(const IEEEfloat &f)
 
     if (exponent == -IEEEfloat::Bias())
     {
-	if (f.IsZero())
+        if (f.IsZero())
             *this = sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
-	else
+        else
         {
             //
             // This is a denormalized number, shift it to fit double format
             //
-	    *this = Normalize(sign, 1 - IEEEfloat::Bias(),
+            *this = Normalize(sign, 1 - IEEEfloat::Bias(),
                               ULongInt(f.Fraction()) << 29);
-	}
+        }
     }
     else
     {
@@ -1281,10 +1281,10 @@ IEEEdouble::IEEEdouble(const IEEEfloat &f)
         else if (f.IsNaN())
             *this = NaN();
         else
-	{
+        {
             // Regular, normalized number.  Shift it to fit double format
             *this = Normalize(sign, exponent, ULongInt(f.Fraction()) << 29);
-	}
+        }
     }
 #endif // HAVE_IEEE754
 }
@@ -1294,7 +1294,7 @@ IEEEdouble::IEEEdouble(i4 a)
 #ifdef HAVE_IEEE754
     value.double_value = (double) a;
 #else
-    int	sign = 0;
+    int sign = 0;
 
     if (a < 0)
     {
@@ -1311,14 +1311,14 @@ IEEEdouble::IEEEdouble(i4 a)
 IEEEdouble::IEEEdouble(const LongInt &a)
 {
 #ifdef HAVE_IEEE754
-# ifdef HAVE_UNSIGNED_LONG_LONG
+# ifdef HAVE_64BIT_TYPES
     value.double_value = (double)(i8) a.Words();
 # else
     value.double_value = ((double)(i4) a.HighWord() * (double) 0x40000000 * 4.0) +
         (double) a.LowWord();
-# endif // HAVE_UNSIGNED_LONG_LONG
+# endif // HAVE_64BIT_TYPES
 #else
-    int	sign = 0;
+    int sign = 0;
     LongInt l = a;
 
     if (a < 0)
@@ -1527,7 +1527,7 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
         nd = MAX_DIGITS;
     }
     e1 = e -= nf;
-	
+
     // 
     // Now we have nd0 digits, starting at s0, followed by a
     // decimal point, followed by nd-nd0 digits.  The number we're
@@ -1576,7 +1576,7 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
         }
     }
     e1 += nd - k;
-	
+
     // 
     // Get starting approximation: *this * 10**e1
     //
@@ -1636,7 +1636,7 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
                     *this /= bigtens[j];
             //
             // The last multiplication could underflow.
-            //			 
+            //
             IEEEdouble tmp(*this);
             *this /= bigtens[j];
             if (IsZero())
@@ -1655,7 +1655,7 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
         }
     }
 
-    //	 
+    //
     // Now the hard part -- adjusting *this to the correct value.
     // Put digits into bd: true value = bd * 10^e
     // 
@@ -1726,7 +1726,7 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
                 break;
             delta <<= 1;
             if (delta.compareTo(bs) > 0)
-		// boundary case -- decrement exponent
+                // boundary case -- decrement exponent
                 BaseLong::operator --();
             break;
         }
@@ -1762,7 +1762,7 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
             {
                 //
                 // special case - mantissa is power of 2
-                //				 
+                //
                 if (aadj < 1.0)
                     aadj = 0.5;
                 else
@@ -1855,7 +1855,7 @@ i4 IEEEdouble::IntValue() const
         return MAX_INT;
     return (i4) value.double_value;
 #else
-    int	sign = Sign(),
+    int sign = Sign(),
         exponent = Exponent();
 
     if (IsInfinite() || exponent > 30)
@@ -1876,7 +1876,7 @@ LongInt IEEEdouble::LongValue() const
     if (IsNaN())
         return LongInt(0);
             
-    int	sign = Sign(),
+    int sign = Sign(),
         exponent = Exponent();
 
     if (IsInfinite() || exponent > 62)
@@ -1889,9 +1889,9 @@ LongInt IEEEdouble::LongValue() const
     LongInt result = Fraction();
 
     if (exponent > (int) FRACT_SIZE)
-	result <<= (exponent - FRACT_SIZE);
+        result <<= (exponent - FRACT_SIZE);
     else if (exponent < (int) FRACT_SIZE)
-	result >>= (FRACT_SIZE - exponent);
+        result >>= (FRACT_SIZE - exponent);
 
     return sign ? (LongInt) -result : result;
 }
@@ -1907,35 +1907,35 @@ IEEEdouble IEEEdouble::Normalize(int sign, int exponent, ULongInt fraction)
     //
     if (fraction.HighWord() >= MAX_FRACT)
     {
-	while (fraction.HighWord() >= MAX_FRACT)
-	{
-	    sticky |= round;
-	    round = (fraction.LowWord() & 1) != 0;
-	    fraction >>= 1;
-	    exponent++;
-	}
-	if (round && (sticky || (fraction.LowWord() & 1)) && exponent > -(int) BIAS)
+        while (fraction.HighWord() >= MAX_FRACT)
+        {
+            sticky |= round;
+            round = (fraction.LowWord() & 1) != 0;
+            fraction >>= 1;
+            exponent++;
+        }
+        if (round && (sticky || (fraction.LowWord() & 1)) && exponent > -(int) BIAS)
             //
             // Capture any overflow caused by rounding. No other checks are
             // required because if overflow occurred, the the low order bit
             // was guaranteed to be zero. Do not round denorms yet.
             //
-	    if ((++fraction).HighWord() >= MAX_FRACT)
-	    {
-		fraction >>= 1;
-		exponent++;
-	    }
+            if ((++fraction).HighWord() >= MAX_FRACT)
+            {
+                fraction >>= 1;
+                exponent++;
+            }
     }
 
     //
     // Normalize left. Shift until value >= MIN_FRACT.
     //
     else
-	while (fraction.HighWord() < MIN_FRACT)
-	{
-	    fraction <<= 1;
-	    exponent--;
-	}
+        while (fraction.HighWord() < MIN_FRACT)
+        {
+            fraction <<= 1;
+            exponent--;
+        }
 
     //
     // Check and respond to overflow
@@ -1948,20 +1948,20 @@ IEEEdouble IEEEdouble::Normalize(int sign, int exponent, ULongInt fraction)
     //
     if (exponent <= -(int) BIAS)
     {
-	while (exponent <= -(int) BIAS)
-	{
-	    sticky |= round;
-	    round = (fraction.LowWord() & 1) != 0;
-	    fraction >>= 1;
-	    exponent++;
-	}
+        while (exponent <= -(int) BIAS)
+        {
+            sticky |= round;
+            round = (fraction.LowWord() & 1) != 0;
+            fraction >>= 1;
+            exponent++;
+        }
 
-	if (round && (sticky || (fraction.LowWord() & 1)))
-	    fraction++;
+        if (round && (sticky || (fraction.LowWord() & 1)))
+            fraction++;
 
-	exponent = -(int) BIAS;
+        exponent = -(int) BIAS;
 
-	if (fraction == 0)
+        if (fraction == 0)
             return sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
     }
 
@@ -1977,12 +1977,12 @@ int IEEEdouble::SplitInto(BaseLong &fraction) const
 
     if (exponent == -(int) BIAS)
     {
-	exponent++;
-	while (fraction.HighWord() < MIN_FRACT)
-	{
-	    fraction <<= 1;
-	    exponent--;
-	}
+        exponent++;
+        while (fraction.HighWord() < MIN_FRACT)
+        {
+            fraction <<= 1;
+            exponent--;
+        }
     }
 
     return exponent;
@@ -2269,8 +2269,8 @@ IEEEdouble IEEEdouble::operator/ (const IEEEdouble op) const
 
     if (x < y)
     {
-	x <<= 1;
-	exponent--;
+        x <<= 1;
+        exponent--;
     }
 
     //
@@ -2280,13 +2280,13 @@ IEEEdouble IEEEdouble::operator/ (const IEEEdouble op) const
     //
     while (mask != 0)
     {
-	if (x >= y)
-	{
-	    result += mask;
-	    x -= y;
-	    if (x == 0)
-		break;
-	}
+        if (x >= y)
+        {
+            result += mask;
+            x -= y;
+            if (x == 0)
+                break;
+        }
         x <<= 1;
         mask >>= 1;
     }
@@ -2884,7 +2884,7 @@ int BigInt::quorem(const BigInt &S)
     sxe = sx + --n;
     bx = data;
     bxe = bx + n;
-    q = *bxe / (*sxe + 1);	 
+    q = *bxe / (*sxe + 1);
     if (q)
     {
         borrow = 0;
@@ -2979,7 +2979,7 @@ IEEEdouble BigInt::DoubleValue() const
 
 
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

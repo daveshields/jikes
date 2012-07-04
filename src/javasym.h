@@ -1,22 +1,24 @@
-// $Id: javasym.h,v 1.14 2001/01/05 09:13:20 mdejong Exp $
+// $Id: javasym.h,v 1.17 2001/09/14 05:31:33 ericb Exp $
+// DO NOT MODIFY THIS FILE - it is generated using jikespg on java.g.
 //
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// This software is subject to the terms of the IBM Jikes Compiler Open
+// Source License Agreement available at the following URL:
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1997, 1998, 1999, 2001, International
+// Business Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #ifndef javasym_INCLUDED
 #define javasym_INCLUDED
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 enum {
       TK_BodyMarker = 101,
-      TK_Identifier = 29,
+      TK_Identifier = 28,
       TK_abstract = 57,
       TK_boolean = 32,
       TK_break = 70,
@@ -59,7 +61,7 @@ enum {
       TK_super = 41,
       TK_switch = 76,
       TK_synchronized = 55,
-      TK_this = 42,
+      TK_this = 43,
       TK_throw = 77,
       TK_throws = 104,
       TK_transient = 65,
@@ -109,14 +111,14 @@ enum {
       TK_GREATER = 20,
       TK_LESS = 21,
       TK_LPAREN = 22,
-      TK_RPAREN = 28,
+      TK_RPAREN = 29,
       TK_LBRACE = 45,
       TK_RBRACE = 31,
       TK_LBRACKET = 9,
       TK_RBRACKET = 56,
       TK_SEMICOLON = 27,
       TK_QUESTION = 26,
-      TK_COLON = 43,
+      TK_COLON = 42,
       TK_COMMA = 30,
       TK_DOT = 3,
       TK_EQUAL = 80,
@@ -125,8 +127,8 @@ enum {
       TK_EOL = 108
      };
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
 #endif /* javasym_INCLUDED */

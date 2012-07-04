@@ -1,10 +1,10 @@
-// $Id: option.h,v 1.29 2001/02/24 22:19:24 mdejong Exp $
+// $Id: option.h,v 1.32 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -16,11 +16,8 @@
 #include "tuple.h"
 #include "jikesapi.h"
 
-//FIXME: include stuff
-//#include <ctype.h>
-
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 class ArgumentExpander
@@ -41,7 +38,7 @@ public:
         delete [] argv;
     }
 
-    bool ArgumentExpanded(Tuple<char *> &, char *);
+    bool ExpandAtFileArgument(Tuple<char *> & arguments, char * file_name);
 };
 
 
@@ -126,7 +123,7 @@ public:
          nocleanup,
          incremental,
          makefile,
-	 dependence_report,
+         dependence_report,
          bytecode,
          full_check,
          unzip,
@@ -142,9 +139,9 @@ public:
     ~Option();
 };
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif /* option_INCLUDED */
+#endif // option_INCLUDED
 

@@ -1,12 +1,13 @@
-// $Id: lookup.cpp,v 1.36 2001/05/04 23:03:58 cabbey Exp $
+// $Id: lookup.cpp,v 1.38 2001/09/14 05:31:33 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #include "lookup.h"
 #include "control.h"
 #include "symbol.h"
@@ -14,8 +15,8 @@
 #include "ast.h"
 #include "case.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 PackageSymbol *Symbol::PackageCast()
@@ -1858,7 +1859,7 @@ LiteralSymbol *LiteralLookupTable::FindOrInsertLiteral(wchar_t *str, size_t len)
     return symbol;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

@@ -1,12 +1,13 @@
-// $Id: stream.h,v 1.29 2001/03/31 05:02:39 cabbey Exp $
+// $Id: stream.h,v 1.32 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #ifndef stream_INCLUDED
 #define stream_INCLUDED
 
@@ -18,22 +19,8 @@
 #include "lookup.h"
 #include "jikesapi.h"
 
-/*
-//FIXME: include stuff
-#include <limits.h>
-#include <iostream.h>
-#include <stddef.h>
-#include <stdio.h>
-*/
-
-#if defined(HAVE_LIBICU_UC)
-# include <unicode/ucnv.h>
-#elif defined(HAVE_ICONV_H)
-# include <iconv.h>
-#endif
-
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 class Control    ;
@@ -355,6 +342,8 @@ class LexStream : public Stream
 
     void SetUpComments()
     {
+        if (comment_buffer)
+            return;
         RereadInput();
         //
         // Calculate the length of the string required to save the comments.
@@ -519,9 +508,9 @@ private:
     }
 };
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif
+#endif // stream_INCLUDED
 

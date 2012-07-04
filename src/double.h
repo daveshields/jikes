@@ -1,10 +1,10 @@
-// $Id: double.h,v 1.17 2001/04/19 13:52:32 cabbey Exp $
+// $Id: double.h,v 1.21 2001/09/21 05:45:42 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 //
@@ -58,14 +58,14 @@
 //
 //
 
-#ifndef Double_INCLUDED
-#define Double_INCLUDED
+#ifndef double_INCLUDED
+#define double_INCLUDED
 
 #include "platform.h"
 #include "long.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 class LongInt;
@@ -181,12 +181,18 @@ public:
     // fields, rather than generating a non-const every time.  However,
     // adding const support is a big undertaking.
     //
-    static inline const IEEEfloat NaN(void)               { return IEEEfloat(NAN); }
-    static inline const IEEEfloat POSITIVE_INFINITY(void) { return IEEEfloat(POS_INF); }
-    static inline const IEEEfloat NEGATIVE_INFINITY(void) { return IEEEfloat(NEG_INF); }
-    static inline const IEEEfloat POSITIVE_ZERO(void)     { return IEEEfloat(POS_ZERO); }
-    static inline const IEEEfloat NEGATIVE_ZERO(void)     { return IEEEfloat(NEG_ZERO); }
-
+    // Note: the (u4) cast is necessary to prevent MSVC from promoting the
+    // enum constants to integer, which causes an infinite loop.
+    static inline const IEEEfloat
+        NaN(void)               { return IEEEfloat((u4)NAN); }
+    static inline const IEEEfloat
+        POSITIVE_INFINITY(void) { return IEEEfloat((u4)POS_INF); }
+    static inline const IEEEfloat
+        NEGATIVE_INFINITY(void) { return IEEEfloat((u4)NEG_INF); }
+    static inline const IEEEfloat
+        POSITIVE_ZERO(void)     { return IEEEfloat((u4)POS_ZERO); }
+    static inline const IEEEfloat
+        NEGATIVE_ZERO(void)     { return IEEEfloat((u4)NEG_ZERO); }
 
     //
     // Constructors
@@ -582,8 +588,8 @@ public:
     IEEEdouble DoubleValue() const;
 
 private:
-    friend IEEEfloat IEEEfloat::Ratio(const BigInt &, const BigInt &);
-    friend IEEEdouble IEEEdouble::Ratio(const BigInt &, const BigInt &);
+    friend class IEEEfloat;
+    friend class IEEEdouble;
 
     int k;      // log2 maxwds
     int maxwds; // size of data[]
@@ -625,9 +631,9 @@ inline void BigInt::resize(int k)
     neg = false;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif // Double_INCLUDED
+#endif // double_INCLUDED
 

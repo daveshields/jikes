@@ -1,10 +1,10 @@
-// $Id: ast.h,v 1.28 2001/05/01 22:29:12 cabbey Exp $
+// $Id: ast.h,v 1.31 2001/09/14 05:31:32 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -16,8 +16,8 @@
 #include "symbol.h"
 #include "set.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 
@@ -1750,8 +1750,6 @@ private:
 public:
     MethodSymbol *symbol;
 
-    AstExpression *base_opt;
-    LexStream::TokenIndex dot_token_opt;
     LexStream::TokenIndex this_token;
     LexStream::TokenIndex left_parenthesis_token;
     LexStream::TokenIndex right_parenthesis_token;
@@ -4067,7 +4065,7 @@ inline bool Ast::IsLeftHandSide()
 
 
 //
-// Given an Ast tree, check whether or not it is a Name - simple or qualified.
+// Given an Ast tree, check whether or not it is generated.
 //
 inline bool Ast::IsGenerated()
 {
@@ -6951,9 +6949,9 @@ template <class T>
         base = NULL;
     }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif
+#endif // ast_INCLUDED
 

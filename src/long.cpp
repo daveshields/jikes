@@ -1,18 +1,18 @@
-// $Id: long.cpp,v 1.21 2001/04/16 07:27:59 cabbey Exp $
+// $Id: long.cpp,v 1.24 2001/09/21 05:06:07 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
 #include "long.h"
 #include "double.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 BaseLong::operator LongInt() const
@@ -27,49 +27,49 @@ BaseLong::operator ULongInt() const
 
 bool BaseLong::operator== (const BaseLong op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return value.words == op.value.words;
 #else
     return value.word[0] == op.value.word[0]
         && value.word[1] == op.value.word[1];
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 bool BaseLong::operator!= (const BaseLong op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return value.words != op.value.words;
 #else
     return value.word[0] != op.value.word[0]
         || value.word[1] != op.value.word[1];
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 bool BaseLong::operator!() const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return !value.words;
 #else
     return (HighWord() != 0) || (LowWord() != 0);
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 BaseLong BaseLong::operator~() const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return BaseLong(~value.words);
 #else
     return BaseLong(~HighWord(), ~LowWord());
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 BaseLong BaseLong::operator^ (const BaseLong op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return BaseLong(value.words ^ op.value.words);
 #else
     return BaseLong(HighWord() ^ op.HighWord(), LowWord() ^ op.LowWord());
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 BaseLong &BaseLong::operator^= (const BaseLong op)
@@ -79,11 +79,11 @@ BaseLong &BaseLong::operator^= (const BaseLong op)
 
 BaseLong BaseLong::operator| (const BaseLong op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return BaseLong(value.words | op.value.words);
 #else
     return BaseLong(HighWord() | op.HighWord(), LowWord() | op.LowWord());
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 BaseLong &BaseLong::operator|= (const BaseLong op)
@@ -93,11 +93,11 @@ BaseLong &BaseLong::operator|= (const BaseLong op)
 
 BaseLong BaseLong::operator& (const BaseLong op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return BaseLong(value.words & op.value.words);
 #else
     return BaseLong(HighWord() & op.HighWord(), LowWord() & op.LowWord());
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 BaseLong &BaseLong::operator&= (const BaseLong op)
@@ -117,7 +117,7 @@ bool BaseLong::operator|| (const BaseLong op) const
 
 BaseLong BaseLong::operator<< (int op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     // TODO: Does this work correctly?
     return BaseLong(value.words << op);
 #else
@@ -140,7 +140,7 @@ BaseLong BaseLong::operator<< (int op) const
     if (n >= 64)
         return BaseLong(0);
     return BaseLong(LowWord() << (n - 32), 0);
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 BaseLong &BaseLong::operator<<= (int op)
@@ -150,7 +150,7 @@ BaseLong &BaseLong::operator<<= (int op)
 
 BaseLong BaseLong::operator+ (const BaseLong op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return BaseLong(value.words + op.value.words);
 #else
     u4 ushort1 = (LowWord() & SHORT_MASK) + (op.LowWord() & SHORT_MASK),
@@ -159,7 +159,7 @@ BaseLong BaseLong::operator+ (const BaseLong op) const
        ushort4 = (ushort3 >> 16) + (HighWord() >> 16) + (op.HighWord() >> 16);
 
     return BaseLong((ushort3 & SHORT_MASK) | (ushort4 << 16), (ushort1 & SHORT_MASK) | (ushort2 << 16));
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 BaseLong &BaseLong::operator+= (const BaseLong op)
@@ -213,7 +213,7 @@ BaseLong BaseLong::operator-- ()
 
 BaseLong BaseLong::operator* (const BaseLong op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return BaseLong(value.words * op.value.words);
 #else
     u4 x0 = LowWord()   & SHORT_MASK,
@@ -250,7 +250,7 @@ BaseLong BaseLong::operator* (const BaseLong op) const
     result += partial << 48;
 
     return result;
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 BaseLong &BaseLong::operator*= (const BaseLong op)
@@ -283,7 +283,7 @@ BaseLong::BaseLong(i4 a)
 void BaseLong::Divide(const BaseLong &dividend, const BaseLong &divisor,
                       BaseLong &quotient, BaseLong &remainder)
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     quotient = BaseLong(dividend.value.words / divisor.value.words);
     remainder = BaseLong(dividend.value.words % divisor.value.words);
 #else
@@ -319,7 +319,7 @@ void BaseLong::Divide(const BaseLong &dividend, const BaseLong &divisor,
     quotient = BaseLong(high, low);
 
     return;
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 
@@ -331,7 +331,7 @@ ULongInt &ULongInt::operator/= (const ULongInt op)
 
 ULongInt ULongInt::operator/ (const ULongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return ULongInt(value.words / op.value.words);
 #else
     BaseLong quotient,
@@ -340,12 +340,12 @@ ULongInt ULongInt::operator/ (const ULongInt op) const
     Divide(*this, op, quotient, remainder);
 
     return quotient;
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 ULongInt ULongInt::operator% (const ULongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return ULongInt(value.words % op.value.words);
 #else
     BaseLong quotient,
@@ -354,7 +354,7 @@ ULongInt ULongInt::operator% (const ULongInt op) const
     Divide(*this, op, quotient, remainder);
 
     return remainder;
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 ULongInt &ULongInt::operator%= (const ULongInt op)
@@ -365,7 +365,7 @@ ULongInt &ULongInt::operator%= (const ULongInt op)
 
 ULongInt ULongInt::operator>> (int op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     // TODO: Does this work correctly?
     return ULongInt(value.words >> op);
 #else
@@ -389,7 +389,7 @@ ULongInt ULongInt::operator>> (int op) const
     if (n >= 64)
         return ULongInt(0);
     return ULongInt(0, HighWord() >> (n - 32));
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 ULongInt &ULongInt::operator>>= (int op)
@@ -399,40 +399,40 @@ ULongInt &ULongInt::operator>>= (int op)
 
 bool ULongInt::operator< (const ULongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return value.words < op.value.words;
 #else
     u4 a = HighWord(), b = op.HighWord();
     return (a == b ? LowWord() < op.LowWord() : a < b);
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 bool ULongInt::operator<= (const ULongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return value.words <= op.value.words;
 #else
     return (*this < op) || (*this == op);
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 bool ULongInt::operator> (const ULongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return value.words > op.value.words;
 #else
     u4 a = HighWord(), b = op.HighWord();
     return (a == b ? LowWord() > op.LowWord() : a > b);
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 bool ULongInt::operator>= (const ULongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return value.words >= op.value.words;
 #else
     return (*this > op) || (*this == op);
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 const LongInt *LongInt::max_long_const = NULL;
@@ -450,7 +450,7 @@ LongInt::LongInt(const IEEEdouble &d)
 
 LongInt LongInt::operator/ (const LongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     bool negative_dividend = (i8) value.words < 0,
          negative_divisor  = (i8) op.value.words < 0;
 
@@ -470,7 +470,7 @@ LongInt LongInt::operator/ (const LongInt op) const
     Divide(a, b, quotient, remainder);
 
     return (negative_dividend ^ negative_divisor ? -quotient : quotient);
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 LongInt &LongInt::operator/= (const LongInt op)
@@ -480,7 +480,7 @@ LongInt &LongInt::operator/= (const LongInt op)
 
 LongInt LongInt::operator% (const LongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     bool negative_dividend = (i8) value.words < 0,
          negative_divisor  = (i8) op.value.words < 0;
 
@@ -500,7 +500,7 @@ LongInt LongInt::operator% (const LongInt op) const
     Divide(a, b, quotient, remainder);
 
     return (negative_dividend ? -remainder : remainder);
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 LongInt &LongInt::operator%= (const LongInt op)
@@ -510,7 +510,7 @@ LongInt &LongInt::operator%= (const LongInt op)
 
 LongInt LongInt::operator>> (int op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     // TODO: Does this work correctly?
     return LongInt((u8) ((i8) value.words >> op));
 #else
@@ -535,7 +535,7 @@ LongInt LongInt::operator>> (int op) const
     if (n >= 64)
         return LongInt(shift, shift);
     return LongInt(shift, hi >> (n - 32));
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 LongInt &LongInt::operator>>= (int op)
@@ -545,43 +545,43 @@ LongInt &LongInt::operator>>= (int op)
 
 bool LongInt::operator< (const LongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return (i8) value.words < (i8) op.value.words;
 #else
     i4 a = HighWord(), b = op.HighWord();
     return (a == b) ? LowWord() < op.LowWord() : a < b;
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 bool LongInt::operator<= (const LongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return (i8) value.words <= (i8) op.value.words;
 #else
     return (*this < op) || (*this == op);
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 bool LongInt::operator> (const LongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return (i8) value.words > (i8) op.value.words;
 #else
     i4 a = HighWord(), b = op.HighWord();
     return (a == b) ? LowWord() > op.LowWord() : a > b;
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
 bool LongInt::operator>= (const LongInt op) const
 {
-#ifdef HAVE_UNSIGNED_LONG_LONG
+#ifdef HAVE_64BIT_TYPES
     return (i8) value.words >= (i8) op.value.words;
 #else
     return (*this > op) || (*this == op);
-#endif // HAVE_UNSIGNED_LONG_LONG
+#endif // HAVE_64BIT_TYPES
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

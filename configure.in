@@ -1,22 +1,42 @@
-# $Id: configure.in,v 1.19 2001/02/17 06:26:54 mdejong Exp $
+# $Id: configure.in,v 1.29 2001/09/22 01:27:40 ericb Exp $
 dnl	This file is an input file used by the GNU "autoconf" program to
 dnl	generate the file "configure", which is run to configure the
 dnl	Makefile in this directory.
 
 AC_INIT(ChangeLog)
-AM_INIT_AUTOMAKE(jikes, 1.13)
-AC_DEFINE(JIKES_VERSION_STRING, "Version 1.13 3/1/2001",
-    [A string to indicate the release of jikes: Version 1.11 1/10/2000])
+AM_INIT_AUTOMAKE(jikes, 1.15)
+AC_DEFINE(JIKES_VERSION_STRING, "Version 1.15 - 26 Sept 2001",
+    [A string to indicate the release of jikes: Version 1.14 - 13 May 2001])
 
 AC_PREREQ(2.14)
 
 dnl AC_CACHE_LOAD
 
 AM_CONFIG_HEADER(src/config.h)
+AH_TOP([/* This software is subject to the terms of the IBM Jikes
+Compiler License Agreement available at the following URL:
+http://ibm.com/developerworks/opensource/jikes.
+Copyright (C) 2000, 2001 International Business Machines Corporation
+and others.  All Rights Reserved.
+You must accept the terms of that agreement to use this software. */])
 
 dnl	Do not autoupdate if configure.in and friends are changed
-dnl	unless the --enable-maintaier-mode flag is used.
+dnl	unless the --enable-maintainer-mode flag is used.
 AM_MAINTAINER_MODE()
+
+dnl     make it easy to turn on debug, like any other project
+AC_ARG_ENABLE(debug, [  --enable-debug          Turn on internal compiler debugging.],
+          [ok=$enableval], [ok=no])
+
+if test "$ok" = "yes"; then
+  AC_DEFINE(JIKES_DEBUG, 1, [Enable internal compiler debugging])
+
+  # If the user did not set CXXFLAGS, set it to -g now to keep
+  # the AC_PROG_CXX macro from using -g -O2 by default.
+  if test "${CXXFLAGS+set}" != "set" ; then
+    CXXFLAGS="-g"
+  fi
+fi
 
 dnl	Set up host checks using config.sub and config.guess.
 AC_CANONICAL_HOST()
@@ -62,7 +82,7 @@ AC_HEADER_STDC()
 AC_CHECK_HEADERS(stdio.h assert.h limits.h ctype.h time.h float.h)
 
 dnl	Check for some headers which are not present on all supported platforms
-AC_CHECK_HEADERS(windows.h direct.h dirent.h sys/cygwin.h)
+AC_CHECK_HEADERS(windows.h direct.h dirent.h sys/cygwin.h langinfo.h locale.h)
 
 dnl	Check for math.h and see if we need to link to the math library
 AC_CHECK_MATHLIB()
@@ -80,6 +100,9 @@ AC_CXX_CHECK_SET_NEW_HANDLER()
 
 dnl	Check for wide string functions
 AC_CHECK_WCS_FUNCS()
+
+dnl     Check for busted ostream insertion problems
+AC_CXX_CHECK_OSTREAM_CONST_UNSIGNED_CHAR_PTR()
 
 dnl	Check for iconv functions and library
 AC_CHECK_ICONV()
@@ -101,8 +124,15 @@ AC_CXX_EXPLICIT()
 
 dnl	Check to see if RTTI is implemented, it is needed
 dnl	to support dynamic casting and type queries. RTTI
-dnl	is known to be buggy so it is disabled by default
-ac_cv_cxx_rtti=no
+dnl	is known to be buggy so it is disabled by default,
+dnl	you can force testing for it by setting the cache
+dnl	variable to test, or set it directly to whatever
+dnl	you want (yes is the only other logical setting).
+if test "x" = "x$ac_cv_cxx_rtti" ; then
+    ac_cv_cxx_rtti=no
+elif test "xtest" = "x$ac_cv_cxx_rtti" ; then
+    unset ac_cv_cxx_rtti
+fi
 AC_CXX_RTTI()
 
 dnl	Check for newer C++ style cast support
@@ -123,7 +153,7 @@ AC_CACHE_CHECK(correct value for UINT_MAX,
     jikes_cv_uint_max,
     AC_TRY_COMPILE([
 #include <limits.h>
-#if ! (UINT_MAX == 0xFFFFFFFF)
+#if ! (UINT_MAX == 0xFFFFFFFFUL)
 # error "UINT_MAX"
 #endif
 ],[return 0;],
@@ -179,7 +209,7 @@ AC_CACHE_CHECK(correct value for SHRT_MAX,
 ],[return 0;],
     jikes_cv_shrt_max=yes,
     AC_MSG_ERROR([short does not store values in the range
-    -32767..+32768 on this system])))
+    -32768..+32767 on this system])))
 
 AC_CACHE_CHECK(correct value for UCHAR_MAX,
     jikes_cv_uchar_max,
@@ -208,8 +238,8 @@ AC_CACHE_CHECK(correct value for SCHAR_MAX,
 
 dnl Check to see if build will use emulated floating point
 
-AC_ARG_ENABLE(fp-emulation, [  --enable-fp-emulation         Use floating point emulation instead of native floating point operations (disabled)],
-	[ok=$enableval], [ok=no])
+AC_ARG_ENABLE(fp-emulation, [  --disable-fp-emulation  Use native floating point operations instead of emulation],
+	[ok=$enableval], [ok=yes])
 
 AC_MSG_CHECKING([for floating point support])
 
@@ -226,20 +256,26 @@ fi
 dnl Check for broken compilers that do not support the long long type!
 AC_CHECK_TYPE(unsigned long long)
 
-#FIXME: we might also want to check for the __int64 type
-#which seems to be defined on some windows systems.
-
-# FIXME: What about the u_int64_t type, would that work too?
-
 if test "$ac_cv_type_unsigned_long_long" != "yes" ; then
   dnl GROAN!! need to "support" systems that do not define
   dnl a 64 bit long long type (some folks refuse to use gcc).
+  dnl What about the u_int64_t type, would that work too?
 
-  dnl   Check for endianness
-  AC_C_BIGENDIAN()
+  AC_CHECK_TYPE(unsigned __int64)
+  if test "$ac_cv_type_unsigned___int64" = "yes" ; then
+    AC_DEFINE(HAVE_UNSIGNED_INT64, ,
+      [Defined when the compiler supports the unsigned __int64 type])
+    AC_DEFINE(HAVE_64BIT_TYPES, ,
+      [Defined when the compiler supports 64 bit integer math])
+  else
+    dnl   Check for endianness
+    AC_C_BIGENDIAN()
+  fi
 else
   AC_DEFINE(HAVE_UNSIGNED_LONG_LONG, ,
     [Defined when the compiler supports the unsigned long long type])
+  AC_DEFINE(HAVE_64BIT_TYPES, ,
+    [Defined when the compiler supports 64 bit integer math])
 fi
 
 
@@ -375,16 +411,15 @@ dnl            ;;
 dnl esac
 
 AC_CACHE_CHECK(floating point bug workaround for ICC compiler, jikes_cv_icc_fp_bugs,
-    AC_TRY_COMPILE([#include <float.h>],
+    if test "$CXX" = "ICC" || test "$CXX" = "vacpp" ; then
+AC_TRY_COMPILE([#include <float.h>],
 [ _control87(EM_UNDERFLOW, EM_UNDERFLOW); ],
-[  if "$CXX" = "ICC" || test "$CXX" = "vacpp" ; then
-       jikes_cv_icc_fp_bugs=yes
-   else
-       jikes_cv_icc_fp_bugs=no
-   fi
-],
-    jikes_cv_icc_fp_bugs=no)
-)
+jikes_cv_icc_fp_bugs=yes,
+jikes_cv_icc_fp_bugs=no)
+else
+    jikes_cv_icc_fp_bugs=no
+fi)
+
 if test "$jikes_cv_icc_fp_bugs" = "yes" ; then
     AC_DEFINE(HAVE_ICC_FP_BUGS, , [known to be broken on Win and OS2 when compiled with ICC])
 fi

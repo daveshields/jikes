@@ -1,10 +1,10 @@
-// $Id: diagnose.cpp,v 1.21 2001/01/10 16:49:44 mdejong Exp $
+// $Id: diagnose.cpp,v 1.23 2001/09/14 05:31:33 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -14,13 +14,8 @@
 #include "case.h"
 #include "spell.h"
 
-/*
-//FIXME: need to readdress this include stuff
-#include <iostream.h>
-*/
-
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 void DiagnoseParser::ReallocateStacks()
@@ -128,7 +123,7 @@ void DiagnoseParser::DiagnoseParse()
                 //     semantic_action(act);
                 //
                 act = nt_action(temp_stack[temp_stack_top], lhs[act]);
-            } while(act <= NUM_RULES);
+            } while (act <= NUM_RULES);
             /*************************************************/
             /* ... Update the maximum useful position of the */
             /* (STATE_)STACK, push goto state into stack, and*/
@@ -150,8 +145,8 @@ void DiagnoseParser::DiagnoseParse()
 /* the highest position in STACK that is still useful after the  */
 /* reductions are executed.                                      */
 /*****************************************************************/
-        while(act > ERROR_ACTION ||       /* SHIFT-REDUCE action */
-              act < ACCEPT_ACTION)               /* SHIFT action */
+        while (act > ERROR_ACTION ||       /* SHIFT-REDUCE action */
+               act < ACCEPT_ACTION)               /* SHIFT action */
         {
             next_stack_top = temp_stack_top + 1;
             for (i = next_pos + 1; i <= next_stack_top; i++)
@@ -175,7 +170,7 @@ void DiagnoseParser::DiagnoseParse()
                     //     semantic_action(act);
                     //
                     act = nt_action(next_stack[next_stack_top], lhs[act]);
-                } while(act <= NUM_RULES);
+                } while (act <= NUM_RULES);
                 pos = Min(pos, next_stack_top);
             }
 
@@ -193,7 +188,7 @@ void DiagnoseParser::DiagnoseParse()
             curtok = lex_stream -> Gettoken();
             tok = lex_stream -> Kind(curtok);
             act = t_action(act, tok, lex_stream);
-            while(act <= NUM_RULES)
+            while (act <= NUM_RULES)
             {
                 /*************************************************/
                 /* ... Process all goto-reduce actions following */
@@ -211,7 +206,7 @@ void DiagnoseParser::DiagnoseParse()
                                ? temp_stack[temp_stack_top]
                                : next_stack[temp_stack_top]);
                     act = nt_action(act, lhs_symbol);
-                }   while(act <= NUM_RULES);
+                }   while (act <= NUM_RULES);
 
                 /*************************************************/
                 /* ... Update the maximum useful position of the */
@@ -270,7 +265,7 @@ void DiagnoseParser::DiagnoseParse()
             {
                 lhs_symbol = candidate.symbol - NT_OFFSET;
                 act = nt_action(act, lhs_symbol);
-                while(act <= NUM_RULES)
+                while (act <= NUM_RULES)
                 {
                     state_stack_top -= (rhs[act]-1);
                     act = nt_action(stack[state_stack_top], lhs[act]);
@@ -345,7 +340,7 @@ RepairCandidate DiagnoseParser::ErrorRecovery(TokenObject error_token)
 /* a successful recovery or have consumed the remaining input    */
 /* tokens.                                                       */
 /*****************************************************************/
-    while(lex_stream -> Kind(buffer[BUFF_UBOUND]) != EOFT_SYMBOL)
+    while (lex_stream -> Kind(buffer[BUFF_UBOUND]) != EOFT_SYMBOL)
     {
         candidate = SecondaryPhase(buffer[MAX_DISTANCE - MIN_DISTANCE + 2]);
         if (candidate.symbol)
@@ -671,7 +666,7 @@ PrimaryRepairInfo DiagnoseParser::CheckPrimaryDistance
     tok = lex_stream -> Kind(buffer[repair.buffer_position]);
     lex_stream -> Reset(buffer[repair.buffer_position + 1]);
     act = t_action(next_state, tok, lex_stream);
-    while(act <= NUM_RULES)
+    while (act <= NUM_RULES)
     {
         do
         {
@@ -681,7 +676,7 @@ PrimaryRepairInfo DiagnoseParser::CheckPrimaryDistance
                                   ? temp_stack[temp_stack_top]
                                   : stck[temp_stack_top]);
             act = nt_action(act, symbol);
-        }   while(act <= NUM_RULES);
+        }   while (act <= NUM_RULES);
         max_pos = Min(max_pos, temp_stack_top);
         temp_stack[temp_stack_top + 1] = act;
         next_state = act;
@@ -737,7 +732,7 @@ PrimaryRepairInfo DiagnoseParser::CheckPrimaryDistance
 /* the current state, except EOFT and ERROR_SYMBOL.              */
 /*****************************************************************/
     symbol = root;
-    while(symbol != 0)
+    while (symbol != 0)
     {
         if (symbol == EOLT_SYMBOL &&
             lex_stream -> AfterEol(buffer[repair.buffer_position]))
@@ -768,7 +763,7 @@ PrimaryRepairInfo DiagnoseParser::CheckPrimaryDistance
 /* in the current state, except EOFT and ERROR_SYMBOL.           */
 /*****************************************************************/
     symbol = root;
-    while(symbol != 0)
+    while (symbol != 0)
     {
         if (symbol == EOLT_SYMBOL &&
             lex_stream -> AfterEol(buffer[repair.buffer_position+1]))
@@ -848,7 +843,7 @@ RepairCandidate DiagnoseParser::PrimaryDiagnosis(PrimaryRepairInfo repair)
     TokenObject prevtok = buffer[repair.buffer_position - 1],
                 curtok  = buffer[repair.buffer_position];
 
-    switch(repair.code)
+    switch (repair.code)
     {
         case INSERTION_CODE: case BEFORE_CODE:
         {
@@ -1018,7 +1013,7 @@ int DiagnoseParser::GetTermIndex(int stck[], int stack_top,
 /*****************************************************************/
     lex_stream -> Reset(buffer[buffer_position]);
     act = t_action(act, tok, lex_stream);
-    while(act <= NUM_RULES)
+    while (act <= NUM_RULES)
     {
         /*********************************************************/
         /* Process all goto-reduce actions following reduction,  */
@@ -1032,7 +1027,7 @@ int DiagnoseParser::GetTermIndex(int stck[], int stack_top,
                                   ? temp_stack[temp_stack_top]
                                   : stck[temp_stack_top]);
             act = nt_action(act, lhs_symbol);
-        } while(act <= NUM_RULES);
+        } while (act <= NUM_RULES);
         /*********************************************************/
         /* Compute new maximum useful position of (STATE_)stack, */
         /* push goto state into the stack, and compute next      */
@@ -1070,7 +1065,7 @@ int DiagnoseParser::GetTermIndex(int stck[], int stack_top,
         act = t_action(act, tok, lex_stream);
     }
 
-    while(act <= NUM_RULES)
+    while (act <= NUM_RULES)
     {
         /*********************************************************/
         /* Process all goto-reduce actions following reduction,  */
@@ -1090,7 +1085,7 @@ int DiagnoseParser::GetTermIndex(int stck[], int stack_top,
                                   ? temp_stack[temp_stack_top]
                                   : stck[temp_stack_top]);
             act = nt_action(act, lhs_symbol);
-        } while(act <= NUM_RULES);
+        } while (act <= NUM_RULES);
 
         temp_stack[temp_stack_top + 1] = act;
         act = t_action(act, tok, lex_stream);
@@ -1137,7 +1132,7 @@ int DiagnoseParser::GetNtermIndex(int start, int sym, int buffer_position)
         act = t_action(act, tok, lex_stream);
     }
 
-    while(act <= NUM_RULES)
+    while (act <= NUM_RULES)
     {
         /*********************************************************/
         /* Process all goto-reduce actions following reduction,  */
@@ -1151,7 +1146,7 @@ int DiagnoseParser::GetNtermIndex(int start, int sym, int buffer_position)
             if (temp_stack_top == 0)
                 highest_symbol = lhs[act];
             act = nt_action(temp_stack[temp_stack_top], lhs[act]);
-        } while(act <= NUM_RULES);
+        } while (act <= NUM_RULES);
         temp_stack[temp_stack_top + 1] = act;
         act = t_action(act, tok, lex_stream);
     }
@@ -1259,7 +1254,7 @@ void DiagnoseParser::ScopeTrialCheck(int stck[], int stack_top,
         tok = scope_la[i];
         lex_stream -> Reset(buffer[repair.buffer_position]);
         act = t_action(act, tok, lex_stream);
-        while(act <= NUM_RULES)
+        while (act <= NUM_RULES)
         {
             /*************************************************/
             /* ... Process all goto-reduce actions following */
@@ -1273,7 +1268,7 @@ void DiagnoseParser::ScopeTrialCheck(int stck[], int stack_top,
                             ?  temp_stack[temp_stack_top]
                             :  stck[temp_stack_top]);
                 act = nt_action(act, lhs_symbol);
-            }  while(act <= NUM_RULES);
+            }  while (act <= NUM_RULES);
             if (temp_stack_top + 1 >= stack_length)
                 return;
             max_pos = Min(max_pos, temp_stack_top);
@@ -1351,7 +1346,7 @@ void DiagnoseParser::ScopeTrialCheck(int stck[], int stack_top,
                     {
                         int top = stack_position;
                         act = nt_action(stck[top], scope_lhs[i]);
-                        while(act <= NUM_RULES)
+                        while (act <= NUM_RULES)
                         {
                             top -= (rhs[act]-1);
                             act = nt_action(stck[top], lhs[act]);
@@ -1675,7 +1670,7 @@ RepairCandidate DiagnoseParser::SecondaryPhase(TokenObject error_token)
 /*****************************************************************/
 /* Update buffer based on number of elements that are deleted.   */
 /*****************************************************************/
-    switch(repair.code)
+    switch (repair.code)
     {
         case MANUAL_CODE: case MISPLACED_CODE:
              candidate.location = Loc(buffer[2]);
@@ -1835,7 +1830,7 @@ void DiagnoseParser::SecondaryDiagnosis(SecondaryRepairInfo repair)
 /*****************************************************************/
 /*  Issue diagnostic.                                            */
 /*****************************************************************/
-    switch(repair.code)
+    switch (repair.code)
 #if defined(SCOPE_REPAIR)
     {
         case SCOPE_CODE:
@@ -1916,13 +1911,13 @@ void ParseError::SortMessages()
      lostack[top] = 0;
      histack[top] = errors.Length() - 1;
 
-     while(top >= 0)
+     while (top >= 0)
      {
          lower = lostack[top];
          upper = histack[top];
          top--;
 
-         while(upper > lower)
+         while (upper > lower)
          {
              /*********************************************************/
              /* The array is most-likely almost sorted. Therefore,    */
@@ -2022,7 +2017,7 @@ void ParseError::Report(int msg_level,
     errors[i].right_string_length = lex_stream -> NameStringLength(right_token);
     errors[i].scope_name_index    = scope_name_index;
 
-    if(control.option.dump_errors)
+    if (control.option.dump_errors)
     {
         PrintPrimaryMessage(i);        
         errors.Reset(1); // we only need to indicate that at least one error was detected... See print_messages
@@ -2071,7 +2066,7 @@ const wchar_t *ParseErrorInfo::getErrorMessage()
     }
 #endif
 
-    switch(msg_code)
+    switch (msg_code)
     {
     case ERROR_CODE:
         s << "Parsing terminated at this token";
@@ -2194,7 +2189,7 @@ wchar_t *ParseErrorInfo::regularErrorString ()
 {
     ErrorString s;
     
-    if(left_line_no == right_line_no)
+    if (left_line_no == right_line_no)
     {
         s << "\n\n";
         s.width(6);
@@ -2323,9 +2318,9 @@ void ParseError::PrintMessages()
     int stack_top    = -1;
     int *error_stack = new int[errors.Length()];
 
-    for(int k = 0; k < errors.Length(); k++)
+    for (int k = 0; k < errors.Length(); k++)
     {
-        for(; stack_top >= 0 && (errors[error_stack[stack_top]].right_token <= errors[k].left_token); stack_top--)
+        for ( ; stack_top >= 0 && (errors[error_stack[stack_top]].right_token <= errors[k].left_token); stack_top--)
         {
              if (stack_top == 0)
              {
@@ -2335,32 +2330,28 @@ void ParseError::PrintMessages()
                  int i = error_stack[stack_top],
                      j = error_stack[stack_top - 1];
 
-                 if((errors[i].msg_code != SECONDARY_CODE &&
-                     errors[i].msg_code != MISPLACED_CODE &&
-                     errors[i].msg_code != DELETION_CODE) 
-                    ||
-                    (errors[j].msg_code != DELETION_CODE  &&
-                     errors[j].msg_code != MISPLACED_CODE &&
-                     errors[j].msg_code != SECONDARY_CODE)
-                 )
+                 if ((errors[i].msg_code != SECONDARY_CODE &&
+                      errors[i].msg_code != MISPLACED_CODE &&
+                      errors[i].msg_code != DELETION_CODE) ||
+                     (errors[j].msg_code != DELETION_CODE  &&
+                      errors[j].msg_code != MISPLACED_CODE &&
+                      errors[j].msg_code != SECONDARY_CODE))
                  {
-                     
                      PrintSecondaryMessage(i);
                  }
              }
         }
 
-        if(errors[k].left_token < errors[k].right_token)
+        if (errors[k].left_token < errors[k].right_token)
         {
             stack_top++;
             error_stack[stack_top] = k;
         }
-        else if(!((stack_top >= 0) &&
-                  (errors[error_stack[stack_top]].msg_code == SECONDARY_CODE ||
-                   errors[error_stack[stack_top]].msg_code == DELETION_CODE) 
-                  &&
-                  (errors[k].left_token  == errors[error_stack[stack_top]].left_token ||
-                   errors[k].right_token == errors[error_stack[stack_top]].right_token)))
+        else if (!((stack_top >= 0) &&
+                   (errors[error_stack[stack_top]].msg_code == SECONDARY_CODE ||
+                    errors[error_stack[stack_top]].msg_code == DELETION_CODE) &&
+                   (errors[k].left_token  == errors[error_stack[stack_top]].left_token ||
+                    errors[k].right_token == errors[error_stack[stack_top]].right_token)))
         {
             /* NOTE that input_line already contains a '\n' character */
             /*
@@ -2375,7 +2366,7 @@ void ParseError::PrintMessages()
                 for (int i = lex_stream -> LineStart(errors[k].left_line_no); i <= lex_stream -> LineEnd(errors[k].left_line_no); i++)
                     Coutput << lex_stream -> InputBuffer()[i];
 
-                if((msg_code == SUBSTITUTION_CODE) ||
+                if ((msg_code == SUBSTITUTION_CODE) ||
                     (n == m) ||
                     (msg_code == BEFORE_CODE)  ||
                     (msg_code == INVALID_CODE  && n <= (m+1)) ||
@@ -2423,7 +2414,7 @@ void ParseError::PrintMessages()
 
     delete [] error_stack;
 
-    if(control.option.errors)
+    if (control.option.errors)
         lex_stream -> DestroyInput();
 
     return;
@@ -2441,7 +2432,7 @@ void ParseError::PrintSecondaryMessage(int k)
     JikesAPI::getInstance()->reportError(&errors[k]);
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

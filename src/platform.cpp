@@ -1,10 +1,10 @@
-// $Id: platform.cpp,v 1.18 2001/04/28 19:34:37 cabbey Exp $
+// $Id: platform.cpp,v 1.21 2001/09/14 05:31:34 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 //
@@ -36,12 +36,11 @@
 //
 
 #include "platform.h"
-
 #include "long.h"
 #include "double.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 // Define the PathSeparator() function with the proper
@@ -232,26 +231,25 @@ int SystemIsDirectory(char *name)
 
 int SystemMkdirhier(char *dirname)
 {
-  if (SystemIsDirectory(dirname))
-    return 0;
+    if (SystemIsDirectory(dirname))
+        return 0;
 
-  for (char *ptr = dirname; *ptr; ptr++)
+    for (char *ptr = dirname; *ptr; ptr++)
     {
-      char delimiter = *ptr;
-      if (delimiter == U_SLASH)
-	{
-	  *ptr = U_NULL;
+        char delimiter = *ptr;
+        if (delimiter == U_SLASH)
+        {
+            *ptr = U_NULL;
 
-	  if (! SystemIsDirectory(dirname))
-	    SystemMkdir(dirname);
+            if (! SystemIsDirectory(dirname))
+                SystemMkdir(dirname);
 
-	  *ptr = delimiter;
-	}
+            *ptr = delimiter;
+        }
     }
+    SystemMkdir(dirname);
 
-  SystemMkdir(dirname);
-
-  return (! SystemIsDirectory(dirname));
+    return (! SystemIsDirectory(dirname));
 }
 
 
@@ -261,30 +259,32 @@ int SystemMkdirhier(char *dirname)
 
 
 // Given three strings, return a newly-allocated string which is their concatenation.
-char * strcat3(const char * prefix, const char * middle, const char * suffix) {
-  int prefix_len = strlen(prefix);
-  int prefix_middle_len = prefix_len + strlen(middle);
+char* strcat3(const char* prefix, const char* middle, const char* suffix)
+{
+    int prefix_len = strlen(prefix);
+    int prefix_middle_len = prefix_len + strlen(middle);
 
-  char * result = new char[prefix_middle_len + strlen(suffix) + 1];
-  strcpy(result, prefix);
-  // The below is more efficient than this commented-out code.
-  // strcat(result, middle);
-  // strcat(result, suffix);
-  strcpy(result + prefix_len, middle);
-  strcpy(result + prefix_middle_len, suffix);
-  return result;
+    char* result = new char[prefix_middle_len + strlen(suffix) + 1];
+    strcpy(result, prefix);
+    // The below is more efficient than this commented-out code.
+    // strcat(result, middle);
+    // strcat(result, suffix);
+    strcpy(result + prefix_len, middle);
+    strcpy(result + prefix_middle_len, suffix);
+    return result;
 }
 
 // It's inconceivable that this is the right way to go about this.
 // One alternative is to use ConvertUnicodeToUtf8.
-char * wstring2string(wchar_t * in) {
-  char * result = new char[wcslen(in) + 1];
-  result[wcslen(in)] = 0;
-  for (size_t i=0; i<wcslen(in); i++) {
-    wchar_t ch = in[i];
-    result[i] = (ch >> 8 == 0 ? (char)ch : '?');
-  }
-  return result;
+char* wstring2string(wchar_t* in)
+{
+    char* result = new char[wcslen(in) + 1];
+    result[wcslen(in)] = 0;
+    for (size_t i=0; i<wcslen(in); i++) {
+        wchar_t ch = in[i];
+        result[i] = (ch >> 8 == 0 ? (char)ch : '?');
+    }
+    return result;
 }
 
 
@@ -490,9 +490,9 @@ FloatToString::FloatToString(const IEEEfloat &f)
     f1 = IEEEfloat((i4) x) / (1 << IEEEfloat::FractSize());
     denorm = i <= -IEEEfloat::Bias();
     //
-    // log(x)	~=~ log(1.5) + (x-1.5)/1.5
-    // log10(x)	 =  log(x) / log(10)
-    //		~=~ log(1.5)/log(10) + (x-1.5)/(1.5*log(10))
+    // log(x)   ~=~ log(1.5) + (x-1.5)/1.5
+    // log10(x)  =  log(x) / log(10)
+    //          ~=~ log(1.5)/log(10) + (x-1.5)/(1.5*log(10))
     // log10(f)  =  log10(f1 * 2**i)
     //           =  i*log10(2) + log10(f1)
     //
@@ -516,7 +516,7 @@ FloatToString::FloatToString(const IEEEfloat &f)
     f1 = f.IsNegative() ? -f : f;
     k_check = true;
     if (fs < 0 && fs != k)
-        k--;	 
+        k--;
     else if (k >= 0 && k <= 10)
     {
         if (f1 < IEEEfloat::tens[k])
@@ -854,16 +854,16 @@ DoubleToString::DoubleToString(const IEEEdouble &d)
     d1 = IEEEdouble(x) / IEEEdouble(LongInt(1) << IEEEdouble::FractSize());
     denorm = i <= -IEEEdouble::Bias();
     //
-    // log(x)	~=~ log(1.5) + (x-1.5)/1.5
-    // log10(x)	 =  log(x) / log(10)
-    //		~=~ log(1.5)/log(10) + (x-1.5)/(1.5*log(10))
+    // log(x)   ~=~ log(1.5) + (x-1.5)/1.5
+    // log10(x)  =  log(x) / log(10)
+    //          ~=~ log(1.5)/log(10) + (x-1.5)/(1.5*log(10))
     // log10(d)  =  log10(d2 * 2**i)
     //           =  i*log10(2) + log10(d2)
     //
     // This suggests computing an approximation k to log10(d) by
     //
     // k = i*0.301029995663981
-    //	+ ( 0.176091259055681 + (d2-1.5)*0.289529654602168 );
+    //   + ( 0.176091259055681 + (d2-1.5)*0.289529654602168 );
     //
     // We want k to be too large rather than too small.
     // The error in the first-order Taylor series approximation
@@ -882,7 +882,7 @@ DoubleToString::DoubleToString(const IEEEdouble &d)
     d1 = d.IsNegative() ? -d : d;
     k_check = true;
     if (ds < 0 && ds != k)
-        k--;	 
+        k--;
     else if (k >= 0 && k <= 22)
     {
         if (d1 < IEEEdouble::tens[k])
@@ -1279,15 +1279,14 @@ wchar_t StringConstant::US_AND[]                        = {U_AM, U_NU}, // "&"
         StringConstant::US_NoClassDefFoundError[] = {U_N, U_o, U_C, U_l, U_a, U_s, U_s, U_D, U_e, U_f, U_F, U_o, U_u, U_n, U_d, U_E, U_r, U_r, U_o, U_r, U_NU}, // "NoClassDefFoundError"
         StringConstant::US_Object[] = {U_O, U_b, U_j, U_e, U_c, U_t, U_NU}, // "Object"
         StringConstant::US_PObject[] = {U_P, U_O, U_b, U_j, U_e, U_c, U_t, U_NU}, // "PObject"
-        StringConstant::US_RuntimeException[] = {U_R, U_u, U_n, U_t, U_i, U_m, U_e, U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n, U_NU}, // RuntimeException
-        StringConstant::US_Serializable[] = {U_S, U_e, U_r, U_i, U_a, U_l, U_i, U_z, U_a, U_b, U_l, U_e, U_NU}, // Serializable
-        StringConstant::US_Short[] = {U_S, U_h, U_o, U_r, U_t, U_NU}, // Short
-        StringConstant::US_StringBuffer[] = {U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_NU}, // StringBuffer
-        StringConstant::US_String[] = {U_S, U_t, U_r, U_i, U_n, U_g, U_NU}, // String
+        StringConstant::US_RuntimeException[] = {U_R, U_u, U_n, U_t, U_i, U_m, U_e, U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n, U_NU}, // "RuntimeException"
+        StringConstant::US_Serializable[] = {U_S, U_e, U_r, U_i, U_a, U_l, U_i, U_z, U_a, U_b, U_l, U_e, U_NU}, // "Serializable"
+        StringConstant::US_Short[] = {U_S, U_h, U_o, U_r, U_t, U_NU}, // "Short"
+        StringConstant::US_String[] = {U_S, U_t, U_r, U_i, U_n, U_g, U_NU}, // "String"
+        StringConstant::US_StringBuffer[] = {U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_NU}, // "StringBuffer"
         StringConstant::US_TYPE[] = {U_T, U_Y, U_P, U_E, U_NU}, // "TYPE"
-        StringConstant::US_Throwable[] = {U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e, U_NU}, // Throwable
-        StringConstant::US_Void[] = {U_V, U_o, U_i, U_d, U_NU}, // Void
-        StringConstant::US_Vector[] = {U_V, U_e, U_c, U_t, U_o, U_r, U_NU}, // Vector
+        StringConstant::US_Throwable[] = {U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e, U_NU}, // "Throwable"
+        StringConstant::US_Void[] = {U_V, U_o, U_i, U_d, U_NU}, // "Void"
         StringConstant::US__DO[] = {U_DO, U_NU}, // "."
         StringConstant::US__DO__DO[] = {U_DO, U_DO, U_NU}, // ".."
         StringConstant::US__DS[] = {U_DS, U_NU}, // "$"
@@ -1380,54 +1379,54 @@ char StringConstant::U8S_command_format[] = "use: jikes [-bootclasspath path][-c
 #if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
                                             "[-encoding encoding]"
 #endif
-					    "[-extdirs path][-g][-nowarn][-nowrite][-O][-sourcepath path][-verbose][-Xstdout]"
+                                            "[-extdirs path][-g][-nowarn][-nowrite][-O][-sourcepath path][-verbose][-Xstdout]"
                                             "[++][+B][+c][+OLDCSO][+D][+DR=filename][+E][+F][+Kname=TypeKeyWord][+M][+P][+Td...d][+U][+Z]"
                                             " file.java...";
 
-char StringConstant::U8S_B[] = {U_B,U_NU}, // "B"
-     StringConstant::U8S_C[] = {U_C,U_NU}, // "C"
-     StringConstant::U8S_Code[] = {U_C,U_o,U_d,U_e,U_NU}, // "Code"
-     StringConstant::U8S_ConstantValue[] = {U_C,U_o,U_n,U_s,U_t,U_a,U_n,U_t,U_V,U_a,U_l,U_u,U_e,U_NU}, // "ConstantValue"
-     StringConstant::U8S_D[] = {U_D,U_NU}, // "D"
-     StringConstant::U8S_Exceptions[] = {U_E,U_x,U_c,U_e,U_p,U_t,U_i,U_o,U_n,U_s,U_NU}, // "Exceptions"
-     StringConstant::U8S_F[] = {U_F,U_NU}, // "F"
-     StringConstant::U8S_I[] = {U_I,U_NU}, // "I"
-     StringConstant::U8S_InnerClasses[] = {U_I,U_n,U_n,U_e,U_r,U_C,U_l,U_a,U_s,U_s,U_e,U_s,U_NU}, // "InnerClasses"
-     StringConstant::U8S_J[] = {U_J,U_NU},  // "J"
-     StringConstant::U8S_LP_Ljava_SL_lang_SL_String_SC_RP_Ljava_SL_lang_SL_Class_SC[] = {U_LP,U_L,U_j,U_a,U_v,U_a,U_SL,U_l,U_a,U_n,U_g,U_SL,U_S,U_t,U_r,U_i,U_n,U_g,U_SC,U_RP,U_L,U_j,U_a,U_v,U_a,U_SL,U_l,U_a,U_n,U_g,U_SL,U_C,U_l,U_a,U_s,U_s,U_SC,U_NU}, // "(Ljava/lang/String;)Ljava/lang/Class;"
-     StringConstant::U8S_LP_Ljava_SL_lang_SL_String_SC_RP_V[] = {U_LP,U_L,U_j,U_a,U_v,U_a,U_SL,U_l,U_a,U_n,U_g,U_SL,U_S,U_t,U_r,U_i,U_n,U_g,U_SC,U_RP,U_V,U_NU}, // "(Ljava/lang/String;)V"
-     StringConstant::U8S_LP_RP_Ljava_SL_lang_SL_String_SC[] = {U_LP,U_RP,U_L,U_j,U_a,U_v,U_a,U_SL,U_l,U_a,U_n,U_g,U_SL,U_S,U_t,U_r,U_i,U_n,U_g,U_SC,U_NU}, // "()_Ljava/lang/String;"
-     StringConstant::U8S_LP_RP_V[] = {U_LP,U_RP,U_V,U_NU}, // "()V"
-     StringConstant::U8S_LineNumberTable[] = {U_L,U_i,U_n,U_e,U_N,U_u,U_m,U_b,U_e,U_r,U_T,U_a,U_b,U_l,U_e,U_NU}, // "LineNumberTable"
-     StringConstant::U8S_LocalVariableTable[] = {U_L,U_o,U_c,U_a,U_l,U_V,U_a,U_r,U_i,U_a,U_b,U_l,U_e,U_T,U_a,U_b,U_l,U_e,U_NU}, // "LocalVariableTable"
-     StringConstant::U8S_S[] = {U_S,U_NU}, // "S"
-     StringConstant::U8S_Sourcefile[] = {U_S,U_o,U_u,U_r,U_c,U_e,U_F,U_i,U_l,U_e,U_NU}, // "Sourcefile"
-     StringConstant::U8S_Synthetic[] = {U_S,U_y,U_n,U_t,U_h,U_e,U_t,U_i,U_c,U_NU}, // "Synthetic"
-     StringConstant::U8S_Deprecated[] = {U_D,U_e,U_p,U_r,U_e,U_c,U_a,U_t,U_e,U_d,U_NU}, // "Deprecated"
-     StringConstant::U8S_V[] = {U_V,U_NU}, // "V"
-     StringConstant::U8S_Z[] = {U_Z,U_NU}, // "Z"
+char StringConstant::U8S_B[] = {U_B, U_NU}, // "B"
+     StringConstant::U8S_C[] = {U_C, U_NU}, // "C"
+     StringConstant::U8S_Code[] = {U_C, U_o, U_d, U_e, U_NU}, // "Code"
+     StringConstant::U8S_ConstantValue[] = {U_C, U_o, U_n, U_s, U_t, U_a, U_n, U_t, U_V, U_a, U_l, U_u, U_e, U_NU}, // "ConstantValue"
+     StringConstant::U8S_D[] = {U_D, U_NU}, // "D"
+     StringConstant::U8S_Exceptions[] = {U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n, U_s, U_NU}, // "Exceptions"
+     StringConstant::U8S_F[] = {U_F, U_NU}, // "F"
+     StringConstant::U8S_I[] = {U_I, U_NU}, // "I"
+     StringConstant::U8S_InnerClasses[] = {U_I, U_n, U_n, U_e, U_r, U_C, U_l, U_a, U_s, U_s, U_e, U_s, U_NU}, // "InnerClasses"
+     StringConstant::U8S_J[] = {U_J, U_NU},  // "J"
+     StringConstant::U8S_LP_Ljava_SL_lang_SL_String_SC_RP_Ljava_SL_lang_SL_Class_SC[] = {U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_C, U_l, U_a, U_s, U_s, U_SC, U_NU}, // "(Ljava/lang/String;)Ljava/lang/Class;"
+     StringConstant::U8S_LP_Ljava_SL_lang_SL_String_SC_RP_V[] = {U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_RP, U_V, U_NU}, // "(Ljava/lang/String;)V"
+     StringConstant::U8S_LP_RP_Ljava_SL_lang_SL_String_SC[] = {U_LP, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_NU}, // "()_Ljava/lang/String;"
+     StringConstant::U8S_LP_RP_V[] = {U_LP, U_RP, U_V, U_NU}, // "()V"
+     StringConstant::U8S_LineNumberTable[] = {U_L, U_i, U_n, U_e, U_N, U_u, U_m, U_b, U_e, U_r, U_T, U_a, U_b, U_l, U_e, U_NU}, // "LineNumberTable"
+     StringConstant::U8S_LocalVariableTable[] = {U_L, U_o, U_c, U_a, U_l, U_V, U_a, U_r, U_i, U_a, U_b, U_l, U_e, U_T, U_a, U_b, U_l, U_e, U_NU}, // "LocalVariableTable"
+     StringConstant::U8S_S[] = {U_S, U_NU}, // "S"
+     StringConstant::U8S_Sourcefile[] = {U_S, U_o, U_u, U_r, U_c, U_e, U_F, U_i, U_l, U_e, U_NU}, // "Sourcefile"
+     StringConstant::U8S_Synthetic[] = {U_S, U_y, U_n, U_t, U_h, U_e, U_t, U_i, U_c, U_NU}, // "Synthetic"
+     StringConstant::U8S_Deprecated[] = {U_D, U_e, U_p, U_r, U_e, U_c, U_a, U_t, U_e, U_d, U_NU}, // "Deprecated"
+     StringConstant::U8S_V[] = {U_V, U_NU}, // "V"
+     StringConstant::U8S_Z[] = {U_Z, U_NU}, // "Z"
 
-     StringConstant::U8S__DO[] = {U_DO,U_NU}, // "."
-     StringConstant::U8S__DO_class[] = {U_DO,U_c,U_l,U_a,U_s,U_s,U_NU}, // ".class"
-     StringConstant::U8S__DO_java[] = {U_DO,U_j,U_a,U_v,U_a,U_NU}, // ".java"
-     StringConstant::U8S__DO_tok[] = {U_DO,U_t,U_o,U_k,U_NU}, // ".tok"
-     StringConstant::U8S__DO_u[] = {U_DO,U_u,U_NU}, // ".u"
-     StringConstant::U8S__LP[] = {U_LP,U_NU}, // "("
-     StringConstant::U8S__RP[] = {U_RP,U_NU}, // ")"
-     StringConstant::U8S__SL[] = {U_SL,U_NU}, // "/"
-     StringConstant::U8S__ST[] = {U_ST,U_NU}, // "*"
+     StringConstant::U8S__DO[] = {U_DO, U_NU}, // "."
+     StringConstant::U8S__DO_class[] = {U_DO, U_c, U_l, U_a, U_s, U_s, U_NU}, // ".class"
+     StringConstant::U8S__DO_java[] = {U_DO, U_j, U_a, U_v, U_a, U_NU}, // ".java"
+     StringConstant::U8S__DO_tok[] = {U_DO, U_t, U_o, U_k, U_NU}, // ".tok"
+     StringConstant::U8S__DO_u[] = {U_DO, U_u, U_NU}, // ".u"
+     StringConstant::U8S__LP[] = {U_LP, U_NU}, // "("
+     StringConstant::U8S__RP[] = {U_RP, U_NU}, // ")"
+     StringConstant::U8S__SL[] = {U_SL, U_NU}, // "/"
+     StringConstant::U8S__ST[] = {U_ST, U_NU}, // "*"
 
-     StringConstant::U8S_class[] = {U_c,U_l,U_a,U_s,U_s,U_NU}, // "class"
-     StringConstant::U8S_java[] = {U_j,U_a,U_v,U_a,U_NU}, // "java"
-     StringConstant::U8S_java_SL_lang_SL_ClassNotFoundException[] = {U_j,U_a,U_v,U_a,U_SL,U_l,U_a,U_n,U_g,U_SL,U_C,U_l,U_a,U_s,U_s,U_N,U_o,U_t,U_F,U_o,U_u,U_n,U_d,U_E,U_x,U_c,U_e,U_p,U_t,U_i,U_o,U_n,U_NU}, // "java/lang/ClassNotFoundException"
-     StringConstant::U8S_java_SL_lang_SL_Class[] = {U_j,U_a,U_v,U_a,U_SL,U_l,U_a,U_n,U_g,U_SL,U_C,U_l,U_a,U_s,U_s,U_NU}, // "java/lang/Class"
-     StringConstant::U8S_java_SL_lang_SL_InternalError[] = {U_j,U_a,U_v,U_a,U_SL,U_l,U_a,U_n,U_g,U_SL,U_I,U_n,U_t,U_e,U_r,U_n,U_a,U_l,U_E,U_r,U_r,U_o,U_r,U_NU}, // "java/lang/InternalError"
-     StringConstant::U8S_java_SL_lang_SL_NoClassDefFoundError[] = {U_j,U_a,U_v,U_a,U_SL,U_l,U_a,U_n,U_g,U_SL,U_N,U_o,U_C,U_l,U_a,U_s,U_s,U_D,U_e,U_f,U_F,U_o,U_u,U_n,U_d,U_E,U_r,U_r,U_o,U_r,U_NU}, // "java/lang/NoClassDefFoundError"
-     StringConstant::U8S_java_SL_lang_SL_StringBuffer[] = {U_j,U_a,U_v,U_a,U_SL,U_l,U_a,U_n,U_g,U_SL,U_S,U_t,U_r,U_i,U_n,U_g,U_B,U_u,U_f,U_f,U_e,U_r,U_NU}, // "java/lang/StringBuffer"
-     StringConstant::U8S_java_SL_lang_SL_Throwable[] = {U_j,U_a,U_v,U_a,U_SL,U_l,U_a,U_n,U_g,U_SL,U_T,U_h,U_r,U_o,U_w,U_a,U_b,U_l,U_e,U_NU}, // "java/lang/Throwable"
-     StringConstant::U8S_null[] = {U_n,U_u,U_l,U_l,U_NU}, // "null"
-     StringConstant::U8S_quit[] = {U_q,U_u,U_i,U_t,U_NU}, // "quit"
-     StringConstant::U8S_this[] = {U_t,U_h,U_i,U_s,U_NU}, // "this"
+     StringConstant::U8S_class[] = {U_c, U_l, U_a, U_s, U_s, U_NU}, // "class"
+     StringConstant::U8S_java[] = {U_j, U_a, U_v, U_a, U_NU}, // "java"
+     StringConstant::U8S_java_SL_lang_SL_ClassNotFoundException[] = {U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_C, U_l, U_a, U_s, U_s, U_N, U_o, U_t, U_F, U_o, U_u, U_n, U_d, U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n, U_NU}, // "java/lang/ClassNotFoundException"
+     StringConstant::U8S_java_SL_lang_SL_Class[] = {U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_C, U_l, U_a, U_s, U_s, U_NU}, // "java/lang/Class"
+     StringConstant::U8S_java_SL_lang_SL_InternalError[] = {U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_I, U_n, U_t, U_e, U_r, U_n, U_a, U_l, U_E, U_r, U_r, U_o, U_r, U_NU}, // "java/lang/InternalError"
+     StringConstant::U8S_java_SL_lang_SL_NoClassDefFoundError[] = {U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_N, U_o, U_C, U_l, U_a, U_s, U_s, U_D, U_e, U_f, U_F, U_o, U_u, U_n, U_d, U_E, U_r, U_r, U_o, U_r, U_NU}, // "java/lang/NoClassDefFoundError"
+     StringConstant::U8S_java_SL_lang_SL_StringBuffer[] = {U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_NU}, // "java/lang/StringBuffer"
+     StringConstant::U8S_java_SL_lang_SL_Throwable[] = {U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e, U_NU}, // "java/lang/Throwable"
+     StringConstant::U8S_null[] = {U_n, U_u, U_l, U_l, U_NU}, // "null"
+     StringConstant::U8S_quit[] = {U_q, U_u, U_i, U_t, U_NU}, // "quit"
+     StringConstant::U8S_this[] = {U_t, U_h, U_i, U_s, U_NU}, // "this"
 
      StringConstant::U8S_LP_LB_C_RP_Ljava_SL_lang_SL_StringBuffer_SC[] = {U_LP, U_LB, U_C, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC, U_NU},
      StringConstant::U8S_LP_C_RP_Ljava_SL_lang_SL_StringBuffer_SC[] = {U_LP, U_C, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL, U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC, U_NU},
@@ -1470,9 +1469,9 @@ ErrorString::ErrorString():ConvertibleArray<wchar_t>(1024), fill_char(' '), fiel
 
 void ErrorString::do_fill(int n)
 {
-    while(n<field_width)
+    while (n < field_width)
     {
-        Next()=(wchar_t)fill_char;
+        Next() = (wchar_t) fill_char;
         n++;
     }
     field_width = 0;
@@ -1481,14 +1480,14 @@ void ErrorString::do_fill(int n)
 ErrorString &ErrorString::operator<<(const wchar_t c)
 {
     do_fill(1);
-    Next()=c;
+    Next() = c;
     return *this;
 }
 
 ErrorString &ErrorString::operator<<(const char c)
 {
     do_fill(1);
-    Next()=(wchar_t)c;
+    Next() = (wchar_t) c;
     return *this;
 }
 
@@ -1500,10 +1499,10 @@ ErrorString &ErrorString::operator<<(const wchar_t *s)
                    (wchar_t *)
 #endif
                    s)
-	    );
-    if(s)
-        while(*s)
-            Next()=*(s++);
+            );
+    if (s)
+        while (*s)
+            Next() = *(s++);
 
     return *this;
 }
@@ -1511,9 +1510,9 @@ ErrorString &ErrorString::operator<<(const wchar_t *s)
 ErrorString &ErrorString::operator<<(const char *s)
 {
     do_fill(strlen(s));
-    if(s)
-        while(*s)
-            Next()=(wchar_t) *(s++);
+    if (s)
+        while (*s)
+            Next() = (wchar_t) *(s++);
     
     return *this;
 }
@@ -1521,7 +1520,7 @@ ErrorString &ErrorString::operator<<(const char *s)
 ErrorString &ErrorString::operator<<(int n)
 {
     char buf[64];
-    sprintf(buf,"%d",n);
+    sprintf(buf, "%d", n);
     
     return (*this << buf);
 }
@@ -1529,13 +1528,13 @@ ErrorString &ErrorString::operator<<(int n)
 wchar_t *ErrorString::Array()
 {
     Next() = U_NULL; // zero terminate string
-    wchar_t *s=ConvertibleArray<wchar_t>::Array();
-    if(!s)
+    wchar_t *s = ConvertibleArray<wchar_t>::Array();
+    if (!s)
         return NULL;
 
     //TODO: optimize!
-    wchar_t *res=new wchar_t[top];
-    memcpy(res,s,top*sizeof(wchar_t));
+    wchar_t *res = new wchar_t[top];
+    memcpy(res, s, top * sizeof(wchar_t));
     return res;
 }
 
@@ -1549,7 +1548,7 @@ void ErrorString::fill(const char c)
     fill_char = c;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

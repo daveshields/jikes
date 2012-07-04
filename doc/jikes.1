@@ -3,17 +3,20 @@
 jikes \- java source to bytecode compiler
 .SH SYNOPSIS
 \fBjikes\fP
+[\fB\-bootclasspath\fP path]
 [\fB\-classpath\fP path]
 [\fB\-d\fP directory]
 [\fB\-debug\fP]
 [\fB\-depend\fP]
 [\fB\-deprecation\fP]
 [\fB\-encoding\fP encoding]
+[\fB\-extdirs\fP path]
 [\fB\-g\fP]
 [\fB\-nowarn\fP]
 [\fB\-nowrite\fP]
 [\fB\-O\fP]
 [\fB\-verbose\fP]
+[\fB\-sourcepath\fP path]
 [\fB\-Xdepend\fP]
 [\fB\-Xstdout\fP]
 [\fB\+\+\fP]
@@ -41,6 +44,9 @@ by the Jikes Project.
 .SH OPTIONS
 \fBJikes\fP may be invoked with the following command-line options:
 .TP
+\fB\-bootclasspath\fP path
+use path for the bootclasspath
+.TP
 \fB\-classpath\fP path
 use path for CLASSPATH
 .TP
@@ -59,6 +65,9 @@ report uses of deprecated features
 \fB\-encoding
 use specified encoding to read source files
 .TP
+\fB\-extdirs\fP path
+use path for extensions directories
+.TP
 \fB\-g
 debug (generate LocalVariableTable attribute)
 .TP
@@ -70,6 +79,9 @@ do not write any class files
 .TP
 \fB\-O
 do not write LineNumberTable
+.TP
+\fB\-sourcepath\fP path
+use path for specifying "source only" directories
 .TP
 \fB\-verbose
 list files read and written
@@ -124,19 +136,25 @@ do not discard comments from lexer output
 .PP
 An argument may have the form \fI@file\fP; each line of \fIfile\fP is
 then interpreted as an argument, except that lines beginning with
-\fI@\fP are not expanded recursively. 
+\fI@\fP are not expanded recursively.
 
 .SH FILES
-\fBJikes\fP requires a colon-separated list of directories or files
-that tell it where to look for any needed class or source files, for
-example ".:$HOME/java/jre/lib/rt.jar".  A definition given with the
-environment variable \fIJIKESPATH\fP takes precedence over one given
-with \fICLASSPATH\fP; a definition using the \fI-classpath\fP option
-takes precedence over any value specified via the environment. 
+\fBJikes\fP has several options related to classpath searching.
+The -bootclasspath, -extdirs, and -sourcepath options are the same
+as in javac.  In addition to being specified on the command line, the
+environment variables BOOTCLASSPATH, EXTDIRS, and SOURCEPATH may also be
+used to specify values for these options, respectively.  \fBJikes\fP also
+has the -classpath option as in javac, with the corresponding environment
+variable CLASSPATH.  The classpath may also be specified in the environment
+variable JIKESPATH.  If JIKESPATH and CLASSPATH coexist, preference will be
+given to JIKESPATH.  A value specified on the command line will be always
+be given preference over the value of any environment variable.  All the
+directories and files specified in these options or environment variables
+must be in a colon-separated list, e.g., ".:$HOME/java/jre/lib/rt.jar".
 .SH "SEE ALSO"
 .TP
 Jikes Project homepage 
-\fIhttp://oss.software.ibm.com/developerworks/opensource/jikes/\fP
+\fIhttp://ibm.com/developerworks/opensource/jikes/\fP
 for news of recent developments,
 to download new versions, 
 to report bugs, or 
@@ -149,6 +167,10 @@ International Business Machines Corporation and others. All Rights Reserved.
 \fBJikes\fP is licensed under the \fIIBM Public License\fP, included
 in the file \fIlicense.htm\fP distributed with the program, and also
 available at the Jikes Project URL.
+.pp
+Portions of \fBJikes\fP are derived from prior, freely distributable
+projects.  For more details on this code, see the comments in
+src/double.h, src/platform.h, and src/unzip.h.
 
 .SH NOTES
 Java is a registered trademark of Sun Microsystems, Inc.

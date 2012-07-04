@@ -1,20 +1,21 @@
-// $Id: set.h,v 1.13 2001/02/01 10:24:07 mdejong Exp $
+// $Id: set.h,v 1.15 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #ifndef set_INCLUDED
 #define set_INCLUDED
 
 #include "platform.h"
 #include "symbol.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 class ShadowSymbol
@@ -128,7 +129,7 @@ public:
     }
 
     //
-    // Empty out the set in question - i.e., remove all its elements
+    // Determine whether the set is empty.
     //
     bool IsEmpty() { return symbol_pool.Length() == 0; }
 
@@ -672,9 +673,9 @@ public:
     {}
 };
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif
+#endif // set_INCLUDED
 

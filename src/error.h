@@ -1,12 +1,13 @@
-// $Id: error.h,v 1.39 2001/02/15 10:36:05 mdejong Exp $
+// $Id: error.h,v 1.44 2001/09/14 05:31:33 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #ifndef error_INCLUDED
 #define error_INCLUDED
 
@@ -15,8 +16,8 @@
 #include "tuple.h"
 #include "jikesapi.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 class Control;
@@ -179,6 +180,7 @@ class SemanticError
         MISMATCHED_INHERITED_METHOD_EXTERNALLY,
         MISMATCHED_INHERITED_METHODS_IN_BASE,
         DUPLICATE_FORMAL_PARAMETER,
+        MISSPELLED_CONSTRUCTOR_NAME,
         MISMATCHED_CONSTRUCTOR_NAME,
         METHOD_WITH_CONSTRUCTOR_NAME,
         DUPLICATE_LOCAL_VARIABLE_DECLARATION,
@@ -292,6 +294,7 @@ class SemanticError
         PARAMETER_REDECLARED,
         BAD_ABSTRACT_METHOD_MODIFIER,
         ABSTRACT_METHOD_MODIFIER_CONFLICT,
+        STRICTFP_NATIVE_METHOD,
         ABSTRACT_METHOD_INVOCATION,
         FINAL_METHOD_OVERRIDE,
         FINAL_METHOD_OVERRIDE_EXTERNALLY,
@@ -350,7 +353,8 @@ class SemanticError
         STATIC_NOT_INNER_CLASS,
         TYPE_NOT_INNER_CLASS,
         SUPER_TYPE_NOT_INNER_CLASS,
-        STATIC_FIELD_IN_INNER_CLASS,
+        STATIC_FIELD_IN_INNER_CLASS_NOT_FINAL,
+        STATIC_FIELD_IN_INNER_CLASS_NOT_CONSTANT,
         STATIC_METHOD_IN_INNER_CLASS,
         STATIC_TYPE_IN_INNER_CLASS,
         STATIC_INITIALIZER_IN_INNER_CLASS,
@@ -510,6 +514,7 @@ private:
     static wchar_t *PrintMISMATCHED_INHERITED_METHOD_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintMISMATCHED_INHERITED_METHODS_IN_BASE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintDUPLICATE_FORMAL_PARAMETER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintMISSPELLED_CONSTRUCTOR_NAME(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintMISMATCHED_CONSTRUCTOR_NAME(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintMETHOD_WITH_CONSTRUCTOR_NAME(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintDUPLICATE_LOCAL_VARIABLE_DECLARATION(ErrorInfo &, LexStream *, Control &);
@@ -623,6 +628,7 @@ private:
     static wchar_t *PrintPARAMETER_REDECLARED(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintBAD_ABSTRACT_METHOD_MODIFIER(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintABSTRACT_METHOD_MODIFIER_CONFLICT(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTRICTFP_NATIVE_METHOD(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintABSTRACT_METHOD_INVOCATION(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintFINAL_METHOD_OVERRIDE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintFINAL_METHOD_OVERRIDE_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
@@ -676,7 +682,8 @@ private:
     static wchar_t *PrintSTATIC_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintTYPE_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintSUPER_TYPE_NOT_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
-    static wchar_t *PrintSTATIC_FIELD_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTATIC_FIELD_IN_INNER_CLASS_NOT_FINAL(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintSTATIC_FIELD_IN_INNER_CLASS_NOT_CONSTANT(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintSTATIC_METHOD_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintSTATIC_TYPE_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintSTATIC_INITIALIZER_IN_INNER_CLASS(ErrorInfo &, LexStream *, Control &);
@@ -698,9 +705,9 @@ private:
     void SortMessages();
 };
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif
+#endif // error_INCLUDED
 

@@ -1,10 +1,10 @@
-// $Id: platform.h,v 1.15 2001/04/16 07:27:59 cabbey Exp $
+// $Id: platform.h,v 1.25 2001/09/21 05:06:07 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 //
@@ -76,6 +76,17 @@
 # endif
 #endif
 
+#ifdef HAVE_SYS_CYGWIN_H
+#include <sys/cygwin.h>
+#endif
+
+#if defined(HAVE_LIBICU_UC)
+# include <unicode/ucnv.h>
+#elif defined(HAVE_ICONV_H)
+# include <iconv.h>
+# include <errno.h>
+#endif
+
 /*
 Currently, we do not use this one
 #ifdef HAVE_INTTYPES_H
@@ -96,12 +107,12 @@ Currently, we do not use this one
 #endif
 
 #ifdef HAVE_DIRENT_H
-#include <dirent.h>
+# include <dirent.h>
 #endif
 
 #ifndef HAVE_WINT_T
-    /* On some systems the type wint_t is not defined in wchar.h */
-    typedef unsigned int wint_t;
+/* On some systems the type wint_t is not defined in wchar.h */
+typedef unsigned int wint_t;
 #endif
 
 #ifdef HAVE_WCHAR_H
@@ -130,6 +141,10 @@ Currently, we do not use this one
 
 #ifdef HAVE_FLOAT_H
 # include <float.h>
+#endif
+
+#ifdef HAVE_TIME_H
+# include <time.h>
 #endif
 
 // C++ standard support
@@ -185,17 +200,22 @@ Currently, we do not use this one
 
 #ifdef HAVE_32BIT_TYPES
 
-//
-// FIXME: Someone with Microsoft VC++ should add __int64 support
-//
+// MS VC++ defines __int64
+# ifdef HAVE_UNSIGNED_INT64
+// Range 0..18446744073709551615
+typedef unsigned __int64 u8;
 
+// Range -9223372036854775808..9223372036854775807
+typedef signed __int64 i8;
+# endif // HAVE_UNSIGNED_INT64
+
+// gcc defines long long
 # ifdef HAVE_UNSIGNED_LONG_LONG
 // Range 0..18446744073709551615
 typedef unsigned long long u8;
 
 // Range -9223372036854775808..9223372036854775807
 typedef signed long long i8;
-
 # endif // HAVE_UNSIGNED_LONG_LONG
 
 // Range 0..4294967295
@@ -237,13 +257,13 @@ enum { false = 0, true = 1 };
 
 // tuple.h needs the above typedefs first, but has it's own namespace block...
 // cabbey would also argue that the wsclen and family don't need to be in our
-// namespace, 'cuz if wee need to define them we aren't going to clash. ;)
+// namespace, 'cuz if we need to define them we aren't going to clash. ;)
 #include "tuple.h"
 
 
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 //
@@ -325,6 +345,37 @@ extern char * wstring2string(wchar_t * in);
 //
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+
+
+// The following comment was part of the original config.h, it explains why some parts of the
+// guts of the compiler are written the way they are. This comment was removed when the ifdef'd
+// EBCDIC code was initially removed. I've added it back for it's "why do they do it that way"
+// value, hopefully it's presence will help prevent people from making assumptions and breaking
+// the code for non-ascii platforms. At some point we'll want to be able to compile on EBCDIC
+// systems again, using the API and iconv/ICU instead of ifdefs scattered all over creation,
+// if the core code hasn't been compromised this should be easier. For those that have no idea
+// what EBCDIC is... it is like ASCII in that it is an encoding system, but it predates ASCII
+// by a number of years (think punchcards). It is still the default encoding on some mainframes
+// and minicomputers such as the IBM zSeries and iSeries (aka the 390 and the 400). To see what
+// the old EBCDIC code looked like, pull a cvs tree with the tag v1-06.
+//
+//
+// Jikes can be compiled on systems using the EBCDIC character set, for which character and string
+// literals are translated by the compiler to EBCDIC and not ASCII, and so cannot be used to represent
+// ASCII/UNICODE values. Such values are constructed using the U_ values defined below. Thus
+// 'a' is represented using U_a, and ".java" is represented by an explicit literal:
+//    {U_DOT, U_j, U_a, U_v, U_a, U_NULL}
+// Variables associated with such literals have names beginning with US_ if the value are 16-bits
+// or U8S_ for 8 bits. The initial underscore is followed by the characters being represented, with
+// letters and digits representing themselves, and other values, all of which have a two character code,
+// surrounded by underscore. Thus the name used for the literal above is US__DO_java.
+//
+// All string-related values are represented internally in ASCII/UNICODE using the U_ values defined
+// below. EBCDIC systems also require that arguments to system functions representing file names be
+// converted from the internal form used by Jikes to EBCDIC, and such functions are referred to using
+// their usual name prefixed with "system_"; for example, a call to "fopen(..." is written "system_fopen(..."
+// The "system_" procedures are define in the file code.cpp.
+//
 
 enum U_chars
 {
@@ -517,10 +568,9 @@ public:
                    US_RuntimeException[], // "RuntimeException"
                    US_Serializable[], // "Serializable"
                    US_Short[], // "Short"
-                   US_StringBuffer[], // "StringBuffer"
                    US_String[], // "String"
+                   US_StringBuffer[], // "StringBuffer"
                    US_TYPE[], // "TYPE"
-                   US_Vector[], // Vector
                    US_Throwable[], // "Throwable"
                    US_Void[], // "Void"
                    US__DO[], // "."
@@ -882,6 +932,7 @@ public:
     {}
 
     void StandardOutput() { os = &cout; }
+    void StandardError() { os = &cerr; }
     void SetExpandWchar(bool val = true) { expand_wchar = val; }
     bool ExpandWchar() { return expand_wchar; }
 
@@ -902,7 +953,7 @@ public:
                 for (int i = 3; i >= 0; i--)
                 {
                     int d = ch % 16;
-                    switch(d)
+                    switch (d)
                     {
                         case 10:
                             str[i] = U_A;
@@ -1035,14 +1086,21 @@ public:
         (*f)(*os);
         return *this;
     }
+
+    Ostream &operator<<(ostream &(*f)(ostream&))
+    {
+        (*f)(*os);
+        return *this;
+    }
 };
 
 extern Ostream Coutput;
 
 //
 // From now on, DO NOT USE cout or cerr !
-// You should wrap cout and cerr in an instance of the Ostream class so that unicode
-// output is translated properly. If you try to use cerr or cout this define will
+// Instead, use Coutput, which wraps either cout or cerr as determined by
+// command line flags, and translates unicode output properly.
+// If you try to use cerr or cout this define will
 // create an undefined symbol and give you a linker error.
 //
 #define cout Please_Do_Not_Use_cout_Directly_But_use_an_instance_of_Ostream_with_cout_as_argument
@@ -1075,9 +1133,9 @@ class ErrorString: public ConvertibleArray<wchar_t>
     int  field_width ;
 };
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif // #ifndef platform_INCLUDED
+#endif // platform_INCLUDED
 

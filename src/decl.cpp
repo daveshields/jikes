@@ -1,10 +1,10 @@
-// $Id: decl.cpp,v 1.50 2001/01/10 16:49:44 mdejong Exp $
+// $Id: decl.cpp,v 1.57 2001/09/14 05:31:32 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 #include "platform.h"
@@ -13,9 +13,10 @@
 #include "depend.h"
 #include "table.h"
 #include "tuple.h"
+#include "spell.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 //
@@ -139,7 +140,7 @@ void Semantic::ProcessTypeNames()
         TypeSymbol *type = NULL;
 
         Ast *type_declaration = compilation_unit -> TypeDeclaration(k);
-        switch(type_declaration -> kind)
+        switch (type_declaration -> kind)
         {
             case Ast::CLASS:
             {
@@ -1267,7 +1268,8 @@ TypeSymbol *Semantic::FindTypeInLayer(Ast *name, SymbolSet &inner_types)
     }
 
     //
-    // We now go through the field access in order until we either encouter a type that is an element of inner_types,
+    // We now go through the field access in order until we either encounter a
+    // type that is an element of inner_types,
     // in which case, we return the type. Otherwise, we return NULL.
     //
     //
@@ -1549,7 +1551,7 @@ void Semantic::ProcessMembers(SemanticEnvironment *environment, AstClassBody *cl
     delete this_type -> innertypes_closure; // save some space !!!
     this_type -> innertypes_closure = NULL;
 
-    if (! this_type -> IsTopLevel())
+    if (this_type -> IsInner())
     {
         for (int i = 0; i < class_body -> NumStaticInitializers(); i++)
         {
@@ -1571,23 +1573,17 @@ void Semantic::ProcessMembers(SemanticEnvironment *environment, AstClassBody *cl
 
             ProcessMembers(interface_declaration);
 
-            if (! this_type -> IsTopLevel())
+            if (this_type -> IsInner() && interface_declaration -> semantic_environment)
             {
                 //
-                // TODO: 1.1 assumption
+                // Nested interfaces are implicitly static
                 //
-                // As every field in an interface is static, we presume that all interfaces
-                // should be treated as static entities
-                //
-                if (interface_declaration -> semantic_environment)
-                {
-                    ReportSemError(SemanticError::STATIC_TYPE_IN_INNER_CLASS,
-                                   interface_declaration -> identifier_token,
-                                   interface_declaration -> identifier_token,
-                                   lex_stream -> NameString(interface_declaration -> identifier_token),
-                                   this_type -> Name(),
-                                   this_type -> FileLoc());
-                }
+                ReportSemError(SemanticError::STATIC_TYPE_IN_INNER_CLASS,
+                               interface_declaration -> identifier_token,
+                               interface_declaration -> identifier_token,
+                               lex_stream -> NameString(interface_declaration -> identifier_token),
+                               this_type -> Name(),
+                               this_type -> FileLoc());
             }
         }
         else
@@ -1596,17 +1592,15 @@ void Semantic::ProcessMembers(SemanticEnvironment *environment, AstClassBody *cl
 
             ProcessMembers(class_declaration -> semantic_environment, class_declaration -> class_body);
 
-            if (! this_type -> IsTopLevel())
+            if (this_type -> IsInner() && class_declaration -> semantic_environment &&
+                class_declaration -> semantic_environment -> Type() -> ACC_STATIC())
             {
-                if (class_declaration -> semantic_environment && class_declaration -> semantic_environment -> Type() -> ACC_STATIC())
-                {
-                    ReportSemError(SemanticError::STATIC_TYPE_IN_INNER_CLASS,
-                                   class_declaration -> identifier_token,
-                                   class_declaration -> identifier_token,
-                                   lex_stream -> NameString(class_declaration -> identifier_token),
-                                   this_type -> Name(),
-                                   this_type -> FileLoc());
-                }
+                ReportSemError(SemanticError::STATIC_TYPE_IN_INNER_CLASS,
+                               class_declaration -> identifier_token,
+                               class_declaration -> identifier_token,
+                               lex_stream -> NameString(class_declaration -> identifier_token),
+                               this_type -> Name(),
+                               this_type -> FileLoc());
             }
         }
     }
@@ -2003,7 +1997,7 @@ void Semantic::CleanUp()
     {
         TypeSymbol *type = NULL;
         Ast *type_declaration = compilation_unit -> TypeDeclaration(i);
-        switch(type_declaration -> kind)
+        switch (type_declaration -> kind)
         {
             case Ast::CLASS:
             {
@@ -2636,23 +2630,38 @@ void Semantic::ProcessFieldDeclaration(AstFieldDeclaration *field_declaration)
                                            : ProcessFieldModifiers(field_declaration));
 
     //
-    // New feature in java 1.2 that is undocumented in the 1.1 document.
-    // A field may be declared static iff it is final and not blank-final...
+    // JLS2 8.1.2 - Inner classes may not have static fields unless they are
+    // final and initialized by a constant.  Hence, the type of the static
+    // field may only be a primitive or String.  Here, we check that the
+    // entire declaration is final, then that each variableDeclarator is
+    // of the right type and is initialized.  Later, when processing the
+    // initializer, we check that it is indeed a compile-time constant
+    // (see init.cpp, Semantic::ProcessVariableInitializer)
     //
-    if (access_flags.ACC_STATIC() && (! access_flags.ACC_FINAL()) && this_type -> IsInner())
+    bool must_be_constant = false;
+    if (this_type -> IsInner() && access_flags.ACC_STATIC())
     {
-        AstModifier *modifier = NULL;
-        for (int i = 0; i < field_declaration -> NumVariableModifiers(); i++)
+        if (access_flags.ACC_FINAL())
         {
-            if (field_declaration -> VariableModifier(i) -> kind == Ast::STATIC)
-                modifier = field_declaration -> VariableModifier(i);
+            must_be_constant = true;
         }
-
-        assert(modifier);
-
-        ReportSemError(SemanticError::STATIC_FIELD_IN_INNER_CLASS,
-                       modifier -> modifier_kind_token,
-                       modifier -> modifier_kind_token);
+        else
+        {
+            AstModifier *modifier = NULL;
+            for (int i = 0; i < field_declaration -> NumVariableModifiers(); i++)
+            {
+                if (field_declaration -> VariableModifier(i) -> kind == Ast::STATIC)
+                    modifier = field_declaration -> VariableModifier(i);
+            }
+            
+            assert(modifier);
+            
+            ReportSemError(SemanticError::STATIC_FIELD_IN_INNER_CLASS_NOT_FINAL,
+                           modifier -> modifier_kind_token,
+                           modifier -> modifier_kind_token,
+                           this_type -> Name(),
+                           this_type -> FileLoc());
+        }
     }
 
     //
@@ -2689,6 +2698,20 @@ void Semantic::ProcessFieldDeclaration(AstFieldDeclaration *field_declaration)
             variable -> declarator = variable_declarator;
             variable -> MarkIncomplete(); // the declaration of a field is not complete until its initializer
                                           // (if any) has been processed.
+            if (must_be_constant)
+            {
+                if (num_dimensions != 0 || (! variable_declarator -> variable_initializer_opt) ||
+                    (! field_type -> Primitive() && field_type != control.String()))
+                {
+                    ReportSemError(SemanticError::STATIC_FIELD_IN_INNER_CLASS_NOT_CONSTANT,
+                                   name -> identifier_token,
+                                   name -> identifier_token,
+                                   name_symbol -> Name(),
+                                   this_type -> Name(),
+                                   this_type -> FileLoc());
+                }
+            }
+
             variable_declarator -> symbol = variable;
 
             if (deprecated_declarations)
@@ -2788,27 +2811,48 @@ void Semantic::GenerateLocalConstructor(MethodSymbol *constructor)
 void Semantic::ProcessConstructorDeclaration(AstConstructorDeclaration *constructor_declaration)
 {
     TypeSymbol *this_type = ThisType();
-    if (this_type -> Anonymous())
-    {
-        ReportSemError(SemanticError::CONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS,
-                       constructor_declaration -> LeftToken(),
-                       constructor_declaration -> RightToken());
-        return;
-    }
 
     AccessFlags access_flags = ProcessConstructorModifiers(constructor_declaration);
 
     AstMethodDeclarator *constructor_declarator = constructor_declaration -> constructor_declarator;
     wchar_t *constructor_name = lex_stream -> NameString(constructor_declarator -> identifier_token);
 
-    if (lex_stream -> NameSymbol(constructor_declarator -> identifier_token) != this_type -> Identity())
+    //
+    // A bad name indicates either a misspelling, or a method missing
+    // a return type.  In an anonymous class, assume a missing return
+    // type.  In all other classes, if the probability of misspelling
+    // >= 50%, correct the name, otherwise treat it as a method with
+    // bad return type.
+    //
+    bool treat_as_method = false;
+    if (this_type -> Anonymous())
     {
-        ReportSemError(SemanticError::MISMATCHED_CONSTRUCTOR_NAME,
-                       constructor_declarator -> identifier_token,
-                       constructor_declarator -> identifier_token,
-                       constructor_name,
-                       this_type -> Name());
-        constructor_name = this_type -> Name(); // assume the proper name !
+        ReportSemError(SemanticError::CONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS,
+                       constructor_declarator -> LeftToken(),
+                       constructor_declarator -> RightToken(),
+                       constructor_name);
+        treat_as_method = true;
+    }
+    else if (lex_stream -> NameSymbol(constructor_declarator -> identifier_token) != this_type -> Identity())
+    {
+        if (Spell::Index(constructor_name, this_type -> Name()) >= 5)
+        {
+            ReportSemError(SemanticError::MISSPELLED_CONSTRUCTOR_NAME,
+                           constructor_declarator -> identifier_token,
+                           constructor_declarator -> identifier_token,
+                           constructor_name,
+                           this_type -> Name());
+            constructor_name = this_type -> Name(); // correct the name
+        }
+        else
+        {
+            ReportSemError(SemanticError::MISMATCHED_CONSTRUCTOR_NAME,
+                           constructor_declarator -> identifier_token,
+                           constructor_declarator -> identifier_token,
+                           constructor_name,
+                           this_type -> Name());
+            treat_as_method = true;
+        }
     }
 
     //
@@ -2821,12 +2865,19 @@ void Semantic::ProcessConstructorDeclaration(AstConstructorDeclaration *construc
     ProcessFormalParameters(block_symbol, constructor_declarator);
 
     //
-    // Note that constructors are always named "<init>"
+    // Note that constructors are always named "<init>", but if this is a
+    // method with missing return type, we use the method name.
     //
-    MethodSymbol *constructor = this_type -> FindMethodSymbol(control.init_name_symbol);
+    NameSymbol *name_symbol = treat_as_method
+        ? lex_stream -> NameSymbol(constructor_declarator -> identifier_token)
+        : control.init_name_symbol;
+    MethodSymbol *constructor = this_type -> FindMethodSymbol(name_symbol);
 
     if (! constructor) // there exists a constructor already in type -> table.
-         constructor = this_type -> InsertConstructorSymbol(control.init_name_symbol);
+        if (! treat_as_method)
+            constructor = this_type -> InsertConstructorSymbol(name_symbol);
+        else
+            constructor = this_type -> InsertMethodSymbol(name_symbol);
     else
     {
         if (this_type -> FindOverloadMethod(constructor, constructor_declarator))
@@ -2845,7 +2896,7 @@ void Semantic::ProcessConstructorDeclaration(AstConstructorDeclaration *construc
     //
     // If the method is not static, leave a slot for the "this" pointer.
     //
-    constructor -> SetType(control.void_type);
+    constructor -> SetType(treat_as_method ? control.no_type : control.void_type);
     constructor -> SetFlags(access_flags);
     constructor -> SetContainingType(this_type);
     constructor -> SetBlockSymbol(block_symbol);
@@ -3655,15 +3706,11 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration *method_declaration
                                            : ProcessMethodModifiers(method_declaration));
 
     //
-    // TODO: File Query Sun on that one. We no longer explicitly mark such methods as final
-    //       as it appears that some tools expect these methods to remain unmarked.
+    // By JLS2 8.4.3.3, a private method and all methods declared in a
+    // final class are implicitly final.
     //
-    //
-    // A private method and all methods declared in a final class are implicitly final.
-    //
-    // if (access_flags.ACC_PRIVATE() || this_type -> ACC_FINAL())
-    //    access_flags.SetACC_FINAL();
-    //
+    if (access_flags.ACC_PRIVATE() || this_type -> ACC_FINAL())
+        access_flags.SetACC_FINAL();
 
     //
     // A method enclosed in an inner type may not be declared static.
@@ -3681,7 +3728,10 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration *method_declaration
 
         ReportSemError(SemanticError::STATIC_METHOD_IN_INNER_CLASS,
                        modifier -> modifier_kind_token,
-                       modifier -> modifier_kind_token);
+                       modifier -> modifier_kind_token,
+                       lex_stream -> NameString(method_declaration -> method_declarator -> identifier_token),
+                       this_type -> Name(),
+                       this_type -> FileLoc());
     }
 
     //
@@ -3742,9 +3792,10 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration *method_declaration
         method = this_type -> Overload(method);
     }
 
-    int num_dimensions = (method_type == control.void_type
-                                       ? 0
-                                       : (array_type ? array_type -> NumBrackets() : 0) + method_declarator -> NumBrackets());
+    int num_dimensions = ((method_type == control.void_type)
+                          ? 0
+                          : (array_type ? array_type -> NumBrackets() : 0))
+                         + method_declarator -> NumBrackets();
     if (num_dimensions == 0)
          method -> SetType(method_type);
     else method -> SetType(method_type -> GetArrayType((Semantic *) this, num_dimensions));
@@ -3802,7 +3853,7 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration *method_declaration
 //
 TypeSymbol *Semantic::FindPrimitiveType(AstPrimitiveType *primitive_type)
 {
-    switch(primitive_type -> kind)
+    switch (primitive_type -> kind)
     {
         case Ast::INT:
              return control.int_type;
@@ -4404,15 +4455,21 @@ void Semantic::ProcessStaticInitializers(AstClassBody *class_body)
 
         //
         // Check that each static final variables has been initialized by now.
-        // If not, issue an error and assume it is.
+        // If not, issue an error and assume it is.  Notice that for inner
+        // classes, we have already reported that a non-constant static
+        // field is illegal, so we only need an error here for top-level
+        // and static classes.
         //
         for (int l = 0; l < finals.Length(); l++)
         {
             if (finals[l] -> ACC_STATIC() && (! finals[l] -> IsDefinitelyAssigned()))
             {
-                ReportSemError(SemanticError::UNINITIALIZED_STATIC_FINAL_VARIABLE,
-                               finals[l] -> declarator -> LeftToken(),
-                               finals[l] -> declarator -> RightToken());
+                if (! this_type -> IsInner())
+                {
+                    ReportSemError(SemanticError::UNINITIALIZED_STATIC_FINAL_VARIABLE,
+                                   finals[l] -> declarator -> LeftToken(),
+                                   finals[l] -> declarator -> RightToken());
+                }
                 finals[l] -> MarkDefinitelyAssigned();
             }
         }
@@ -4601,7 +4658,7 @@ void Semantic::ProcessBlockInitializers(AstClassBody *class_body)
     return;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

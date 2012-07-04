@@ -1,10 +1,10 @@
-// $Id: control.cpp,v 1.42 2001/05/06 08:03:39 cabbey Exp $
+// $Id: control.cpp,v 1.46 2001/09/14 05:31:32 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 #include "control.h"
@@ -15,8 +15,8 @@
 #include "bytecode.h"
 #include "case.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 Control::Control(char **arguments, Option &option_) : return_code(0),
@@ -418,7 +418,7 @@ Control::Control(char **arguments, Option &option_) : return_code(0),
             {
                 FILE *outfile = SystemFopen(option.dependence_report_name, "w");
                 if (outfile == NULL)
-                    Coutput << "*** Cannot open file " << option.dependence_report_name << "\n";
+                    Coutput << "*** Cannot open file " << option.dependence_report_name << endl;
                 else
                 {
                     SymbolSet types_in_new_files;
@@ -432,16 +432,7 @@ Control::Control(char **arguments, Option &option_) : return_code(0),
                         for (int j = 0; j < file_symbol -> types.Length(); j++)
                         {
                             TypeSymbol *type = file_symbol -> types[j];
-#ifdef EBCDIC
-                            for (char *p = java_name; *p; p++)
-                                 fprintf(outfile, "%c", Code::ToEBCDIC(*p));
-                            fprintf(outfile, " : ");
-                            for (char *q = type -> SignatureString(); *q; q++)
-                                 fprintf(outfile, "%c", Code::ToEBCDIC(*q));
-                            fprintf(outfile, "\n");
-#else
                             fprintf(outfile, "%s : %s\n", java_name, type -> SignatureString());
-#endif
 
                             //
                             //
@@ -452,14 +443,7 @@ Control::Control(char **arguments, Option &option_) : return_code(0),
                             {
                                 if (! type -> parents -> IsElement(static_parent)) // Only a static reference to static_parent?
                                 {
-#ifdef EBCDIC
-                                    fprintf(outfile, "   !");
-                                    for (char *q = static_parent -> SignatureString(); *q; q++)
-                                         fprintf(outfile, "%c", Code::ToEBCDIC(*q));
-                                    fprintf(outfile, "\n");
-#else
                                     fprintf(outfile, "   !%s\n", static_parent -> SignatureString());
-#endif
 
                                     //
                                     // If the type is contained in a type that is not one of the input files, save it
@@ -476,14 +460,7 @@ Control::Control(char **arguments, Option &option_) : return_code(0),
                                              parent;
                                              parent = (TypeSymbol *) type -> parents -> NextElement())
                             {
-#ifdef EBCDIC
-                                fprintf(outfile, "    ");
-                                for (char *q = parent -> SignatureString(); *q; q++)
-                                     fprintf(outfile, "%c", Code::ToEBCDIC(*q));
-                                fprintf(outfile, "\n");
-#else
                                 fprintf(outfile, "    %s\n", parent -> SignatureString());
-#endif
 
                                 //
                                 // If the type is contained in a type that is not one of the input files, save it
@@ -502,16 +479,7 @@ Control::Control(char **arguments, Option &option_) : return_code(0),
                                      type = (TypeSymbol *) types_in_new_files.NextElement())
                     {
                         char *class_name = type -> file_symbol -> FileName();
-#ifdef EBCDIC
-                        for (char *p = class_name; *p; p++)
-                             fprintf(outfile, "%c", Code::ToEBCDIC(*p));
-                        fprintf(outfile, " : ");
-                        for (char *q = type -> SignatureString(); *q; q++)
-                             fprintf(outfile, "%c", Code::ToEBCDIC(*q));
-                        fprintf(outfile, "\n");
-#else
                         fprintf(outfile, "%s : %s\n", class_name, type -> SignatureString());
-#endif
                     }
 
                     fclose(outfile);
@@ -565,10 +533,11 @@ Control::~Control()
 #ifdef JIKES_DEBUG
     if (option.debug_dump_lex || option.debug_dump_ast || option.debug_unparse_ast)
     {
-        Coutput << line_count << " source lines read\n\n"
-                << class_files_read << " \".class\" files read\n"
-                << class_files_written << " \".class\" files written\n"
-                << input_files_processed << " \".java\" files processed\n";
+        Coutput << line_count << " source lines read" << endl << endl
+                << class_files_read << " \".class\" files read" << endl
+                << class_files_written << " \".class\" files written" << endl
+                << input_files_processed << " \".java\" files processed"
+                << endl;
     }
 #endif
 }
@@ -590,7 +559,7 @@ PackageSymbol *Control::ProcessPackage(wchar_t *name)
         FindPathsToDirectory(package_symbol);
     }
 
-    while(length < name_length)
+    while (length < name_length)
     {
         int start = ++length;
         for (int i = 0; length < name_length && name[length] != U_SLASH; i++, length++)
@@ -870,16 +839,16 @@ void Control::ProcessNewInputFiles(SymbolSet &file_set, char **arguments, int fi
     //
     // Process all file names specified in command line
     //
-    if(arguments)
+    if (arguments)
     {
         int j=0;
-        while(arguments[j])
+        while (arguments[j])
         {
             char *file_name = arguments[j++];
             int file_name_length = strlen(file_name);
 
             wchar_t *name = new wchar_t[file_name_length + 1];
-            for(int i = 0; i < file_name_length; i++)
+            for (int i = 0; i < file_name_length; i++)
                 name[i] = (file_name[i] != U_BACKSLASH ? file_name[i] : (wchar_t) U_SLASH); // change backslash to forward slash.
             name[file_name_length] = U_NULL;
             
@@ -1036,6 +1005,10 @@ void Control::ProcessFile(FileSymbol *file_symbol)
     {
         assert(semantic.Length() == 0);
 
+        //
+        // These bodies are not necessarily in file_symbol; they
+        // might be in another FileSymbol used by file_symbol.
+        //
         ProcessBodies(needs_body_work[i]);
     }
     needs_body_work.Reset();
@@ -1054,7 +1027,7 @@ void Control::ProcessHeaders(FileSymbol *file_symbol)
     {
         Coutput << "[read "
                 << file_symbol -> FileName()
-                << "]\n";
+                << "]" << endl;
     }
 
     if (! file_symbol -> lex_stream)
@@ -1122,9 +1095,10 @@ void Control::ProcessMembers()
         } while (start < semantic.Length());
 
         //
-        // Patially order the collection of types in needs_member_work and place the result
-        // in partially_ordered_types. This reordering is based on the complete "supertype"
-        // information computed in ProcessTypeHeaders.
+        // Partially order the collection of types in needs_member_work and
+        // place the result in partially_ordered_types. This reordering is
+        // based on the complete "supertype" information computed in
+        // ProcessTypeHeaders.
         //
         topological_sorter.Sort();
         for (int i = 0; i < partially_ordered_types.Length(); i++)
@@ -1385,7 +1359,7 @@ void Control::CleanUp(FileSymbol *file_symbol)
     return;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

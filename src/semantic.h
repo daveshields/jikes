@@ -1,12 +1,13 @@
-// $Id: semantic.h,v 1.37 2001/04/19 13:52:32 cabbey Exp $
+// $Id: semantic.h,v 1.40 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #ifndef semantic_INCLUDED
 #define semantic_INCLUDED
 
@@ -19,15 +20,8 @@
 #include "tuple.h"
 #include "set.h"
 
-/*
-//FIXME: include stuff
-#ifdef HAVE_WCHAR_H
-# include <wchar.h>
-#endif
-*/
-
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 
@@ -1285,11 +1279,11 @@ inline void Semantic::AddDependence(TypeSymbol *base_type_, TypeSymbol *parent_t
             if (parent_type -> ContainingPackage() == control.unnamed_package &&
                 base_type -> ContainingPackage() != control.unnamed_package)
             {
-                error -> Report(SemanticError::PARENT_TYPE_IN_UNNAMED_PACKAGE,
-                                tok,
-                                tok,
-                                parent_type_ -> ContainingPackage() -> PackageName(),
-                                parent_type_ -> ExternalName());
+                ReportSemError(SemanticError::PARENT_TYPE_IN_UNNAMED_PACKAGE,
+                               tok,
+                               tok,
+                               parent_type_ -> ContainingPackage() -> PackageName(),
+                               parent_type_ -> ExternalName());
             }
         }
     }
@@ -1321,9 +1315,9 @@ inline void Semantic::AddStringConversionDependence(TypeSymbol *type, LexStream:
          AddDependence(ThisType(), control.Double(), tok);
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif
+#endif // semantic_INCLUDED
 

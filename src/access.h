@@ -1,10 +1,10 @@
-// $Id: access.h,v 1.12 2001/01/05 09:13:19 mdejong Exp $
+// $Id: access.h,v 1.15 2001/09/14 05:31:32 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -13,8 +13,8 @@
 
 #include "platform.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 
@@ -92,14 +92,14 @@ public:
         if (ACC_INTERFACE())    Coutput << " interface";
         if (ACC_ABSTRACT())     Coutput << " abstract";
         if (ACC_STRICTFP())     Coutput << " strictfp";
-        Coutput << "\n";
+        Coutput << endl;
     }
 #endif
 };
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif
+#endif // access_INCLUDED
 

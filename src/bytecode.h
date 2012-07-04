@@ -1,12 +1,12 @@
-// $Id: bytecode.h,v 1.24 2001/05/07 06:33:59 cabbey Exp $
+// $Id: bytecode.h,v 1.28 2001/09/14 05:31:32 ericb Exp $ -*- c++ -*-
 //
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
-
 //
+
 #ifndef bytecode_INCLUDED
 #define bytecode_INCLUDED
 
@@ -19,8 +19,8 @@
 #include "op.h"
 #include "segment.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 class TypeSymbol;
@@ -195,6 +195,12 @@ private:
 
 class ByteCode : public ClassFile, public StringConstant, public Operators
 {
+    // A heuristic level for generating code to handle conditional branches
+    // crossing more than 32767 bytes of code. In one test case, 54616 was
+    // required to generate that much code, so 10000 seems like a conservative
+    // value.
+    enum { TOKEN_WIDTH_REQUIRING_GOTOW = 10000 };
+
     Control& this_control;
     Semantic& this_semantic;
 
@@ -666,15 +672,15 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
     //
     // Methods to generate expressions.
     //
-    int  EmitExpression(AstExpression *);
+    int  EmitExpression(AstExpression *, bool = true);
     int  EmitArrayCreationExpression(AstArrayCreationExpression *);
     int  EmitAssignmentExpression(AstAssignmentExpression *, bool);
     int  EmitBinaryExpression(AstBinaryExpression *);
     int  EmitCastExpression(AstCastExpression *);
     void EmitCast(TypeSymbol *, TypeSymbol *);
     int  EmitClassInstanceCreationExpression(AstClassInstanceCreationExpression *, bool);
-    int  EmitConditionalExpression(AstConditionalExpression *);
-    int  EmitFieldAccess(AstFieldAccess *);
+    int  EmitConditionalExpression(AstConditionalExpression *, bool);
+    int  EmitFieldAccess(AstFieldAccess *, bool = true);
     AstExpression *VariableExpressionResolution(AstExpression *);
     TypeSymbol *VariableTypeResolution(AstExpression *, VariableSymbol *);
     TypeSymbol *MethodTypeResolution(AstExpression *, MethodSymbol *);
@@ -722,7 +728,8 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
     void EmitStatementExpression(AstExpression *);
     void EmitSwitchStatement(AstSwitchStatement *);
     void EmitTryStatement(AstTryStatement *);
-    void EmitBranchIfExpression(AstExpression *, bool, Label &);
+    void EmitBranchIfExpression(AstExpression *, bool, Label &, AstStatement *);
+    void EmitBranch(unsigned int opc, Label& lab, AstStatement *over);
     void CompleteCall(MethodSymbol *, int, TypeSymbol * = NULL);
 
 
@@ -732,7 +739,7 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
     //
     AstExpression *UnParenthesize(AstExpression *expr)
     {
-        while(! (expr -> IsConstant()) && expr -> ParenthesizedExpressionCast())
+        while (! (expr -> IsConstant()) && expr -> ParenthesizedExpressionCast())
             expr = expr -> ParenthesizedExpressionCast() -> expression;
 
         return expr;
@@ -754,6 +761,12 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
         return LoadArrayElement(expression -> Type());
     }
 
+    // Return the OP_IF... bytecode that has the opposite meaning 
+    unsigned int InvertIfOpCode(unsigned int opc) 
+    {
+        assert(OP_IFEQ <= opc && opc <= OP_IF_ACMPNE);
+        return ((opc + 1) ^ 1) - 1;
+    }
 
     void EmitBranch(unsigned int opc, Label& lab)
     {
@@ -892,9 +905,9 @@ public:
     }
 };
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif
+#endif // bytecode_INCLUDED
 

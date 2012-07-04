@@ -1,15 +1,13 @@
 %options scopes,act,an=javaact.cpp,hn=javaact.h,em,tab,gp=c++,
 %options fp=java,escape=$,prefix=TK_,em,defer,output-size=125
-%options hblockb=\:,hblocke=:\
-%options nogoto-default
-%options single-productions
-%options la=2,names=max
--- $Id: java.g,v 1.18 2000/07/22 21:02:51 mdejong Exp $
+%options hblockb=\:,hblocke=:\,nogoto-default,single-productions
+%options la=2,names=max,jikes
+-- $Id: java.g,v 1.22 2001/09/16 01:38:25 ericb Exp $
 -- This software is subject to the terms of the IBM Jikes Compiler
 -- License Agreement available at the following URL:
--- http://www.ibm.com/research/jikes.
--- Copyright (C) 1996, 1999, International Business Machines Corporation
--- and others.  All Rights Reserved.
+-- http://ibm.com/developerworks/opensource/jikes.
+-- Copyright (C) 1996, 1999, 2000, 2001 International Business
+-- Machines Corporation and others.  All Rights Reserved.
 -- You must accept the terms of that agreement to use this software.
 
 ------------------------------------------------------------------------
@@ -17,8 +15,11 @@
 --                               J A V A
 --
 -- This Java grammar is almost identical to the grammar defined in
--- chapter 19 of the Java Language Specification manual together with
--- the additional rules found in the 1.1 document. It is written here
+-- chapter 19 of the first edition of the Java Language Specification
+-- manual.  It has been updated with additional rules added with the
+-- 1.1. amendment and second edition JLS (chapter 18 of the second
+-- edition is completely broken, so the grammar follows the
+-- expository text within the remaining chapters). It is written here
 -- in JIKES PG format with semantic actions following each rule. In
 -- specifying the rules we enclosed all terminal symbols in single
 -- quotes so that they can be quickly distinguished from
@@ -385,25 +386,27 @@ $Start
 $Rules
 
 \:
+// $Id: java.g,v 1.22 2001/09/16 01:38:25 ericb Exp $ -*- c++ -*-
+// DO NOT MODIFY THIS FILE - it is generated using jikespg on java.g.
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
 #ifndef HEADERS
 
-#ifdef	HAVE_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 void Parser::InitRuleAction()
 {
     rule_action[0] = &Parser::BadAction;
-#else
+#else // HEADERS
     void BadAction(void);
     void NoAction(void);
     void NullAction(void);
@@ -424,17 +427,19 @@ void Parser::InitRuleAction()
     void MakeSuperDoubleFieldAccess(void);
     void MakeArrayAccess(void);
     void MakeCastExpression(void);
-#endif
+#endif // HEADERS
 
 :\
 
 /.#line $next_line "$input_file"
+// $Id: java.g,v 1.22 2001/09/16 01:38:25 ericb Exp $
+// DO NOT MODIFY THIS FILE - it is generated using jikespg on java.g.
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -445,12 +450,8 @@ void Parser::InitRuleAction()
 #undef HEADERS
 #include "javaact.h"
 
-#ifdef	HAVE_NAMESPACE
-using namespace Jikes;
-#endif
-
-#ifdef	HAVE_NAMESPACE
-using namespace Jikes;
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 //****************************************************************************//
@@ -720,7 +721,7 @@ void Parser::MakeArrayType(void)
         {
             root = root -> next;
             p -> AddBrackets((AstBrackets *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     Sym(1) = p;
@@ -792,7 +793,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddImportDeclaration((AstImportDeclaration *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     if (Sym(3) != NULL)
@@ -804,7 +805,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddTypeDeclaration(root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     Sym(1) = p;
@@ -1114,7 +1115,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddClassModifier((AstModifier *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> class_token          = Token(2);
@@ -1129,7 +1130,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddInterface((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> class_body = (AstClassBody *) Sym(6);
@@ -1258,7 +1259,7 @@ void Parser::Act$rule_number(void)
                 num_blocks++;
             }
             else num_empty_declarations++;
-        } while(root != tail);
+        } while (root != tail);
 
         p -> AllocateInstanceVariables(num_instance_variables);
         p -> AllocateClassVariables(num_class_variables);
@@ -1317,7 +1318,7 @@ void Parser::Act$rule_number(void)
             {
                 p -> AddEmptyDeclaration((AstEmptyDeclaration *) root -> element);
             }
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_brace_token = Token(3);
@@ -1404,13 +1405,6 @@ ClassMemberDeclaration -> InterfaceDeclaration
 \:$NoAction:\
 /.$shared_NoAction./
 
---
--- Empty declarations are not valid Java ClassMemberDeclarations.
--- However, since the current (2/14/97) Java compiler accepts them
--- (in fact, some of the official tests contain this erroneous
--- syntax), we decided to accept them as valid syntax and flag them
--- as a warning during semantic processing.
---
 ClassMemberDeclaration ::= ';'
 \:$action:\
 /.$location
@@ -1445,7 +1439,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddVariableModifier((AstModifier *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> type = Sym(2);
@@ -1460,7 +1454,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddVariableDeclarator((AstVariableDeclarator *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> semicolon_token      = Token(4);
@@ -1546,7 +1540,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddBrackets((AstBrackets *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     Sym(1) = p;
@@ -1602,7 +1596,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddMethodModifier((AstModifier *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> type              = Sym(2);
@@ -1616,7 +1610,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddThrow((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     Sym(1) = p;
@@ -1638,7 +1632,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddMethodModifier((AstModifier *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> type              = ast_pool -> NewPrimitiveType(Ast::VOID_TYPE, Token(2));
@@ -1652,7 +1646,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddThrow((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     Sym(1) = p;
@@ -1676,7 +1670,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddFormalParameter((AstFormalParameter *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(4);
@@ -1689,7 +1683,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddBrackets((AstBrackets *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     Sym(1) = p;
@@ -1770,7 +1764,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddParameterModifier((AstModifier *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
 
@@ -1897,7 +1891,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddConstructorModifier((AstModifier *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> constructor_declarator = (AstMethodDeclarator *) Sym(2);
@@ -1910,7 +1904,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddThrow((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> constructor_body       = block;
@@ -1944,7 +1938,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddFormalParameter((AstFormalParameter *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(4);
@@ -1979,7 +1973,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             block -> AddStatement((AstStatement *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     else
@@ -2003,8 +1997,6 @@ ExplicitConstructorInvocation ::= 'this' '(' ArgumentListopt ')' ';'
 void Parser::Act$rule_number(void)
 {
     AstThisCall *p = ast_pool -> NewThisCall();
-    p -> base_opt                = NULL;
-    p -> dot_token_opt           = 0;
     p -> this_token              = Token(1);
     p -> left_parenthesis_token  = Token(2);
     if (Sym(3) != NULL)
@@ -2016,7 +2008,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddArgument((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(4);
@@ -2044,40 +2036,11 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddArgument((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(4);
     p -> semicolon_token         = Token(5);
-    Sym(1) = p;
-}
-./
-
---1.2 feature
-ExplicitConstructorInvocation ::= Primary '.' 'this' '(' ArgumentListopt ')' ';'
-\:$action:\
-/.$location
-void Parser::Act$rule_number(void)
-{
-    AstThisCall *p = ast_pool -> NewThisCall();
-    p -> base_opt               = (AstExpression *) Sym(1);
-    p -> dot_token_opt          = Token(2);
-    p -> this_token             = Token(3);
-    p -> left_parenthesis_token = Token(4);
-    if (Sym(5) != NULL)
-    {
-        AstListNode *tail = (AstListNode *) Sym(5);
-        p -> AllocateArguments(tail -> index + 1);
-        AstListNode *root = tail;
-        do
-        {
-            root = root -> next;
-            p -> AddArgument((AstExpression *) root -> element);
-        } while(root != tail);
-        FreeCircularList(tail);
-    }
-    p -> right_parenthesis_token = Token(6);
-    p -> semicolon_token         = Token(7);
     Sym(1) = p;
 }
 ./
@@ -2102,7 +2065,7 @@ void Parser::MakeQualifiedSuper(void)
         {
             root = root -> next;
             p -> AddArgument((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(6);
@@ -2141,7 +2104,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddInterfaceModifier((AstModifier *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> interface_token  = Token(2);
@@ -2155,7 +2118,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddExtendsInterface((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     Sym(1) = p;
@@ -2214,7 +2177,7 @@ void Parser::Act$rule_number(void)
                 num_inner_interfaces++;
             }
             else num_empty_declarations++;
-        } while(root != tail);
+        } while (root != tail);
 
         p -> AllocateClassVariables(num_class_variables);
         p -> AllocateMethods(num_methods);
@@ -2252,7 +2215,7 @@ void Parser::Act$rule_number(void)
             {
                 p -> AddEmptyDeclaration((AstEmptyDeclaration *) root -> element);
             }
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_brace_token = Token(3);
@@ -2317,13 +2280,6 @@ InterfaceMemberDeclaration -> InterfaceDeclaration
 \:$NoAction:\
 /.$shared_NoAction./
 
---
--- Empty declarations are not valid Java InterfaceMemberDeclarations.
--- However, since the current (2/14/97) Java compiler accepts them
--- (in fact, some of the official tests contain this erroneous
--- syntax), we decided to accept them as valid syntax and flag them
--- as a warning during semantic processing.
---
 InterfaceMemberDeclaration ::= ';'
 \:$action:\
 /.$location
@@ -2382,7 +2338,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddVariableInitializer(root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_brace_token     = Token(3);
@@ -2406,7 +2362,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddVariableInitializer(root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_brace_token     = Token(4);
@@ -2470,7 +2426,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddStatement((AstStatement *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_brace_token = Token(3);
@@ -2556,7 +2512,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddVariableDeclarator((AstVariableDeclarator *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> semicolon_token_opt  = 0;
@@ -2582,7 +2538,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddLocalModifier((AstModifier *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> type = Sym(2);
@@ -2597,7 +2553,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddVariableDeclarator((AstVariableDeclarator *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> semicolon_token_opt  = 0;
@@ -2912,7 +2868,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             block -> AddStatement((AstStatement *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     block -> right_brace_token = Token(3);
@@ -2944,7 +2900,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             q -> AddSwitchLabel((AstStatement *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
 
@@ -2980,7 +2936,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             block -> AddStatement((AstStatement *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
 
@@ -2998,7 +2954,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             q -> AddSwitchLabel(root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
 
@@ -3066,7 +3022,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddSwitchLabel(root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
 
@@ -3081,7 +3037,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddStatement((AstStatement *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     Sym(1) = p;
@@ -3163,7 +3119,7 @@ void Parser::MakeWhileStatement(void)
 
     AstBlock *block = ast_pool -> NewBlock();
     block -> AllocateBlockStatements(1); // allocate 1 element
-    block -> left_brace_token  = Token(1); // point to 'FOR' keyword
+    block -> left_brace_token  = Token(1); // point to 'WHILE keyword
     block -> AddStatement(p);
     block -> right_brace_token = Sym(5) -> RightToken(); // point to last token in statement
 
@@ -3216,7 +3172,7 @@ void Parser::MakeForStatement(void)
         {
             root = root -> next;
             p -> AddForInitStatement((AstStatement *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> end_expression_opt = (AstExpression *) Sym(5);
@@ -3229,7 +3185,7 @@ void Parser::MakeForStatement(void)
         {
             root = root -> next;
             p -> AddForUpdateStatement((AstExpressionStatement *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> statement = (AstStatement *) Sym(9);
@@ -3433,7 +3389,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddCatchClause((AstCatchClause *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> finally_clause_opt = NULL;
@@ -3460,7 +3416,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddCatchClause((AstCatchClause *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
 
@@ -3545,7 +3501,20 @@ Primary -> PrimaryNoNewArray
 \:$NoAction:\
 /.$shared_NoAction./
 
-Primary -> ArrayCreationExpression
+--
+--1.2 feature
+--
+-- It is legal to access an element of an initialized array, as in
+-- new int[] {0}[0]; this requires splitting the original rule for
+-- array creation into two.
+--
+-- Primary -> ArrayCreationExpression
+--
+Primary -> ArrayCreationUninitialized
+\:$NoAction:\
+/.$shared_NoAction./
+
+Primary -> ArrayCreationInitialized
 \:$NoAction:\
 /.$shared_NoAction./
 
@@ -3658,7 +3627,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddArgument((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(5);
@@ -3688,7 +3657,7 @@ void Parser::MakeQualifiedNew(void)
         {
             root = root -> next;
             p -> AddArgument((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(7);
@@ -3743,7 +3712,15 @@ void Parser::Act$rule_number(void)
 }
 ./
 
-ArrayCreationExpression ::= 'new' PrimitiveType DimExprs Dimsopt
+--
+--1.2 feature
+--
+-- ArrayCreationExpression is split into two parsing categories, to
+-- allow array access on an initialized array.  See above.
+--
+-- ArrayCreationExpression ::= 'new' PrimitiveType DimExprs Dimsopt
+--
+ArrayCreationUninitialized ::= 'new' PrimitiveType DimExprs Dimsopt
 \:$MakeArrayCreationExpression:\
 /.$location
 void Parser::MakeArrayCreationExpression(void)
@@ -3762,7 +3739,7 @@ void Parser::MakeArrayCreationExpression(void)
         {
             root = root -> next;
             p -> AddDimExpr((AstDimExpr *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
 
@@ -3775,7 +3752,7 @@ void Parser::MakeArrayCreationExpression(void)
         {
             root = root -> next;
             p -> AddBrackets((AstBrackets *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> array_initializer_opt = NULL;
@@ -3783,7 +3760,10 @@ void Parser::MakeArrayCreationExpression(void)
 }
 ./
 
-ArrayCreationExpression ::= 'new' ClassOrInterfaceType DimExprs Dimsopt
+--
+-- ArrayCreationExpression ::= 'new' ClassOrInterfaceType DimExprs Dimsopt
+--
+ArrayCreationUninitialized ::= 'new' ClassOrInterfaceType DimExprs Dimsopt
 \:$MakeArrayCreationExpression:\
 /.$shared_function
 //
@@ -3791,7 +3771,10 @@ ArrayCreationExpression ::= 'new' ClassOrInterfaceType DimExprs Dimsopt
 //./
 
 --1.1 feature
-ArrayCreationExpression ::= 'new' ArrayType ArrayInitializer
+--
+-- ArrayCreationExpression ::= 'new' ArrayType ArrayInitializer
+--
+ArrayCreationInitialized ::= 'new' ArrayType ArrayInitializer
 \:$action:\
 /.$location
 void Parser::Act$rule_number(void)
@@ -3949,7 +3932,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddArgument((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(4);
@@ -3976,7 +3959,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddArgument((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(6);
@@ -4003,7 +3986,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddArgument((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(6);
@@ -4031,7 +4014,7 @@ void Parser::Act$rule_number(void)
         {
             root = root -> next;
             p -> AddArgument((AstExpression *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(8);
@@ -4054,6 +4037,17 @@ void Parser::MakeArrayAccess(void)
 ./
 
 ArrayAccess ::= PrimaryNoNewArray '[' Expression ']'
+\:$MakeArrayAccess:\
+/.$shared_function
+//
+// void MakeArrayAccess(void);
+//./
+
+--
+--1.2 feature
+-- Access of an initialized array is legal.  See above.
+--
+ArrayAccess ::= ArrayCreationInitialized '[' Expression ']'
 \:$MakeArrayAccess:\
 /.$shared_function
 //
@@ -4209,7 +4203,7 @@ void Parser::MakeCastExpression(void)
         {
             root = root -> next;
             p -> AddBrackets((AstBrackets *) root -> element);
-        } while(root != tail);
+        } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token_opt = Token(4);
@@ -4940,6 +4934,12 @@ void Parser::Act$rule_number(void)
 }
 ./
 
+/.
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
+#endif
+./
+
 ---------------------------------------------------------------------------------------
 
 \:
@@ -4947,11 +4947,11 @@ void Parser::Act$rule_number(void)
     return;
 }
 
-#ifdef	HAVE_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif
+#endif // ! HEADERS
 :\
 
 $names

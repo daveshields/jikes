@@ -1,10 +1,10 @@
-// $Id: stream.cpp,v 1.53 2001/05/11 07:28:44 cabbey Exp $
+// $Id: stream.cpp,v 1.57 2001/09/14 05:31:34 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -15,19 +15,8 @@
 #include "control.h"
 #include "semantic.h"
 
-#ifdef HAVE_CTYPE_H
-#include <ctype.h>
-#endif
-
-#if defined(HAVE_LIBICU_UC)
-# include <unicode/ucnv.h>
-#elif defined(HAVE_ICONV_H)
-# include <iconv.h>
-# include <errno.h>
-#endif
-
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 // Class StreamError
@@ -51,56 +40,56 @@ const char *StreamError::getFileName()
 
 const wchar_t *StreamError::getErrorMessage() 
 {
-    switch(kind)
+    switch (kind)
     {
     case StreamError::BAD_TOKEN:
-        return L"Illegal token\n";
+        return L"Illegal token";
         break;
     case StreamError::BAD_OCTAL_CONSTANT:
-        return L"Octal constant contains invalid digit\n";
+        return L"Octal constant contains invalid digit";
         break;
     case StreamError::EMPTY_CHARACTER_CONSTANT:
-        return L"Empty character constant\n";
+        return L"Empty character constant";
         break;
     case StreamError::UNTERMINATED_CHARACTER_CONSTANT:
-        return L"Character constant not properly terminated\n";
+        return L"Character constant not properly terminated";
         break;
     case StreamError::UNTERMINATED_COMMENT:
-        return L"Comment not properly terminated\n";
+        return L"Comment not properly terminated";
         break;
     case StreamError::UNTERMINATED_STRING_CONSTANT:
-        return L"String constant not properly terminated\n";
+        return L"String constant not properly terminated";
         break;
     case StreamError::INVALID_HEX_CONSTANT:
-        return L"The prefix 0x must be followed by at least one hex digit\n";
+        return L"The prefix 0x must be followed by at least one hex digit";
         break;
     case StreamError::INVALID_FLOATING_CONSTANT_EXPONENT:
-        return L"floating-constant exponent has no digit\n";
+        return L"floating-constant exponent has no digit";
         break;
     case StreamError::INVALID_UNICODE_ESCAPE:
-        return L"Invalid unicode escape character\n";
+        return L"Invalid unicode escape character";
         break;
     default:
         assert(false);
     }
 
-    return L"Unknown Error\n";
+    return L"Unknown Error";
 }
 
-bool StreamError::emacs_style_report=false;
+bool StreamError::emacs_style_report = false;
 
 const wchar_t *StreamError::getErrorReport() 
 {
     /*
      * We need to use this lazy initialization,
      * because we can't to it in Initialize() method. Reason
-     * is that Find* methods are unusalble until
+     * is that Find* methods are unusable until
      * LexStream::CompressSpace is called, which
-     * is not happend until later after scanning is done
+     * does not happen until later after scanning is done
      * and all errors are reported.
      * (lord)
      */
-    if(!initialized)
+    if (! initialized)
     {
         left_line_no    = lex_stream->FindLine   ( start_location );
         left_column_no  = lex_stream->FindColumn ( start_location );
@@ -109,7 +98,7 @@ const wchar_t *StreamError::getErrorReport()
         initialized     = true;
     }
 
-    return emacs_style_report?emacsErrorString():regularErrorString();
+    return emacs_style_report ? emacsErrorString() : regularErrorString();
 }
 
 wchar_t *StreamError::emacsErrorString()
@@ -130,7 +119,7 @@ wchar_t *StreamError::regularErrorString()
     ErrorString s;
 
     assert(lex_stream);
-    if(left_line_no == right_line_no)
+    if (left_line_no == right_line_no)
         PrintSmallSource(s);
     else 
         PrintLargeSource(s);
@@ -361,7 +350,7 @@ Stream::DecodeNextCharacter() {
                           source_tail+1,
                           &err);
 
-    if(U_FAILURE(err))
+    if (U_FAILURE(err))
     {
         fprintf(stderr,"Conversion error: %s at byte %d\n", 
             u_errorName(err),
@@ -394,19 +383,21 @@ Stream::DecodeNextCharacter() {
                     &source_ptr, &srcl,
                     (char **)&chp, &chl);
 
-    if(n == (size_t) -1)
+    if (n == (size_t) -1)
     {
-	if (errno == EINVAL && before + srcl + 1 <= source_tail) {
-	  srcl++; //we're on a multibyte input and it didn't fit in srcl
-	  goto try_it_again; //so we increase the window if there is space
-	  // and try again. This is the ultimate hack. I hate it.
-	} else {
-        fprintf(stderr,"Charset conversion error at offset %d: ",
-            int(before - data_buffer));
-        perror("");
-        error_decode_next_character = true;
-        return 0;
-    }
+        if (errno == EINVAL && before + srcl + 1 <= source_tail) {
+            srcl++; //we're on a multibyte input and it didn't fit in srcl
+            goto try_it_again; //so we increase the window if there is space
+            // and try again. This is the ultimate hack. I hate it.
+        }
+        else
+        {
+            fprintf(stderr,"Charset conversion error at offset %d: ",
+                    int(before - data_buffer));
+            perror("");
+            error_decode_next_character = true;
+            return 0;
+        }
     }
 
 # if JIKES_ICONV_NEEDS_BYTE_SWAP
@@ -431,7 +422,7 @@ Stream::DecodeNextCharacter() {
 
 #endif //iconv
 
-    if(before == source_ptr)
+    if (before == source_ptr)
     {
         //End of conversion
         error_decode_next_character = true;
@@ -466,7 +457,7 @@ LexStream::LexStream(Control &control_, FileSymbol *file_symbol_) : file_symbol(
 
 wchar_t *LexStream::KeywordName(int kind)
 {
-    switch(kind)
+    switch (kind)
     {
         case TK_abstract:     return StringConstant::US_abstract; break;
         case TK_boolean:      return StringConstant::US_boolean;  break;
@@ -662,7 +653,7 @@ void LexStream::CompressSpace()
     locations = line_location  .Array();
     types     = type_index     .Array();
     
-    if(control.option.dump_errors)
+    if (control.option.dump_errors)
         InitializeColumns();
     
     return;
@@ -821,7 +812,7 @@ void LexStream::RereadInput()
 
 int LexStream::hexvalue(wchar_t ch)
 {
-    switch(ch)
+    switch (ch)
     {
     case U_a: case U_A:
         return 10;
@@ -871,7 +862,7 @@ void LexStream::ProcessInputAscii(const char *buffer, long filesize)
     {
         InitializeDataBuffer(buffer, filesize);
 
-        while(source_ptr <= source_tail)
+        while (source_ptr <= source_tail)
         {
             *(++input_ptr) = (*source_ptr++) & 0x00ff; // The (& 0x00ff) guarantees that quantity is copied as unsigned value
 
@@ -898,7 +889,7 @@ void LexStream::ProcessInputAscii(const char *buffer, long filesize)
                         int multiplier[4] = {4096, 256, 16, 1};
 
                         const char ch = *source_ptr++;
-                        switch(ch)
+                        switch (ch)
                         {
                             case U_a: case U_A:
                                 *input_ptr += (10 * multiplier[i]);
@@ -958,7 +949,7 @@ void LexStream::ProcessInputAscii(const char *buffer, long filesize)
         //
         // Remove all trailing spaces
         //
-        while((input_ptr > input_buffer) && Code::IsSpace(*input_ptr))
+        while ((input_ptr > input_buffer) && Code::IsSpace(*input_ptr))
             input_ptr--;
     }
 
@@ -995,7 +986,7 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
     wchar_t *input_tail = input_ptr + filesize;
     *input_ptr = U_LINE_FEED; // add an initial '\n';
 
-    if(buffer)
+    if (buffer)
     {
         int      escape_value;
         wchar_t *escape_ptr;
@@ -1004,20 +995,21 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
         UnicodeLexerState state = START;
         bool oncemore = false;
 
-        if(control.option.encoding)
+        if (control.option.encoding)
         {
             // The encoding should have been validated by now
-            assert( SetEncoding(control.option.encoding) );
+            bool encoding_set = SetEncoding(control.option.encoding);
+            assert(encoding_set);
         }
 
         // init data after setting the encoding
         InitializeDataBuffer(buffer, filesize);
 
-        while(HasMoreData() || oncemore)
+        while (HasMoreData() || oncemore)
         {
             // On each iteration we advance input_ptr maximun 2 postions.
             // Here we check if we are close to the end of input_buffer
-            if(input_ptr>=input_tail)
+            if (input_ptr>=input_tail)
             {
                 // If this happen, reallocate it with some more space.
                 // This is very rare case, which could happen if
@@ -1039,7 +1031,7 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
             
             wchar_t ch;
             
-            if(!oncemore)
+            if (!oncemore)
             {
                 ch=DecodeNextCharacter();
 
@@ -1050,16 +1042,16 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
                 oncemore = false;
             }
 
-            switch(state)
+            switch (state)
             {
 
             case QUOTE:
-                if(ch==U_BACKSLASH)
+                if (ch==U_BACKSLASH)
                 {
                     *(++input_ptr) = U_BACKSLASH;
                     *(++input_ptr) = U_BACKSLASH;
                     state          = RAW;
-                } else if(ch==U_u)
+                } else if (ch==U_u)
                 {
                     escape_ptr = input_ptr;
                     state      = UNICODE_ESCAPE;
@@ -1072,13 +1064,13 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
                 break;
 
             case UNICODE_ESCAPE:
-                if(isxdigit(ch))
+                if (isxdigit(ch))
                 {
                     state=UNICODE_ESCAPE_DIGIT_0;
                     escape_value=hexvalue(ch)*16*16*16;
-                } else if(ch!=U_u)
+                } else if (ch!=U_u)
                 {
-                    if(initial_reading_of_input)
+                    if (initial_reading_of_input)
                         bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
                                                      (unsigned) (escape_ptr - input_buffer),
                                                      (unsigned) (input_ptr - input_buffer), this);
@@ -1086,13 +1078,13 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
                 break;
 
             case UNICODE_ESCAPE_DIGIT_0:
-                if(isxdigit(ch))
+                if (isxdigit(ch))
                 {
                     state=UNICODE_ESCAPE_DIGIT_1;
                     escape_value+=hexvalue(ch)*16*16;
                 } else  
                 {
-                    if(initial_reading_of_input)
+                    if (initial_reading_of_input)
                         bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
                                                      (unsigned) (escape_ptr - input_buffer),
                                                      (unsigned) (input_ptr - input_buffer), this);
@@ -1100,13 +1092,13 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
                 break;
 
             case UNICODE_ESCAPE_DIGIT_1:
-                if(isxdigit(ch))
+                if (isxdigit(ch))
                 {
                     state=UNICODE_ESCAPE_DIGIT_2;
                     escape_value+=hexvalue(ch)*16;
                 } else  
                 {
-                    if(initial_reading_of_input)
+                    if (initial_reading_of_input)
                         bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
                                                      (unsigned) (escape_ptr - input_buffer),
                                                      (unsigned) (input_ptr - input_buffer), this);
@@ -1114,7 +1106,7 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
                 break;
 
             case UNICODE_ESCAPE_DIGIT_2:
-                if(isxdigit(ch))
+                if (isxdigit(ch))
                 {
                     ch       = escape_value+hexvalue(ch);
                     state    = saved_state;
@@ -1122,7 +1114,7 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
                     oncemore = true;
                 } else  
                 {
-                    if(initial_reading_of_input)
+                    if (initial_reading_of_input)
                         bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
                                                      (unsigned) (escape_ptr - input_buffer),
                                                      (unsigned) (input_ptr - input_buffer), this);
@@ -1157,14 +1149,14 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
                 // if for some reason converter produced or passed
                 // byte order mark, it have to be ignored.
                 state = RAW;
-                if(ch==U_BOM || ch==U_REVERSE_BOM)
+                if (ch==U_BOM || ch==U_REVERSE_BOM)
                     break; //ignore
                     
             case RAW:
-                if(ch==U_BACKSLASH && saved_state != UNICODE_ESCAPE_DIGIT_2)
+                if (ch==U_BACKSLASH && saved_state != UNICODE_ESCAPE_DIGIT_2)
                 {
                     state       = QUOTE;
-                } else if(ch == U_CARRIAGE_RETURN)
+                } else if (ch == U_CARRIAGE_RETURN)
                 {
                     state = CR;
                     *(++input_ptr) = U_LINE_FEED;
@@ -1216,13 +1208,13 @@ void LexStream::SortMessages()
      lostack[top] = 0;
      histack[top] = bad_tokens.Length() - 1;
 
-     while(top >= 0)
+     while (top >= 0)
      {
          lower = lostack[top];
          upper = histack[top];
          top--;
 
-         while(upper > lower)
+         while (upper > lower)
          {
              //
              // The array is most-likely almost sorted. Therefore,
@@ -1325,7 +1317,7 @@ void LexStream::PrintMessages()
     return;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

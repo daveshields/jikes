@@ -1,10 +1,10 @@
-// $Id: expr.cpp,v 1.69 2001/05/07 05:56:03 cabbey Exp $
+// $Id: expr.cpp,v 1.76 2001/09/14 05:31:33 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -17,15 +17,8 @@
 #include "tuple.h"
 #include "spell.h"
 
-/*
-//FIXME: need to readdress this include stuff
-#include <assert.h>
-#include <stdio.h>
-#include <math.h>
-*/
-
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 bool Semantic::IsIntValueRepresentableInType(AstExpression *expr, TypeSymbol *type)
@@ -1858,7 +1851,7 @@ void Semantic::ConstructorAccessCheck(AstClassInstanceCreationExpression *class_
         {
             if (constructor -> ACC_PROTECTED())
             {
-                if(containing_type->ContainingPackage() != this_package)
+                if (containing_type->ContainingPackage() != this_package)
                 {
                     ReportSemError(SemanticError::PROTECTED_CONSTRUCTOR_NOT_ACCESSIBLE,
                                    class_creation -> class_type -> LeftToken(),
@@ -1940,7 +1933,7 @@ void Semantic::MemberAccessCheck(AstFieldAccess *field_access, TypeSymbol *base_
                 // Since "this" is a primary, it can be parenthesized. We remove all such parentheses here.
                 //
                 AstExpression *expr = base;
-                while(expr -> ParenthesizedExpressionCast())
+                while (expr -> ParenthesizedExpressionCast())
                     expr = expr -> ParenthesizedExpressionCast() -> expression;
 
                 if (! (expr -> ThisExpressionCast() || expr -> SuperExpressionCast()))
@@ -2457,8 +2450,9 @@ void Semantic::ProcessAmbiguousName(Ast *name)
             // ...First, classify the name or expression to the left of the '.'...
             //
             if (simple_name || sub_field_access)
-                 ProcessAmbiguousName(base);
-            else ProcessExpression(base);
+                ProcessAmbiguousName(base);
+            else // The qualifier might be a complex String constant
+                ProcessExpressionOrStringConstant(base);
 
             if (base -> symbol == control.no_type)
             {
@@ -2993,7 +2987,7 @@ void Semantic::ProcessMethodName(AstMethodInvocation *method_call)
                 // We are in a static region if we are:
                 //     . in the body of a static method
                 //     . in the body of a static initializer
-                //     . precessing an initializer expression for a static variable.
+                //     . processing an initializer expression for a static variable.
                 //
                 // See StaticRegion() Semantic.h for more detail.
                 //
@@ -3041,8 +3035,9 @@ void Semantic::ProcessMethodName(AstMethodInvocation *method_call)
         AstFieldAccess *sub_field_access = base -> FieldAccessCast();
 
         if (base -> SimpleNameCast() || sub_field_access)
-             ProcessAmbiguousName(base);
-        else ProcessExpression(base);
+            ProcessAmbiguousName(base);
+        else // The qualifier might be a complex String constant
+            ProcessExpressionOrStringConstant(base);
 
         if (base -> symbol == control.no_type)
         {
@@ -3401,6 +3396,9 @@ void Semantic::ProcessParenthesizedExpression(Ast *expr)
 
 void Semantic::UpdateGeneratedLocalConstructor(MethodSymbol *constructor)
 {
+    if (! constructor) // because of an earlier error
+        return;
+
     TypeSymbol *local_type = constructor -> containing_type;
     MethodSymbol *local_constructor = constructor -> LocalConstructor();
 
@@ -3791,8 +3789,8 @@ void Semantic::GetAnonymousConstructor(AstClassInstanceCreationExpression *class
     constructor -> SetACC_PUBLIC();
 
     //
-    // Report error is super constructor has throws clause, but add the exceptions to the local throws
-    // clause to avoid spurious errors later !!!
+    // Report error if super constructor has throws clause, but add the
+    // exceptions to the local throws clause to avoid spurious errors later !!!
     //
     int num_throws = super_constructor -> NumThrows();
     if (num_throws > 0)
@@ -4026,7 +4024,10 @@ void Semantic::GetAnonymousConstructor(AstClassInstanceCreationExpression *class
     return;
 }
 
-
+//
+// super_type is the type specified in the anonymous constructor,
+// which is the supertype of the created anonymous type.
+//
 TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class_creation, TypeSymbol *super_type)
 {
     TypeSymbol *this_type = ThisType();
@@ -4077,26 +4078,11 @@ TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class
     inner_type -> SetSignature(control);
 
     //
-    // TODO: As an anonymous type cannot be a super class, it makes sense to mark
-    // is final. This allows jikes to be consistent with javac in emitting an
-    // error message when the anonymous class is checked in an instanceof
-    // operation against an interface. However, this fact is not documented
-    // in the 1.1 document. Furthermore, the class file that is emitted for an
-    // anonymous flag (when processed by javac) does not have the FINAL flag turned on.
-    // We also turn this flag off after processing the body of the anonymmous type.
-    // See bolow...
+    // By JLS2 15.9.5, an anonymous class is implicitly final, but never
+    // static.  However, in a static context, error checking is much
+    // easier if the STATIC flag is temporarily set; we turn it off below.
     //
     inner_type -> SetACC_FINAL();
-
-    //
-    // Note that if the anonymous type we are constructing was encountered while
-    // we were processing an explicit constructor invocation, we assume we are
-    // in a static region. This allows the anonymous type to be constructed without
-    // requiring a this$0 parameter as the "this" pointer argument that would
-    // be passed such a this$0 parameter does not yet exist at that point. Furthermore,
-    // making the anonymous type static also prevents it from accessing any surrounding
-    // instance variable that would require the this$0 pointer.
-    //
     if (StaticRegion() || (ExplicitConstructorInvocation() && inner_type -> ContainingType() == ThisType()))
          inner_type -> SetACC_STATIC();
     else inner_type -> InsertThis(0);
@@ -4168,9 +4154,9 @@ TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class
     }
 
     //
-    // TODO: See comment above regarding the setting of this flag.
+    // See above - anonymous classes are never static.
     //
-    inner_type -> ResetACC_FINAL();
+    inner_type -> ResetACC_STATIC();
 
     return inner_type;
 }
@@ -6895,6 +6881,7 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
                            conditional_expression -> true_expression -> Type() -> ContainingPackage() -> PackageName(),
                            conditional_expression -> true_expression -> Type() -> ExternalName());
             conditional_expression -> symbol = control.no_type;
+            return;
         }
         else if (true_type == control.null_type)
             conditional_expression -> symbol = false_type;
@@ -7084,7 +7071,7 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
         return;
     }
 
-    switch(assignment_expression -> assignment_tag)
+    switch (assignment_expression -> assignment_tag)
     {
         case AstAssignmentExpression::PLUS_EQUAL:
         case AstAssignmentExpression::STAR_EQUAL:
@@ -7103,14 +7090,12 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
                     // hand side is constant 0 then issue an error message.
                     //
                     if (control.IsIntegral(left_type) &&
-#ifdef HAVE_DYNAMIC_CAST
-                        (right_type == control.int_type && dynamic_cast<IntLiteralValue *> (right_expression -> value) -> value == 0) ||
-                        (right_type == control.long_type && dynamic_cast<LongLiteralValue *> (right_expression -> value) -> value == 0)
-#else // ! HAVE_DYNAMIC_CAST
-                        (right_type == control.int_type && ((IntLiteralValue *) right_expression -> value) -> value == 0) ||
-                        (right_type == control.long_type && ((LongLiteralValue *) right_expression -> value) -> value == 0)
-#endif // ! HAVE_DYNAMIC_CAST
-                        )
+                        (right_expression -> Type() == control.int_type &&
+                         DYNAMIC_CAST<IntLiteralValue *, LiteralValue *>
+                         (right_expression -> value) -> value == 0) ||
+                        (right_expression -> Type() == control.long_type &&
+                         DYNAMIC_CAST<LongLiteralValue *, LiteralValue *>
+                         (right_expression -> value) -> value == 0))
                     {
                         ReportSemError(SemanticError::ZERO_DIVIDE_CAUTION,
                                        assignment_expression -> LeftToken(),
@@ -7146,8 +7131,28 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
         case AstAssignmentExpression::AND_EQUAL:
         case AstAssignmentExpression::XOR_EQUAL:
         case AstAssignmentExpression::IOR_EQUAL:
-             if (left_type != control.boolean_type || right_type != control.boolean_type) // if anyont of the exprs is not boolean
+             if (left_type == control.boolean_type)
+             {
+                 if (right_type != control.boolean_type)
+                     ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
+                                    assignment_expression -> expression -> LeftToken(),
+                                    assignment_expression -> expression -> RightToken(),
+                                    right_type -> Name());
+             }
+             else
+             {
+                 if (! control.IsIntegral(left_type))
+                     ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
+                                    left_hand_side -> LeftToken(),
+                                    left_hand_side -> RightToken(),
+                                    left_type -> Name());
+                 if (! control.IsIntegral(right_type))
+                     ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
+                                    assignment_expression -> expression -> LeftToken(),
+                                    assignment_expression -> expression -> RightToken(),
+                                    right_type -> Name());
                  BinaryNumericPromotion(assignment_expression);
+             }
              break;
         default:
             assert(false);
@@ -7157,7 +7162,7 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
     return;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

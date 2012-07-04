@@ -1,17 +1,17 @@
-// $Id: definite.cpp,v 1.21 2001/05/08 15:08:36 cabbey Exp $
+// $Id: definite.cpp,v 1.24 2001/09/14 05:31:33 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 #include "platform.h"
 #include "semantic.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 DefiniteAssignmentSet *Semantic::DefiniteExpression(AstExpression *expr, BitSet &set)
@@ -792,7 +792,7 @@ DefiniteAssignmentSet *Semantic::DefiniteAssignmentExpression(AstExpression *exp
 #ifdef DUMP
 Coutput << "(1) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
         << "\" is defined at line " << lex_stream -> Line(assignment_expression -> LeftToken())
-        << "\n";
+        << endl;
 #endif
             }
 
@@ -1016,7 +1016,7 @@ inline void Semantic::DefiniteBlockStatements(AstBlock *block_body)
 #ifdef DUMP
 Coutput << "(2) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
         << "\" is defined at line " << lex_stream -> Line(statement -> LeftToken())
-        << "\n";
+        << endl;
 #endif
                             statement -> AddDefinedVariable(variable);
                             locally_defined_variables.AddElement(k);
@@ -1060,9 +1060,10 @@ void Semantic::DefiniteBlock(Ast *stmt)
 if (control.option.g && block_body -> NumLocallyDefinedVariables() > 0)
 {
 Coutput << "(3) At Line " << lex_stream -> Line(block_body -> RightToken())
-        << " the range for the following variables end:\n\n";
+        << " the range for the following variables end:" << endl << endl;
 for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
-Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\n";
+Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name()
+        << "\"" << endl;
 }
 #endif
     //
@@ -1108,7 +1109,7 @@ void Semantic::DefiniteLocalVariableDeclarationStatement(Ast *stmt)
 #ifdef DUMP
 Coutput << "(3.5) Local Variable \"" << variable_symbol -> Name() << " #" << variable_symbol -> LocalVariableIndex()
         << "\" is declared at line " << lex_stream -> Line(variable_declarator -> LeftToken())
-        << "\n";
+        << endl;
 #endif
                 definite_block_stack -> TopLocalVariables()[variable_symbol -> LocalVariableIndex()] = variable_symbol;
             }
@@ -1128,7 +1129,7 @@ Coutput << "(3.5) Local Variable \"" << variable_symbol -> Name() << " #" << var
 #ifdef DUMP
 Coutput << "(4) Variable \"" << variable_symbol -> Name() << " #" << variable_symbol -> LocalVariableIndex()
         << "\" is defined at line " << lex_stream -> Line(variable_declarator -> LeftToken())
-        << "\n";
+        << endl;
 #endif
                 }
             }
@@ -1355,7 +1356,7 @@ void Semantic::DefiniteForStatement(Ast *stmt)
 #ifdef DUMP
 Coutput << "(5) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
         << "\" is defined at line " << lex_stream -> Line(statement -> LeftToken())
-        << "\n";
+        << endl;
 #endif
                         statement -> AddDefinedVariable(variable);
                         locally_defined_variables.AddElement(k);
@@ -1530,7 +1531,7 @@ void Semantic::DefiniteSwitchStatement(Ast *stmt)
 #ifdef DUMP
 Coutput << "Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
         << "\" is defined at line " << lex_stream -> Line(statement -> LeftToken())
-        << "\n";
+        << endl;
 #endif
                                 statement -> AddDefinedVariable(variable);
                                 locally_defined_variables.AddElement(k);
@@ -1548,9 +1549,10 @@ Coutput << "Variable \"" << variable -> Name() << " #" << variable -> LocalVaria
 if (control.option.g && block_body -> NumLocallyDefinedVariables() > 0)
 {
 Coutput << "(5.5) At Line " << lex_stream -> Line(statement -> RightToken())
-        << " the range for the following variables end:\n\n";
+        << " the range for the following variables end:" << endl << endl;
 for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
-Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\n";
+Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name()
+        << "\"" << endl;
 }
 #endif
             //
@@ -1853,9 +1855,10 @@ void Semantic::DefiniteTryStatement(Ast *stmt)
 if (control.option.g && try_block_body -> NumLocallyDefinedVariables() > 0)
 {
 Coutput << "(6) At Line " << lex_stream -> Line(try_block_body -> RightToken())
-        << " the range for the following variables end:\n\n";
+        << " the range for the following variables end:" << endl << endl;
 for (int k = 0; k < try_block_body -> NumLocallyDefinedVariables(); k++)
-Coutput << "    \"" << try_block_body -> LocallyDefinedVariable(k) -> Name() << "\"\n";
+Coutput << "    \"" << try_block_body -> LocallyDefinedVariable(k) -> Name()
+        << "\"" << endl;
 }
 #endif
     BitSet &exit_set = definite_block_stack -> TopFinalExitSet(*possibly_assigned_finals),
@@ -1921,7 +1924,7 @@ Coutput << "    \"" << try_block_body -> LocallyDefinedVariable(k) -> Name() << 
 #ifdef DUMP
 Coutput << "(7) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
         << "\" is defined at line " << lex_stream -> Line(clause -> formal_parameter -> LeftToken())
-        << "\n";
+        << endl;
 #endif
         }
         *possibly_assigned_finals = before_catch_finals;
@@ -1934,9 +1937,10 @@ Coutput << "(7) Variable \"" << variable -> Name() << " #" << variable -> LocalV
 if (control.option.g && clause_block_body -> NumLocallyDefinedVariables() > 0)
 {
 Coutput << "(8) At Line " << lex_stream -> Line(clause_block_body -> RightToken())
-        << " the range for the following variables end:\n\n";
+        << " the range for the following variables end:" << endl << endl;
 for (int l = 0; l < clause_block_body -> NumLocallyDefinedVariables(); l++)
-Coutput << "    \"" << clause_block_body -> LocallyDefinedVariable(l) -> Name() << "\"\n";
+Coutput << "    \"" << clause_block_body -> LocallyDefinedVariable(l) -> Name()
+        << "\"" << endl;
 }
 #endif
         //
@@ -2015,7 +2019,7 @@ void Semantic::DefiniteMethodBody(AstMethodDeclaration *method_declaration, Tupl
 if (control.option.g)
 Coutput << "(9) Processing method \"" << method_declaration -> method_symbol -> Name()
         << "\" in " << ThisType() -> ContainingPackage() -> PackageName() << "/"
-        << ThisType() -> ExternalName() << "\n";
+        << ThisType() -> ExternalName() << endl;
 #endif
         AstConstructorBlock *constructor_block = method_declaration -> method_body -> ConstructorBlockCast();
         AstBlock *block_body = (constructor_block ? constructor_block -> block : (AstBlock *) method_declaration -> method_body);
@@ -2052,7 +2056,7 @@ Coutput << "(9) Processing method \"" << method_declaration -> method_symbol -> 
 #ifdef DUMP
 Coutput << "(10) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
         << "\" is defined at line " << lex_stream -> Line(formal_declarator -> LeftToken())
-        << "\n";
+        << endl;
 #endif
             }
 
@@ -2073,9 +2077,10 @@ Coutput << "(10) Variable \"" << variable -> Name() << " #" << variable -> Local
 if (control.option.g && block_body -> NumLocallyDefinedVariables() > 0)
 {
 Coutput << "(11) At Line " << lex_stream -> Line(block_body -> RightToken())
-        << " the range for the following variables end:\n\n";
+        << " the range for the following variables end:" << endl << endl;
 for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
-Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\n";
+Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name()
+        << "\"" << endl;
 }
 #endif
         definite_block_stack -> Pop();
@@ -2099,7 +2104,7 @@ void Semantic::DefiniteConstructorBody(AstConstructorDeclaration *constructor_de
 if (control.option.g)
 Coutput << "(12) Processing constructor \"" << constructor_declaration -> constructor_symbol -> Name()
         << "\" in " << ThisType() -> ContainingPackage() -> PackageName() << "/"
-        << ThisType() -> ExternalName() << "\n";
+        << ThisType() -> ExternalName() << endl;
 #endif
     AstConstructorBlock *constructor_block = constructor_declaration -> constructor_body;
     AstBlock *block_body = constructor_block -> block;
@@ -2167,7 +2172,7 @@ Coutput << "(12) Processing constructor \"" << constructor_declaration -> constr
 #ifdef DUMP
 Coutput << "(13) Variable \"" << variable -> Name() << " #" << variable -> LocalVariableIndex()
         << "\" is defined at line " << lex_stream -> Line(formal_declarator -> LeftToken())
-        << "\n";
+        << endl;
 #endif
         }
 
@@ -2188,9 +2193,10 @@ Coutput << "(13) Variable \"" << variable -> Name() << " #" << variable -> Local
 if (control.option.g && block_body -> NumLocallyDefinedVariables() > 0)
 {
 Coutput << "(14) At Line " << lex_stream -> Line(block_body -> RightToken())
-        << " the range for the following variables end:\n\n";
+        << " the range for the following variables end:" << endl << endl;
 for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
-Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\n";
+Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name()
+        << "\"" << endl;
 }
 #endif
     //
@@ -2224,7 +2230,7 @@ void Semantic::DefiniteBlockInitializer(AstBlock *block_body, int stack_size, Tu
 if (control.option.g)
 Coutput << "(15) Processing Initializer block "
         << " in " << ThisType() -> ContainingPackage() -> PackageName() << "/"
-        << ThisType() -> ExternalName() << "\n";
+        << ThisType() -> ExternalName() << endl;
 #endif
     universe = new BitSet(block_body -> block_symbol -> max_variable_index + finals.Length(), BitSet::UNIVERSE);
     definite_block_stack = new DefiniteBlockStack(control, stack_size + 1, universe -> Size()); // +1 for absent method block
@@ -2276,9 +2282,10 @@ Coutput << "(15) Processing Initializer block "
 if (control.option.g && block_body -> NumLocallyDefinedVariables() > 0)
 {
 Coutput << "(16) At Line " << lex_stream -> Line(block_body -> RightToken())
-        << " the range for the following variables end:\n\n";
+        << " the range for the following variables end:" << endl << endl;
 for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
-Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\n";
+Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name()
+        << "\"" << endl;
 }
 #endif
     //
@@ -2367,7 +2374,7 @@ void Semantic::DefiniteVariableInitializer(AstVariableDeclarator *variable_decla
     return;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

@@ -1,12 +1,13 @@
-// $Id: incrmnt.cpp,v 1.23 2001/01/10 16:49:45 mdejong Exp $
+// $Id: incrmnt.cpp,v 1.26 2001/09/14 05:31:33 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #include "platform.h"
 #include "control.h"
 #include "scanner.h"
@@ -15,8 +16,8 @@
 #include "case.h"
 #include "set.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 void Control::RemoveTrashedTypes(SymbolSet &type_trash_set)
@@ -369,13 +370,10 @@ bool Control::IncrementalRecompilation()
         candidates = recompilation_file_set;
     else
     {
-	// FIXME: This actually uses cerr for output, can't pass cout as argument because
-	// of the wacky #define of cout in platform.h.
-	Ostream out;
-	// FIXME: Why does this not work?
-	//out << endl;
-	out << "\nIncremental: Enter to continue or q + Enter to quit: ";
-	out.flush();
+        Ostream out;
+        out.StandardOutput();
+        out << endl << "Incremental: Enter to continue or q + Enter to quit: "
+            << flush;
 
         char ch;
         // See if the user types Q or presses enter/escape or sends an EOF
@@ -418,7 +416,7 @@ bool Control::IncrementalRecompilation()
     return true;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

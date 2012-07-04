@@ -1,12 +1,13 @@
-// $Id: lookup.h,v 1.25 2001/05/04 23:03:58 cabbey Exp $
+// $Id: lookup.h,v 1.27 2001/09/14 05:31:33 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+
 #ifndef lookup_INCLUDED
 #define lookup_INCLUDED
 
@@ -15,16 +16,8 @@
 #include "long.h"
 #include "double.h"
 
-#ifdef HAVE_TIME_H
-#include <time.h>
-#endif
-
-#ifdef HAVE_WCHAR_H
-# include <wchar.h>
-#endif
-
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 class Control;
@@ -830,8 +823,8 @@ private:
     void Rehash();
 };
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif
+#endif // lookup_INCLUDED

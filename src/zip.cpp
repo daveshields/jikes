@@ -1,10 +1,10 @@
-// $Id: zip.cpp,v 1.14 2001/04/28 19:34:37 cabbey Exp $
+// $Id: zip.cpp,v 1.17 2001/09/14 05:31:34 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -12,8 +12,8 @@
 #include "control.h"
 #include "symbol.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 //************************************************************************************************
@@ -47,7 +47,7 @@ namespace Jikes {	// Open namespace Jikes block
              getc(zipfile);
     }
 
-#elif defined(WIN32_FILE_SYSTEM)
+#elif defined(WIN32_FILE_SYSTEM) // ! UNIX_FILE_SYSTEM
 
     int (*ZipFile::uncompress_file[10]) (char *, char *, long) =
     {
@@ -72,7 +72,7 @@ namespace Jikes {	// Open namespace Jikes block
     {
         file_buffer += length;
     }
-#endif
+#endif // WIN32_FILE_SYSTEM
 
 
 inline u2 ZipFile::GetU2()
@@ -329,7 +329,7 @@ Zip::Zip(Control &control_, char *zipfile_name) : control(control_),
         {
             zipbuffer = new char[22];
             buffer_ptr = zipbuffer;
-            fread(buffer_ptr, sizeof(char), 22, zipfile);
+            SystemFread(buffer_ptr, sizeof(char), 22, zipfile);
 
             magic = GetU4();
         }
@@ -402,7 +402,7 @@ void Zip::ReadDirectory()
         delete [] zipbuffer;
         zipbuffer = new char[central_directory_size + 22];
         buffer_ptr = zipbuffer;
-        fread(buffer_ptr, sizeof(char), central_directory_size + 22, zipfile);
+        SystemFread(buffer_ptr, sizeof(char), central_directory_size + 22, zipfile);
 #elif defined(WIN32_FILE_SYSTEM)
         buffer_ptr -= (central_directory_size + 16);
 #endif
@@ -413,7 +413,7 @@ void Zip::ReadDirectory()
     return;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

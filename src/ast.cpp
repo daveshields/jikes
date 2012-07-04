@@ -1,17 +1,17 @@
-// $Id: ast.cpp,v 1.27 2001/01/10 16:49:43 mdejong Exp $
+// $Id: ast.cpp,v 1.31 2001/09/14 05:31:32 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
 #include "ast.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 #ifdef JIKES_DEBUG
@@ -138,13 +138,13 @@ void AstSwitchStatement::SortCases()
     lostack[top] = 0;
     histack[top] = map.Length() - 1;
 
-    while(top >= 0)
+    while (top >= 0)
     {
         lower = lostack[top];
         upper = histack[top];
         top--;
 
-        while(upper > lower)
+        while (upper > lower)
         {
             //
             // The array is most-likely almost sorted. Therefore,
@@ -1007,7 +1007,8 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     void Ast::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (Ast):  "
-                << "Node number " << (int) kind << " does not contain a print routine\n";
+                << "Node number " << (int) kind
+                << " does not contain a print routine" << endl;
     }
 
     void AstBlock::Print(LexStream& lex_stream)
@@ -1031,22 +1032,22 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
             for (int j = 0; j < this -> NumStatements(); j++)
             {
                 if (j % 10 == 0)
-                    Coutput << "\n        ";
+                    Coutput << endl << "        ";
                 Coutput << " #" << this -> Statement(j) -> id;
             }
-            Coutput << "    }\n";
+            Coutput << "    }" << endl;
             for (int k = 0; k < this -> NumStatements(); k++)
                 this -> Statement(k) -> Print(lex_stream);
         }
         else
-	     Coutput <<"\n";
+            Coutput << endl;
     }
 
     void AstPrimitiveType::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (PrimitiveType):  "
                 << lex_stream.NameString(primitive_kind_token)
-                << "\n";
+                << endl;
     }
 
     void AstArrayType::Print(LexStream& lex_stream)
@@ -1055,7 +1056,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << "#" << type -> id;
         for (int i = 0; i < this -> NumBrackets(); i++)
              Coutput << " []";
-        Coutput << "\n";
+        Coutput << endl;
         type -> Print(lex_stream);
     }
 
@@ -1063,14 +1064,14 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     {
         Coutput << "#" << this -> id << " (SimpleName):  "
                 << lex_stream.NameString(identifier_token)
-                << "\n";
+                << endl;
     }
 
     void AstPackageDeclaration::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (PackageDeclaration):  "
                 << lex_stream.NameString(package_token)
-                << " #" << name -> id << "\n";
+                << " #" << name -> id << endl;
         name -> Print(lex_stream);
     }
 
@@ -1080,15 +1081,15 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << lex_stream.NameString(import_token)
                 << " #" << name -> id << (star_token_opt ? "." : "")
                 << (star_token_opt ? lex_stream.NameString(star_token_opt) : L"")
-                << "\n";
+                << endl;
         name -> Print(lex_stream);
     }
 
     void AstCompilationUnit::Print(LexStream& lex_stream)
     {
-        Coutput << "\nAST structure for "
+        Coutput << endl << "AST structure for "
                 << lex_stream.FileName()
-                << ":\n\n"
+                << ":" << endl << endl
                 << "#" << this -> id << " (CompilationUnit):  "
                 << "#" << (package_declaration_opt ? package_declaration_opt -> id : 0)
                 << " (";
@@ -1097,7 +1098,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << " ) (";
         for (int k = 0; k < this -> NumTypeDeclarations(); k++)
             Coutput << " #" << this -> TypeDeclaration(k) -> id;
-        Coutput << ")\n";
+        Coutput << ")" << endl;
 
         if (package_declaration_opt)
             package_declaration_opt -> Print(lex_stream);
@@ -1111,27 +1112,27 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     {
         Coutput << "#" << this -> id << " (Modifier):  "
                 << lex_stream.NameString(modifier_kind_token)
-                << "\n";
+                << endl;
     }
 
     void AstEmptyDeclaration::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (EmptyDeclaration):  "
                 << lex_stream.NameString(semicolon_token)
-                << "\n";
+                << endl;
     }
 
     void AstClassBody::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (ClassBody):  "
-                << "\n    {";
+                << endl << "    {";
         for (int i = 0; i < this -> NumClassBodyDeclarations(); i++)
         {
             if (i % 10 == 0)
-                 Coutput << "\n       ";
+                Coutput << endl << "       ";
             Coutput << " #" << this -> ClassBodyDeclaration(i) -> id;
         }
-        Coutput << "\n    }\n";
+        Coutput << endl << "    }" << endl;
 
         for (int k = 0; k < this -> NumClassBodyDeclarations(); k++)
             this -> ClassBodyDeclaration(k) -> Print(lex_stream);
@@ -1152,7 +1153,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << "(";
         for (int j = 0; j < NumInterfaces(); j++)
             Coutput << " #" << this -> Interface(j) -> id;
-        Coutput << ") #" << class_body -> id << "\n";
+        Coutput << ") #" << class_body -> id << endl;
 
         if (super_opt)
             super_opt -> Print(lex_stream);
@@ -1164,14 +1165,14 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     void AstArrayInitializer::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (ArrayInitializer):  "
-                << "\n    {";
+                << endl << "    {";
         for (int i = 0; i < NumVariableInitializers(); i++)
         {
             if (i % 10 == 0)
-                 Coutput << "\n       ";
+                Coutput << endl << "       ";
             Coutput << " #" << this -> VariableInitializer(i) -> id;
         }
-        Coutput << "\n    }\n";
+        Coutput << endl << "    }" << endl;
 
         for (int k = 0; k < NumVariableInitializers(); k++)
             this -> VariableInitializer(k) -> Print(lex_stream);
@@ -1179,7 +1180,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
 
     void AstBrackets::Print(LexStream& lex_stream)
     {
-        Coutput << "#" << this -> id << " (Brackets):  []" << "\n";
+        Coutput << "#" << this -> id << " (Brackets):  []" << endl;
     }
 
     void AstVariableDeclaratorId::Print(LexStream& lex_stream)
@@ -1188,13 +1189,13 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << lex_stream.NameString(identifier_token);
         for (int i = 0; i < NumBrackets(); i++)
              Coutput << " []";
-        Coutput << "\n";
+        Coutput << endl;
     }
 
     void AstVariableDeclarator::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (VariableDeclarator):  " << "#" << variable_declarator_name -> id << " #" <<
-                   (variable_initializer_opt ? variable_initializer_opt -> id : 0) << "\n";
+                   (variable_initializer_opt ? variable_initializer_opt -> id : 0) << endl;
         variable_declarator_name -> Print(lex_stream);
         if (variable_initializer_opt)
             variable_initializer_opt -> Print(lex_stream);
@@ -1213,7 +1214,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << "(";
         for (int j = 0; j < this -> NumVariableDeclarators(); j++)
             Coutput << " #" << this -> VariableDeclarator(j) -> id;
-        Coutput << ") \n";
+        Coutput << ")" << endl;
 
         type -> Print(lex_stream);
         for (int k = 0; k < this -> NumVariableDeclarators(); k++)
@@ -1229,7 +1230,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                     << " ";
         }
         Coutput << "#" << type -> id
-                << " #" << formal_declarator -> id << "\n";
+                << " #" << formal_declarator -> id << endl;
         type -> Print(lex_stream);
         formal_declarator -> Print(lex_stream);
     }
@@ -1244,7 +1245,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << " )";
         for (int i = 0; i < NumBrackets(); i++)
              Coutput << " []";
-        Coutput <<  "\n";
+        Coutput <<  endl;
 
         for (int j = 0; j < this -> NumFormalParameters(); j++)
             this -> FormalParameter(j) -> Print(lex_stream);
@@ -1263,7 +1264,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << " throws: (";
         for (int j = 0; j < this -> NumThrows(); j++)
             Coutput << " #" << this -> Throw(j) -> id;
-        Coutput << ") #" << method_body -> id << "\n";
+        Coutput << ") #" << method_body -> id << endl;
 
         type -> Print(lex_stream);
         method_declarator -> Print(lex_stream);
@@ -1276,26 +1277,18 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     {
         Coutput << "#" << this -> id << " (StaticInitializer):  "
                 << lex_stream.NameString(static_token)
-                << " #" << block -> id << "\n";
+                << " #" << block -> id << endl;
         block -> Print(lex_stream);
     }
 
     void AstThisCall::Print(LexStream& lex_stream)
     {
-        Coutput << "#" << this -> id << " (ThisCall):  ";
-        if (base_opt)
-        {
-            Coutput << "#" << base_opt -> id
-                    << lex_stream.NameString(dot_token_opt);
-        }
-        Coutput << lex_stream.NameString(this_token)
+        Coutput << "#" << this -> id << " (ThisCall):  "
+                << lex_stream.NameString(this_token)
                 << " (";
         for (int i = 0; i < this -> NumArguments(); i++)
             Coutput << " #" << this -> Argument(i) -> id;
-        Coutput << " ) \n";
-
-        if (base_opt)
-            base_opt -> Print(lex_stream);
+        Coutput << " )" << endl;
 
         for (int j = 0; j < NumArguments(); j++)
             this -> Argument(j) -> Print(lex_stream);
@@ -1313,7 +1306,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << " (";
         for (int i = 0; i < this -> NumArguments(); i++)
             Coutput << " #" << this -> Argument(i) -> id;
-        Coutput << " ) \n";
+        Coutput << " )" << endl;
 
         if (base_opt)
             base_opt -> Print(lex_stream);
@@ -1329,7 +1322,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
              Coutput << " #" << explicit_constructor_invocation_opt -> id;
         else Coutput << " #0";
         Coutput << " #" << block -> id
-                << "\n";
+                << endl;
 
         if (explicit_constructor_invocation_opt)
             explicit_constructor_invocation_opt -> Print(lex_stream);
@@ -1349,7 +1342,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         for (int j = 0; j < this -> NumThrows(); j++)
             Coutput << " #" << this -> Throw(j) -> id;
         Coutput << ") #" << constructor_body -> id
-                << "\n";
+                << endl;
 
         constructor_declarator -> Print(lex_stream);
         for (int k = 0; k < this -> NumThrows(); k++)
@@ -1374,7 +1367,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << ") {";
         for (int m = 0; m < NumInterfaceMemberDeclarations(); m++)
             Coutput << " #" << this -> InterfaceMemberDeclaration(m) -> id;
-        Coutput << "}\n";
+        Coutput << "}" << endl;
 
         for (int k = 0; k < NumExtendsInterfaces(); k++)
             this -> ExtendsInterface(k) -> Print(lex_stream);
@@ -1394,7 +1387,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << "(";
         for (int j = 0; j < this -> NumVariableDeclarators(); j++)
             Coutput << " #" << this -> VariableDeclarator(j) -> id;
-        Coutput << ") \n";
+        Coutput << ")" << endl;
 
         type -> Print(lex_stream);
         for (int k = 0; k < this -> NumVariableDeclarators(); k++)
@@ -1409,7 +1402,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         if (false_statement_opt)
              Coutput << " else #" << false_statement_opt -> id;
         else Coutput << " #0";
-        Coutput << "\n";
+        Coutput << endl;
 
         expression -> Print(lex_stream);
         true_statement -> Print(lex_stream);
@@ -1421,12 +1414,12 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     {
         Coutput << "#" << this -> id << " (EmptyStatement):  "
                 << lex_stream.NameString(semicolon_token)
-                << "\n";
+                << endl;
     }
 
     void AstExpressionStatement::Print(LexStream& lex_stream)
     {
-        Coutput << "#" << this -> id << " (ExpressionStatement):  " << "#" << expression -> id << "\n";
+        Coutput << "#" << this -> id << " (ExpressionStatement):  " << "#" << expression -> id << endl;
         expression -> Print(lex_stream);
     }
 
@@ -1434,16 +1427,16 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     {
         Coutput << "#" << this -> id << " (CaseLabel):  "
                 << lex_stream.NameString(case_token)
-                << " #" << expression -> id << ":\n";
+                << " #" << expression -> id << ":" << endl;
         expression -> Print(lex_stream);
-        Coutput << "    map_index: " << map_index << "\n";
+        Coutput << "    map_index: " << map_index << endl;
     }
 
     void AstDefaultLabel::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (DefaultLabel):  "
                 << lex_stream.NameString(default_token)
-                << ":\n";
+                << ":" << endl;
     }
 
     void AstSwitchBlockStatement::Print(LexStream& lex_stream)
@@ -1452,17 +1445,17 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         for (int i = 0; i < NumSwitchLabels(); i++)
         {
             if (i % 10 == 0)
-                 Coutput << "\n        ";
+                Coutput << "        " << endl;
             Coutput << " #" << this -> SwitchLabel(i) -> id << ':';
         }
-        Coutput << "\n";
+        Coutput << endl;
         for (int k = 0; k < NumStatements(); k++)
         {
             if (k % 10 == 0)
-                 Coutput << "\n            ";
+                Coutput << "            " << endl;
             Coutput << " #" << this -> Statement(k) -> id;
         }
-        Coutput << "\n";
+        Coutput << endl;
 
         for (int j = 0; j < NumSwitchLabels(); j++)
             this -> SwitchLabel(j) -> Print(lex_stream);
@@ -1474,12 +1467,12 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     {
         Coutput << "#" << this -> id << " (SwitchStatement):  "
                 << lex_stream.NameString(switch_token)
-                << " ( #" << expression -> id << " ) #" << switch_block -> id << "\n";
+                << " ( #" << expression -> id << " ) #" << switch_block -> id << endl;
 
-        Coutput << "default case: index " << default_case.index << "\n";
+        Coutput << "default case: index " << default_case.index << endl;
         for (int i = 0; i < cases -> Length(); i++)
         {
-            Coutput << "case: " << i << "  index: " << (*cases)[i] -> index << "  value: " << (*cases)[i] -> Value() << "\n";
+            Coutput << "case: " << i << "  index: " << (*cases)[i] -> index << "  value: " << (*cases)[i] -> Value() << endl;
         }
 
         expression -> Print(lex_stream);
@@ -1490,7 +1483,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     {
         Coutput << "#" << this -> id << " (WhileStatement):  "
                 << lex_stream.NameString(while_token)
-                << " ( #" << expression -> id << " ) #" << statement -> id << "\n";
+                << " ( #" << expression -> id << " ) #" << statement -> id << endl;
         expression -> Print(lex_stream);
         statement -> Print(lex_stream);
     }
@@ -1501,7 +1494,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << lex_stream.NameString(do_token)
                 << " { #" << statement -> id << " } "
                 << lex_stream.NameString(while_token)
-                << " ( #" << expression -> id << " ) #\n";
+                << " ( #" << expression -> id << " ) #" << endl;
 
         statement -> Print(lex_stream);
         expression -> Print(lex_stream);
@@ -1516,7 +1509,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << "; #" << (end_expression_opt ? end_expression_opt -> id : 0) << ";";
         for (int k = 0; k < this -> NumForUpdateStatements(); k++)
             Coutput << " #" << this -> ForUpdateStatement(k) -> id;
-        Coutput << ") #" << statement -> id << "\n";
+        Coutput << ") #" << statement -> id << endl;
 
         for (int m = 0; m < this -> NumForInitStatements(); m++)
             this -> ForInitStatement(m) -> Print(lex_stream);
@@ -1533,7 +1526,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << lex_stream.NameString(break_token)
                 << " "
                 << (identifier_token_opt ? lex_stream.NameString(identifier_token_opt) : L"")
-                << " at nesting_level " << nesting_level << "\n";
+                << " at nesting_level " << nesting_level << endl;
     }
 
     void AstContinueStatement::Print(LexStream& lex_stream)
@@ -1542,7 +1535,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << lex_stream.NameString(continue_token)
                 << " "
                 << (identifier_token_opt ? lex_stream.NameString(identifier_token_opt) : L"")
-                << " at nesting_level " << nesting_level << "\n";
+                << " at nesting_level " << nesting_level << endl;
     }
 
     void AstReturnStatement::Print(LexStream& lex_stream)
@@ -1550,7 +1543,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << "#" << this -> id << " (ReturnStatement):  "
                 << lex_stream.NameString(return_token)
                 << " "
-                << " #" << (expression_opt ? expression_opt -> id : 0) << "\n";
+                << " #" << (expression_opt ? expression_opt -> id : 0) << endl;
         if (expression_opt)
             expression_opt -> Print(lex_stream);
     }
@@ -1560,7 +1553,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << "#" << this -> id << " (ThrowStatement):  "
                 << lex_stream.NameString(throw_token)
                 << " "
-                << " #" << expression -> id << "\n";
+                << " #" << expression -> id << endl;
         expression -> Print(lex_stream);
     }
 
@@ -1569,7 +1562,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << "#" << this -> id << " (SynchronizedStatement):  "
                 << lex_stream.NameString(synchronized_token)
                 << " ( #" << expression -> id
-                << " ) #" << block -> id << "\n";
+                << " ) #" << block -> id << endl;
         expression -> Print(lex_stream);
         block -> Print(lex_stream);
     }
@@ -1579,7 +1572,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << "#" << this -> id << " (CatchClause):  "
                 << lex_stream.NameString(catch_token)
                 << " #" << formal_parameter -> id
-                << " #" << block -> id << "\n";
+                << " #" << block -> id << endl;
         formal_parameter -> Print(lex_stream);
         block -> Print(lex_stream);
     }
@@ -1588,7 +1581,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     {
         Coutput << "#" << this -> id << " (FinallyClause):  "
                 << lex_stream.NameString(finally_token)
-                << " #" << block -> id << "\n";
+                << " #" << block -> id << endl;
         block -> Print(lex_stream);
     }
 
@@ -1600,7 +1593,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << " catch (";
         for (int i = 0; i < this -> NumCatchClauses(); i++)
             Coutput << " #" << this -> CatchClause(i) -> id;
-        Coutput << ") finally " << "#" << (finally_clause_opt ? finally_clause_opt -> id : 0) << "\n";
+        Coutput << ") finally " << "#" << (finally_clause_opt ? finally_clause_opt -> id : 0) << endl;
 
         block -> Print(lex_stream);
         for (int k = 0; k < this -> NumCatchClauses(); k++)
@@ -1613,77 +1606,77 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     {
         Coutput << "#" << this -> id << " (IntegerLiteral):  "
                 << lex_stream.NameString(integer_literal_token)
-                << "\n";
+                << endl;
     }
 
     void AstLongLiteral::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (LongLiteral):  "
                 << lex_stream.NameString(long_literal_token)
-                << "\n";
+                << endl;
     }
 
     void AstFloatingPointLiteral::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (FloatingPointLiteral):  "
                 << lex_stream.NameString(floating_point_literal_token)
-                << "\n";
+                << endl;
     }
 
     void AstDoubleLiteral::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (DoubleLiteral):  "
                 << lex_stream.NameString(double_literal_token)
-                << "\n";
+                << endl;
     }
 
     void AstTrueLiteral::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (TrueLiteral):  "
                 << lex_stream.NameString(true_literal_token)
-                << "\n";
+                << endl;
     }
 
     void AstFalseLiteral::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (FalseLiteral):  "
                 << lex_stream.NameString(false_literal_token)
-                << "\n";
+                << endl;
     }
 
     void AstStringLiteral::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (StringLiteral):  "
                 << lex_stream.NameString(string_literal_token)
-                << "\n";
+                << endl;
     }
 
     void AstCharacterLiteral::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (CharacterLiteral):  "
                 << lex_stream.NameString(character_literal_token)
-                << "\n";
+                << endl;
     }
 
     void AstNullLiteral::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (NullLiteral):  "
                 << lex_stream.NameString(null_token)
-                << "\n";
+                << endl;
     }
 
     void AstThisExpression::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (ThisExpression):  "
                 << lex_stream.NameString(this_token)
-                << "\n";
+                << endl;
     }
 
     void AstSuperExpression::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (SuperExpression):  "
                 << lex_stream.NameString(super_token)
-                << "\n";
+                << endl;
     }
 
     void AstParenthesizedExpression::Print(LexStream& lex_stream)
@@ -1692,14 +1685,14 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << lex_stream.NameString(left_parenthesis_token)
                 << "#" << expression -> id
                 << lex_stream.NameString(right_parenthesis_token)
-                << "\n";
+                << endl;
         expression -> Print(lex_stream);
     }
 
     void AstTypeExpression::Print(LexStream& lex_stream)
     {
         Coutput << "#" << this -> id << " (TypeExpression):  "
-                << " #" << type -> id << "\n";
+                << " #" << type -> id << endl;
         type -> Print(lex_stream);
     }
 
@@ -1718,7 +1711,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         for (int i = 0; i < this -> NumArguments(); i++)
             Coutput << " #" << this -> Argument(i) -> id;
         Coutput << " ) "
-                << "#" << (class_body_opt ? class_body_opt -> id : 0) << "\n";
+                << "#" << (class_body_opt ? class_body_opt -> id : 0) << endl;
 
         if (base_opt)
             base_opt -> Print(lex_stream);
@@ -1733,7 +1726,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
 
     void AstDimExpr::Print(LexStream& lex_stream)
     {
-        Coutput << "#" << this -> id << " (DimExpr):  [ #" << expression -> id << " ]\n";
+        Coutput << "#" << this -> id << " (DimExpr):  [ #" << expression -> id << " ]" << endl;
         expression -> Print(lex_stream);
     }
 
@@ -1747,7 +1740,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         for (int k = 0; k < NumBrackets(); k++)
              Coutput << " []";
         Coutput << " "
-                << "#" << (array_initializer_opt ? array_initializer_opt -> id : 0) << "\n";
+                << "#" << (array_initializer_opt ? array_initializer_opt -> id : 0) << endl;
 
         array_type -> Print(lex_stream);
         for (int j = 0; j < this -> NumDimExprs(); j++)
@@ -1759,7 +1752,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << "#" << this -> id << " (FieldAccess):  "
                 << " #" << base -> id << " "
                 << lex_stream.NameString(identifier_token)
-                << "\n";
+                << endl;
 
         base -> Print(lex_stream);
     }
@@ -1771,7 +1764,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                 << " (";
         for (int i = 0; i < this -> NumArguments(); i++)
             Coutput << " #" << this -> Argument(i) -> id;
-        Coutput << " ) \n";
+        Coutput << " )" << endl;
 
         method -> Print(lex_stream);
         for (int j = 0; j < NumArguments(); j++)
@@ -1782,7 +1775,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     {
         Coutput << "#" << this -> id << " (ArrayAccess):  "
                 << "#" << base -> id
-                << " [ #" << expression -> id << " ]\n";
+                << " [ #" << expression -> id << " ]" << endl;
 
         base -> Print(lex_stream);
         expression -> Print(lex_stream);
@@ -1793,7 +1786,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << "#" << this -> id << " (PostUnaryExpression):  "
                 << "#" << expression -> id
                 << lex_stream.NameString(post_operator_token)
-                << "\n";
+                << endl;
 
         expression -> Print(lex_stream);
     }
@@ -1802,7 +1795,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
     {
         Coutput << "#" << this -> id << " (PreUnaryExpression):  "
                 << lex_stream.NameString(pre_operator_token)
-                << " #" << expression -> id << "\n";
+                << " #" << expression -> id << endl;
 
         expression -> Print(lex_stream);
     }
@@ -1815,14 +1808,14 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
                   << "( #" << (type_opt ? type_opt -> id : 0);
             for (int i = 0; i < NumBrackets(); i++)
                  Coutput << " []";
-            Coutput << " ) #" << expression -> id << "\n";
+            Coutput << " ) #" << expression -> id << endl;
             if (type_opt)
                 type_opt -> Print(lex_stream);
         }
         else
         {
             Coutput << "#" << this -> id << " (Java Semantic Cast to " << Type() -> Name()
-                    << "):  #" << expression -> id << "\n";
+                    << "):  #" << expression -> id << endl;
         }
 
         expression -> Print(lex_stream);
@@ -1833,7 +1826,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << "#" << this -> id << " (BinaryExpression):  "
                 << "#" << left_expression -> id << " "
                 << lex_stream.NameString(binary_operator_token)
-                << " #" << right_expression -> id << "\n";
+                << " #" << right_expression -> id << endl;
 
         left_expression -> Print(lex_stream);
         right_expression -> Print(lex_stream);
@@ -1844,7 +1837,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << "#" << this -> id << " (ConditionalExpression):  "
                 << "#" << test_expression -> id
                 << " ? #" << true_expression -> id
-                << " : #" << false_expression -> id << "\n";
+                << " : #" << false_expression -> id << endl;
 
         test_expression -> Print(lex_stream);
         true_expression -> Print(lex_stream);
@@ -1856,7 +1849,7 @@ Ast *AstAssignmentExpression::Clone(StoragePool *ast_pool)
         Coutput << "#" << this -> id << " (AssignmentExpression):  "
                 << "#" << left_hand_side -> id << " "
                 << lex_stream.NameString(assignment_operator_token)
-                << " #" << expression -> id << "\n";
+                << " #" << expression -> id << endl;
 
         left_hand_side -> Print(lex_stream);
         expression -> Print(lex_stream);
@@ -2348,7 +2341,7 @@ AstAssignmentExpression::~AstAssignmentExpression()
     //    delete expression;
 }
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 

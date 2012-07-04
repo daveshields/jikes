@@ -1,7 +1,17 @@
 /* src/config.h.in.  Generated automatically from configure.in by autoheader.  */
 
+/* This software is subject to the terms of the IBM Jikes
+Compiler License Agreement available at the following URL:
+http://ibm.com/developerworks/opensource/jikes.
+Copyright (C) 2000, 2001 International Business Machines Corporation
+and others.  All Rights Reserved.
+You must accept the terms of that agreement to use this software. */
+
 /* Defined when bit sizes are int = 32, short = 16, char = 8 */
 #undef HAVE_32BIT_TYPES
+
+/* Defined when the compiler supports 64 bit integer math */
+#undef HAVE_64BIT_TYPES
 
 /* Define if you have the <assert.h> header file. */
 #undef HAVE_ASSERT_H
@@ -31,7 +41,8 @@
 #undef HAVE_DYNAMIC_CAST
 
 /* Defined when the compiler would generate an error on a call to iconv with a
-   non const 2nd argument. This is a known problem on IRIX systems. */
+   non const 2nd argument. This is a known problem on IRIX systems, as well as
+   newer GNU LIBCs. */
 #undef HAVE_ERROR_CALL_ICONV_CONST
 
 /* Defined when the compiler would generate an error on a call to wcslen with
@@ -56,15 +67,6 @@
 /* Define if you have the <iconv.h> header file. */
 #undef HAVE_ICONV_H
 
-/* Define this to the name of the unicode encoding that is the same
-   size as your wchar_t. See also the following entry for byte swapping.
-   This define needs to include wrappering double quotes. */
-#undef JIKES_ICONV_ENCODING
-
-/* Define this if the encoding specified above does not match your
-   platform's native endianness. */
-#undef JIKES_ICONV_NEEDS_BYTE_SWAP
-
 /* Defined when Jikes is built with native floating support */
 #undef HAVE_IEEE754
 
@@ -73,6 +75,9 @@
 
 /* Define Jikes functions in a namespace */
 #undef HAVE_JIKES_NAMESPACE
+
+/* Define if you have the <langinfo.h> header file. */
+#undef HAVE_LANGINFO_H
 
 /* use unix style mkdir(str, S_IRWXU) */
 #undef HAVE_LIBC5_MKDIR
@@ -88,6 +93,9 @@
 
 /* Define if you have the <limits.h> header file. */
 #undef HAVE_LIMITS_H
+
+/* Define if you have the <locale.h> header file. */
+#undef HAVE_LOCALE_H
 
 /* use mac style mkdir(str,0) from <stat.mac.h> */
 #undef HAVE_MAC_MKDIR
@@ -125,6 +133,9 @@
 /* define if the compiler supports ISO C++ standard library */
 #undef HAVE_STD
 
+/* Define if you have the <stdint.h> header file. */
+#undef HAVE_STDINT_H
+
 /* Define if you have the <stdio.h> header file. */
 #undef HAVE_STDIO_H
 
@@ -140,11 +151,20 @@
 /* Define if you have the <sys/cygwin.h> header file. */
 #undef HAVE_SYS_CYGWIN_H
 
+/* Define if you have the <sys/stat.h> header file. */
+#undef HAVE_SYS_STAT_H
+
+/* Define if you have the <sys/types.h> header file. */
+#undef HAVE_SYS_TYPES_H
+
 /* Define if you have the <time.h> header file. */
 #undef HAVE_TIME_H
 
 /* Define if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
+
+/* Defined when the compiler supports the unsigned __int64 type */
+#undef HAVE_UNSIGNED_INT64
 
 /* Defined when the compiler supports the unsigned long long type */
 #undef HAVE_UNSIGNED_LONG_LONG
@@ -182,10 +202,21 @@
 /* Defined when the wint_t type is supported */
 #undef HAVE_WINT_T
 
+/* Enable internal compiler debugging */
+#undef JIKES_DEBUG
+
+/* Define this to the name of the unicode encoding that is the same size as
+   your wchar_t. See also the following entry for byte swapping. */
+#undef JIKES_ICONV_ENCODING
+
+/* Define this if the encoding specified above does not match your platform's
+   native endianness. */
+#undef JIKES_ICONV_NEEDS_BYTE_SWAP
+
 /* Used to test results of stat call to see if it is a directory */
 #undef JIKES_STAT_S_IFDIR
 
-/* A string to indicate the release of jikes: Version 1.11 1/10/2000 */
+/* A string to indicate the release of jikes: Version 1.14 - 13 May 2001 */
 #undef JIKES_VERSION_STRING
 
 /* Name of package */

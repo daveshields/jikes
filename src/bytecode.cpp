@@ -1,10 +1,10 @@
-// $Id: bytecode.cpp,v 1.62 2001/05/07 06:33:59 cabbey Exp $
+// $Id: bytecode.cpp,v 1.75 2001/09/21 02:43:14 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1996, 1998, International Business Machines Corporation
-// and others.  All Rights Reserved.
+// http://ibm.com/developerworks/opensource/jikes.
+// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -17,23 +17,8 @@
 #include "symbol.h"
 #include "table.h"
 
-/*
-//FIXME: need to readdress this include stuff
-#ifdef HAVE_IOSTREAM_H
-#include <iostream.h>
-#endif
-
-#ifdef HAVE_WCHAR_H
-# include <wchar.h>
-#endif
-
-#ifdef WIN32_FILE_SYSTEM
-#include <windows.h>
-#endif
-*/
-
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 void ByteCode::CompileClass()
@@ -710,6 +695,17 @@ void ByteCode::GenerateAccessMethod(MethodSymbol *method_symbol)
 {
     assert(method_symbol -> ACC_STATIC());
 
+    // Here, we add a line-number attribute entry for this method.
+    // Even though this is a generated method, JPDA debuggers will
+    // still fail setting breakpoints if methods don't have line numbers.
+    // Sun's javac compiler generates a single line number entry
+    // with start_pc set to zero and line number set to the first line of
+    // code in the source.  
+    // In testing, it appears that setting the start_pc and line_number
+    // to zero as we do here, also works.  
+    line_number_table_attribute -> AddLineNumber(0, 0);
+
+
     int stack_words = 0,
         argument_offset = 0; // offset to start of argument
 
@@ -776,7 +772,7 @@ if (this_control.option.g)
 {
 Coutput << "(51) Generating code for method \"" << msym -> Name()
         << "\" in " << unit_type -> ContainingPackage() -> PackageName() << "/"
-        << unit_type -> ExternalName() << "\n";
+        << unit_type -> ExternalName() << endl;
 Coutput.flush();
 }
 #endif
@@ -943,8 +939,8 @@ void ByteCode::EndMethod(int method_index, MethodSymbol *msym)
             if (local_variable_table_attribute -> LocalVariableTableLength() > 0)
                  code_attribute -> AddAttribute(local_variable_table_attribute);
             else delete local_variable_table_attribute; // local_variable_table_attribute not needed, so delete it now
-        } else if (local_variable_table_attribute)// delete if we're dealing w/
-	  delete local_variable_table_attribute;  // a generated access method.
+        } else if (local_variable_table_attribute) // delete when dealing with
+            delete local_variable_table_attribute;  // a generated access method.
 
         methods[method_index].AddAttribute(code_attribute);
 
@@ -1097,7 +1093,7 @@ void ByteCode::DeclareLocalVariable(AstVariableDeclarator *declarator)
 #ifdef DUMP
 Coutput << "(53) Variable \"" << declarator -> symbol -> Name()
         << "\" numbered " << declarator -> symbol -> LocalVariableIndex()
-        << " was processed\n";
+        << " was processed" << endl;
 Coutput.flush();
 #endif
         method_stack -> StartPc(declarator -> symbol) = code_attribute -> CodeLength();
@@ -1140,7 +1136,7 @@ void ByteCode::EmitStatement(AstStatement *statement)
 #ifdef DUMP
 Coutput << "(55) Variable \"" << variable -> Name()
         << "\" numbered " << variable -> LocalVariableIndex()
-        << " was processed\n";
+        << " was processed" << endl;
 Coutput.flush();
 #endif
             method_stack -> StartPc(variable) = code_attribute -> CodeLength();
@@ -1182,13 +1178,13 @@ Coutput.flush();
                  {
                      Label label1,
                            label2;
-                     EmitBranchIfExpression(if_statement -> expression, false, label1);
+                     AstStatement *true_statement = if_statement -> true_statement;
+                     EmitBranchIfExpression(if_statement -> expression, false, label1, true_statement);
                      stack_depth = 0;
 
-                     AstStatement *true_statement = if_statement -> true_statement;
                      EmitStatement(true_statement);
                      if (true_statement -> can_complete_normally)
-                         EmitBranch(OP_GOTO, label2);
+                         EmitBranch(OP_GOTO, label2, if_statement -> false_statement_opt);
 
                      DefineLabel(label1);
                      EmitStatement(if_statement -> false_statement_opt);
@@ -1202,7 +1198,7 @@ Coutput.flush();
                  else // if no false part
                  {
                      Label label1;
-                     EmitBranchIfExpression(if_statement -> expression, false, label1);
+                     EmitBranchIfExpression(if_statement -> expression, false, label1, if_statement -> true_statement);
                      stack_depth = 0;
                      EmitStatement(if_statement -> true_statement);
                      DefineLabel(label1);
@@ -1229,7 +1225,8 @@ Coutput.flush();
                  // body of the loop we can fall through into it after each
                  // loop iteration without the need for an additional branch.
                  //
-                 EmitBranch(OP_GOTO, method_stack -> TopContinueLabel());
+                 EmitBranch(OP_GOTO, method_stack -> TopContinueLabel(),
+                            wp -> statement);
                  Label begin_label;
                  DefineLabel(begin_label);
                  EmitStatement(wp -> statement);
@@ -1242,7 +1239,8 @@ Coutput.flush();
                  line_number_table_attribute -> AddLineNumber(code_attribute -> CodeLength(),
                                                               this_semantic.lex_stream -> Line(wp -> expression -> LeftToken()));
 
-                 EmitBranchIfExpression(wp -> expression, true, begin_label);
+                 EmitBranchIfExpression(wp -> expression, true, begin_label,
+                                        wp -> statement);
                  CompleteLabel(begin_label);
                  CompleteLabel(method_stack -> TopContinueLabel());
              }
@@ -1262,7 +1260,8 @@ Coutput.flush();
                  line_number_table_attribute -> AddLineNumber(code_attribute -> CodeLength(),
                                                               this_semantic.lex_stream -> Line(sp -> expression -> LeftToken()));
 
-                 EmitBranchIfExpression(sp -> expression, true, begin_label);
+                 EmitBranchIfExpression(sp -> expression, true, begin_label,
+                                        sp -> statement);
                  CompleteLabel(begin_label);
                  CompleteLabel(method_stack -> TopContinueLabel());
              }
@@ -1274,7 +1273,7 @@ Coutput.flush();
                      EmitStatement(for_statement -> ForInitStatement(i));
                  Label begin_label,
                        test_label;
-                 EmitBranch(OP_GOTO, test_label);
+                 EmitBranch(OP_GOTO, test_label, for_statement -> statement);
                  DefineLabel(begin_label);
                  EmitStatement(for_statement -> statement);
                  DefineLabel(method_stack -> TopContinueLabel());
@@ -1293,9 +1292,10 @@ Coutput.flush();
                      line_number_table_attribute -> AddLineNumber(code_attribute -> CodeLength(),
                                                                   this_semantic.lex_stream -> Line(end_expr -> LeftToken()));
 
-                     EmitBranchIfExpression(end_expr, true, begin_label);
+                     EmitBranchIfExpression(end_expr, true, begin_label,
+                                            for_statement -> statement);
                  }
-                 else EmitBranch(OP_GOTO, begin_label);
+                 else EmitBranch(OP_GOTO, begin_label, for_statement -> statement);
 
                  CompleteLabel(begin_label);
                  CompleteLabel(test_label);
@@ -1400,7 +1400,7 @@ void ByteCode::EmitBlockStatement(AstBlock *block)
 #ifdef DUMP
 Coutput << "(56) The symbol \"" << variable -> Name()
         << "\" numbered " << variable -> LocalVariableIndex()
-        << " was released\n";
+        << " was released" << endl;
 Coutput.flush();
 #endif
             local_variable_table_attribute -> AddLocalVariable(method_stack -> StartPc(variable),
@@ -1421,9 +1421,6 @@ void ByteCode::EmitStatementExpression(AstExpression *expression)
 {
     switch (expression -> kind)
     {
-        case Ast::PARENTHESIZED_EXPRESSION:
-             (void) EmitStatementExpression(expression -> ParenthesizedExpressionCast() -> expression);
-             break;
         case Ast::CALL:
              {
                  AstMethodInvocation *method_call = (AstMethodInvocation *) expression;
@@ -1523,6 +1520,12 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *switch_statement)
     }
 
     //
+    // Set up the environment for the switch block.  This must be done before
+    // emitting the expression, in case the expression is an assignment.
+    //
+    method_stack -> Push(switch_block);
+
+    //
     // Reset the line number before evaluating the expression
     //
     line_number_table_attribute -> AddLineNumber(code_attribute -> CodeLength(),
@@ -1536,13 +1539,8 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *switch_statement)
     //
     // supply any needed padding
     //
-    while(code_attribute -> CodeLength() % 4 != 0)
+    while (code_attribute -> CodeLength() % 4 != 0)
         PutNop(0);
-
-    //
-    // Set up the environment for the switch block.
-    //
-    method_stack -> Push(switch_block);
 
     //
     // Note that if no default clause in switch statement, must allocate
@@ -1678,24 +1676,27 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *switch_statement)
             for (int i = 0; i < switch_block_statement -> NumLocallyDefinedVariables(); i++)
             {
                 VariableSymbol *variable = switch_block_statement -> LocallyDefinedVariable(i);
+                if (method_stack -> StartPc(variable) > op_start)
+                {
 
 #ifdef JIKES_DEBUG
-                assert(method_stack -> StartPc(variable) != 0xFFFF);
+                    assert(method_stack -> StartPc(variable) != 0xFFFF);
 #endif
 #ifdef DUMP
 Coutput << "(57) The symbol \"" << variable -> Name()
         << "\" numbered " << variable -> LocalVariableIndex()
-        << " was released\n";
+        << " was released" << endl;
 Coutput.flush();
 #endif
-                local_variable_table_attribute -> AddLocalVariable(method_stack -> StartPc(variable),
-                                                                   code_attribute -> CodeLength(),
-                                                                   RegisterUtf8(variable -> ExternalIdentity() -> Utf8_literal),
-                                                                   RegisterUtf8(variable -> Type() -> signature),
-                                                                   variable -> LocalVariableIndex());
+                    local_variable_table_attribute -> AddLocalVariable(method_stack -> StartPc(variable),
+                                                                       code_attribute -> CodeLength(),
+                                                                       RegisterUtf8(variable -> ExternalIdentity() -> Utf8_literal),
+                                                                       RegisterUtf8(variable -> Type() -> signature),
+                                                                       variable -> LocalVariableIndex());
 #ifdef JIKES_DEBUG
-                method_stack -> StartPc(variable) = 0xFFFF;
+                    method_stack -> StartPc(variable) = 0xFFFF;
 #endif
+                }
             }
         }
     }
@@ -1710,21 +1711,24 @@ Coutput.flush();
         for (int i = 0; i < switch_block -> NumLocallyDefinedVariables(); i++)
         {
             VariableSymbol *variable = switch_block -> LocallyDefinedVariable(i);
+            if (method_stack -> StartPc(variable) > op_start)
+            {
 
 #ifdef JIKES_DEBUG
-            assert(method_stack -> StartPc(variable) != 0xFFFF);
+                assert(method_stack -> StartPc(variable) != 0xFFFF);
 #endif
 #ifdef DUMP
 Coutput << "(58) The symbol \"" << variable -> Name()
         << "\" numbered " << variable -> LocalVariableIndex()
-        << " was released\n";
+        << " was released" << endl;
 Coutput.flush();
 #endif
-            local_variable_table_attribute -> AddLocalVariable(method_stack -> StartPc(variable),
-                                                               code_attribute -> CodeLength(),
-                                                               RegisterUtf8(variable -> ExternalIdentity() -> Utf8_literal),
-                                                               RegisterUtf8(variable -> Type() -> signature),
-                                                               variable -> LocalVariableIndex());
+                local_variable_table_attribute -> AddLocalVariable(method_stack -> StartPc(variable),
+                                                                   code_attribute -> CodeLength(),
+                                                                   RegisterUtf8(variable -> ExternalIdentity() -> Utf8_literal),
+                                                                   RegisterUtf8(variable -> Type() -> signature),
+                                                                   variable -> LocalVariableIndex());
+            }
         }
     }
 
@@ -1808,8 +1812,7 @@ void ByteCode::EmitTryStatement(AstTryStatement *statement)
             //
             // Call finally block if have finally handler.
             //
-            PutOp(OP_JSR);
-            UseLabel(finally_label, 2, 1);
+            EmitBranch(OP_JSR, finally_label, statement);
         }
 
         EmitBranch(OP_GOTO, end_label);
@@ -1854,8 +1857,7 @@ void ByteCode::EmitTryStatement(AstTryStatement *statement)
                     //
                     // Call finally block if have finally handler.
                     //
-                    PutOp(OP_JSR);
-                    UseLabel(finally_label, 2, 1);
+                    EmitBranch(OP_JSR, finally_label, statement);
                 }
 
                 //
@@ -1888,8 +1890,7 @@ void ByteCode::EmitTryStatement(AstTryStatement *statement)
                                            code_attribute -> CodeLength(),
                                            0);
             StoreLocal(variable_index, this_control.Object()); // Save exception
-            PutOp(OP_JSR); // Jump to finally block.
-            UseLabel(finally_label, 2, 1);
+            EmitBranch(OP_JSR, finally_label, statement);
             LoadLocal(variable_index, this_control.Object()); // Reload exception,
             PutOp(OP_ATHROW); // and rethrow it.
         }
@@ -1945,42 +1946,66 @@ void ByteCode::ProcessAbruptExit(int to_lev, TypeSymbol *return_type)
 
                 StoreLocal(variable_index, return_type);
 
-                PutOp(OP_JSR);
-                UseLabel(finally_label, 2, 1);
+                EmitBranch(OP_JSR, finally_label, 
+                           method_stack -> Block(enclosing_level));
 
                 LoadLocal(variable_index, return_type);
             }
             else
             {
-                PutOp(OP_JSR);
-                UseLabel(method_stack -> FinallyLabel(enclosing_level), 2, 1);
+                EmitBranch(OP_JSR, 
+                           method_stack -> FinallyLabel(enclosing_level),
+                           method_stack -> Block(enclosing_level));
             }
         }
         else if (block -> block_tag == AstBlock::SYNCHRONIZED)
         {
-            if (return_type)
-            {
-                Label &monitor_label = method_stack -> MonitorLabel(enclosing_level);
-                int variable_index = method_stack -> Block(enclosing_level) -> block_symbol -> try_or_synchronized_variable_index + 2;
-
-                StoreLocal(variable_index, return_type);
-
-                PutOp(OP_JSR);
-                UseLabel(monitor_label, 2, 1);
-
-                LoadLocal(variable_index, return_type);
-            }
-            else
-            {
-                PutOp(OP_JSR);
-                UseLabel(method_stack -> MonitorLabel(enclosing_level), 2, 1);
-            }
+            int variable_index = method_stack -> Block(enclosing_level) ->
+                block_symbol -> try_or_synchronized_variable_index;
+            
+            LoadLocal(variable_index, this_control.Object());
+            PutOp(OP_MONITOREXIT);
         }
     }
 
     return;
 }
 
+void ByteCode::EmitBranch(unsigned int opc, Label& lab, AstStatement *over)
+{
+    // Use the number of tokens as a heuristic for the size of the statement
+    // we're jumping over. If the statement is large enough, either change
+    // to the 4-byte branch opcode or write out a branch around a goto_w for
+    // branch opcodes that don't have a long form.
+    int sizeHeuristic = !over ? 0
+                              : over -> RightToken() - over -> LeftToken();
+    if (sizeHeuristic < TOKEN_WIDTH_REQUIRING_GOTOW) {
+        EmitBranch(opc, lab);
+        return;
+    }
+    if (opc == OP_GOTO) {
+        PutOp(OP_GOTO_W);
+        UseLabel(lab, 4, 1);
+        return;
+    }
+    if (opc == OP_JSR) {
+        PutOp(OP_JSR_W);
+        UseLabel(lab, 4, 1);
+        return;
+    }
+    // if op lab
+    //  =>
+    // if !op label2
+    // goto_w lab
+    // label2:
+    PutOp(InvertIfOpCode(opc));
+    Label label2;
+    UseLabel(label2, 2, 1);
+    PutOp(OP_GOTO_W);
+    UseLabel(lab, 4, 1);
+    DefineLabel(label2);
+    CompleteLabel(label2);
+}
 
 //
 // java provides a variety of conditional branch instructions, so
@@ -1993,7 +2018,8 @@ void ByteCode::ProcessAbruptExit(int to_lev, TypeSymbol *return_type)
 // Other expressions are just evaluated and the appropriate
 // branch emitted.
 //
-void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
+void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab,
+                                      AstStatement *over)
 {
     if (p -> ParenthesizedExpressionCast())
         p = UnParenthesize(p);
@@ -2014,7 +2040,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
         // effect of negation
         assert(pre -> pre_unary_tag == AstPreUnaryExpression::NOT);
 
-        EmitBranchIfExpression(pre -> expression, (! cond), lab);
+        EmitBranchIfExpression(pre -> expression, (! cond), lab, over);
         return;
     }
 
@@ -2026,7 +2052,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
     if (! bp)
     {
         EmitExpression(p);
-        EmitBranch((cond ? OP_IFNE : OP_IFEQ), lab);
+        EmitBranch((cond ? OP_IFNE : OP_IFEQ), lab, over);
         return;
     }
 
@@ -2053,7 +2079,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
                  PutU2(instanceof_type -> num_dimensions > 0 ? RegisterClass(instanceof_type -> signature)
                                                              : RegisterClass(instanceof_type -> fully_qualified_name));
 
-                 EmitBranch((cond ? OP_IFNE : OP_IFEQ), lab);
+                 EmitBranch((cond ? OP_IFNE : OP_IFEQ), lab, over);
              }
              return;
         case AstBinaryExpression::AND_AND:
@@ -2069,15 +2095,15 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
              if (cond)
              {
                  Label skip;
-                 EmitBranchIfExpression(left, false, skip);
-                 EmitBranchIfExpression(right, true, lab);
+                 EmitBranchIfExpression(left, false, skip, over);
+                 EmitBranchIfExpression(right, true, lab, over);
                  DefineLabel(skip);
                  CompleteLabel(skip);
              }
              else
              {
-                 EmitBranchIfExpression(left, false, lab);
-                 EmitBranchIfExpression(right, false, lab);
+                 EmitBranchIfExpression(left, false, lab, over);
+                 EmitBranchIfExpression(right, false, lab, over);
              }
              return;
         case AstBinaryExpression::OR_OR:
@@ -2093,14 +2119,14 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
              //
              if (cond)
              {
-                 EmitBranchIfExpression(left, true, lab);
-                 EmitBranchIfExpression(right, true, lab);
+                 EmitBranchIfExpression(left, true, lab, over);
+                 EmitBranchIfExpression(right, true, lab, over);
              }
              else
              {
                  Label skip;
-                 EmitBranchIfExpression(left, true, skip);
-                 EmitBranchIfExpression(right, false, lab);
+                 EmitBranchIfExpression(left, true, skip, over);
+                 EmitBranchIfExpression(right, false, lab, over);
                  DefineLabel(skip);
                  CompleteLabel(skip);
              }
@@ -2125,8 +2151,8 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
                  EmitExpression(left);
 
                  if (bp -> binary_tag == AstBinaryExpression::EQUAL_EQUAL)
-                      EmitBranch(cond ? OP_IFNULL : OP_IFNONNULL, lab);
-                 else EmitBranch(cond ? OP_IFNONNULL : OP_IFNULL, lab);
+                      EmitBranch(cond ? OP_IFNULL : OP_IFNONNULL, lab, over);
+                 else EmitBranch(cond ? OP_IFNONNULL : OP_IFNULL, lab, over);
 
                  return;
              }
@@ -2149,8 +2175,8 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
                  EmitExpression(left);
 
                  if (bp -> binary_tag == AstBinaryExpression::EQUAL_EQUAL)
-                      EmitBranch((cond ? OP_IFEQ : OP_IFNE), lab);
-                 else EmitBranch((cond ? OP_IFNE : OP_IFEQ), lab);
+                      EmitBranch((cond ? OP_IFEQ : OP_IFNE), lab, over);
+                 else EmitBranch((cond ? OP_IFNE : OP_IFEQ), lab, over);
 
                  return;
              }
@@ -2165,8 +2191,8 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
                  EmitExpression(right);
 
                  if (bp -> binary_tag == AstBinaryExpression::EQUAL_EQUAL)
-                      EmitBranch((cond ? OP_IF_ICMPEQ : OP_IF_ICMPNE), lab);
-                 else EmitBranch((cond ? OP_IF_ICMPNE : OP_IF_ICMPEQ), lab);
+                      EmitBranch((cond ? OP_IF_ICMPEQ : OP_IF_ICMPNE), lab, over);
+                 else EmitBranch((cond ? OP_IF_ICMPNE : OP_IF_ICMPEQ), lab, over);
 
                  return;
              }
@@ -2180,8 +2206,8 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
                  EmitExpression(right);
 
                  if (bp -> binary_tag == AstBinaryExpression::EQUAL_EQUAL)
-                      EmitBranch((cond ? OP_IF_ACMPEQ : OP_IF_ACMPNE), lab);
-                 else EmitBranch((cond ? OP_IF_ACMPNE : OP_IF_ACMPEQ), lab);
+                      EmitBranch((cond ? OP_IF_ACMPEQ : OP_IF_ACMPNE), lab, over);
+                 else EmitBranch((cond ? OP_IF_ACMPNE : OP_IF_ACMPEQ), lab, over);
 
                  return;
              }
@@ -2197,7 +2223,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
     // integral comparison for which no special casing needed.
     // Begin by dealing with non-comparisons
     //
-    switch(bp -> binary_tag)
+    switch (bp -> binary_tag)
     {
         case AstBinaryExpression::LESS:
         case AstBinaryExpression::LESS_EQUAL:
@@ -2212,7 +2238,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
              // of the expression and branch on the result
              //
              EmitExpression(p);
-             EmitBranch(cond ? OP_IFNE : OP_IFEQ, lab);
+             EmitBranch(cond ? OP_IFNE : OP_IFEQ, lab, over);
              return;
     }
 
@@ -2232,7 +2258,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
         if (IsZero(left))
         {
             EmitExpression(right);
-            switch(bp -> binary_tag)
+            switch (bp -> binary_tag)
             {
                 case AstBinaryExpression::LESS: // if (0 < x) same as  if (x > 0)
                      op_true = OP_IFGT;
@@ -2259,7 +2285,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
         {
             EmitExpression(left);
 
-            switch(bp -> binary_tag)
+            switch (bp -> binary_tag)
             {
                 case AstBinaryExpression::LESS:
                      op_true = OP_IFLT;
@@ -2287,7 +2313,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
             EmitExpression(left);
             EmitExpression(right);
 
-            switch(bp -> binary_tag)
+            switch (bp -> binary_tag)
             {
                 case AstBinaryExpression::LESS:
                      op_true = OP_IF_ICMPLT;
@@ -2440,7 +2466,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression *p, bool cond, Label &lab)
     if (opcode)
         PutOp(opcode); // if need to emit comparison before branch
 
-    EmitBranch (cond ? op_true : op_false, lab);
+    EmitBranch (cond ? op_true : op_false, lab, over);
 
     return;
 }
@@ -2452,9 +2478,8 @@ void ByteCode::EmitSynchronizedStatement(AstSynchronizedStatement *statement)
 
     int variable_index = method_stack -> TopBlock() -> block_symbol -> try_or_synchronized_variable_index;
 
+    PutOp(OP_DUP); // duplicate for saving, entering monitor
     StoreLocal(variable_index, this_control.Object()); // save address of object
-    LoadLocal(variable_index, this_control.Object()); // load address of object onto stack
-
     PutOp(OP_MONITORENTER); // enter monitor associated with object
 
     int start_synchronized_pc = code_attribute -> CodeLength(); // start pc
@@ -2463,16 +2488,21 @@ void ByteCode::EmitSynchronizedStatement(AstSynchronizedStatement *statement)
 
     int end_synchronized_pc = code_attribute -> CodeLength(); // end pc
 
-    LoadLocal(variable_index, this_control.Object()); // load address of object onto stack
-    PutOp(OP_MONITOREXIT);
+    if (statement -> block -> can_complete_normally)
+    {
+        LoadLocal(variable_index, this_control.Object()); // load address of object onto stack
+        PutOp(OP_MONITOREXIT);
+    }
 
     if (start_synchronized_pc != end_synchronized_pc) // if the synchronized block is not empty.
     {
         Label end_label;
-        EmitBranch(OP_GOTO, end_label); // branch around exception handler
+        if (statement -> block -> can_complete_normally)
+            EmitBranch(OP_GOTO, end_label); // branch around exception handler
 
         //
-        // Reach here if any increment. max_stack in case exception thrown while stack at greatest depth
+        // Reach here if any exception thrown. Increment max_stack in case
+        // exception thrown while stack at greatest depth
         //
         max_stack++;
         int handler_pc = code_attribute -> CodeLength();
@@ -2482,16 +2512,8 @@ void ByteCode::EmitSynchronizedStatement(AstSynchronizedStatement *statement)
 
         code_attribute -> AddException(start_synchronized_pc, handler_pc, handler_pc, 0);
 
-        DefineLabel(method_stack -> TopMonitorLabel());
-        CompleteLabel(method_stack -> TopMonitorLabel());
-
-        int loc_index = variable_index + 1; // local variable index to save return  address
-        StoreLocal(loc_index, this_control.Object()); // save return address
-        LoadLocal(variable_index, this_control.Object()); // load address of object onto stack
-        PutOp(OP_MONITOREXIT);
-        PutOpWide(OP_RET, loc_index);  // return using saved address
-
-        DefineLabel(end_label);
+        if (IsLabelUsed(end_label))
+            DefineLabel(end_label);
         CompleteLabel(end_label);
     }
 
@@ -2505,77 +2527,164 @@ void ByteCode::EmitSynchronizedStatement(AstSynchronizedStatement *statement)
 //
 // Expressions: Chapter 14 of JLS
 //
-int ByteCode::EmitExpression(AstExpression *expression)
+int ByteCode::EmitExpression(AstExpression *expression, bool need_value)
 {
+    //
+    // The only time when need_value should be false is for an expression
+    // qualifying a static member access.  Hence, it must be a reference,
+    // and if one is a constant, it must be a String expression.
+    //
     if (expression -> IsConstant())
     {
-        LoadLiteral(expression -> value, expression -> Type());
-        return (this_control.IsDoubleWordType(expression -> Type()) ? 2 : 1);
+        if (need_value)
+        {
+            LoadLiteral(expression -> value, expression -> Type());
+            return (this_control.IsDoubleWordType(expression -> Type()) ? 2 : 1);
+        }
+        else
+        {
+            assert(expression -> Type() == this_control.String());
+            return 0;
+        }
     }
 
     switch (expression -> kind)
     {
         case Ast::IDENTIFIER:
+             if (need_value)
              {
                  AstSimpleName *simple_name = expression -> SimpleNameCast();
                  return (simple_name -> resolution_opt ? EmitExpression(simple_name -> resolution_opt)
                                                        : LoadVariable(GetLhsKind(expression), expression));
              }
+             else
+             {
+                 return 0;
+             }
         case Ast::THIS_EXPRESSION:
         case Ast::SUPER_EXPRESSION:
-             PutOp(OP_ALOAD_0); // must be use
-             return 1;
+             if (need_value)
+             {
+                 PutOp(OP_ALOAD_0); // will be used
+                 return 1;
+             }
+             else
+             {
+                 return 0;
+             }
         case Ast::PARENTHESIZED_EXPRESSION:
-             return EmitExpression(((AstParenthesizedExpression *) expression) -> expression);
+             return EmitExpression(((AstParenthesizedExpression *) expression) -> expression, need_value);
         case Ast::CLASS_CREATION:
-             return EmitClassInstanceCreationExpression((AstClassInstanceCreationExpression *) expression, true);
+             return EmitClassInstanceCreationExpression((AstClassInstanceCreationExpression *) expression, need_value);
         case Ast::ARRAY_CREATION:
+             assert(need_value && "array can't qualify static member");
              return EmitArrayCreationExpression((AstArrayCreationExpression *) expression);
         case Ast::DIM:
+             assert(need_value && "dimension can't qualify static member");
              return EmitExpression(expression -> DimExprCast() -> expression);
         case Ast::DOT:
              {
                  AstFieldAccess *field_access = (AstFieldAccess *) expression;
                  return ((field_access -> IsClassAccess()) && (field_access -> resolution_opt))
                                                             ? (unit_type -> outermost_type -> ACC_INTERFACE()
-                                                                          ? EmitExpression(field_access -> resolution_opt)
+                                                                          ? EmitExpression(field_access -> resolution_opt, need_value)
                                                                           : GenerateClassAccess(field_access))
-                                                            : EmitFieldAccess(field_access);
+                                                            : EmitFieldAccess(field_access, need_value);
              }
         case Ast::CALL:
              {
                  AstMethodInvocation *method_call = expression -> MethodInvocationCast();
+                 // must evaluate for side effects
                  EmitMethodInvocation(method_call);
-                 return GetTypeWords(method_call -> Type());
+                 if (need_value)
+                 {
+                     return GetTypeWords(method_call -> Type());
+                 }
+                 else
+                 {
+                     assert(! method_call -> Type() -> Primitive());
+                     PutOp(OP_POP);
+                     return 0;
+                 }
              }
-        case Ast::ARRAY_ACCESS:             // if seen alone this will be as RHS
-             return EmitArrayAccessRhs((AstArrayAccess *) expression);
+        case Ast::ARRAY_ACCESS:         // if seen alone this will be as RHS
+             {
+                 // must evaluate, for potential Exception side effects
+                 int words = EmitArrayAccessRhs((AstArrayAccess *) expression);
+                 if (need_value)
+                 {
+                     return words;
+                 }
+                 else
+                 {
+                     assert(words == 1); // must be reference type
+                     PutOp(OP_POP);
+                     return 0;
+                 }
+             }
         case Ast::POST_UNARY:
+             assert(need_value && "increment can't qualify static member");
              return EmitPostUnaryExpression((AstPostUnaryExpression *) expression, true);
         case Ast::PRE_UNARY:
+             assert(need_value && "increment can't qualify static member");
              return EmitPreUnaryExpression((AstPreUnaryExpression *) expression, true);
         case Ast::CAST:
              {
                  AstCastExpression *cast_expression = (AstCastExpression *) expression;
+
+                 assert(need_value || ! cast_expression -> expression -> Type() -> Primitive());
 
                  //
                  // only primitive types require casting
                  //
                  return (cast_expression -> expression -> Type() -> Primitive()
                                           ? EmitCastExpression(cast_expression)
-                                          : EmitExpression(cast_expression -> expression));
+                                          : EmitExpression(cast_expression -> expression, need_value));
              }
         case Ast::CHECK_AND_CAST:
-             return EmitCastExpression((AstCastExpression *) expression);
+             {
+                 // must evaluate, for ClassCastException side effect
+                 int words = EmitCastExpression((AstCastExpression *) expression);
+                 if (need_value)
+                 {
+                     return words;
+                 }
+                 else
+                 {
+                     assert(words == 1); // must be reference type
+                     PutOp(OP_POP);
+                     return 0;
+                 }
+             }
         case Ast::BINARY:
-             return EmitBinaryExpression((AstBinaryExpression *) expression);
+             {
+                 // must evaluate for potential side effects
+                 int words = EmitBinaryExpression((AstBinaryExpression *) expression);
+                 if (need_value)
+                 {
+                     return words;
+                 }
+                 else
+                 {
+                     assert(((AstBinaryExpression *) expression) -> binary_tag == AstBinaryExpression::PLUS && words == 1); // must be string concat
+                     PutOp(OP_POP);
+                     return 0;
+                 }
+             }
         case Ast::CONDITIONAL:
-             return EmitConditionalExpression((AstConditionalExpression *) expression);
+             return EmitConditionalExpression((AstConditionalExpression *) expression, need_value);
         case Ast::ASSIGNMENT:
-             return EmitAssignmentExpression((AstAssignmentExpression *) expression, true);
+             return EmitAssignmentExpression((AstAssignmentExpression *) expression, need_value);
         case Ast::NULL_LITERAL:
-             PutOp(OP_ACONST_NULL);
-             return 1;
+             if (need_value)
+             {
+                 PutOp(OP_ACONST_NULL);
+                 return 1;
+             }
+             else
+             {
+                 return 0;
+             }
         default:
              assert(false && "unknown expression kind");
              break;
@@ -2695,6 +2804,16 @@ void ByteCode::EmitFieldAccessLhs(AstExpression *expression)
 //
 void ByteCode::GenerateClassAccessMethod(MethodSymbol *msym)
 {
+    // Here, we add a line-number attribute entry for this method.
+    // Even though this is a generated method, JPDA debuggers will
+    // still fail setting breakpoints if methods don't have line numbers.
+    // Sun's javac compiler generates a single line number entry
+    // with start_pc set to zero and line number set to the first line of
+    // code in the source.  
+    // In testing, it appears that setting the start_pc and line_number
+    // to zero as we do here, also works.  
+    line_number_table_attribute -> AddLineNumber(0, 0);
+
     //
     // The code takes the form:
     //
@@ -2898,7 +3017,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
 
     if (assignment_expression -> SimpleAssignment())
     {
-        switch(kind)
+        switch (kind)
         {
             case LHS_ARRAY:
                  EmitArrayAccessLhs(left_hand_side -> ArrayAccessCast()); // lhs must be array access
@@ -2908,18 +3027,11 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
                  break;
             case LHS_STATIC:
                  //
-                 // if the access is qualified by an arbitrary base
+                 // If the access is qualified by an arbitrary base
                  // expression, evaluate it for side effects.
                  //
                  if (left_hand_side -> FieldAccessCast())
-                 {
-                     AstExpression *base = left_hand_side -> FieldAccessCast() -> base;
-                     if (! base -> IsSimpleNameOrFieldAccess())
-                     {
-                         EmitExpression(base);
-                         PutOp(OP_POP);
-                     }
-                 }
+                     EmitExpression(((AstFieldAccess *) left_hand_side) -> base, false);
                  break;
             case LHS_METHOD:
                  if (! accessed_member -> ACC_STATIC()) // need to load address of object, obtained from resolution
@@ -2937,18 +3049,11 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
                      EmitExpression(field_expression -> base);
                  }
                  else if (left_hand_side -> FieldAccessCast())
-                 {
                      //
-                     // if the access is qualified by an arbitrary base
+                     // If the access is qualified by an arbitrary base
                      // expression, evaluate it for side effects.
                      //
-                     AstExpression *base = left_hand_side -> FieldAccessCast() -> base;
-                     if (! base -> IsSimpleNameOrFieldAccess())
-                     {
-                         EmitExpression(base);
-                         PutOp(OP_POP);
-                     }
-                 }
+                     EmitExpression(((AstFieldAccess *) left_hand_side) -> base, false);
                  break;
             case LHS_LOCAL:
                  break;
@@ -2964,7 +3069,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
     //
     else
     {
-        switch(kind)
+        switch (kind)
         {
             case LHS_ARRAY:
                  EmitArrayAccessLhs(left_hand_side -> ArrayAccessCast()); // lhs must be array access
@@ -3182,6 +3287,10 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
                          assert(false && "bad op_type in EmitAssignmentExpression");
                 }
             }
+            else
+            {
+                assert(false && "bad op_type in EmitAssignmentExpression");
+            }
 
             //
             // convert value to desired type if necessary
@@ -3201,7 +3310,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
     //
     // Update left operand, saving value of right operand if it is needed.
     //
-    switch(kind)
+    switch (kind)
     {
         case LHS_ARRAY:
              if (need_value)
@@ -3247,7 +3356,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
 #ifdef DUMP
 Coutput << "(59) Variable \"" << variable -> Name()
         << "\" numbered " << variable -> LocalVariableIndex()
-        << " was processed\n";
+        << " was processed" << endl;
 Coutput.flush();
 #endif
         method_stack -> StartPc(variable) = code_attribute -> CodeLength();
@@ -3275,11 +3384,11 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression *expression)
              {
                  Label lab1,
                        lab2;
-                 EmitBranchIfExpression(expression, true, lab1);
+                 EmitBranchIfExpression(expression, true, lab1, 0);
                  PutOp(OP_ICONST_0);                // push false
                  EmitBranch(OP_GOTO, lab2);
                  DefineLabel(lab1);
-                 PutOp(OP_ICONST_1);                // push false
+                 PutOp(OP_ICONST_1);                // push true 
                  DefineLabel(lab2);
                  CompleteLabel(lab1);
                  CompleteLabel(lab2);
@@ -3664,15 +3773,16 @@ int ByteCode::EmitClassInstanceCreationExpression(AstClassInstanceCreationExpres
 }
 
 
-int ByteCode::EmitConditionalExpression(AstConditionalExpression *expression)
+int ByteCode::EmitConditionalExpression(AstConditionalExpression *expression,
+                                        bool need_value)
 {
     Label lab1,
           lab2;
-    EmitBranchIfExpression(expression -> test_expression, false, lab1);
-    EmitExpression(expression -> true_expression);
+    EmitBranchIfExpression(expression -> test_expression, false, lab1, 0);
+    EmitExpression(expression -> true_expression, need_value);
     EmitBranch(OP_GOTO, lab2);
     DefineLabel(lab1);
-    EmitExpression(expression -> false_expression);
+    EmitExpression(expression -> false_expression, need_value);
     DefineLabel(lab2);
     CompleteLabel(lab1);
     CompleteLabel(lab2);
@@ -3681,18 +3791,36 @@ int ByteCode::EmitConditionalExpression(AstConditionalExpression *expression)
 }
 
 
-int ByteCode::EmitFieldAccess(AstFieldAccess *expression)
+int ByteCode::EmitFieldAccess(AstFieldAccess *expression, bool need_value)
 {
     assert(! expression -> IsConstant());
 
     AstExpression *base = expression -> base;
     VariableSymbol *sym = expression -> symbol -> VariableCast();
 
-    if (expression -> resolution_opt) // resolve reference to private field in parent
-        return EmitExpression(expression -> resolution_opt);
+    if (expression -> resolution_opt) // resolve reference to private field nested in same top-level class
+    {
+        //
+        // If the access is qualified by an arbitrary base
+        // expression, evaluate it for side effects.
+        // Normally, this will be done when evaluating the accessor method.
+        // However, if this is a static field, and need_value is false,
+        // the access will not have a side effect, so we can bypass it.
+        //
+        MethodSymbol *method = expression -> symbol -> MethodCast();
+        if (! need_value && method && ! method -> AccessesInstanceMember())
+            return EmitExpression(base, false);
+        else
+            return EmitExpression(expression -> resolution_opt, need_value);
+    }
+
+    if (! sym) // not a variable, so it must be a class or package name
+        return 0;
 
     if (base -> Type() -> IsArray() && sym -> ExternalIdentity() == this_control.length_name_symbol)
     {
+        assert(need_value && "array.length cannot qualify static member");
+
         EmitExpression(base);
         PutOp(OP_ARRAYLENGTH);
 
@@ -3703,25 +3831,36 @@ int ByteCode::EmitFieldAccess(AstFieldAccess *expression)
     if (sym -> ACC_STATIC())
     {
         //
-        // if the access is qualified by an arbitrary base
+        // If the access is qualified by an arbitrary base
         // expression, evaluate it for side effects.
         //
-        if (! base -> IsSimpleNameOrFieldAccess())
+        if (! expression -> IsClassAccess())
+            EmitExpression(base, false);
+        if (need_value)
         {
-            EmitExpression(base);
-            PutOp(OP_POP);
+            PutOp(OP_GETSTATIC);
+            ChangeStack(this_control.IsDoubleWordType(expression_type) ? 2 : 1);
         }
-        PutOp(OP_GETSTATIC);
-        ChangeStack(this_control.IsDoubleWordType(expression_type) ? 2 : 1);
+        else
+        {
+            return 0;
+        }
     }
     else
     {
         EmitExpression(base); // get base
-        PutOp(OP_GETFIELD);
+        PutOp(OP_GETFIELD); // must evaluate, in case of NullPointerException
         ChangeStack(this_control.IsDoubleWordType(expression_type) ? 1 : 0);
     }
 
     PutU2(RegisterFieldref(VariableTypeResolution(expression, sym), sym));
+
+    if (! need_value)
+    {
+        assert(! expression_type -> Primitive());
+        PutOp(OP_POP);
+        return 0;
+    }
 
     return GetTypeWords(expression_type);
 }
@@ -3743,22 +3882,16 @@ void ByteCode::EmitMethodInvocation(AstMethodInvocation *expression)
     if (msym -> ACC_STATIC())
     {
         //
-        // if the access is qualified by an arbitrary base
+        // If the access is qualified by an arbitrary base
         // expression, evaluate it for side effects.
-        // Notice that accessor methods, which are always static, already
-        // evaluate the base expression.
+        // Notice that accessor methods, which are always static, might
+        // access an instance method, in which case the base expression
+        // will already be evaluated as the first parameter.
         //
-        AstFieldAccess *field = expression -> resolution_opt ||
-            (msym -> accessed_member &&
-             msym -> accessed_member -> VariableCast() &&
-             (! msym -> accessed_member -> VariableCast() -> ACC_STATIC()))
-            ? NULL
+        AstFieldAccess *field = msym -> AccessesInstanceMember() ? NULL
             : method_call -> method -> FieldAccessCast();
-        if (field && ! field -> base -> IsSimpleNameOrFieldAccess())
-        {
-            EmitExpression(field -> base);
-            PutOp(OP_POP);
-        }        
+        if (field)
+            EmitExpression(field -> base, false);
     }
     else
     {
@@ -3878,7 +4011,7 @@ int ByteCode::EmitPostUnaryExpression(AstPostUnaryExpression *expression, bool n
 {
     int kind = GetLhsKind(expression);
 
-    switch(kind)
+    switch (kind)
     {
         case LHS_LOCAL:
         case LHS_STATIC:
@@ -4187,7 +4320,7 @@ void ByteCode::EmitPreUnaryIncrementExpression(AstPreUnaryExpression *expression
 {
     int kind = GetLhsKind(expression);
 
-    switch(kind)
+    switch (kind)
     {
         case LHS_LOCAL:
         case LHS_STATIC:
@@ -4436,8 +4569,6 @@ void ByteCode::EmitThisInvocation(AstThisCall *this_call)
     PutOp(OP_ALOAD_0); // load 'this'
 
     int stack_words = 0; // words on stack needed for arguments
-    if (this_call -> base_opt)
-        stack_words += EmitExpression(this_call -> base_opt);
 
     for (int i = 0; i < this_call -> NumLocalArguments(); i++)
         stack_words += EmitExpression((AstExpression *) this_call -> LocalArgument(i));
@@ -4720,7 +4851,7 @@ void ByteCode::CompleteLabel(Label& lab)
         assert((lab.defined) && "label used but with no definition");
 
         //
-        // patch byte code reference to label to reflect it's definition
+        // patch byte code reference to label to reflect its definition
         // as 16-bit signed offset.
         //
         for (int i = 0; i < lab.uses.Length(); i++)
@@ -4730,6 +4861,7 @@ void ByteCode::CompleteLabel(Label& lab)
                 offset = lab.definition - start;
             if (lab.uses[i].use_length == 2) // here if short offset
             {
+                assert(offset < 32768 && "needed longer branch offset");
                 code_attribute -> ResetCode(luse, (offset >> 8) & 0xFF);
                 code_attribute -> ResetCode(luse + 1, offset & 0xFF);
             }
@@ -4941,18 +5073,11 @@ int ByteCode::LoadVariable(int kind, AstExpression *expr)
                  if (sym -> ACC_STATIC())
                  {
                      //
-                     // if the access is qualified by an arbitrary base
+                     // If the access is qualified by an arbitrary base
                      // expression, evaluate it for side effects.
                      //
                      if (expr -> FieldAccessCast())
-                     {
-                         AstExpression *base = expr -> FieldAccessCast() -> base;
-                         if (! base -> IsSimpleNameOrFieldAccess())
-                         {
-                             EmitExpression(base);
-                             PutOp(OP_POP);
-                         }
-                     }
+                         EmitExpression(((AstFieldAccess *) expr) -> base, false);
 
                      PutOp(OP_GETSTATIC);
                      ChangeStack(GetTypeWords(expression_type));
@@ -5004,14 +5129,10 @@ void ByteCode::LoadReference(AstExpression *expression)
         if (sym -> ACC_STATIC())
         {
             //
-            // if the access is qualified by an arbitrary base
+            // If the access is qualified by an arbitrary base
             // expression, evaluate it for side effects.
             //
-            if (! field_access -> base -> IsSimpleNameOrFieldAccess())
-            {
-                EmitExpression(field_access -> base);
-                PutOp(OP_POP);
-            }
+            EmitExpression(field_access -> base, false);
 
             PutOp(OP_GETSTATIC);
             ChangeStack(1);
@@ -5514,7 +5635,7 @@ void ByteCode::ChangeStack(int i)
             << stack_depth
             << "  max_stack: "
             << max_stack
-            << "\n";
+            << endl;
 #endif
 
     return;
@@ -5526,11 +5647,12 @@ void ByteCode::PrintCode()
 {
     Coutput << "magic " << hex << magic << dec
             << " major_version " << (unsigned) major_version
-            << " minor_version " << (unsigned) minor_version << "\n";
+            << " minor_version " << (unsigned) minor_version << endl;
     AccessFlags::Print();
-    Coutput << "\n"
-            << " this_class " << (unsigned) this_class << "  super_class " << (unsigned) super_class <<"\n"
-            << " constant_pool: " << constant_pool.Length() << "\n";
+    Coutput << endl
+            << " this_class " << (unsigned) this_class << "  super_class "
+            << (unsigned) super_class << endl
+            << " constant_pool: " << constant_pool.Length() << endl;
 
     {
         for (int i = 1; i < constant_pool.Length(); i++)
@@ -5546,42 +5668,42 @@ void ByteCode::PrintCode()
     {
         for (int i = 0; i < interfaces.Length(); i++)
              Coutput << "  " << (int) interfaces[i];
-        Coutput <<"\n";
+        Coutput << endl;
     }
 
-    Coutput << "  fields " << fields.Length() <<": ";
+    Coutput << "  fields " << fields.Length() << ": ";
     {
         for (int i = 0; i < fields.Length(); i++)
         {
-            Coutput << "field " << i << "\n";
+            Coutput << "field " << i << endl;
             fields[i].Print(constant_pool);
         }
     }
 
-    Coutput << " methods length " << methods.Length() << "\n";
+    Coutput << " methods length " << methods.Length() << endl;
     {
         for (int i = 0; i < methods.Length(); i++)
         {
-            Coutput << "method " << i << "\n";
+            Coutput << "method " << i << endl;
             methods[i].Print(constant_pool);
         }
     }
 
-    Coutput << " attributes length " << attributes.Length() << "\n";
+    Coutput << " attributes length " << attributes.Length() << endl;
     {
         for (int i = 0; i < attributes.Length(); i++)
         {
-            Coutput << "attribute " << i << "\n";
+            Coutput << "attribute " << i << endl;
             attributes[i] -> Print(constant_pool);
         }
     }
-    Coutput << "\n";
+    Coutput << endl;
 
     return;
 }
 #endif
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
