@@ -1,4 +1,4 @@
-// $Id: semantic.h,v 1.102 2004/03/31 13:56:33 ericb Exp $ -*- c++ -*-
+// $Id: semantic.h,v 1.103 2004/08/18 08:49:15 elliott-oss Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1128,7 +1128,8 @@ private:
     void ProcessThisCall(AstThisCall*);
     void ProcessSuperCall(AstSuperCall*);
     void WarnOfAccessibleFieldWithName(SemanticError::SemanticErrorKind,
-                                       AstVariableDeclaratorId*, NameSymbol*);
+                                       AstVariableDeclaratorId*, NameSymbol*,
+                                       bool);
     void CheckThrow(AstTypeName*, Tuple<AstTypeName*>*);
     void ProcessMethodBody(AstMethodDeclaration*);
     void ProcessConstructorBody(AstConstructorDeclaration*);

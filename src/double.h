@@ -1,4 +1,4 @@
-// $Id: double.h,v 1.28 2004/02/17 10:34:42 elliott-oss Exp $ -*- c++ -*-
+// $Id: double.h,v 1.30 2004/06/02 11:26:22 elliott-oss Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -625,7 +625,7 @@ public:
     BigInt(const char*, int before, int total, u4 start, int startsize);
     // copy constructor and assignment operator
     BigInt& operator=(const BigInt&);
-    BigInt(const BigInt& op) { *this = op; }
+    BigInt(const BigInt& op) { data = NULL; *this = op; }
     // destructor
     ~BigInt() { delete data; }
 
@@ -652,15 +652,15 @@ public:
     inline void IsNegative(bool value) { neg = value; }
 
     // operators
-    BigInt& operator+(const unsigned op) const;
+    BigInt operator+(const unsigned op) const;
     inline BigInt& operator+=(const unsigned op) { return *this = *this + op; }
     inline BigInt& operator++() { return *this += 1; } // pre-increment
-    BigInt& operator-(const BigInt& op) const;
-    BigInt& operator*(const BigInt& op) const;
-    BigInt& operator*(unsigned op) const;
+    BigInt operator-(const BigInt& op) const;
+    BigInt operator*(const BigInt& op) const;
+    BigInt operator*(unsigned op) const;
     inline BigInt& operator*=(const BigInt& op) { return *this = *this * op; }
     inline BigInt& operator*=(unsigned op) { return *this = *this * op; }
-    BigInt& operator<<(unsigned op) const;
+    BigInt operator<<(unsigned op) const;
     inline BigInt& operator<<=(unsigned op) { return *this = *this << op; }
 
     // equivalent to *this = *this * m + a, with less work

@@ -1,3 +1,32 @@
+*** Jikes 1.22 was released 3 October 2004
+
+This release supports compilation using the rt.jar shipped with
+the released version of Java 5.0, but otherwise has no more
+support for new language features than 1.21 did.
+
+These specification problems are fixed:
+
+    3986  jikes compiles faulty source without error or warning
+    4042  constructor of strictfp class not strictfp
+    4046  no warning when overriding a deprecated method
+
+These crashes on valid or invalid source are fixed:
+
+    3934  Assertion failed: ! array tuple.h line 429
+    3972  "Assertion failed" on incorrect String operations
+    3974  Assertion failed: type == control.String()
+    3989  Assertion `! array' failed with String.class literal
+
+These problems with diagnostics are fixed:
+
+    3424  Confusing error message for type not found error
+    3947  static method local shouldn't shadow instance field
+
+These other problems are fixed:
+
+     495  classpath problems introduced by 1.14
+    4018  errno undefined (freebsd-4.8
+
 *** Jikes 1.21 was released 16 May 2004
 
 A regression in 1.20 that caused us to complain about supposedly

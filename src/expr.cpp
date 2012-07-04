@@ -1,4 +1,4 @@
-// $Id: expr.cpp,v 1.197 2004/04/18 06:08:45 cabbey Exp $
+// $Id: expr.cpp,v 1.198 2004/05/17 21:55:56 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -4239,6 +4239,7 @@ void Semantic::ProcessArrayCreationExpression(Ast* expr)
         }
         dim_expr -> expression = expr;
         if (expr -> IsConstant() &&
+            expr -> Type() == control.int_type &&
             (DYNAMIC_CAST<IntLiteralValue*> (expr -> value)) -> value < 0)
         {
             ReportSemError(SemanticError::NEGATIVE_ARRAY_SIZE,
@@ -5437,7 +5438,7 @@ void Semantic::ProcessLEFT_SHIFT(AstBinaryExpression* expr)
                                                            (right -> value &
                                                             LONG_SHIFT_MASK));
         }
-        else // assert(expr -> Type() == control.int_type)
+        else if (expr -> Type() == control.int_type)
         {
             IntLiteralValue* left = DYNAMIC_CAST<IntLiteralValue*>
                 (expr -> left_expression -> value);
@@ -5470,7 +5471,7 @@ void Semantic::ProcessRIGHT_SHIFT(AstBinaryExpression* expr)
                                                            (right -> value &
                                                             LONG_SHIFT_MASK));
         }
-        else // assert(expr -> Type() == control.int_type)
+        else if (expr -> Type() == control.int_type)
         {
             IntLiteralValue* left = DYNAMIC_CAST<IntLiteralValue*>
                 (expr -> left_expression -> value);
@@ -5502,7 +5503,7 @@ void Semantic::ProcessUNSIGNED_RIGHT_SHIFT(AstBinaryExpression* expr)
             expr -> value = control.long_pool.FindOrInsert((LongInt)
                 ((ULongInt) left -> value >> (right -> value & LONG_SHIFT_MASK)));
         }
-        else // assert(expr -> Type() == control.int_type)
+        else if (expr -> Type() == control.int_type)
         {
             IntLiteralValue* left = DYNAMIC_CAST<IntLiteralValue*>
                 (expr -> left_expression -> value);
@@ -5565,7 +5566,7 @@ void Semantic::ProcessLESS(AstBinaryExpression* expr)
                 control.int_pool.FindOrInsert(left -> value <
                                               right -> value ? 1 : 0);
         }
-        else // assert(left_type == control.int_type)
+        else if (left_type == control.int_type)
         {
             IntLiteralValue* left = DYNAMIC_CAST<IntLiteralValue*>
                 (expr -> left_expression -> value);
@@ -5629,7 +5630,7 @@ void Semantic::ProcessGREATER(AstBinaryExpression* expr)
                 control.int_pool.FindOrInsert(left -> value >
                                               right -> value ? 1 : 0);
         }
-        else // assert(left_type == control.int_type)
+        else if (left_type == control.int_type)
         {
             IntLiteralValue* left = DYNAMIC_CAST<IntLiteralValue*>
                 (expr -> left_expression -> value);
@@ -5693,7 +5694,7 @@ void Semantic::ProcessLESS_EQUAL(AstBinaryExpression* expr)
                 control.int_pool.FindOrInsert(left -> value <=
                                               right -> value ? 1 : 0);
         }
-        else // assert(left_type == control.int_type)
+        else if (left_type == control.int_type)
         {
             IntLiteralValue* left = DYNAMIC_CAST<IntLiteralValue*>
                 (expr -> left_expression -> value);
@@ -5757,7 +5758,7 @@ void Semantic::ProcessGREATER_EQUAL(AstBinaryExpression* expr)
                 control.int_pool.FindOrInsert(left -> value >=
                                               right -> value ? 1 : 0);
         }
-        else // assert(left_type == control.int_type)
+        else if (left_type == control.int_type)
         {
             IntLiteralValue* left = DYNAMIC_CAST<IntLiteralValue*>
                 (expr -> left_expression -> value);
@@ -5849,7 +5850,7 @@ void Semantic::ProcessAND(AstBinaryExpression* expr)
                 expr -> value = control.long_pool.FindOrInsert(left -> value &
                                                                right -> value);
             }
-            else // assert(expr_type == control.int_type)
+            else if (expr_type == control.int_type)
             {
                 IntLiteralValue* left = DYNAMIC_CAST<IntLiteralValue*>
                     (expr -> left_expression -> value);
@@ -5941,7 +5942,7 @@ void Semantic::ProcessXOR(AstBinaryExpression* expr)
                 expr -> value = control.long_pool.FindOrInsert(left -> value ^
                                                                right -> value);
             }
-            else // assert(expr_type == control.int_type)
+            else if (expr_type == control.int_type)
             {
                 IntLiteralValue* left = DYNAMIC_CAST<IntLiteralValue*>
                     (expr -> left_expression -> value);
@@ -6033,7 +6034,7 @@ void Semantic::ProcessIOR(AstBinaryExpression* expr)
                 expr -> value = control.long_pool.FindOrInsert(left -> value |
                                                                right -> value);
             }
-            else // assert(expr_type == control.int_type)
+            else if (expr_type == control.int_type)
             {
                 IntLiteralValue* left = DYNAMIC_CAST<IntLiteralValue*>
                     (expr -> left_expression -> value);

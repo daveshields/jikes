@@ -1,4 +1,4 @@
-// $Id: definite.cpp,v 1.67 2004/03/26 13:58:22 ericb Exp $
+// $Id: definite.cpp,v 1.69 2004/06/02 10:28:06 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:

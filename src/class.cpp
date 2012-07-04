@@ -1,4 +1,4 @@
-// $Id: class.cpp,v 1.15 2004/05/03 14:05:50 elliott-oss Exp $
+// $Id: class.cpp,v 1.16 2004/09/14 05:49:05 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1062,7 +1062,7 @@ Annotation::Annotation(ClassFile& buffer)
     : type_index(buffer.GetU2())
     , components(6, 16)
 {
-    if (buffer.Pool()[type_index] -> Tag() != CPInfo::CONSTANT_Class)
+    if (buffer.Pool()[type_index] -> Tag() != CPInfo::CONSTANT_Utf8)
         buffer.MarkInvalid("bad type for annotation");
     unsigned i = buffer.GetU2();
     while (i--)

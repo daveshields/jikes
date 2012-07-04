@@ -39,6 +39,9 @@ You must accept the terms of that agreement to use this software. */
 /* Defined if Jikes supports -encoding for input files. */
 #undef HAVE_ENCODING
 
+/* Define to 1 if you have the <errno.h> header file. */
+#undef HAVE_ERRNO_H
+
 /* Defined when the compiler would generate an error on a call to iconv with a
    non const 2nd argument. This is a known problem on IRIX systems, as well as
    newer GNU LIBCs. */

@@ -1,4 +1,4 @@
-// $Id: double.cpp,v 1.32 2004/02/17 12:58:44 ericb Exp $
+// $Id: double.cpp,v 1.35 2004/06/02 11:26:21 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -2739,12 +2739,16 @@ BigInt::BigInt(const char *s, int nd0, int nd, u4 start, int startsize) :
 
 BigInt &BigInt::operator =(const BigInt &b)
 {
-    k = b.k;
-    maxwds = b.maxwds;
-    neg = b.neg;
-    wds = b.wds;
-    data = new u4[maxwds];
-    memcpy(data, b.data, wds * sizeof(u4));
+    if (this != &b)
+    {
+        k = b.k;
+        maxwds = b.maxwds;
+        neg = b.neg;
+        wds = b.wds;
+        delete data;
+        data = new u4[maxwds];
+        memcpy(data, b.data, wds * sizeof(u4));
+    }
     return *this;
 }
 
@@ -2826,13 +2830,13 @@ int BigInt::lo0bits(u4 &y)
     return k;
 }
 
-BigInt &BigInt::operator +(const unsigned op) const
+BigInt BigInt::operator +(const unsigned op) const
 {
     int i = 0; // counter
     u4 carry = op; // carry between words
     ULongInt sum; // sum
-    BigInt *result = new BigInt(*this);
-    u4 *x = result -> data; // access to data
+    BigInt result(*this);
+    u4 *x = result.data; // access to data
 
     do
     {
@@ -2844,21 +2848,21 @@ BigInt &BigInt::operator +(const unsigned op) const
     {
         if (wds == maxwds)
         {
-            result -> maxwds = 1 << (++result -> k);
-            x = new u4[result -> maxwds];
-            memcpy(x, result -> data, wds * sizeof(u4));
-            delete result -> data;
-            result -> data = x;
+            result.maxwds = 1 << (++result.k);
+            x = new u4[result.maxwds];
+            memcpy(x, result.data, wds * sizeof(u4));
+            delete result.data;
+            result.data = x;
         }
-        result -> data[result -> wds++] = carry;
+        result.data[result.wds++] = carry;
     }
-    return *result;
+    return result;
 }
 
-BigInt &BigInt::operator -(const BigInt &op) const
+BigInt BigInt::operator -(const BigInt &op) const
 {
     const BigInt *a = this, *b = &op;
-    BigInt *c = NULL;
+    BigInt zero(0);
     int i, wa, wb;
     u4 *xa, *xae, *xb, *xbe, *xc;
     u4 borrow;
@@ -2866,7 +2870,7 @@ BigInt &BigInt::operator -(const BigInt &op) const
 
     i = a -> compareTo(op);
     if (! i)
-        return *new BigInt(0);
+        return zero;
     if (i < 0)
     {
         const BigInt *tmp = a;
@@ -2876,16 +2880,17 @@ BigInt &BigInt::operator -(const BigInt &op) const
     }
     else
         i = 0;
-    c = new BigInt(0);
-    c -> resize(a -> k);
-    c -> neg = i != 0;
+
+    BigInt c(0);
+    c.resize(a -> k);
+    c.neg = i != 0;
     wa = a -> wds;
     xa = a -> data;
     xae = xa + wa;
     wb = b -> wds;
     xb = b -> data;
     xbe = xb + wb;
-    xc = c -> data;
+    xc = c.data;
     borrow = 0;
     do
     {
@@ -2901,17 +2906,17 @@ BigInt &BigInt::operator -(const BigInt &op) const
     }
     while (!*--xc)
         wa--;
-    c -> wds = wa;
-    return *c;
+    c.wds = wa;
+    return c;
 }
 
-BigInt &BigInt::operator *(unsigned op) const
+BigInt BigInt::operator *(unsigned op) const
 {
     int i = 0; // counter
     u4 carry = 0; // carry between words
     ULongInt product; // product
-    BigInt *result = new BigInt(*this);
-    u4 *x = result -> data; // access to data
+    BigInt result(*this);
+    u4 *x = result.data; // access to data
     ULongInt factor = (u4) op; // avoid creating object multiple times
 
     do
@@ -2924,21 +2929,20 @@ BigInt &BigInt::operator *(unsigned op) const
     {
         if (wds == maxwds)
         {
-            result -> maxwds = 1 << (++result -> k);
-            x = new u4[result -> maxwds];
-            memcpy(x, result -> data, wds * sizeof(u4));
-            delete result -> data;
-            result -> data = x;
+            result.maxwds = 1 << (++result.k);
+            x = new u4[result.maxwds];
+            memcpy(x, result.data, wds * sizeof(u4));
+            delete result.data;
+            result.data = x;
         }
-        result -> data[result -> wds++] = carry;
+        result.data[result.wds++] = carry;
     }
-    return *result;
+    return result;
 }
 
-BigInt &BigInt::operator *(const BigInt &op) const
+BigInt BigInt::operator *(const BigInt &op) const
 {
     const BigInt *a = this, *b = &op;
-    BigInt *c; // result
     int k; // c -> k
     int wa, wb, wc; // wds in each of a, b, c
     u4 *x, *xa, *xae, *xb, *xbe, *xc, *xc0;
@@ -2957,16 +2961,16 @@ BigInt &BigInt::operator *(const BigInt &op) const
     wc = wa + wb;
     if (wc > a -> maxwds)
         k++;
-    c = new BigInt(0);
-    c -> resize(k);
-    c -> neg = a -> neg ^ b -> neg;
-    for (x = c -> data, xa = x + wc; x < xa; x++)
+    BigInt c(0);
+    c.resize(k);
+    c.neg = a -> neg ^ b -> neg;
+    for (x = c.data, xa = x + wc; x < xa; x++)
         *x = 0;
     xa = a -> data;
     xae = xa + wa;
     xb = b -> data;
     xbe = xb + wb;
-    xc0 = c -> data;
+    xc0 = c.data;
     for ( ; xb < xbe; xc0++)
     {
         if ((y = *xb++) != 0)
@@ -2983,13 +2987,13 @@ BigInt &BigInt::operator *(const BigInt &op) const
             *xc = carry;
         }
     }
-    for (xc0 = c -> data, xc = xc0 + wc; wc > 0 && !*--xc; --wc);
+    for (xc0 = c.data, xc = xc0 + wc; wc > 0 && !*--xc; --wc);
 
-    c -> wds = wc;
-    return *c;
+    c.wds = wc;
+    return c;
 }
 
-BigInt &BigInt::operator <<(unsigned op) const
+BigInt BigInt::operator <<(unsigned op) const
 {
     int i, k1, n, n1;
     u4 *x, *x1, *xe, z;
@@ -2998,11 +3002,11 @@ BigInt &BigInt::operator <<(unsigned op) const
     n1 = n + wds + 1;
     for (i = maxwds; n1 > i; i <<= 1)
         k1++;
-    BigInt *result = new BigInt(*this);
-    result -> maxwds = 1 << k1;
-    result -> k = k1;
-    delete result -> data;
-    result -> data = x1 = new u4[result -> maxwds];
+    BigInt result(*this);
+    result.maxwds = 1 << k1;
+    result.k = k1;
+    delete result.data;
+    result.data = x1 = new u4[result.maxwds];
     for (i = 0; i < n; i++)
         *x1++ = 0;
     x = data;
@@ -3023,8 +3027,8 @@ BigInt &BigInt::operator <<(unsigned op) const
         do
             *x1++ = *x++;
         while (x < xe);
-    result -> wds = n1 - 1;
-    return *result;
+    result.wds = n1 - 1;
+    return result;
 }
 
 BigInt &BigInt::multadd(unsigned m, unsigned a)

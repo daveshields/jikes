@@ -1,15 +1,15 @@
-# $Id: configure.ac,v 1.13 2004/05/14 04:01:41 cabbey Exp $
+# $Id: configure.ac,v 1.15 2004/10/03 20:44:55 cabbey Exp $
 dnl	This file is an input file used by the GNU "autoconf" program to
 dnl	generate the file "configure", which is run to configure the
 dnl	Makefile in this directory.
 
 dnl Set up the name and version
-AC_INIT([jikes],[1.21])
+AC_INIT([jikes],[1.22])
 AM_INIT_AUTOMAKE([foreign check-news dist-bzip2 1.8.3])
 AC_PREREQ(2.59)
 
 AC_DEFINE(JIKES_VERSION_STRING,
-          "Version 1.21 - 16 May 2004",
+          "Version 1.22 - 3 October 2004",
     [A string to indicate the release of jikes: Version 1.19 - 1 Feb 2004])
 
 dnl AC_CACHE_LOAD
@@ -105,7 +105,7 @@ AS_IF([test "$ok" = yes],
 dnl	Check for standard c and c++ headers and libraries
 AC_HEADER_STDC()
 
-AC_CHECK_HEADERS(stdio.h assert.h limits.h ctype.h time.h float.h)
+AC_CHECK_HEADERS(stdio.h assert.h errno.h limits.h ctype.h time.h float.h)
 
 dnl	Check for some headers which are not present on all supported platforms
 AC_CHECK_HEADERS(windows.h direct.h dirent.h sys/cygwin.h locale.h)

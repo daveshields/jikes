@@ -1,4 +1,4 @@
-// $Id: decl.cpp,v 1.138 2004/04/12 12:47:28 ericb Exp $
+// $Id: decl.cpp,v 1.144 2004/09/26 22:40:41 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -2097,7 +2097,7 @@ void Semantic::ProcessFieldDeclaration(AstFieldDeclaration* field_declaration)
             if (name_symbol != control.serialVersionUID_name_symbol)
             {
                 WarnOfAccessibleFieldWithName(SemanticError::HIDDEN_FIELD,
-                                              name, name_symbol);
+                                              name, name_symbol, access_flags.ACC_STATIC());
             }
 
             VariableSymbol* variable =
@@ -2215,6 +2215,9 @@ void Semantic::ProcessConstructorDeclaration(AstConstructorDeclaration* construc
 
     AccessFlags access_flags =
         ProcessConstructorModifiers(constructor_declaration);
+    if (this_type -> ACC_STRICTFP())
+        access_flags.SetACC_STRICTFP();
+
     if (constructor_declaration -> type_parameters_opt)
     {
         // TODO: Add generics support for 1.5.
@@ -2363,6 +2366,9 @@ void Semantic::AddDefaultConstructor(TypeSymbol* type)
     else if (type -> ACC_PRIVATE())
         constructor -> SetACC_PRIVATE();
 
+    if (type -> ACC_STRICTFP())
+        constructor -> SetACC_STRICTFP();
+
     if (type -> EnclosingType())
     {
         VariableSymbol* this0_variable =
@@ -2495,13 +2501,17 @@ void Semantic::CheckMethodOverride(MethodSymbol* method,
         if (hidden_method -> Type() -> IsSubtype(control.Object()) &&
             method -> Type() -> IsSubtype(hidden_method -> Type()))
         {
-            // Silent acceptance. TODO: Should we add a pedantic warning?
-            // This must work, because the 1.5 library (including
-            // System.out.println("")) is covariant, even for -source 1.4!
-//              if (control.option.source < JikesOption::SDK1_5)
-//                  ReportSemError(SemanticError::COVARIANCE_UNSUPPORTED,
-//                                 left_tok, right_tok, method -> Header(),
-//                                 hidden_method -> Header());
+            // Silent acceptance for .class files only.
+            // They must work, because the 1.5 library is covariant,
+            // even for -source 1.4!
+            if (control.option.source < JikesOption::SDK1_5 &&
+                ! hidden_method -> containing_type ->
+                  file_symbol -> IsClassOnly())
+            {
+                ReportSemError(SemanticError::COVARIANCE_UNSUPPORTED,
+                               left_tok, right_tok, method -> Header(),
+                               hidden_method -> Header());
+            }
         }
         else if (method -> containing_type == base_type)
         {
@@ -2581,6 +2591,18 @@ void Semantic::CheckMethodOverride(MethodSymbol* method,
         base_type -> MarkBad();
     }
 
+    //
+    // Warn if a method we have source for is overriding a deprecated method.
+    //
+    if (control.option.deprecation &&
+        hidden_method -> IsDeprecated() &&
+        ! method -> containing_type -> file_symbol -> IsClassOnly())
+    {
+        ReportSemError(SemanticError::DEPRECATED_METHOD_OVERRIDE,
+                       left_tok, right_tok, method -> Header(),
+                       hidden_method -> containing_type -> ContainingPackageName(),
+                       hidden_method -> containing_type -> ExternalName());
+    }
 
     //
     // Both or neither versions must be static.
@@ -3933,9 +3955,21 @@ void Semantic::ProcessType(AstType* type_expr)
         }
     }
     if (type -> Bad() && NumErrors() == error_count)
-        ReportSemError(SemanticError::INVALID_TYPE_FOUND, actual_type,
-                       lex_stream -> NameString(type_expr ->
-                                                IdentifierToken()));
+    {
+        if (type == control.no_type)
+        {
+            ReportSemError(SemanticError::TYPE_NOT_FOUND, actual_type,
+                           NULL,
+                           lex_stream -> NameString(type_expr ->
+                                                    IdentifierToken()));
+        }
+        else
+        {
+            ReportSemError(SemanticError::INVALID_TYPE_FOUND, actual_type,
+                           lex_stream -> NameString(type_expr ->
+                                                    IdentifierToken()));
+        }
+    }
     if (array_type)
         type = type -> GetArrayType(this, array_type -> NumBrackets());
     type_expr -> symbol = type;

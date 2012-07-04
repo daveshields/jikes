@@ -1,4 +1,4 @@
-// $Id: platform.h,v 1.52 2004/03/25 13:32:28 ericb Exp $ -*- c++ -*-
+// $Id: platform.h,v 1.53 2004/08/20 00:21:17 elliott-oss Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -108,6 +108,10 @@
 
 #ifdef HAVE_DIRENT_H
 # include <dirent.h>
+#endif
+
+#ifdef HAVE_ERRNO_H
+# include STD_LIB_NAME(errno)
 #endif
 
 #ifndef HAVE_WINT_T

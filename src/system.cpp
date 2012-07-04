@@ -1,4 +1,4 @@
-// $Id: system.cpp,v 1.62 2004/04/04 19:45:48 ericb Exp $
+// $Id: system.cpp,v 1.63 2004/06/20 21:24:19 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1376,6 +1376,7 @@ MethodSymbol* Control::ProcessSystemMethod(TypeSymbol* type,
                 ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
                                BAD_TOKEN, type -> ContainingPackageName(),
                                type -> ExternalName());
+            return NULL;
         }
         method = type -> InsertMethodSymbol(name_symbol);
         method -> SetType(no_type);
@@ -1411,6 +1412,7 @@ VariableSymbol* Control::ProcessSystemField(TypeSymbol* type,
                 ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
                                BAD_TOKEN, type -> ContainingPackageName(),
                                type -> ExternalName());
+            return NULL;
         }
         field = type -> InsertVariableSymbol(name_symbol);
         field -> SetType(no_type);

@@ -1,4 +1,4 @@
-// $Id: error.cpp,v 1.158 2004/05/03 14:05:51 elliott-oss Exp $
+// $Id: error.cpp,v 1.159 2004/09/26 22:40:41 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -530,6 +530,7 @@ void SemanticError::StaticInitializer()
     warning[CLASS_FIELD_ACCESSED_VIA_INSTANCE] = WEAK_WARNING;
     warning[ASSIGNMENT_USED_AS_TRUTH_VALUE] = WEAK_WARNING;
     warning[NON_STATIC_FINAL_CONSTANT_FIELD] = WEAK_WARNING;
+    warning[AMBIGUOUS_NULL_VARARG] = WEAK_WARNING;
 
     //
     // Somewhat stronger warnings, but code will be generated anyway.
@@ -1356,6 +1357,9 @@ void SemanticError::InitializeMessages()
     messages[NON_STATIC_FINAL_CONSTANT_FIELD] =
         "Final field \"%1\" is initialized with a constant expression and "
         "could be made static to save space.";
+    messages[AMBIGUOUS_NULL_VARARG] =
+        "Cast to an array to demonstrate that you really want a null "
+        "array rather than an array of length 1 containing a null value.";
 
     // "Effective Java" warnings.
     messages[EJ_AVOID_OVERLOADING_EQUALS] =
@@ -2014,6 +2018,8 @@ void SemanticError::InitializeMessages()
     messages[DEFAULT_METHOD_NOT_OVERRIDDEN] =
         "Method \"%1\" in class \"%T2\" does not override or hide "
         "the corresponding method with default access in class \"%T4\".";
+    messages[DEPRECATED_METHOD_OVERRIDE] =
+        "The overridden method \"%1\" is deprecated in type \"%T2\".";
 
     // Package related errors.
     messages[WRONG_TYPE_IN_CLASSFILE] =

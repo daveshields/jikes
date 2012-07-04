@@ -1,4 +1,4 @@
-// $Id: symbol.h,v 1.85 2004/04/11 18:32:46 elliott-oss Exp $ -*- c++ -*-
+// $Id: symbol.h,v 1.86 2004/09/26 23:10:19 elliott-oss Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1883,7 +1883,8 @@ inline DirectorySymbol* DirectorySymbol::InsertDirectorySymbol(const NameSymbol*
                                                                bool source_dir)
 {
     DirectorySymbol* subdirectory_symbol =
-        Table() -> InsertDirectorySymbol(name_symbol, this, source_dir);
+        Table() -> InsertDirectorySymbol(name_symbol, this,
+                                         source_dir && source_dir_only);
     subdirectories.Next() = subdirectory_symbol;
     return subdirectory_symbol;
 }

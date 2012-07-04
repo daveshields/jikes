@@ -1,4 +1,4 @@
-// $Id: error.h,v 1.106 2004/04/12 12:47:29 ericb Exp $ -*- c++ -*-
+// $Id: error.h,v 1.107 2004/09/26 22:40:41 elliott-oss Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -194,6 +194,7 @@ public:
         HIDDEN_FIELD,
         ASSIGNMENT_USED_AS_TRUTH_VALUE,
         NON_STATIC_FINAL_CONSTANT_FIELD,
+        AMBIGUOUS_NULL_VARARG,
 
         // "Effective Java" warnings.
         EJ_AVOID_OVERLOADING_EQUALS,
@@ -423,6 +424,7 @@ public:
         VARIABLE_NOT_DEFINITELY_ASSIGNED,
         TYPED_METHOD_WITH_NO_RETURN,
         DEFAULT_METHOD_NOT_OVERRIDDEN,
+        DEPRECATED_METHOD_OVERRIDE,
 
         // Package related errors.
         WRONG_TYPE_IN_CLASSFILE,

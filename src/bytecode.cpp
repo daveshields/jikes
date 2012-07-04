@@ -1,4 +1,4 @@
-// $Id: bytecode.cpp,v 1.184 2004/03/20 04:48:14 jikesadmin Exp $
+// $Id: bytecode.cpp,v 1.185 2004/05/20 21:01:33 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -6036,10 +6036,11 @@ void ByteCode::AppendString(AstExpression* expression, bool need_value)
     {
         Utf8LiteralValue* value =
             DYNAMIC_CAST<Utf8LiteralValue*> (expression -> value);
+        assert(value != NULL);
+        assert(! control.IsPrimitive(type)); // Bug 2919.
         // Optimization: do nothing when appending "", or for unused result.
         if (value -> length == 0 || ! need_value)
             return;
-        assert(type == control.String());
         if (value -> length == 1)
         {
             // Optimization: append(char) more efficient than append(String)
