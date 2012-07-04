@@ -1,3 +1,61 @@
+2004-05-16  Chris Abbey  <jikes@cabbey.net>
+
+	Release 1.21
+
+2004-05-13  Chris Abbey  <jikes@cabbey.net>
+
+	* configure.ac: bump version
+	* configure: regen
+
+	
+2004-05-04  Chris Abbey  <jikes@cabbey.net>
+
+	* src/m4/ac_check_iconv.m4: enable --without-iconv
+	* aclocal.m4:
+	* config.guess:
+	* config.sub:
+	* configure:
+	* depcomp
+	* install-sh
+	* Makefile.in
+	* src/Makefile.in
+	* doc/Makefile.in: regen
+
+2004-05-04  Chris Abbey  <jikes@cabbey.net>
+
+	* autogen.sh: made more user friendly
+
+2004-05-03  Elliott Hughes  <enh@acm.org>
+
+	* src/init.cpp: fix bug #3948 by ignoring fields of array types
+	when looking for final fields that could be made static.
+
+2004-05-03  Elliott Hughes  <enh@acm.org>
+
+	* src/class.cpp, src/error.cpp: ensures we also print the path to
+	the class file within the JAR file (i.e. include the package) in
+	diagnostics about invalid class files.
+
+2004-05-03  Elliott Hughes  <enh@acm.org>
+
+	* src/class.h: fixes compilation with libgcj3.3.jar; gcj-compiled
+	classes have an extra attribute "gnu.gcj.gcj-compiled". A fencepost
+	error in GetN was causing us to reject the class file. (Also fixes
+	the analogous error in SkipN.)
+
+2004-05-03  Elliott Hughes  <enh@acm.org>
+
+	* src/class.h, src/class.cpp: Always call MarkInvalid rather than
+	sometimes manipulating the field directly, and switch from a simple
+	boolean to a description of the problem we found...
+	* src/error.cpp: ...so we can give a potentially useful diagnostic.
+
+2004-05-01  Elliott Hughes  <enh@acm.org>
+
+	* src/control.cpp: it's the import that's unused, not the name.
+	Let the user's editor highlight the whole import declaration,
+	not just the name.
+
 2004-04-18  Chris Abbey  <jikes@cabbey.net>
 
 	Release 1.20.

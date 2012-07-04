@@ -3,12 +3,11 @@ License: IBM Public License, http://ibm.com/developerworks/oss/license10.html
 Group: Development/Languages
 Name: jikes
 Prefix: /usr
-Version: 1.20
 Release: 1
-Source: %{name}-%{version}.tar.bz2
+Source: %{name}-%{version}.tar.gz
 URL: http://ibm.com/developerworks/opensource/jikes
 Buildroot: /tmp/jikesrpm
-Packager: Chris Abbey <jikes@cabbey.net>
+Packager: %{_gpg_name}
 
 %description
 The IBM Jikes compiler translates Java source files to bytecode. It

@@ -1,3 +1,9 @@
+*** Jikes 1.21 was released 16 May 2004
+
+A regression in 1.20 that caused us to complain about supposedly
+invalid .class files has been rectified. Some minor error message
+improvements have been made.
+
 *** Jikes 1.20 was released 18 April 2004
 
 Many new diagnostics have been added. These include detection of

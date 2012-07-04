@@ -1,4 +1,4 @@
-// $Id: error.cpp,v 1.156 2004/04/15 03:04:15 cabbey Exp $
+// $Id: error.cpp,v 1.158 2004/05/03 14:05:51 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1280,7 +1280,7 @@ void SemanticError::InitializeMessages()
         "The file %1(%F2) is in an unsupported compressed format. "
         "(Unzip and) Rezip \"%1\".";
     messages[INVALID_CLASS_FILE] =
-        "The class file \"%F1.class\" has an invalid format.";
+        "The class file \"%1.class\" in \"%F2\" has an invalid format (%4).";
     messages[CANNOT_OPEN_CLASS_FILE] =
         "Unable to open file associated with type \"%T1\".";
     messages[IO_ERROR] = "I/O error: %1.";

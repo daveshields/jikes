@@ -1,4 +1,4 @@
-// $Id: init.cpp,v 1.27 2004/03/28 20:52:07 elliott-oss Exp $
+// $Id: init.cpp,v 1.28 2004/05/03 21:20:23 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -26,15 +26,15 @@ void Semantic::ProcessVariableInitializer(AstVariableDeclarator* variable_declar
         return;
     }
 
+    TypeSymbol* field_type = symbol -> Type();
     AstExpression* init =
         (AstExpression*) variable_declarator -> variable_initializer_opt;
     AstArrayInitializer* array_initializer = init -> ArrayInitializerCast();
     if (array_initializer)
-        ProcessArrayInitializer(array_initializer, symbol -> Type());
+        ProcessArrayInitializer(array_initializer, field_type);
     else
     {
         ProcessExpressionOrStringConstant(init);
-        TypeSymbol* field_type = symbol -> Type();
 
         if (field_type != init -> Type() && init -> Type() != control.no_type)
         {
@@ -90,6 +90,7 @@ void Semantic::ProcessVariableInitializer(AstVariableDeclarator* variable_declar
     //
     TypeSymbol* containing_type = symbol -> owner -> TypeCast();
     if (containing_type && ! containing_type -> ACC_INTERFACE() &&
+        ! field_type -> IsArray() &&
         symbol -> ACC_FINAL() &&
         ! symbol -> ACC_STATIC() &&
         init && init -> IsConstant())

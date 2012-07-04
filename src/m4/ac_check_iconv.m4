@@ -1,7 +1,7 @@
 dnl @synopsis AC_CHECK_ICONV
 dnl
 dnl Check to see if the iconv functions and libs are present
-dnl @version $Id: ac_check_iconv.m4,v 1.7 2004/02/02 14:46:49 ericb Exp $
+dnl @version $Id: ac_check_iconv.m4,v 1.8 2004/05/05 04:50:16 cabbey Exp $
 dnl @author Mo DeJong <mdejong@redhat.com>
 dnl
 AC_DEFUN([AC_CHECK_ICONV],
@@ -10,7 +10,7 @@ AC_CHECK_HEADERS(iconv.h)
 
 dnl No point going on if iconv.h isn't present.
 dnl In this case, we just assume iconv can not be used by the application
-AS_IF([test "$ac_cv_header_iconv_h" = yes],
+AS_IF([test "$ac_cv_header_iconv_h" = yes -a "x$with_iconv" != "xno" ],
 [dnl	Check if iconv library is present
 AC_SEARCH_LIBS([iconv], [iconv])
 
