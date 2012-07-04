@@ -1,4 +1,4 @@
-// $Id: symbol.h,v 1.77 2004/01/20 04:10:28 ericb Exp $ -*- c++ -*-
+// $Id: symbol.h,v 1.85 2004/04/11 18:32:46 elliott-oss Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,7 +11,6 @@
 #define symbol_INCLUDED
 
 #include "platform.h"
-#include "stream.h"
 #include "lookup.h"
 #include "access.h"
 #include "tuple.h"
@@ -33,6 +32,7 @@ class AstVariableDeclarator;
 class ExpandedTypeTable;
 class ExpandedFieldTable;
 class ExpandedMethodTable;
+class LexStream;
 class SymbolTable;
 class SymbolSet;
 class SymbolMap;
@@ -226,11 +226,7 @@ public:
          Symbol::_kind = _FILE;
     }
 
-    virtual ~FileSymbol()
-    {
-        delete [] file_name;
-        delete lex_stream;
-    }
+    virtual ~FileSymbol();
 
     FileSymbol* Clone()
     {
@@ -321,24 +317,9 @@ class FileLocation
 public:
     wchar_t* location;
 
-    FileLocation (LexStream* lex_stream, LexStream::TokenIndex token_index)
-    {
-        char* file_name = lex_stream -> FileName();
-        unsigned length = lex_stream -> FileNameLength();
-        location = new wchar_t[length + 13];
-        for (unsigned i = 0; i < length; i++) {
-            location[i] = (wchar_t) file_name[i];
-        }
-        location[length++] = U_COLON;
+    FileLocation(LexStream* lex_stream, TokenIndex token_index);
 
-        IntToWstring line_no(lex_stream -> Line(token_index));
-
-        for (int j = 0; j < line_no.Length(); j++)
-            location[length++] = line_no.String()[j];
-        location[length] = U_NULL;
-    }
-
-    FileLocation (FileSymbol* file_symbol)
+    FileLocation(FileSymbol* file_symbol)
     {
         char* file_name = file_symbol -> FileName();
         unsigned length = file_symbol -> FileNameLength();
@@ -358,6 +339,11 @@ public:
 
 class PackageSymbol : public Symbol
 {
+    enum
+    {
+        DEPRECATED = 0x01
+    };
+
 public:
     Tuple<DirectorySymbol*> directory;
     PackageSymbol* owner;
@@ -368,6 +354,7 @@ public:
         , name_symbol(name_symbol_)
         , table(NULL)
         , package_name(NULL)
+        , status(0)
     {
         Symbol::_kind = PACKAGE;
     }
@@ -412,6 +399,9 @@ public:
     inline TypeSymbol* InsertOuterTypeSymbol(NameSymbol*);
     inline void DeleteTypeSymbol(TypeSymbol*);
 
+    void MarkDeprecated() { status |= DEPRECATED; }
+    bool IsDeprecated() { return (status & DEPRECATED) != 0; }
+
 private:
     const NameSymbol* name_symbol;
     SymbolTable* table;
@@ -419,6 +409,7 @@ private:
 
     wchar_t* package_name;
     unsigned package_name_length;
+    u1 status;
 };
 
 
@@ -426,8 +417,7 @@ class MethodSymbol : public Symbol, public AccessFlags
 {
     enum
     {
-        SYNTHETIC = 0x01,
-        DEPRECATED = 0x02
+        DEPRECATED = 0x01
     };
 
 public:
@@ -506,8 +496,8 @@ public:
         type_ = _type;
     }
 
-    void ProcessMethodSignature(Semantic*, LexStream::TokenIndex);
-    void ProcessMethodThrows(Semantic*, LexStream::TokenIndex);
+    void ProcessMethodSignature(Semantic*, TokenIndex);
+    void ProcessMethodThrows(Semantic*, TokenIndex);
 
     TypeSymbol* Type()
     {
@@ -622,9 +612,6 @@ public:
 
     void CleanUp();
 
-    void MarkSynthetic() { status |= SYNTHETIC; }
-    bool IsSynthetic() { return (status & SYNTHETIC) != 0; }
-
     void MarkDeprecated() { status |= DEPRECATED; }
     bool IsDeprecated() { return (status & DEPRECATED) != 0; }
 
@@ -656,7 +643,7 @@ class TypeSymbol : public Symbol, public AccessFlags
         HEADER_PROCESSED = 0x0040,
         PRIMITIVE = 0x0080,
         DEPRECATED = 0x0100,
-        SYNTHETIC = 0x0200,
+        ENUM_TYPE = 0x0200, // can't use ACC_ENUM on types :(
         BAD = 0x0400,
         CIRCULAR = 0x0800
     };
@@ -993,6 +980,14 @@ public:
     bool HasProtectedAccessTo(TypeSymbol*);
 
     //
+    // For JSR 201, control.int_class -> BoxedType() returns control.Integer(),
+    // types without boxing return themselves. UnboxedType() works the other
+    // direction.
+    //
+    TypeSymbol* BoxedType(Control&);
+    TypeSymbol* UnboxedType(Control&);
+
+    //
     // Note that this test considers a class a subclass of itself, and also
     // interfaces are a subclass of Object. See also IsSubtype.
     //
@@ -1099,7 +1094,7 @@ public:
 
     bool IsNestedIn(TypeSymbol*);
 
-    bool IsNested() { return outermost_type != this; }
+    bool IsNested() const { return outermost_type != this; }
 
     //
     // JLS2 8.1.2 states that ALL local and anonymous classes are inner
@@ -1109,14 +1104,14 @@ public:
     // is lame. If everything works correctly, these classes will correctly
     // be marked nested, yet never static.
     //
-    bool IsInner()
+    bool IsInner() const
     {
         assert((! IsLocal() && ! Anonymous()) ||
                (IsNested() && ! ACC_STATIC()));
         return IsNested() && ! ACC_STATIC();
     }
 
-    bool IsLocal()
+    bool IsLocal() const
     {
         for (Symbol* sym = owner;
              ! sym -> PackageCast(); sym = ((TypeSymbol*) sym) -> owner)
@@ -1187,8 +1182,9 @@ public:
     void ResetDeprecated() { status &= ~DEPRECATED; }
     bool IsDeprecated() const { return (status & DEPRECATED) != 0; }
 
-    void MarkSynthetic() { status |= SYNTHETIC; }
-    bool IsSynthetic() const { return (status & SYNTHETIC) != 0; }
+    void MarkEnum() { status |= ENUM_TYPE; }
+    void ResetEnum() { status &= ~ENUM_TYPE; }
+    bool IsEnum() const { return (status & ENUM_TYPE) != 0; }
 
     void MarkBad()
     {
@@ -1208,7 +1204,7 @@ public:
     void MarkNonCircular() { status &= ~ CIRCULAR; }
     bool Circular() const { return (status & CIRCULAR) != 0; }
 
-    void ProcessNestedTypeSignatures(Semantic*, LexStream::TokenIndex);
+    void ProcessNestedTypeSignatures(Semantic*, TokenIndex);
 
     bool NestedTypesProcessed() { return nested_type_signatures == NULL; }
 
@@ -1258,6 +1254,7 @@ public:
     MethodSymbol* FindOverloadMethod(MethodSymbol*, AstMethodDeclarator*);
 
     inline void CompressSpace();
+    void UnlinkFromParents();
 
 private:
     //
@@ -1283,13 +1280,12 @@ private:
 
     MethodSymbol* class_literal_method;
     Utf8LiteralValue* class_literal_name;
-
     VariableSymbol* assert_variable;
 
     //
     // For a local type, when we first encounter an embedded call to one of
     // its constructors or a constructor of one of its inner types, either via
-    // a ClassInstanceCreation or an ExplicitConstructorInvocation, we record
+    // a ClassCreationExpression or an ExplicitConstructorInvocation, we record
     // it and resolve it after we have computed all necessary information
     // about the type and its inner types.
     //
@@ -1372,6 +1368,13 @@ private:
 
 class VariableSymbol : public Symbol, public AccessFlags
 {
+    enum
+    {
+        COMPLETE = 0x01, // Used to prevent use of field before declaration
+        DEPRECATED = 0x02, // Used to mark deprecated fields
+        INITIALIZED = 0x04 // Used when initial value of final field is known
+    };
+
 public:
     AstVariableDeclarator* declarator;
     FileLocation* file_location;
@@ -1496,7 +1499,7 @@ public:
         signature = type_ -> signature;
     }
 
-    void ProcessVariableSignature(Semantic*, LexStream::TokenIndex);
+    void ProcessVariableSignature(Semantic*, TokenIndex);
 
     TypeSymbol* Type()
     {
@@ -1533,9 +1536,6 @@ public:
     void MarkComplete() { status |= COMPLETE; }
     bool IsDeclarationComplete() { return (status & COMPLETE) != 0; }
 
-    void MarkSynthetic() { status |= SYNTHETIC; }
-    bool IsSynthetic() { return (status & SYNTHETIC) != 0; }
-
     void MarkDeprecated() { status |= DEPRECATED; }
     bool IsDeprecated() { return (status & DEPRECATED) != 0; }
 
@@ -1543,12 +1543,6 @@ public:
     bool IsInitialized() { return (status & INITIALIZED) != 0; }
 
 private:
-    enum {
-        COMPLETE = 0x01, // Used to prevent use of field before declaration
-        SYNTHETIC = 0x02, // Used to mark compiler-created variables
-        DEPRECATED = 0x04, // Used to mark deprecated fields
-        INITIALIZED = 0x08 // Used when initial value of final field is known
-    };
     const NameSymbol* external_name_symbol;
 
     unsigned char status;
@@ -1562,7 +1556,8 @@ class BlockSymbol : public Symbol
 {
 public:
     int max_variable_index;
-    int try_or_synchronized_variable_index;
+    // try, synchronized, and foreach need synthetic helper variables
+    int helper_variable_index;
 
     BlockSymbol(unsigned hash_size);
     virtual ~BlockSymbol();
@@ -2064,7 +2059,11 @@ inline void PackageSymbol::DeleteTypeSymbol(TypeSymbol* type)
 inline void SymbolTable::DeleteAnonymousTypes()
 {
     for (unsigned i = 0; i < NumAnonymousSymbols(); i++)
-        delete AnonymousSym(i);
+    {
+        TypeSymbol* symbol = AnonymousSym(i);
+        symbol -> UnlinkFromParents();
+        delete symbol;
+    }
     delete anonymous_symbol_pool;
     anonymous_symbol_pool = NULL;
 }

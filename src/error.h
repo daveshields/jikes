@@ -1,4 +1,4 @@
-// $Id: error.h,v 1.89 2004/01/26 06:07:16 cabbey Exp $ -*- c++ -*-
+// $Id: error.h,v 1.106 2004/04/12 12:47:29 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,7 +11,6 @@
 #define error_INCLUDED
 
 #include "platform.h"
-#include "stream.h"
 #include "tuple.h"
 #include "jikesapi.h"
 
@@ -21,6 +20,7 @@ namespace Jikes { // Open namespace Jikes block
 
 class Control;
 class LexStream;
+class FileSymbol;
 class SymbolSet;
 class Semantic;
 class SemanticError;
@@ -57,6 +57,12 @@ public:
     //
     const wchar_t* Array();
 
+    //
+    // The returned value is safe, but the caller is responsible for
+    // freeing the returned memory.
+    //
+    const wchar_t* SafeArray();
+
 private:
     void DoFill(int n);
     char fill_char;
@@ -91,8 +97,8 @@ private:
     int right_line_no;
     int right_column_no;
 
-    LexStream::TokenIndex left_token;
-    LexStream::TokenIndex right_token;
+    TokenIndex left_token;
+    TokenIndex right_token;
 
     enum { MAX_INSERTS = 9 };
     const wchar_t* insert[MAX_INSERTS];
@@ -159,9 +165,13 @@ public:
         COMPRESSED_ZIP_FILE,
         INVALID_CLASS_FILE,
         CANNOT_OPEN_CLASS_FILE,
+        IO_ERROR,
+        IO_WARNING,
 
         // Warnings and pedantic errors.
         NEGATIVE_ARRAY_SIZE,
+        NEGATIVE_SHIFT_COUNT,
+        SHIFT_COUNT_TOO_LARGE,
         UNNECESSARY_PARENTHESIS,
         EMPTY_DECLARATION,
         REDUNDANT_MODIFIER,
@@ -177,6 +187,13 @@ public:
         REFERENCE_TO_TYPE_IN_MISMATCHED_FILE,
         ZERO_DIVIDE_CAUTION,
         VOID_TO_STRING,
+        CLASS_METHOD_INVOKED_VIA_INSTANCE,
+        CLASS_FIELD_ACCESSED_VIA_INSTANCE,
+        CONSTANT_OVERFLOW,
+        LOCAL_SHADOWS_FIELD,
+        HIDDEN_FIELD,
+        ASSIGNMENT_USED_AS_TRUTH_VALUE,
+        NON_STATIC_FINAL_CONSTANT_FIELD,
 
         // "Effective Java" warnings.
         EJ_AVOID_OVERLOADING_EQUALS,
@@ -189,19 +206,27 @@ public:
         EJ_OVERLY_GENERAL_THROWS_CLAUSE,
         EJ_PUBLIC_STATIC_FINAL_ARRAY_FIELD,
         EJ_RETURN_OF_NULL_ARRAY,
-        
+        EJ_SERIALIZABLE_INNER_CLASS,
+
+        // serialVersionUID warnings.
+        UNNEEDED_SERIAL_VERSION_UID,
+        BAD_SERIAL_VERSION_UID,
+        MISSING_SERIAL_VERSION_UID,
+
         // Naming convention warnings.
         UNCONVENTIONAL_CLASS_NAME,
         UNCONVENTIONAL_CONSTANT_FIELD_NAME,
         UNCONVENTIONAL_FIELD_NAME,
         UNCONVENTIONAL_METHOD_NAME,
         UNCONVENTIONAL_VARIABLE_NAME,
-        
+
         // Type and package related errors.
         DUPLICATE_INNER_TYPE_NAME,
         DUPLICATE_TYPE_DECLARATION,
         DUPLICATE_IMPORT_NAME,
         UNNECESSARY_TYPE_IMPORT,
+        UNUSED_TYPE_IMPORT,
+        UNUSED_PACKAGE_IMPORT,
         DUPLICATE_ACCESS_MODIFIER,
         DUPLICATE_MODIFIER,
         FINAL_ABSTRACT_ENTITY,
@@ -268,6 +293,7 @@ public:
         INCOMPATIBLE_TYPE_FOR_ASSIGNMENT,
         INCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION,
         INCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION,
+        INCOMPATIBLE_TYPE_FOR_FOREACH,
         VOID_ARRAY,
         DUPLICATE_THROWS_CLAUSE_CLASS,
         REDUNDANT_THROWS_CLAUSE_CLASS,
@@ -279,6 +305,7 @@ public:
         TYPE_NOT_BOOLEAN,
         TYPE_NOT_ARRAY,
         TYPE_NOT_REFERENCE,
+        TYPE_NOT_ITERABLE,
         TYPE_IS_VOID,
         VALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE,
         DUPLICATE_CASE_VALUE,
@@ -312,6 +339,35 @@ public:
         MISPLACED_CONTINUE_STATEMENT,
         MISPLACED_EXPLICIT_CONSTRUCTOR,
         INVALID_CONTINUE_TARGET,
+
+        // JDK 1.5 (JLS3) feature-related errors.
+        HEX_FLOATING_POINT_UNSUPPORTED,
+        FOREACH_UNSUPPORTED,
+        VARARGS_UNSUPPORTED,
+        STATIC_IMPORT_UNSUPPORTED,
+        ANNOTATION_MODIFIER_UNSUPPORTED,
+        RECOMMENDED_ANNOTATION_ORDER,
+        DUPLICATE_ANNOTATION,
+        ANNOTATION_TYPE_UNSUPPORTED,
+        ENUM_TYPE_UNSUPPORTED,
+        SUPER_IS_ENUM,
+        CANNOT_CONSTRUCT_ENUM,
+        TYPE_ARGUMENTS_UNSUPPORTED,
+        TYPE_PARAMETERS_UNSUPPORTED,
+        COVARIANCE_UNSUPPORTED,
+        WILDCARD_UNSUPPORTED,
+        EXPLICIT_TYPE_ARGUMENTS_UNSUPPORTED,
+        UNCHECKED_TYPE_CONVERSION,
+
+        // Type parameterization related errors.
+        DUPLICATE_TYPE_PARAMETER,
+        TYPE_PARAMETER_FORWARD_REFERENCE,
+        TYPE_PARAMETER_IN_MULTIPLE_BOUNDS,
+        TYPE_NOT_PARAMETERIZED,
+        MISMATCHED_TYPE_PARAMETER_COUNT,
+        TYPE_ARGUMENT_FAILS_BOUNDS,
+        TYPE_PARAMETER_NOT_TYPE,
+        TYPE_MAY_NOT_HAVE_PARAMETERS,
 
         // More type-related errors.
         NON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD,
@@ -351,6 +407,7 @@ public:
         SYNTHETIC_METHOD_INVOCATION,
         SYNTHETIC_CONSTRUCTOR_INVOCATION,
         SYNTHETIC_TYPE_ACCESS,
+        UNNAMED_TYPE_ACCESS,
         SELF_IN_EXPLICIT_CONSTRUCTOR,
         EXPRESSION_NOT_CONSTANT,
         UNCAUGHT_METHOD_EXCEPTION,
@@ -394,46 +451,35 @@ public:
         ENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION,
         ENCLOSING_INSTANCE_NOT_ACCESSIBLE,
         INVALID_ENCLOSING_INSTANCE,
+        STATIC_TYPE_ACCESSING_MEMBER_TYPE,
 
-	//this counts the number of legitimate types in the enum
-	// it must follow all of the real error types
+        // This counts the number of legitimate types in the enum
+        // it must follow all of the real error types.
         _num_kinds,
 
-	//this is a made up, bogus, error type. It is used as
-	// token for *all* of the UNCONVENTIONAL_*_NAME errors
-	// above, but ONLY in the argument processing logic,
-	// where it is used as a token, but not as an index into
-	// the tables that are indexed by the above... no point
-	// wasting space in those tables for it.
-	UNCONVENTIONAL_NAMES
+        // This is a made up, bogus, error type. It is used in lists
+        // of SemanticErrorKinds to mark the end of the list.
+        // It is not used as an index into
+        // the tables that are indexed by the above... no point
+        // wasting space in those tables for it.
+        END
     };
-
-    //
-    // Describes an error code for the purpose of turning it on or off by name.
-    // The name is used on the command-line, in Jikes' -help output.
-    //
-    struct NamedError
-    {
-        const char* name;
-        const char* reason;
-        SemanticErrorKind code;
-        WarningLevel level;
-    };
-    static NamedError named_errors[];
 
     static void StaticInitializer();
     static void InitializeMessages();
+    static void InitializeMessageGroups();
+    static void SetWarningLevel(SemanticErrorKind, WarningLevel);
 
     static bool ProcessWarningSwitch(const char*);
     static void PrintNamedWarnings();
     static void EnableDefaultWarnings();
 
-    void Report(SemanticErrorKind, LexStream::TokenIndex,
-                LexStream::TokenIndex, const wchar_t* = NULL,
+    void Report(SemanticErrorKind, TokenIndex, TokenIndex,
                 const wchar_t* = NULL, const wchar_t* = NULL,
                 const wchar_t* = NULL, const wchar_t* = NULL,
                 const wchar_t* = NULL, const wchar_t* = NULL,
-                const wchar_t* = NULL, const wchar_t* = NULL);
+                const wchar_t* = NULL, const wchar_t* = NULL,
+                const wchar_t* = NULL);
 
     SemanticError(Control&, FileSymbol*);
     ~SemanticError()
@@ -442,8 +488,8 @@ public:
             delete [] buffer[i];
     }
 
-    int num_errors,
-        num_warnings;
+    int num_errors;
+    int num_warnings;
 
     void EnteringClone() { clone_count++; }
     void ExitingClone() { clone_count--; }

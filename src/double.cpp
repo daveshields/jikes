@@ -1,9 +1,9 @@
-// $Id: double.cpp,v 1.30 2003/09/27 18:16:58 ericb Exp $
+// $Id: double.cpp,v 1.32 2004/02/17 12:58:44 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2003 IBM Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 //
@@ -59,6 +59,7 @@
 
 #include "double.h"
 #include "long.h"
+#include "code.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -114,10 +115,8 @@ IEEEfloat::IEEEfloat(i4 a)
         a  = -a; // even works for MIN_INT!
         sign = 1;
     }
-    if (a == 0)
-        *this = POSITIVE_ZERO();
-    else
-        *this = Normalize(sign, FRACT_SIZE, (u4) a);
+    *this = (a == 0) ? POSITIVE_ZERO()
+        : Normalize(sign, FRACT_SIZE, (u4) a);
 #endif // HAVE_IEEE754
 }
 
@@ -325,6 +324,7 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
     // consume whitespace
     //
     for (s = str; ; s++)
+    {
         switch (*s)
         {
         case U_MINUS:
@@ -346,9 +346,10 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
         default:
             goto break2;
         }
+    }
  break2:
     //
-    // consume leading 0's
+    // Consume leading zeroes.
     //
     if (*s == U_0)
     {
@@ -360,6 +361,109 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
             *this = sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
             return;
         }
+        //
+        // Parse hexadecimal floating point.
+        //
+        else if (*s == U_x || *s == U_X)
+        {
+            i4 fraction = 0;
+            // Exponent adjustment, based on '.' location.
+            int shift = FRACT_SIZE;
+            bool seen_dot = false;
+            while (*++s && *s == U_0); // Consume leading zeroes.
+            c = *s;
+            if (c == U_DOT)
+            {
+                seen_dot = true;
+                while (*++s && *s == U_0)
+                    shift -= 4;
+                c = *s;
+            }
+            if (! c || c == U_p || c == U_P)
+            {
+                *this = sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
+                return;
+            }
+            // To avoid overflow, stop after enough bits have been read.
+            for (i = 0; i < (FRACT_SIZE >> 2) + 2 && c; i++, c = *++s)
+            {
+                if (c == U_DOT)
+                {
+                    if (seen_dot)
+                        break;
+                    c = *++s;
+                    seen_dot = true;
+                }
+                int value;
+                if (Code::IsHexDigit(c))
+                    value = Code::Value(c);
+                else break;
+                if (seen_dot)
+                    shift -= 4;
+                fraction = (fraction << 4) + value;
+            }
+            // Round any remaining bits.
+            bool sticky = false;
+            while (c == U_DOT || Code::IsHexDigit(c))
+            {
+                if (c == U_DOT)
+                {
+                    if (seen_dot)
+                        break;
+                    seen_dot = true;
+                }
+                else
+                {
+                    if (! seen_dot)
+                        shift += 4;
+                    if (c != U_0)
+                        sticky = true;
+                }
+                c = *++s;
+            }
+            assert(fraction != 0);
+            if (sticky)
+                fraction++;
+            // On to the expononet.
+            int exponent = 0;
+            esign = false;
+            if (c == U_p || c == U_P)
+            {
+                if (*++s == U_MINUS)
+                {
+                    esign = true;
+                    s++;
+                }
+                else if (*s == U_PLUS)
+                    s++;
+                while ((c = *s++))
+                {
+                    if (! Code::IsDecimalDigit(c))
+                        break;
+                    exponent = exponent * 10 + c - U_0;
+                    // Check for exponent overflow
+                    if (exponent + shift > 19999)
+                    {
+                        if (check_invalid)
+                            *this = NaN();
+                        else
+                        {
+                            *this = esign ? POSITIVE_ZERO()
+                                : POSITIVE_INFINITY();
+                            if (sign)
+                                *this = - *this;
+                        }
+                        return;
+                    }
+                }
+            }
+            if (esign)
+                exponent = - exponent;
+            *this = Normalize(sign, exponent + shift, fraction);
+            if (check_invalid && (IsZero() || IsInfinite()))
+                *this = NaN();
+            return;
+        }
     }
 
     //
@@ -367,7 +471,7 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
     //
     s0 = s;
     y = z = 0;
-    for (nd = nf = 0; (c = *s) >= U_0 && c <= U_9; nd++, s++)
+    for (nd = nf = 0; Code::IsDecimalDigit(c = *s); nd++, s++)
         if (nd < 8)
             y = 10 * y + c - U_0;
     nd0 = nd;
@@ -388,7 +492,7 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
                 nz = 0;
             }
         }
-        for ( ; c >= U_0 && c <= U_9; c = *++s)
+        for ( ; Code::IsDecimalDigit(c); c = *++s)
         {
             nz++;
             if (c -= U_0)
@@ -418,7 +522,7 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
         case U_PLUS:
             c = *++s;
         }
-        if (c >= U_0 && c <= U_9)
+        if (Code::IsDecimalDigit(c))
         {
             if (!nd && !nz && !nz0)
             {
@@ -431,7 +535,7 @@ IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
             {
                 L = c - U_0;
                 s1 = s;
-                while ((c = *++s) >= U_0 && c <= U_9)
+                while (Code::IsDecimalDigit(c = *++s))
                     L = 10 * L + c - U_0;
                 //
                 // Avoid confusion from exponents so large that e might
@@ -721,7 +825,7 @@ i4 IEEEfloat::IntValue() const
         exponent = Exponent();
 
     if (exponent > 30)
-        return sign ? MIN_INT : MAX_INT;
+        return sign ? Int::MIN_INT() : Int::MAX_INT();
 
     // This covers true zero and denorms.
     if (exponent < 0)
@@ -766,7 +870,7 @@ IEEEfloat IEEEfloat::Normalize(int sign, int exponent, u4 fraction)
 {
     bool round = false, sticky = false;
 
-    assert(fraction);
+    assert(fraction != 0);
 
     //
     // Normalize right. Shift until value < MAX_FRACT.
@@ -814,6 +918,8 @@ IEEEfloat IEEEfloat::Normalize(int sign, int exponent, u4 fraction)
     //
     if (exponent <= -BIAS)
     {
+        if (exponent < -BIAS - FRACT_SIZE)
+            return sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
         while (exponent <= -BIAS)
         {
             sticky |= round;
@@ -821,12 +927,9 @@ IEEEfloat IEEEfloat::Normalize(int sign, int exponent, u4 fraction)
             fraction >>= 1;
             exponent++;
         }
-
         if (round && (sticky || (fraction & 1)))
             fraction++;
-
         exponent = -BIAS;
-
         if (fraction == 0)
             return sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
     }
@@ -1314,10 +1417,8 @@ IEEEdouble::IEEEdouble(i4 a)
         a  = -a; // even works for MIN_INT!
         sign = 1;
     }
-    if (a == 0)
-        *this = POSITIVE_ZERO();
-    else
-        *this = Normalize(sign, FRACT_SIZE, ULongInt((u4) a));
+    *this = (a == 0) ? POSITIVE_ZERO()
+        : Normalize(sign, FRACT_SIZE, ULongInt((u4) a));
 #endif // HAVE_IEEE754
 }
 
@@ -1339,10 +1440,8 @@ IEEEdouble::IEEEdouble(const LongInt &a)
         l  = -a; // even works for MIN_LONG!
         sign = 1;
     }
-    if (l == 0)
-        *this = POSITIVE_ZERO();
-    else
-        *this = Normalize(sign, FRACT_SIZE, ULongInt(l));
+    *this = (l == 0) ? POSITIVE_ZERO()
+        : Normalize(sign, FRACT_SIZE, ULongInt(l));
 #endif // HAVE_IEEE754
 }
 
@@ -1372,6 +1471,7 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
     // consume whitespace
     //
     for (s = str; ; s++)
+    {
         switch (*s)
         {
         case U_MINUS:
@@ -1393,9 +1493,10 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
         default:
             goto break2;
         }
+    }
  break2:
     //
-    // consume leading 0's
+    // Consume leading zeroes.
     //
     if (*s == U_0)
     {
@@ -1407,6 +1508,109 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
             *this = sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
             return;
         }
+        //
+        // Parse hexadecimal floating point.
+        //
+        else if (*s == U_x || *s == U_X)
+        {
+            LongInt fraction = 0;
+            // Exponent adjustment, based on '.' location.
+            int shift = FRACT_SIZE;
+            bool seen_dot = false;
+            while (*++s && *s == U_0); // Consume leading zeroes.
+            c = *s;
+            if (c == U_DOT)
+            {
+                seen_dot = true;
+                while (*++s && *s == U_0)
+                    shift -= 4;
+                c = *s;
+            }
+            if (! c || c == U_p || c == U_P)
+            {
+                *this = sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
+                return;
+            }
+            // To avoid overflow, stop after enough bits have been read.
+            for (i = 0; i < (FRACT_SIZE >> 2) + 2 && c; i++, c = *++s)
+            {
+                if (c == U_DOT)
+                {
+                    if (seen_dot)
+                        break;
+                    c = *++s;
+                    seen_dot = true;
+                }
+                int value;
+                if (Code::IsHexDigit(c))
+                    value = Code::Value(c);
+                else break;
+                if (seen_dot)
+                    shift -= 4;
+                fraction = (fraction << 4) + value;
+            }
+            // Round any remaining bits.
+            bool sticky = false;
+            while (c == U_DOT || Code::IsHexDigit(c))
+            {
+                if (c == U_DOT)
+                {
+                    if (seen_dot)
+                        break;
+                    seen_dot = true;
+                }
+                else
+                {
+                    if (! seen_dot)
+                        shift += 4;
+                    if (c != U_0)
+                        sticky = true;
+                }
+                c = *++s;
+            }
+            assert(fraction != 0);
+            if (sticky)
+                fraction++;
+            // On to the expononet.
+            int exponent = 0;
+            esign = false;
+            if (c == U_p || c == U_P)
+            {
+                if (*++s == U_MINUS)
+                {
+                    esign = true;
+                    s++;
+                }
+                else if (*s == U_PLUS)
+                    s++;
+                while ((c = *s++))
+                {
+                    if (! Code::IsDecimalDigit(c))
+                        break;
+                    exponent = exponent * 10 + c - U_0;
+                    // Check for exponent overflow
+                    if (exponent + shift > 19999)
+                    {
+                        if (check_invalid)
+                            *this = NaN();
+                        else
+                        {
+                            *this = esign ? POSITIVE_ZERO()
+                                : POSITIVE_INFINITY();
+                            if (sign)
+                                *this = - *this;
+                        }
+                        return;
+                    }
+                }
+            }
+            if (esign)
+                exponent = - exponent;
+            *this = Normalize(sign, exponent + shift, fraction);
+            if (check_invalid && (IsZero() || IsInfinite()))
+                *this = NaN();
+            return;
+        }
     }
 
     //
@@ -1414,7 +1618,7 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
     //
     s0 = s;
     y = z = 0;
-    for (nd = nf = 0; (c = *s) >= U_0 && c <= U_9; nd++, s++)
+    for (nd = nf = 0; Code::IsDecimalDigit(c = *s); nd++, s++)
         if (nd < 9)
             y = 10 * y + c - U_0;
         else if (nd < 16)
@@ -1437,7 +1641,7 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
                 nz = 0;
             }
         }
-        for ( ; c >= U_0 && c <= U_9; c = *++s)
+        for ( ; Code::IsDecimalDigit(c); c = *++s)
         {
             nz++;
             if (c -= U_0)
@@ -1471,7 +1675,7 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
         case U_PLUS:
             c = *++s;
         }
-        if (c >= U_0 && c <= U_9)
+        if (Code::IsDecimalDigit(c))
         {
             if (!nd && !nz && !nz0)
             {
@@ -1484,7 +1688,7 @@ IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
             {
                 L = c - U_0;
                 s1 = s;
-                while ((c = *++s) >= U_0 && c <= U_9)
+                while (Code::IsDecimalDigit(c = *++s))
                     L = 10 * L + c - U_0;
                 //
                 // Avoid confusion from exponents so large that e might
@@ -1863,17 +2067,17 @@ i4 IEEEdouble::IntValue() const
         return 0;
 
 #ifdef HAVE_IEEE754
-    if (value.double_value < (double)(i4) MIN_INT)
-        return MIN_INT;
-    else if (value.double_value > (double) MAX_INT)
-        return MAX_INT;
+    if (value.double_value < (double)(i4) Int::MIN_INT())
+        return Int::MIN_INT();
+    else if (value.double_value > (double) Int::MAX_INT())
+        return Int::MAX_INT();
     return (i4) value.double_value;
 #else
     int sign = Sign(),
         exponent = Exponent();
 
     if (exponent > 30)
-        return sign ? MIN_INT : MAX_INT;
+        return sign ? Int::MIN_INT() : Int::MAX_INT();
 
     // This includes true zero and denorms.
     if (exponent < 0)
@@ -1957,27 +2161,26 @@ IEEEdouble IEEEdouble::Normalize(int sign, int exponent, ULongInt fraction)
     //
     // Check and respond to overflow
     //
-    if (exponent > (int) BIAS)
+    if (exponent > BIAS)
         return sign ? NEGATIVE_INFINITY() : POSITIVE_INFINITY();
 
     //
     // Check and respond to underflow
     //
-    if (exponent <= -(int) BIAS)
+    if (exponent <= -BIAS)
     {
-        while (exponent <= -(int) BIAS)
+        if (exponent < -BIAS - FRACT_SIZE)
+            return sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
+        while (exponent <= -BIAS)
         {
             sticky |= round;
             round = (fraction.LowWord() & 1) != 0;
             fraction >>= 1;
             exponent++;
         }
-
         if (round && (sticky || (fraction.LowWord() & 1)))
             fraction++;
-
-        exponent = -(int) BIAS;
-
+        exponent = -BIAS;
         if (fraction == 0)
             return sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
     }

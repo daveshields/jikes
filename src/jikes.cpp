@@ -1,4 +1,4 @@
-// $Id: jikes.cpp,v 1.95 2004/01/07 13:58:11 ericb Exp $
+// $Id: jikes.cpp,v 1.98 2004/03/20 04:48:17 jikesadmin Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -50,15 +50,16 @@ int main(int argc, char *argv[])
                "                      control level of debug information in class files\n"
                "                      [default lines,source]\n"
                "-J...               no effect (ignored for compatibility)\n"
-               "-nowarn             do not issue warning messages\n"
+               "-nowarn             javac-compatible equivalent of +Z0\n"
                "-nowrite            do not write any class files, useful with -verbose\n"
                "-O                  optimize bytecode (presently does nothing)\n"
                "-source release     interpret source by Java SDK release rules\n"
-               "                      [default to max(target, 1.3)]\n"
+               "                      [default to max(target, 1.4)]\n"
                "-sourcepath path    location of user source files [default '']\n"
                "-target release     output bytecode for Java SDK release rules\n"
                "                      [default to source if specified, else 1.4.2]\n"
                "-verbose            list files read and written\n"
+               "-Werror             javac-compatible equivalent of +Z2\n"
                "-Xstdout            redirect output listings to stdout\n"
                "-Xswitchcheck       warn about fallthrough between switch statement cases\n"
                "\tEnhanced options:\n"
@@ -79,7 +80,10 @@ int main(int argc, char *argv[])
 
         printf("+T=n                set value of tab to n spaces, defaults to 8\n"
                "+U                  do full dependence check including Zip and Jar files\n"
-               "+Z                  treat cautions as errors\n"
+               "+Z0                 do not issue warning messages\n"
+               "+Z1                 treat cautions as errors\n"
+               "+Z2                 treat both warnings and cautions as errors\n"
+               "+Z                  equivalent to +Z1\n"
 #ifdef JIKES_DEBUG
                "\tDebugging options:\n"
                "+A                  dump AST to standard output\n"

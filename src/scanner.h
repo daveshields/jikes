@@ -1,4 +1,4 @@
-// $Id: scanner.h,v 1.16 2004/01/23 12:07:04 ericb Exp $ -*- c++ -*-
+// $Id: scanner.h,v 1.17 2004/03/25 13:32:28 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -43,7 +43,7 @@ private:
     bool deprecated; // true if the next token should be marked deprecated
 
     LexStream::Token* current_token;
-    LexStream::TokenIndex current_token_index;
+    TokenIndex current_token_index;
 
     void Initialize(FileSymbol*);
     void Scan();
@@ -68,20 +68,20 @@ private:
     class BraceStack
     {
     public:
-        void Push(LexStream::TokenIndex brace) { table.Next() = brace; }
+        void Push(TokenIndex brace) { table.Next() = brace; }
         void Pop()
         {
             if (table.Length() > 0)
                 table.Reset(table.Length() - 1);
         }
         int Size() { return table.Length(); }
-        LexStream::TokenIndex Top()
+        TokenIndex Top()
         {
             return table.Length() > 0 ? table[table.Length() - 1] : 0;
         }
 
     private:
-        Tuple<LexStream::TokenIndex> table;
+        Tuple<TokenIndex> table;
     } brace_stack;
 
     void (Scanner::*classify_token[128 + 1])();

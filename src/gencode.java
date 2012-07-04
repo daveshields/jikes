@@ -1,10 +1,9 @@
-// $Id: gencode.java,v 1.13 2002/08/02 21:29:46 ericb Exp $
+// $Id: gencode.java,v 1.14 2004/02/17 12:58:45 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://www.ibm.com/research/jikes.
-// Copyright (C) 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1999, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -19,20 +18,18 @@ import java.util.*;
  */
 class gencode
 {
-    static final int NEWLINE_CODE      = 0; // '\n', '\r'
-    static final int SPACE_CODE        = 1; // '\t', '\f', ' '
-    static final int WHITESPACE_CODE   = 2; // Character.isWhitespace
-    static final int BAD_CODE          = 3; // everything else ...
-    static final int DIGIT_CODE        = 4; // '0'..'9'
-    static final int OTHER_DIGIT_CODE  = 5; // Character.isJavaIdentifierPart
-    static final int LOWER_CODE        = 6; // 'a'..'z'
-    static final int UPPER_CODE        = 7; // 'A'..'Z'
-    static final int OTHER_LETTER_CODE = 8; // Character.isJavaIdentifierStart
+    static final int SPACE_CODE    = 0; // Character.isWhitespace
+    static final int BAD_CODE      = 1; // everything else ...
+    static final int DIGIT_CODE    = 2; // Character.isDigit
+    static final int ID_PART_CODE  = 3; // Character.isJavaIdentifierPart
+    static final int LOWER_CODE    = 4; // Character.isLowerCase
+    static final int UPPER_CODE    = 5; // Character.isUpperCase
+    static final int ID_START_CODE = 6; // Character.isJavaIdentifierStart
+    static final int MAX_CODEPOINT = 0x10ffff; // Maximum Unicode.
 
     static final String[] CODE_NAMES = {
-        "NEWLINE_CODE", "SPACE_CODE", "WHITESPACE_CODE", "BAD_CODE",
-        "DIGIT_CODE", "OTHER_DIGIT_CODE", "LOWER_CODE", "UPPER_CODE",
-        "OTHER_LETTER_CODE"
+        "SPACE_CODE", "BAD_CODE", "DIGIT_CODE", "ID_PART_CODE", "LOWER_CODE",
+        "UPPER_CODE", "ID_START_CODE"
     };
 
     static public void main(String args[])
@@ -40,26 +37,31 @@ class gencode
     {
         System.out.println("Gathering data...");
         // Use char[] for ease in building strings, despite only using 8 bits.
-        int numElements = 65536;
+        int numElements = MAX_CODEPOINT + 1;
         char[] info = new char[numElements];
         for (int i = 0; i < info.length; i++)
         {
-            if (i == '\n' || i == '\r')
-                info[i] = NEWLINE_CODE;
-            else if (i == ' ' || i == '\t' || i == '\f')
+            if (Character.isWhitespace(i))
                 info[i] = SPACE_CODE;
-            else if (Character.isWhitespace((char) i))
-                info[i] = WHITESPACE_CODE;
-            else if (i < 128 && Character.isLowerCase((char) i))
-                info[i] = LOWER_CODE; // Ascii lower case
-            else if (i < 128 && Character.isUpperCase((char) i))
-                info[i] = UPPER_CODE; // Ascii upper case
-            else if (i < 128 && Character.isDigit((char) i))
-                info[i] = DIGIT_CODE; // Ascii digit
-            else if (Character.isJavaIdentifierStart((char) i))
-                info[i] = OTHER_LETTER_CODE;
-            else if (Character.isJavaIdentifierPart((char) i))
-                info[i] = OTHER_DIGIT_CODE;
+            else if (Character.isLowerCase(i))
+            {
+                assert Character.isJavaIdentifierStart(i);
+                info[i] = LOWER_CODE;
+            }
+            else if (Character.isUpperCase(i))
+            {
+                assert Character.isJavaIdentifierStart(i);
+                info[i] = UPPER_CODE;
+            }
+            else if (Character.isDigit(i))
+            {
+                assert Character.isJavaIdentifierPart(i);
+                info[i] = DIGIT_CODE;
+            }
+            else if (Character.isJavaIdentifierStart(i))
+                info[i] = ID_START_CODE;
+            else if (Character.isJavaIdentifierPart(i))
+                info[i] = ID_PART_CODE;
             else
             {
                 info[i] = BAD_CODE;
@@ -72,7 +74,7 @@ class gencode
         int bestEst = info.length;
         String bestBlkStr = null;
 
-        for (int i = 3; i < 11; i++)
+        for (int i = 3; i < 12; i++)
         {
             int blkSize = 1 << i;
             Map blocks = new HashMap();
@@ -174,8 +176,8 @@ class gencode
                 if (str != null)
                     blockStr.append(str);
             }
-            if (blockStr.length() != blockLen)
-                throw new Error("Unexpected blockLen " + blockLen);
+            assert blockStr.length() == blockLen :
+                "Unexpected blockLen " + blockLen;
             int estimate = blockLen + (info.length >> (i - 1));
             System.out.println(" after merge " + blockLen + ": " + estimate +
                                " bytes");
@@ -187,21 +189,20 @@ class gencode
             }
         }
 
+        System.out.println("Generating code.h with shift of " + bestShift);
         int blkSize = 1 << bestShift;
-        char[] blocks = new char[info.length / blkSize];
+        char[] blocks = new char[info.length >> bestShift];
         for (int j = 0; j < info.length; j += blkSize)
         {
             String key = new String(info, j, blkSize);
             int index = bestBlkStr.indexOf(key);
-            if (index == -1)
-                throw new Error("Unexpected index for " + j);
+            assert index != -1 : "Unexpected index for " + j;
             blocks[j >> bestShift] = (char) (index - j);
         }
 
         //
         // Process the code.h file
         //
-        System.out.println("Generating code.h with shift of " + bestShift);
         PrintStream hfile = new PrintStream(new FileOutputStream("code.h"));
         printHeader(hfile, new String[] {"\"platform.h\""});
         hfile.println("#ifndef code_INCLUDED");
@@ -211,20 +212,18 @@ class gencode
         hfile.println("{");
         hfile.println("    //");
         hfile.println("    // To facilitate the scanning, the character set is partitioned into");
-        hfile.println("    // 8 categories using the array CODE. These are described below");
-        hfile.println("    // together with some self-explanatory functions defined on CODE.");
+        hfile.println("    // categories using the array CODE. These are described below together");
+        hfile.println("    // with some self-explanatory functions defined on CODE.");
         hfile.println("    //");
         hfile.println("    enum {");
         hfile.println("        SHIFT = " + bestShift + ",");
-        hfile.println("        NEWLINE_CODE = " + NEWLINE_CODE + ',');
         hfile.println("        SPACE_CODE = " + SPACE_CODE + ',');
-        hfile.println("        WHITESPACE_CODE = " + WHITESPACE_CODE + ',');
         hfile.println("        BAD_CODE = " + BAD_CODE + ',');
         hfile.println("        DIGIT_CODE = " + DIGIT_CODE + ',');
-        hfile.println("        OTHER_DIGIT_CODE = " + OTHER_DIGIT_CODE + ',');
+        hfile.println("        ID_PART_CODE = " + ID_PART_CODE + ',');
         hfile.println("        LOWER_CODE = " + LOWER_CODE + ',');
         hfile.println("        UPPER_CODE = " + UPPER_CODE + ',');
-        hfile.println("        OTHER_LETTER_CODE = " + OTHER_LETTER_CODE);
+        hfile.println("        ID_START_CODE = " + ID_START_CODE);
         hfile.println("    };");
         hfile.println();
         hfile.println("    static char codes[" + bestBlkStr.length() + "];");
@@ -232,13 +231,8 @@ class gencode
         hfile.println();
         hfile.println();
         hfile.println("public:");
-        hfile.println();
-        hfile.println("    static inline void SetBadCode(wchar_t c)");
-        hfile.println("    {");
-        hfile.println("        codes[(u2) (blocks[c >> SHIFT] + c)] = BAD_CODE;");
-        hfile.println("    }");
-        hfile.println();
-        hfile.println("    static inline void CodeCheck(wchar_t c)");
+        hfile.println("#ifdef JIKES_DEBUG");
+        hfile.println("    static inline void CodeCheck(u4 c)");
         hfile.println("    {");
         hfile.println("        assert((u2) (blocks[c >> SHIFT] + c) < " +
                       bestBlkStr.length() + ");");
@@ -246,68 +240,104 @@ class gencode
         hfile.println();
         hfile.println("    static inline bool CodeCheck(void)");
         hfile.println("    {");
-        hfile.println("        for (int i = 0; i <= 0xffff; i++)");
-        hfile.println("            CodeCheck((wchar_t) i);");
+        hfile.println("        for (u4 c = 0; c <= " + MAX_CODEPOINT +
+                      "; c++)");
+        hfile.println("            CodeCheck(c);");
         hfile.println("        return true;");
         hfile.println("    }");
+        hfile.println("#endif // JIKES_DEBUG");
         hfile.println();
+        hfile.println("//");
+        hfile.println("// These methods test for Unicode surrogate pairs.");
+        hfile.println("//");
+        hfile.println("    static inline bool IsHighSurrogate(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return c >= 0xd800 && c <= 0xdbff;");
+        hfile.println("    }");
+        hfile.println("    static inline bool IsLowSurrogate(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return c >= 0xdc00 && c <= 0xdfff;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline u4 Codepoint(wchar_t hi, wchar_t lo)");
+        hfile.println("    {");
+        hfile.println("        assert(IsHighSurrogate(hi) && IsLowSurrogate(lo));");
+        hfile.println("        return (hi << 10) + lo + (0x10000 - (0xd800 << 10) - 0xdc00);");
+        hfile.println("    }");
+        hfile.println("    static inline u4 Codepoint(const wchar_t* p)");
+        hfile.println("    {");
+        hfile.println("        u4 result = (u4) *p;");
+        hfile.println("        if (IsHighSurrogate(result) && IsLowSurrogate(p[1]))");
+        hfile.println("            result = Codepoint(result, p[1]);");
+        hfile.println("        return result;");
+        hfile.println("    }");
+        hfile.println("    static inline int Codelength(const wchar_t* p)");
+        hfile.println("    {");
+        hfile.println("        return (IsHighSurrogate(*p) && IsLowSurrogate(p[1])) ? 2 : 1;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("//");
+        hfile.println("// These methods test for ASCII characteristics. Since it is strictly ASCII,");
+        hfile.println("// there is no need to check for Unicode surrogate pairs.");
+        hfile.println("//");
         hfile.println("    static inline bool IsNewline(wchar_t c)");
         hfile.println("    {");
-        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] == NEWLINE_CODE;");
+        hfile.println("        return c == U_LF || c == U_CR;");
         hfile.println("    }");
-        hfile.println();
         hfile.println("    static inline bool IsSpaceButNotNewline(wchar_t c)");
         hfile.println("    {");
-        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] == SPACE_CODE;");
+        hfile.println("        return c == U_SP || c == U_FF || c == U_HT;");
         hfile.println("    }");
-        hfile.println();
         hfile.println("    static inline bool IsSpace(wchar_t c)");
         hfile.println("    {");
-        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] <= SPACE_CODE;");
+        hfile.println("        return c == U_SP || c == U_CR || c == U_LF ||");
+        hfile.println("            c == U_HT || c == U_FF;");
         hfile.println("    }");
         hfile.println();
-        hfile.println("    static inline bool IsWhitespace(wchar_t c)");
+        hfile.println("    static inline bool IsDecimalDigit(wchar_t c)");
         hfile.println("    {");
-        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] <= WHITESPACE_CODE;");
+        hfile.println("        return c <= U_9 && c >= U_0;");
         hfile.println("    }");
-        hfile.println();
-        hfile.println("    static inline bool IsDigit(wchar_t c)");
-        hfile.println("    {");
-        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] == DIGIT_CODE;");
-        hfile.println("    }");
-        hfile.println();
         hfile.println("    static inline bool IsOctalDigit(wchar_t c)");
         hfile.println("    {");
         hfile.println("        return c <= U_7 && c >= U_0;");
         hfile.println("    }");
-        hfile.println();
         hfile.println("    static inline bool IsHexDigit(wchar_t c)");
         hfile.println("    {");
         hfile.println("        return c <= U_f && (c >= U_a ||");
         hfile.println("                            (c >= U_A && c <= U_F) ||");
         hfile.println("                            (c >= U_0 && c <= U_9));");
         hfile.println("    }");
-        hfile.println();
-        hfile.println("    static inline bool IsUpper(wchar_t c)");
+        hfile.println("    static inline int Value(wchar_t c)");
         hfile.println("    {");
-        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] == UPPER_CODE;");
+        hfile.println("        assert(IsHexDigit(c));");
+        hfile.println("        return c - (c <= U_9 ? U_0 : c < U_a ? U_A - 10 : U_a - 10);");
+        hfile.println("    }");
+        hfile.println("    static inline bool IsSign(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return c == U_MINUS || c == U_PLUS;");
         hfile.println("    }");
         hfile.println();
-        hfile.println("    static inline bool IsLower(wchar_t c)");
+        hfile.println("    static inline bool IsAsciiUpper(wchar_t c)");
         hfile.println("    {");
-        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] == LOWER_CODE;");
+        hfile.println("        return c <= U_Z && c >= U_A;");
+        hfile.println("    }");
+        hfile.println("    static inline bool IsAsciiLower(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return c <= U_z && c >= U_a;");
         hfile.println("    }");
         hfile.println();
-        hfile.println("    static inline bool IsAlpha(wchar_t c)");
-        hfile.println("    {");
-        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] >= LOWER_CODE;");
-        hfile.println("    }");
-        hfile.println();
-        hfile.println("    static inline bool IsAlnum(wchar_t c)");
-        hfile.println("    {");
-        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] >= DIGIT_CODE;");
-        hfile.println("    }");
-        hfile.println();
+        hfile.println("//");
+        hfile.println("// The following methods recognize Unicode surrogate pairs, hence the need to");
+        hfile.println("// pass a pointer. Use Codelength() to determine if one or two characters");
+        hfile.println("// were used in the formation of a character.");
+        hfile.println("//");
+        printMethod(hfile, "IsWhitespace", "SPACE_CODE", "==");
+        printMethod(hfile, "IsDigit", "DIGIT_CODE", "==");
+        printMethod(hfile, "IsUpper", "UPPER_CODE", "==");
+        printMethod(hfile, "IsLower", "LOWER_CODE", "==");
+        printMethod(hfile, "IsAlpha", "LOWER_CODE", ">=");
+        printMethod(hfile, "IsAlnum", "DIGIT_CODE", ">=");
         hfile.println("};");
         hfile.println();
         hfile.println("#endif // code_INCLUDED");
@@ -322,9 +352,9 @@ class gencode
         printHeader(cfile, new String[] {"\"code.h\""});
         cfile.println("char Code::codes[" + bestBlkStr.length() + "] =");
         cfile.println("{");
-        for (int j = 0; j < bestBlkStr.length(); j += 4)
+        for (int j = 0; j < bestBlkStr.length(); j += 5)
         {
-            for (int k = 0; k < 4; k++)
+            for (int k = 0; k < 5; k++)
             {
                 if (k + j >= bestBlkStr.length())
                     break;
@@ -365,7 +395,7 @@ class gencode
                            blocks.length * 2 + " bytes for block lookup");
         System.out.println("   plus " + bestBlkStr.length() +
                            " bytes for the encodings");
-        System.out.println("The number of unicode characters legal in Java sourcecode is " +
+        System.out.println("Number of legal unicode codepoints:" +
                            numElements);
     }
 
@@ -377,8 +407,7 @@ class gencode
         file.println("// This software is subject to the terms of the IBM Jikes Compiler");
         file.println("// License Agreement available at the following URL:");
         file.println("// http://www.ibm.com/research/jikes.");
-        file.println("// Copyright (C) 1999, 2000, 2001, 2002, International Business");
-        file.println("// Machines Corporation and others.  All Rights Reserved.");
+        file.println("// Copyright (C) 1999, 2004 IBM Corporation and others.  All Rights Reserved.");
         file.println("// You must accept the terms of that agreement to use this software.");
         file.println("//");
         file.println();
@@ -395,6 +424,17 @@ class gencode
         file.println();
     }
 
+    static void printMethod(PrintStream file, String name, String value,
+                            String relation)
+    {
+        file.println("    static inline bool " + name + "(const wchar_t* p)");
+        file.println("    {");
+        file.println("        u4 c = Codepoint(p);");
+        file.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] " +
+                     relation + ' ' + value + ";");
+        file.println("    }");
+    }
+
     static void printFooter(PrintStream file)
     {
         file.println();
@@ -403,5 +443,4 @@ class gencode
         file.println("#endif");
         file.println();
     }
-
 }

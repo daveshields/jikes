@@ -1,4 +1,4 @@
-// $Id: system.cpp,v 1.53 2004/01/31 17:16:02 ericb Exp $
+// $Id: system.cpp,v 1.62 2004/04/04 19:45:48 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -57,6 +57,108 @@ int Control::ConvertUnicodeToUtf8(const wchar_t* source, char* target)
 
 
 //
+// Turn a C string literal into a NameSymbol. Because it works even on
+// non-ASCII systems (where 'a' != U_a), it is slightly inefficient. Hence it
+// is private and only called from caching accessor methods.
+//
+NameSymbol* Control::FindOrInsertSystemName(const char* name)
+{
+    int len = strlen(name);
+    wchar_t* wname = new wchar_t[len + 1];
+    for (int i = 0; i < len; i++)
+    {
+        // Only list the characters we expect in system names.
+        switch (name[i])
+        {
+        case 'a': wname[i] = U_a; break;
+        case 'b': wname[i] = U_b; break;
+        case 'c': wname[i] = U_c; break;
+        case 'd': wname[i] = U_d; break;
+        case 'e': wname[i] = U_e; break;
+        case 'f': wname[i] = U_f; break;
+        case 'g': wname[i] = U_g; break;
+        case 'h': wname[i] = U_h; break;
+        case 'i': wname[i] = U_i; break;
+        case 'j': wname[i] = U_j; break;
+        case 'k': wname[i] = U_k; break;
+        case 'l': wname[i] = U_l; break;
+        case 'm': wname[i] = U_m; break;
+        case 'n': wname[i] = U_n; break;
+        case 'o': wname[i] = U_o; break;
+        case 'p': wname[i] = U_p; break;
+        case 'q': wname[i] = U_q; break;
+        case 'r': wname[i] = U_r; break;
+        case 's': wname[i] = U_s; break;
+        case 't': wname[i] = U_t; break;
+        case 'u': wname[i] = U_u; break;
+        case 'v': wname[i] = U_v; break;
+        case 'w': wname[i] = U_w; break;
+        case 'x': wname[i] = U_x; break;
+        case 'y': wname[i] = U_y; break;
+        case 'z': wname[i] = U_z; break;
+        case 'A': wname[i] = U_A; break;
+        case 'B': wname[i] = U_B; break;
+        case 'C': wname[i] = U_C; break;
+        case 'D': wname[i] = U_D; break;
+        case 'E': wname[i] = U_E; break;
+        case 'F': wname[i] = U_F; break;
+        case 'G': wname[i] = U_G; break;
+        case 'H': wname[i] = U_H; break;
+        case 'I': wname[i] = U_I; break;
+        case 'J': wname[i] = U_J; break;
+        case 'K': wname[i] = U_K; break;
+        case 'L': wname[i] = U_L; break;
+        case 'M': wname[i] = U_M; break;
+        case 'N': wname[i] = U_N; break;
+        case 'O': wname[i] = U_O; break;
+        case 'P': wname[i] = U_P; break;
+        case 'Q': wname[i] = U_Q; break;
+        case 'R': wname[i] = U_R; break;
+        case 'S': wname[i] = U_S; break;
+        case 'T': wname[i] = U_T; break;
+        case 'U': wname[i] = U_U; break;
+        case 'V': wname[i] = U_V; break;
+        case 'W': wname[i] = U_W; break;
+        case 'X': wname[i] = U_X; break;
+        case 'Y': wname[i] = U_Y; break;
+        case 'Z': wname[i] = U_Z; break;
+        case '0': wname[i] = U_0; break;
+        case '1': wname[i] = U_1; break;
+        case '2': wname[i] = U_2; break;
+        case '3': wname[i] = U_3; break;
+        case '4': wname[i] = U_4; break;
+        case '5': wname[i] = U_5; break;
+        case '6': wname[i] = U_6; break;
+        case '7': wname[i] = U_7; break;
+        case '8': wname[i] = U_8; break;
+        case '9': wname[i] = U_9; break;
+        case '_': wname[i] = U_UN; break;
+        case '$': wname[i] = U_DS; break;
+        case '(': wname[i] = U_LP; break;
+        case ')': wname[i] = U_RP; break;
+        case ';': wname[i] = U_SC; break;
+        case '<': wname[i] = U_LT; break;
+        case '>': wname[i] = U_GT; break;
+        case '/': wname[i] = U_SL; break;
+        case '[': wname[i] = U_LB; break;
+        case ']': wname[i] = U_RB; break;
+        case '-': wname[i] = U_MI; break;
+        case '.': wname[i] = U_DO; break;
+        case '?': wname[i] = U_QU; break;
+        default: assert(false && "bad character in system name");
+        }
+    }
+    wname[len] = U_NULL;
+    NameSymbol* name_symbol = name_table.FindOrInsertName(wname, len);
+    delete [] wname;
+    if (! name_symbol -> Utf8_literal)
+        name_symbol -> Utf8_literal =
+            ConvertUnicodeToUtf8(name_symbol -> Name());
+    return name_symbol;
+}
+
+
+//
 // Convert the Utf8 string of length len pointed to by source into its unicode
 // representation pointed to by target. The wchar_t string target is presumed
 // to have been allocated and to be large enough (at least len + 1) to
@@ -92,12 +194,8 @@ int Control::ConvertUtf8ToUnicode(wchar_t* target, const char* source, int len)
             ch = source[i] & 0x3F;
             *ptr += ch;
         }
-        else
-        {
-            assert(! "valid character encoding: chaos, Damn, Caramba, Zut !!!\n");
-        }
+        else assert(false && "invalid character encoding");
     }
-
     *ptr = U_NULL;
     return ptr - target;
 }
@@ -192,374 +290,60 @@ void Control::FindPathsToDirectory(PackageSymbol* package)
 
 void Control::ProcessGlobals()
 {
-    dot_name_symbol = FindOrInsertName(US_DO, wcslen(US_DO));
-    dot_dot_name_symbol = FindOrInsertName(US_DO_DO, wcslen(US_DO_DO));
-    length_name_symbol = FindOrInsertName(US_length, wcslen(US_length));
-    init_name_symbol = FindOrInsertName(US_LT_init_GT, wcslen(US_LT_init_GT));
-    clinit_name_symbol = FindOrInsertName(US_LT_clinit_GT,
-                                          wcslen(US_LT_clinit_GT));
-    block_init_name_symbol = FindOrInsertName(US_this, wcslen(US_this));
-    this0_name_symbol = FindOrInsertName(US_this0, wcslen(US_this0));
-    clone_name_symbol = FindOrInsertName(US_clone, wcslen(US_clone));
-    object_name_symbol = FindOrInsertName(US_Object, wcslen(US_Object));
-    type_name_symbol = FindOrInsertName(US_TYPE, wcslen(US_TYPE));
-    class_name_symbol = FindOrInsertName(US_class_DOLLAR,
-                                         wcslen(US_class_DOLLAR));
-    equals_name_symbol = FindOrInsertName(US_equals, wcslen(US_equals));
-    hashCode_name_symbol = FindOrInsertName(US_hashCode, wcslen(US_hashCode));
-    serialVersionUID_name_symbol = FindOrInsertName(US_serialVersionUID, wcslen(US_serialVersionUID));
-    toString_name_symbol = FindOrInsertName(US_toString, wcslen(US_toString));
-    append_name_symbol = FindOrInsertName(US_append, wcslen(US_append));
-    forName_name_symbol = FindOrInsertName(US_forName, wcslen(US_forName));
-    getMessage_name_symbol = FindOrInsertName(US_getMessage,
-                                              wcslen(US_getMessage));
-    getClass_name_symbol = FindOrInsertName(US_getClass, wcslen(US_getClass));
-    getComponentType_name_symbol =
-        FindOrInsertName(US_getComponentType,
-                         wcslen(US_getComponentType));
-    desiredAssertionStatus_name_symbol =
-        FindOrInsertName(US_desiredAssertionStatus,
-                         wcslen(US_desiredAssertionStatus));
-    initCause_name_symbol = FindOrInsertName(US_initCause,
-                                             wcslen(US_initCause));
+    // Some names are conditional on 1.5 VMs, which expanded the set of legal
+    // VM names to include non-Java identifiers.
+    access_name_symbol =
+        FindOrInsertSystemName(option.source < JikesOption::SDK1_5
+                               ? "access$" : "-");
+    array_name_symbol = FindOrInsertSystemName("array");
+    assert_name_symbol = FindOrInsertSystemName("assert");
+    block_init_name_symbol = FindOrInsertSystemName("this");
+    class_name_symbol = FindOrInsertSystemName("class");
+    clinit_name_symbol = FindOrInsertSystemName("<clinit>");
+    clone_name_symbol = FindOrInsertSystemName("clone");
+    dot_name_symbol = FindOrInsertSystemName(".");
+    dot_dot_name_symbol = FindOrInsertSystemName("..");
+    Enum_name_symbol = FindOrInsertSystemName("Enum");
+    equals_name_symbol = FindOrInsertSystemName("equals");
+    false_name_symbol = FindOrInsertSystemName("false");
+    hashCode_name_symbol = FindOrInsertSystemName("hashCode");
+    init_name_symbol = FindOrInsertSystemName("<init>");
+    length_name_symbol = FindOrInsertSystemName("length");
+    null_name_symbol = FindOrInsertSystemName("null");
+    Object_name_symbol = FindOrInsertSystemName("Object");
+    package_info_name_symbol = FindOrInsertSystemName("package-info");
+    question_name_symbol = FindOrInsertSystemName("??");
+    serialPersistentFields_name_symbol =
+        FindOrInsertSystemName("serialPersistentFields");
+    serialVersionUID_name_symbol = FindOrInsertSystemName("serialVersionUID");
+    this_name_symbol = FindOrInsertSystemName("this");
+    true_name_symbol = FindOrInsertSystemName("true");
+    val_name_symbol =
+        FindOrInsertSystemName(option.source < JikesOption::SDK1_5
+                               ? "val$" : "-");
 
     ConstantValue_literal = Utf8_pool.FindOrInsert(U8S_ConstantValue,
-                                                   U8S_ConstantValue_length);
+                                                   strlen(U8S_ConstantValue));
     Exceptions_literal = Utf8_pool.FindOrInsert(U8S_Exceptions,
-                                                U8S_Exceptions_length);
+                                                strlen(U8S_Exceptions));
     InnerClasses_literal = Utf8_pool.FindOrInsert(U8S_InnerClasses,
-                                                  U8S_InnerClasses_length);
+                                                  strlen(U8S_InnerClasses));
     Synthetic_literal = Utf8_pool.FindOrInsert(U8S_Synthetic,
-                                               U8S_Synthetic_length);
+                                               strlen(U8S_Synthetic));
     Deprecated_literal = Utf8_pool.FindOrInsert(U8S_Deprecated,
-                                                U8S_Deprecated_length);
+                                                strlen(U8S_Deprecated));
     LineNumberTable_literal =
         Utf8_pool.FindOrInsert(U8S_LineNumberTable,
-                               U8S_LineNumberTable_length);
+                               strlen(U8S_LineNumberTable));
     LocalVariableTable_literal =
         Utf8_pool.FindOrInsert(U8S_LocalVariableTable,
-                               U8S_LocalVariableTable_length);
-    Code_literal = Utf8_pool.FindOrInsert(U8S_Code, U8S_Code_length);
+                               strlen(U8S_LocalVariableTable));
+    Code_literal = Utf8_pool.FindOrInsert(U8S_Code, strlen(U8S_Code));
     SourceFile_literal = Utf8_pool.FindOrInsert(U8S_SourceFile,
-                                                U8S_SourceFile_length);
-
-    null_literal = Utf8_pool.FindOrInsert(U8S_null, U8S_null_length);
-    this_literal = Utf8_pool.FindOrInsert(U8S_this, U8S_this_length);
-}
-
-
-void Control::InitClassInfo()
-{
-    if (! Class_type -> Bad())
-    {
-        //
-        // Search for relevant forName method
-        //
-        for (MethodSymbol* method =
-                 Class_type -> FindMethodSymbol(forName_name_symbol);
-             method;
-             method = method -> next_method)
-        {
-            const char* signature = method -> SignatureString();
-
-            if (strcmp(signature, StringConstant::U8S_LP_String_RP_Class) == 0)
-            {
-                Class_forName_method = method;
-                break;
-            }
-        }
-
-        if (! Class_forName_method)
-        {
-            system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
-                                              LexStream::BadToken(),
-                                              Class_type -> ContainingPackageName(),
-                                              Class_type -> ExternalName());
-        }
-    }
-
-        //
-        // Search for relevent getComponentType method
-        //
-        for (MethodSymbol* method =
-                 Class_type -> FindMethodSymbol(getComponentType_name_symbol);
-             method;
-             method = method -> next_method)
-        {
-            const char* signature = method -> SignatureString();
-
-            if (strcmp(signature, StringConstant::U8S_LP_RP_Class) == 0)
-            {
-                Class_getComponentType_method = method;
-                break;
-            }
-       }
-
-        if (! Class_getComponentType_method)
-        {
-            system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
-                                              LexStream::BadToken(),
-                                              Class_type -> ContainingPackageName(),
-                                              Class_type -> ExternalName());
-        }
-
-        //
-        // Search for relevent desiredAssertionStatus method, in Java SDK 1.4
-        // or later
-        //
-        if (option.target >= JikesOption::SDK1_4)
-        {
-            for (MethodSymbol* method =
-                     Class_type -> FindMethodSymbol(desiredAssertionStatus_name_symbol);
-                 method;
-                 method = method -> next_method)
-            {
-                const char* signature = method -> SignatureString();
-
-                if (strcmp(signature, StringConstant::U8S_LP_RP_Z) == 0)
-                {
-                    Class_desiredAssertionStatus_method = method;
-                    break;
-                }
-            }
-
-            if (! Class_desiredAssertionStatus_method)
-            {
-                system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
-                                                  LexStream::BadToken(),
-                                                  Class_type -> ContainingPackageName(),
-                                                  Class_type -> ExternalName());
-            }
-        }
-}
-
-
-void Control::InitAssertionErrorInfo()
-{
-    assert(option.source >= JikesOption::SDK1_4);
-    if (! AssertionError_type -> Bad())
-    {
-        //
-        // Search for relevant constructors
-        //
-        MethodSymbol* ctor;
-        for (ctor = AssertionError_type -> FindMethodSymbol(init_name_symbol);
-             ctor; ctor = ctor -> next_method)
-        {
-            const char* signature = ctor -> SignatureString();
-
-            if (strcmp(signature, StringConstant::U8S_LP_RP_V) == 0)
-                AssertionError_Init_method = ctor;
-            else if (strcmp(signature, StringConstant::U8S_LP_C_RP_V) == 0)
-                AssertionError_InitWithChar_method = ctor;
-            else if (strcmp(signature, StringConstant::U8S_LP_Z_RP_V) == 0)
-                AssertionError_InitWithBoolean_method = ctor;
-            else if (strcmp(signature, StringConstant::U8S_LP_I_RP_V) == 0)
-                AssertionError_InitWithInt_method = ctor;
-            else if (strcmp(signature, StringConstant::U8S_LP_J_RP_V) == 0)
-                AssertionError_InitWithLong_method = ctor;
-            else if (strcmp(signature, StringConstant::U8S_LP_F_RP_V) == 0)
-                AssertionError_InitWithFloat_method = ctor;
-            else if (strcmp(signature, StringConstant::U8S_LP_D_RP_V) == 0)
-                AssertionError_InitWithDouble_method = ctor;
-            else if (strcmp(signature,
-                            StringConstant::U8S_LP_Object_RP_V) == 0)
-                AssertionError_InitWithObject_method = ctor;
-        }
-
-        if (! (AssertionError_Init_method &&
-               AssertionError_InitWithChar_method &&
-               AssertionError_InitWithBoolean_method &&
-               AssertionError_InitWithInt_method &&
-               AssertionError_InitWithLong_method &&
-               AssertionError_InitWithFloat_method &&
-               AssertionError_InitWithDouble_method &&
-               AssertionError_InitWithObject_method))
-        {
-            system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
-                                              LexStream::BadToken(),
-                                              AssertionError_type -> ContainingPackageName(),
-                                              AssertionError_type -> ExternalName());
-        }
-    }
-}
-
-
-void Control::InitThrowableInfo()
-{
-    if (! Throwable_type -> Bad())
-    {
-        //
-        // Search for relevant getMessage method
-        //
-        for (MethodSymbol* method =
-                 Throwable_type -> FindMethodSymbol(getMessage_name_symbol);
-             method;
-             method = method -> next_method)
-        {
-            const char* signature = method -> SignatureString();
-
-            if (strcmp(signature, StringConstant::U8S_LP_RP_String) == 0)
-            {
-                Throwable_getMessage_method = method;
-                break;
-            }
-        }
-
-        if (option.source >= JikesOption::SDK1_4)
-        {
-            //
-            // Search for relevant initCause method
-            //
-            for (MethodSymbol* method =
-                     Throwable_type -> FindMethodSymbol(initCause_name_symbol);
-                 method;
-                 method = method -> next_method)
-            {
-                const char* signature = method -> SignatureString();
-
-                if (strcmp(signature,
-                           StringConstant::U8S_LP_Throwable_RP_Throwable) == 0)
-                {
-                    Throwable_initCause_method = method;
-                    break;
-                }
-            }
-        }
-
-        if (! Throwable_getMessage_method ||
-            (option.source >= JikesOption::SDK1_4 &&
-             ! Throwable_initCause_method))
-        {
-            system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
-                                              LexStream::BadToken(),
-                                              Throwable_type -> ContainingPackageName(),
-                                              Throwable_type -> ExternalName());
-        }
-    }
-}
-
-
-void Control::InitNoClassDefFoundErrorInfo()
-{
-    if (! NoClassDefFoundError_type -> Bad())
-    {
-        //
-        // Search for relevant constructors
-        //
-        MethodSymbol* ctor;
-        for (ctor = NoClassDefFoundError_type -> FindMethodSymbol(init_name_symbol);
-             ctor; ctor = ctor -> next_method)
-        {
-            const char* signature = ctor -> SignatureString();
-
-            if (strcmp(signature, StringConstant::U8S_LP_String_RP_V) == 0)
-                NoClassDefFoundError_InitString_method = ctor;
-            else if (strcmp(signature, StringConstant::U8S_LP_RP_V) == 0)
-                NoClassDefFoundError_Init_method = ctor;
-        }
-
-        if (! NoClassDefFoundError_InitString_method ||
-            ! NoClassDefFoundError_Init_method)
-        {
-            system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
-                                              LexStream::BadToken(),
-                                              NoClassDefFoundError_type -> ContainingPackageName(),
-                                              NoClassDefFoundError_type -> ExternalName());
-        }
-    }
-}
-
-
-void Control::InitStringBufferInfo()
-{
-    if (! StringBuffer_type -> Bad())
-    {
-        //
-        // Search for relevant constructors
-        //
-        MethodSymbol* ctor;
-        for (ctor = StringBuffer_type -> FindMethodSymbol(init_name_symbol);
-             ctor; ctor = ctor -> next_method)
-        {
-            const char* signature = ctor -> SignatureString();
-            if (strcmp(signature, StringConstant::U8S_LP_RP_V) == 0)
-                 StringBuffer_Init_method = ctor;
-            else if (strcmp(signature,
-                            StringConstant::U8S_LP_String_RP_V) == 0)
-                 StringBuffer_InitWithString_method = ctor;
-        }
-
-        //
-        // Search for relevant toString method
-        //
-        for (MethodSymbol* toString_method =
-                 StringBuffer_type -> FindMethodSymbol(toString_name_symbol);
-             toString_method;
-             toString_method = toString_method -> next_method)
-        {
-            if (strcmp(toString_method -> SignatureString(),
-                       StringConstant::U8S_LP_RP_String) == 0)
-            {
-                StringBuffer_toString_method = toString_method;
-                break;
-            }
-        }
-
-        //
-        // Search for relevant append method
-        //
-        for (MethodSymbol* append_method =
-                 StringBuffer_type -> FindMethodSymbol(append_name_symbol);
-             append_method;
-             append_method = append_method -> next_method)
-        {
-            const char* signature = append_method -> SignatureString();
-
-            if (strcmp(signature,
-                       StringConstant::U8S_LP_C_RP_StringBuffer) == 0)
-                 StringBuffer_append_char_method = append_method;
-            else if (strcmp(signature,
-                            StringConstant::U8S_LP_Z_RP_StringBuffer) == 0)
-                 StringBuffer_append_boolean_method = append_method;
-            else if (strcmp(signature,
-                            StringConstant::U8S_LP_I_RP_StringBuffer) == 0)
-                 StringBuffer_append_int_method = append_method;
-            else if (strcmp(signature,
-                            StringConstant::U8S_LP_J_RP_StringBuffer) == 0)
-                 StringBuffer_append_long_method = append_method;
-            else if (strcmp(signature,
-                            StringConstant::U8S_LP_F_RP_StringBuffer) == 0)
-                 StringBuffer_append_float_method = append_method;
-            else if (strcmp(signature,
-                            StringConstant::U8S_LP_D_RP_StringBuffer) == 0)
-                 StringBuffer_append_double_method = append_method;
-            else if (strcmp(signature,
-                            StringConstant::U8S_LP_String_RP_StringBuffer) == 0)
-                 StringBuffer_append_string_method = append_method;
-            else if (strcmp(signature,
-                            StringConstant::U8S_LP_Object_RP_StringBuffer) == 0)
-                 StringBuffer_append_object_method = append_method;
-        }
-
-        if (! (StringBuffer_Init_method &&
-               StringBuffer_InitWithString_method &&
-               StringBuffer_toString_method &&
-               StringBuffer_append_char_method &&
-               StringBuffer_append_boolean_method &&
-               StringBuffer_append_int_method &&
-               StringBuffer_append_long_method &&
-               StringBuffer_append_float_method &&
-               StringBuffer_append_double_method &&
-               StringBuffer_append_string_method &&
-               StringBuffer_append_object_method))
-        {
-            system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
-                                              LexStream::BadToken(),
-                                              StringBuffer_type -> ContainingPackageName(),
-                                              StringBuffer_type -> ExternalName());
-        }
-    }
+                                                strlen(U8S_SourceFile));
+    EnclosingMethod_literal =
+        Utf8_pool.FindOrInsert(U8S_EnclosingMethod,
+                               strlen(U8S_EnclosingMethod));
 }
 
 
@@ -568,19 +352,15 @@ void Control::InitStringBufferInfo()
 //
 void Control::ProcessUnnamedPackage()
 {
-    unnamed_package =
-        external_table.InsertPackageSymbol(FindOrInsertName(US_EMPTY,
-                                                            wcslen(US_EMPTY)),
-                                           NULL);
+    unnamed_package = external_table
+        .InsertPackageSymbol(FindOrInsertName(US_EMPTY, 0), NULL);
 
     //
     // Create an entry for no_type. no_type is used primarily to signal an
     // error.
     //
-    no_type =
-        unnamed_package -> InsertSystemTypeSymbol(FindOrInsertName(US_QU_QU,
-                                                                   wcslen(US_QU_QU)));
-    no_type -> SetSignature(Utf8_pool.FindOrInsert(U8S_DO, strlen(U8S_DO)));
+    no_type = unnamed_package -> InsertSystemTypeSymbol(question_name_symbol);
+    no_type -> SetSignature(dot_name_symbol -> Utf8_literal);
     no_type -> outermost_type = no_type;
     no_type -> SetOwner(unnamed_package);
     no_type -> subtypes = new SymbolSet();
@@ -589,9 +369,7 @@ void Control::ProcessUnnamedPackage()
     //
     // Create an entry for the null type.
     //
-    null_type =
-        unnamed_package -> InsertSystemTypeSymbol(FindOrInsertName(US_null,
-                                                                   wcslen(US_null)));
+    null_type = unnamed_package -> InsertSystemTypeSymbol(null_name_symbol);
     null_type -> outermost_type = null_type;
     null_type -> SetOwner(unnamed_package);
     null_type -> SetACC_PUBLIC();
@@ -664,11 +442,8 @@ void Control::ProcessPath()
     //
 
     ProcessBootClassPath();
-
     ProcessExtDirs();
-
     ProcessClassPath();
-
     ProcessSourcePath();
 
     //
@@ -816,6 +591,7 @@ void Control::ProcessBootClassPath()
                 }
                 else
                 {
+                    errno = 0;
                     Zip* zipinfo = new Zip(*this, head);
                     if (! zipinfo -> IsValid())
                     {
@@ -824,13 +600,24 @@ void Control::ProcessBootClassPath()
                         for (int i = 0; i < input_name_length; i++)
                             name[i] = input_name[i];
                         name[input_name_length] = U_NULL;
-                        wchar_t* tail = &name[input_name_length - 3];
-                        if (Case::StringSegmentEqual(tail, US_zip, 3) ||
-                            Case::StringSegmentEqual(tail, US_jar, 3))
+                        if (errno)
                         {
-                            bad_zip_filenames.Next() = name;
+                            const char* std_err = strerror(errno);
+                            ErrorString err_str;
+                            err_str << '"' << std_err << '"'
+                                    << " while trying to open " << name;
+                            general_io_warnings.Next() = err_str.SafeArray();
                         }
-                        else bad_dirnames.Next() = name;
+                        else
+                        {
+                            wchar_t* tail = &name[input_name_length - 3];
+                            if (Case::StringSegmentEqual(tail, US_zip, 3) ||
+                               Case::StringSegmentEqual(tail, US_jar, 3))
+                            {
+                                bad_zip_filenames.Next() = name;
+                            }
+                            else bad_dirnames.Next() = name;
+                        }
                     }
 
                     unnamed_package -> directory.Next() =
@@ -852,8 +639,7 @@ void Control::ProcessBootClassPath()
 #ifdef WIN32_FILE_SYSTEM
         delete [] full_directory_name;
         delete [] input_name;
-#endif
-
+#endif // WIN32_FILE_SYSTEM
         delete [] path_name;
     }
 }
@@ -986,13 +772,15 @@ void Control::ProcessExtDirs()
                             // + 1 for possible '/' between path and file.
                             int fullpath_length = input_name_length +
                                 entry_length + 1;
-			    char * ending = &(entry->d_name[entry_length-3]);
-			    // skip ., .., and things that are neither zip nor jar
-                            if (! strcmp(entry->d_name, U8S_DO) ||
-                                ! strcmp(entry->d_name, U8S_DO_DO) ||
-				  ( strcasecmp(ending, "zip") &&
-				    strcasecmp(ending, "jar")    ) )
+                            char* ending = &(entry->d_name[entry_length-3]);
+                            // skip ., .., non-zip, and non-jar
+                            if (! strcmp(entry -> d_name, ".") ||
+                                ! strcmp(entry -> d_name, "..") ||
+                                (strcasecmp(ending, "zip") &&
+                                 strcasecmp(ending, "jar")))
+                            {
                                 continue;
+                            }
 
                             char* extdir_entry = new char[fullpath_length + 1];
                             // First put on path.
@@ -1010,6 +798,7 @@ void Control::ProcessExtDirs()
                             for (int i = 0; i < fullpath_length; ++i)
                                 extdir_entry_name[i] = extdir_entry[i];
 
+                            errno = 0;
                             Zip* zipinfo = new Zip(*this, extdir_entry);
                             if (! zipinfo -> IsValid())
                             {
@@ -1018,7 +807,17 @@ void Control::ProcessExtDirs()
                                 for (int i = 0; i < fullpath_length; ++i)
                                     name[i] = extdir_entry_name[i];
                                 name[fullpath_length] = U_NULL;
-                                bad_zip_filenames.Next() = name;
+                                if (errno)
+                                {
+                                    const char* std_err = strerror(errno);
+                                    ErrorString err_str;
+                                    err_str << '"' << std_err << '"'
+                                            << " while trying to open "
+                                            << name;
+                                    general_io_warnings.Next() =
+                                        err_str.SafeArray();
+                                }
+                                else bad_zip_filenames.Next() = name;
                             }
 
                             unnamed_package->directory.Next() =
@@ -1044,8 +843,9 @@ void Control::ProcessExtDirs()
                     char* directory_name = new char[input_name_length + 3];
                     strcpy(directory_name, head);
                     if (directory_name[input_name_length - 1] != U_SLASH)
-                        strcat(directory_name, StringConstant::U8S_SL);
-                    strcat(directory_name, StringConstant::U8S_ST);
+                        directory_name[input_name_length++] = U_SLASH;
+                    directory_name[input_name_length++] = U_STAR;
+                    directory_name[input_name_length] = U_NULL;
 
                     WIN32_FIND_DATA entry;
                     HANDLE file_handle = FindFirstFile(directory_name, &entry);
@@ -1057,13 +857,15 @@ void Control::ProcessExtDirs()
                             // + 1 for possible '/' between path and file.
                             int fullpath_length = input_name_length +
                                 entry_length + 1;
-			    char* ending = &(entry.cFileName[entry_length-3]);
-			    // skip ., .., and not zip or jar
+                            char* ending = &(entry.cFileName[entry_length-3]);
+                            // skip ., .., and not zip or jar
                             if ((! strcmp(entry.cFileName, "." )) ||
                                 (! strcmp(entry.cFileName, "..")) ||
-				  ( strcasecmp(ending, "zip") &&
-				    strcasecmp(ending, "jar")    ) )
+                                ( strcasecmp(ending, "zip") &&
+                                  strcasecmp(ending, "jar")))
+                            {
                                 continue;
+                            }
 
                             char* extdir_entry = new char[fullpath_length + 1];
                             wchar_t* extdir_entry_name =
@@ -1097,6 +899,7 @@ void Control::ProcessExtDirs()
                             for (int i = 0; i < fullpath_length; ++i)
                                 extdir_entry_name[i] = extdir_entry[i];
 
+                            errno = 0;
                             Zip* zipinfo = new Zip(*this, extdir_entry);
                             if (! zipinfo -> IsValid())
                             {
@@ -1105,10 +908,20 @@ void Control::ProcessExtDirs()
                                 for (int i = 0; i < fullpath_length; ++i)
                                     name[i] = extdir_entry_name[i];
                                 name[fullpath_length] = U_NULL;
-                                bad_zip_filenames.Next() = name;
+                                if (errno)
+                                {
+                                    const char* std_err = strerror(errno);
+                                    ErrorString err_str;
+                                    err_str << '"' << std_err << '"'
+                                            << " while trying to open "
+                                            << name;
+                                    general_io_warnings.Next() =
+                                        err_str.SafeArray();
+                                }
+                                else bad_zip_filenames.Next() = name;
                             }
 
-                            unnamed_package->directory.Next() =
+                            unnamed_package -> directory.Next() =
                                 zipinfo -> RootDirectory();
 
                             NameSymbol* extdir_entry_symbol =
@@ -1283,6 +1096,7 @@ void Control::ProcessClassPath()
                 }
                 else
                 {
+                    errno = 0;
                     Zip* zipinfo = new Zip(*this, head);
                     // If the zipfile is all screwed up, give up here !!!
                     if (! zipinfo -> IsValid())
@@ -1291,12 +1105,24 @@ void Control::ProcessClassPath()
                         for (int i = 0; i < input_name_length; i++)
                             name[i] = input_name[i];
                         name[input_name_length] = U_NULL;
-                        wchar_t* tail = &name[input_name_length - 3];
-                        if (Case::StringSegmentEqual(tail, US_zip, 3) ||
-                            Case::StringSegmentEqual(tail, US_jar, 3))
-                            bad_zip_filenames.Next() = name;
+                        if (errno)
+                        {
+                            const char* std_err = strerror(errno);
+                            ErrorString err_str;
+                            err_str << '"' << std_err << '"'
+                                    << " while trying to open " << name;
+                            general_io_warnings.Next() = err_str.SafeArray();
+                        }
                         else
-                            bad_dirnames.Next() = name;
+                        {
+                            wchar_t* tail = &name[input_name_length - 3];
+                            if (Case::StringSegmentEqual(tail, US_zip, 3) ||
+                                Case::StringSegmentEqual(tail, US_jar, 3))
+                            {
+                                bad_zip_filenames.Next() = name;
+                            }
+                            else bad_dirnames.Next() = name;
+                        }
                     }
 
                     unnamed_package -> directory.Next() =
@@ -1420,23 +1246,28 @@ void Control::ProcessSourcePath()
                 {
                     if (name_symbol == dot_name_symbol)
                     {
-                        dot_classpath_index = classpath.Length(); // The next index
-                        classpath.Next() = classpath[0];          // share the "." directory
-                        unnamed_package -> directory.Next() = classpath[0] -> RootDirectory();
+                        dot_classpath_index = classpath.Length(); // next index
+                        classpath.Next() = classpath[0]; // share "." directory
+                        unnamed_package -> directory.Next() =
+                            classpath[0] -> RootDirectory();
                     }
-
                     continue;
                 }
 
                 //
-                // Check whether or not the path points to a system directory. If not, assume it's a zip file
+                // Check whether or not the path points to a system directory.
+                // If not, assume it's a zip file.
                 //
                 if (SystemIsDirectory(head))
                 {
                     // This is the sourcepath, so pass true
-                    DirectorySymbol* dot_directory = ProcessSubdirectories(input_name, input_name_length, true);
+                    DirectorySymbol* dot_directory =
+                        ProcessSubdirectories(input_name, input_name_length,
+                                              true);
                     unnamed_package -> directory.Next() = dot_directory;
-                    classpath.Next() = classpath_table.InsertPathSymbol(name_symbol, dot_directory);
+                    classpath.Next() =
+                        classpath_table.InsertPathSymbol(name_symbol,
+                                                         dot_directory);
                 }
                 else
                 {
@@ -1459,13 +1290,12 @@ void Control::ProcessSourcePath()
     }
 }
 
-TypeSymbol* Control::GetPrimitiveType(const wchar_t* name,
-                                      const char* signature)
+TypeSymbol* Control::GetPrimitiveType(const char* name, char signature)
 {
-    NameSymbol* name_symbol = FindOrInsertName(name, wcslen(name));
+    NameSymbol* name_symbol = FindOrInsertSystemName(name);
     TypeSymbol* type = unnamed_package -> InsertSystemTypeSymbol(name_symbol);
-
-    type -> SetSignature(Utf8_pool.FindOrInsert(signature, strlen(signature)));
+    char sig[2] = { signature, U_NU };
+    type -> SetSignature(Utf8_pool.FindOrInsert(sig, 1));
     type -> outermost_type = type;
     type -> SetOwner(unnamed_package);
     type -> SetACC_PUBLIC();
@@ -1479,22 +1309,118 @@ void Control::ProcessSystemInformation()
     //
     // Add entry for system package
     //
-    system_package = ProcessPackage(US_java_SL_lang);
+    lang_package = ProcessPackage(US_java_SL_lang);
 
     //
     // Create an entry for each primitive type. Note that the type void is
     // treated as a primitive. We do not set up any subtyping relationships,
     // as that would violate the assumptions made elsewhere.
     //
-    void_type = GetPrimitiveType(US_void, U8S_V);
-    boolean_type = GetPrimitiveType(US_boolean, U8S_Z);
-    byte_type = GetPrimitiveType(US_byte, U8S_B);
-    char_type = GetPrimitiveType(US_char, U8S_C);
-    short_type = GetPrimitiveType(US_short, U8S_S);
-    int_type = GetPrimitiveType(US_int, U8S_I);
-    long_type = GetPrimitiveType(US_long, U8S_J);
-    float_type = GetPrimitiveType(US_float, U8S_F);
-    double_type = GetPrimitiveType(US_double, U8S_D);
+    void_type = GetPrimitiveType("void", U_V);
+    boolean_type = GetPrimitiveType("boolean", U_Z);
+    byte_type = GetPrimitiveType("byte", U_B);
+    char_type = GetPrimitiveType("char", U_C);
+    short_type = GetPrimitiveType("short", U_S);
+    int_type = GetPrimitiveType("int", U_I);
+    long_type = GetPrimitiveType("long", U_J);
+    float_type = GetPrimitiveType("float", U_F);
+    double_type = GetPrimitiveType("double", U_D);
+}
+
+
+//
+// Find the given system type.
+//
+TypeSymbol* Control::ProcessSystemType(PackageSymbol* package,
+                                       const char* name)
+{
+    NameSymbol* name_symbol = FindOrInsertSystemName(name);
+    TypeSymbol* type = package -> FindTypeSymbol(name_symbol);
+
+    if (! type)
+    {
+        Control& control = *this;
+        FileSymbol* file_symbol = GetFile(control, package, name_symbol);
+        type = system_semantic -> ReadType(file_symbol, package,
+                                           name_symbol, 0);
+    }
+    else if (type -> SourcePending())
+        ProcessHeaders(type -> file_symbol);
+    return type;
+}
+
+
+//
+// Find the given system method.
+//
+MethodSymbol* Control::ProcessSystemMethod(TypeSymbol* type,
+                                           const char* name,
+                                           const char* descriptor)
+{
+    NameSymbol* name_symbol = FindOrInsertSystemName(name);
+    MethodSymbol* method = NULL;
+    if (! type -> Bad())
+    {
+        for (method = type -> FindMethodSymbol(name_symbol);
+             method; method = method -> next_method)
+        {
+            if (! strcmp(descriptor, method -> SignatureString()))
+                break;
+        }
+    }
+    if (! method)
+    {
+        if (! type -> Bad())
+        {
+            system_semantic ->
+                ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
+                               BAD_TOKEN, type -> ContainingPackageName(),
+                               type -> ExternalName());
+        }
+        method = type -> InsertMethodSymbol(name_symbol);
+        method -> SetType(no_type);
+        method -> SetContainingType(type);
+        method -> SetSignature(FindOrInsertSystemName(descriptor) ->
+                               Utf8_literal);
+    }
+    return method;
+}
+
+
+//
+// Find the given system field.
+//
+VariableSymbol* Control::ProcessSystemField(TypeSymbol* type,
+                                            const char* name,
+                                            const char* descriptor)
+{
+    NameSymbol* name_symbol = FindOrInsertSystemName(name);
+    VariableSymbol* field = NULL;
+    if (! type -> Bad())
+    {
+        field = type -> FindVariableSymbol(name_symbol);
+        if (! field -> IsTyped())
+            field -> ProcessVariableSignature(system_semantic, BAD_TOKEN);
+        field -> MarkInitialized();
+    }
+    if (! field)
+    {
+        if (! type -> Bad())
+        {
+            system_semantic ->
+                ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
+                               BAD_TOKEN, type -> ContainingPackageName(),
+                               type -> ExternalName());
+        }
+        field = type -> InsertVariableSymbol(name_symbol);
+        field -> SetType(no_type);
+        field -> SetOwner(type);
+        field -> MarkInitialized();
+        Utf8LiteralValue* utf8 =
+            FindOrInsertSystemName(descriptor) -> Utf8_literal;
+        field -> SetSignatureString(utf8 -> value, utf8 -> length);
+    }
+    return field;
 }
 
 
@@ -1800,24 +1726,6 @@ FileSymbol* Control::GetFileFirst(Control& control, PackageSymbol* package,
     return file_symbol;
 }
 
-
-
-TypeSymbol* Control::GetType(PackageSymbol* package, const wchar_t* name)
-{
-    NameSymbol* name_symbol = FindOrInsertName(name, wcslen(name));
-    TypeSymbol* type = package -> FindTypeSymbol(name_symbol);
-
-    if (! type)
-    {
-        Control& control = *this;
-        FileSymbol* file_symbol = GetFile(control, package, name_symbol);
-        type = system_semantic -> ReadType(file_symbol, package,
-                                           name_symbol, 0);
-    }
-    else if (type -> SourcePending())
-         ProcessHeaders(type -> file_symbol);
-    return type;
-}
 
 #ifdef HAVE_JIKES_NAMESPACE
 } // Close namespace Jikes block

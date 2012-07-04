@@ -1,4 +1,4 @@
-// $Id: bytecode.cpp,v 1.174 2004/01/30 12:22:51 ericb Exp $
+// $Id: bytecode.cpp,v 1.184 2004/03/20 04:48:14 jikesadmin Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -409,8 +409,11 @@ void ByteCode::DeclareField(VariableSymbol* symbol)
             AddAttribute(new ConstantValueAttribute(attribute_index, index));
     }
 
-    if (symbol -> IsSynthetic())
+    if (symbol -> ACC_SYNTHETIC() &&
+        control.option.target < JikesOption::SDK1_5)
+    {
         fields[field_index] -> AddAttribute(CreateSyntheticAttribute());
+    }
 
     if (symbol -> IsDeprecated())
         fields[field_index] -> AddAttribute(CreateDeprecatedAttribute());
@@ -444,8 +447,11 @@ void ByteCode::BeginMethod(int method_index, MethodSymbol* msym)
         SetDescriptorIndex(RegisterUtf8(msym -> signature));
     methods[method_index] -> SetFlags(msym -> Flags());
 
-    if (msym -> IsSynthetic())
+    if (msym -> ACC_SYNTHETIC() &&
+        control.option.target < JikesOption::SDK1_5)
+    {
         methods[method_index] -> AddAttribute(CreateSyntheticAttribute());
+    }
 
     if (msym -> IsDeprecated())
         methods[method_index] -> AddAttribute(CreateDeprecatedAttribute());
@@ -604,7 +610,7 @@ void ByteCode::EndMethod(int method_index, MethodSymbol* msym)
             {
                 local_variable_table_attribute ->
                     AddLocalVariable(0, code_attribute -> CodeLength(),
-                                     RegisterUtf8(control.this_literal),
+                                     RegisterUtf8(control.this_name_symbol -> Utf8_literal),
                                      RegisterUtf8(msym -> containing_type -> signature),
                                      0);
             }
@@ -796,7 +802,7 @@ void ByteCode::DeclareLocalVariable(AstVariableDeclarator* declarator)
                 (StripNops(expr) -> Type() == control.null_type))
             {
                 PutOp(OP_CHECKCAST);
-                PutU2(RegisterClass(type -> signature));
+                PutU2(RegisterClass(type));
             }
         }
     }
@@ -842,10 +848,10 @@ bool ByteCode::EmitStatement(AstStatement* statement)
         return EmitBlockStatement((AstBlock*) statement);
     case Ast::LOCAL_VARIABLE_DECLARATION: // JLS 14.3
         {
-            AstLocalVariableDeclarationStatement* lvds =
-                statement -> LocalVariableDeclarationStatementCast();
-            for (unsigned i = 0; i < lvds -> NumVariableDeclarators(); i++)
-                DeclareLocalVariable(lvds -> VariableDeclarator(i));
+            AstLocalVariableStatement* lvs =
+                statement -> LocalVariableStatementCast();
+            for (unsigned i = 0; i < lvs -> NumVariableDeclarators(); i++)
+                DeclareLocalVariable(lvs -> VariableDeclarator(i));
         }
         return false;
     case Ast::EMPTY_STATEMENT: // JLS 14.5
@@ -1034,8 +1040,8 @@ bool ByteCode::EmitStatement(AstStatement* statement)
             bool abrupt = false;
             for (unsigned i = 0; i < for_statement -> NumForInitStatements(); i++)
                 EmitStatement(for_statement -> ForInitStatement(i));
-            Label begin_label,
-                  test_label;
+            Label begin_label;
+            Label test_label;
             //
             // The loop test is placed after the body, unless the body
             // always completes abruptly, to save an additional jump.
@@ -1083,8 +1089,11 @@ bool ByteCode::EmitStatement(AstStatement* statement)
             abrupt |= EmitBlockStatement(for_statement -> statement);
             bool empty = (begin_pc == code_attribute -> CodeLength());
             DefineLabel(continue_label);
-            for (unsigned j = 0; j < for_statement -> NumForUpdateStatements(); j++)
+            for (unsigned j = 0;
+                 j < for_statement -> NumForUpdateStatements(); j++)
+            {
                 EmitStatement(for_statement -> ForUpdateStatement(j));
+            }
             DefineLabel(test_label);
             CompleteLabel(test_label);
 
@@ -1098,7 +1107,8 @@ bool ByteCode::EmitStatement(AstStatement* statement)
                 //
                 line_number_table_attribute ->
                     AddLineNumber(code_attribute -> CodeLength(),
-                                  semantic.lex_stream -> Line(end_expr -> LeftToken()));
+                                  semantic.lex_stream -> Line(end_expr ->
+                                                              LeftToken()));
 
                 EmitBranchIfExpression(end_expr, true,
                                        empty ? continue_label : begin_label,
@@ -1110,6 +1120,9 @@ bool ByteCode::EmitStatement(AstStatement* statement)
             CompleteLabel(begin_label);
             return abrupt && ! for_statement -> can_complete_normally;
         }
+    case Ast::FOREACH: // JSR 201
+        EmitForeachStatement((AstForeachStatement*) statement);
+        return false;
     case Ast::BREAK: // JLS 14.13
         {
             unsigned nesting_level =
@@ -1269,8 +1282,8 @@ void ByteCode::EmitStatementExpression(AstExpression* expression)
         EmitAssignmentExpression((AstAssignmentExpression*) expression, false);
         break;
     case Ast::CLASS_CREATION:
-        EmitInstanceCreationExpression(((AstClassInstanceCreationExpression*)
-                                        expression), false);
+        EmitClassCreationExpression((AstClassCreationExpression*) expression,
+                                    false);
         break;
     default:
         assert(false && "invalid statement expression kind");
@@ -1587,20 +1600,19 @@ bool ByteCode::EmitSwitchBlockStatement(AstSwitchBlockStatement* block,
     {
         if (! abrupt)
             abrupt = EmitStatement(block -> Statement(i));
-        else if (block -> Statement(i) ->
-                 LocalVariableDeclarationStatementCast())
+        else if (block -> Statement(i) -> LocalVariableStatementCast())
         {
             //
             // In a switch statement, local variable declarations are
             // accessible in other case labels even if the declaration
             // itself is unreachable.
             //
-            AstLocalVariableDeclarationStatement* lvds =
-                (AstLocalVariableDeclarationStatement*) block -> Statement(i);
-            for (unsigned j = 0; j < lvds -> NumVariableDeclarators(); j++)
+            AstLocalVariableStatement* lvs =
+                (AstLocalVariableStatement*) block -> Statement(i);
+            for (unsigned j = 0; j < lvs -> NumVariableDeclarators(); j++)
             {
                 AstVariableDeclarator* declarator =
-                    lvds -> VariableDeclarator(j);
+                    lvs -> VariableDeclarator(j);
                 if (control.option.g & JikesOption::VARS)
                 {
                     method_stack -> StartPc(declarator -> symbol) =
@@ -1681,16 +1693,16 @@ void ByteCode::EmitTryStatement(AstTryStatement* statement)
     //
     if (statement -> finally_clause_opt)
         if (! emit_finally_clause)
-            statement -> block -> block_tag = AstBlock::NONE;
+            statement -> block -> SetTag(AstBlock::NONE);
         else if (! statement -> finally_clause_opt -> block ->
                  can_complete_normally)
         {
-            statement -> block -> block_tag = AstBlock::ABRUPT_TRY_FINALLY;
+            statement -> block -> SetTag(AstBlock::ABRUPT_TRY_FINALLY);
         }
-    if (statement -> block -> block_tag == AstBlock::NONE &&
+    if (statement -> block -> Tag() == AstBlock::NONE &&
         statement -> NumCatchClauses())
     {
-        statement -> block -> block_tag = AstBlock::TRY_CLAUSE_WITH_CATCH;
+        statement -> block -> SetTag(AstBlock::TRY_CLAUSE_WITH_CATCH);
     }
     bool abrupt = EmitBlockStatement(statement -> block);
 
@@ -1730,11 +1742,21 @@ void ByteCode::EmitTryStatement(AstTryStatement* statement)
             u2 handler_pc = code_attribute -> CodeLength();
 
             AstCatchClause* catch_clause = statement -> CatchClause(i);
-            VariableSymbol* parameter_symbol = catch_clause -> parameter_symbol;
+            VariableSymbol* parameter_symbol =
+                catch_clause -> parameter_symbol;
 
             assert(stack_depth == 0);
             stack_depth = 1; // account for the exception already on the stack
-            if (! IsNop(catch_clause -> block))
+            line_number_table_attribute ->
+                AddLineNumber(code_attribute -> CodeLength(),
+                              semantic.lex_stream -> Line(catch_clause ->
+                                                          catch_token));
+            //
+            // Unless debugging, we don't need to waste a variable on an
+            // empty catch.
+            //
+            if ((control.option.g & JikesOption::VARS) ||
+                ! IsNop(catch_clause -> block))
             {
                 StoreLocal(parameter_symbol -> LocalVariableIndex(),
                            parameter_symbol -> Type());
@@ -1756,14 +1778,16 @@ void ByteCode::EmitTryStatement(AstTryStatement* statement)
             // completions emit a GOTO instead of a JSR.
             //
             if (statement -> finally_clause_opt)
+            {
                 if (! emit_finally_clause)
-                    catch_clause -> block -> block_tag = AstBlock::NONE;
+                    catch_clause -> block -> SetTag(AstBlock::NONE);
                 else if (! statement -> finally_clause_opt -> block ->
                          can_complete_normally)
                 {
-                    catch_clause -> block -> block_tag =
-                        AstBlock::ABRUPT_TRY_FINALLY;
+                    catch_clause -> block ->
+                        SetTag(AstBlock::ABRUPT_TRY_FINALLY);
                 }
+            }
             abrupt = EmitBlockStatement(catch_clause -> block);
 
             if (control.option.g & JikesOption::VARS)
@@ -1791,7 +1815,7 @@ void ByteCode::EmitTryStatement(AstTryStatement* statement)
         if (emit_finally_clause)
         {
             int variable_index = method_stack -> TopBlock() ->
-                block_symbol -> try_or_synchronized_variable_index;
+                block_symbol -> helper_variable_index;
             u2 finally_start_pc = code_attribute -> CodeLength();
             u2 special_end_pc = finally_start_pc;
 
@@ -1929,12 +1953,12 @@ bool ByteCode::ProcessAbruptExit(unsigned level, u2 width,
             unsigned nesting_level = method_stack -> NestingLevel(i);
             unsigned enclosing_level = method_stack -> NestingLevel(i - 1);
             AstBlock* block = method_stack -> Block(nesting_level);
-            if (block -> block_tag == AstBlock::TRY_CLAUSE_WITH_FINALLY)
+            if (block -> Tag() == AstBlock::TRY_CLAUSE_WITH_FINALLY)
             {
                 variable_index = method_stack -> Block(enclosing_level) ->
-                    block_symbol -> try_or_synchronized_variable_index + 2;
+                    block_symbol -> helper_variable_index + 2;
             }
-            else if (block -> block_tag == AstBlock::ABRUPT_TRY_FINALLY)
+            else if (block -> Tag() == AstBlock::ABRUPT_TRY_FINALLY)
             {
                 variable_index = -1;
                 PutOp(control.IsDoubleWordType(return_type) ? OP_POP2 : OP_POP);
@@ -1951,14 +1975,14 @@ bool ByteCode::ProcessAbruptExit(unsigned level, u2 width,
         unsigned nesting_level = method_stack -> NestingLevel(i);
         unsigned enclosing_level = method_stack -> NestingLevel(i - 1);
         AstBlock* block = method_stack -> Block(nesting_level);
-        if (block -> block_tag == AstBlock::TRY_CLAUSE_WITH_FINALLY)
+        if (block -> Tag() == AstBlock::TRY_CLAUSE_WITH_FINALLY)
         {
             EmitBranch(OP_JSR, method_stack -> FinallyLabel(enclosing_level),
                        method_stack -> Block(enclosing_level));
             method_stack -> HandlerRangeEnd(enclosing_level).
                 Push(code_attribute -> CodeLength());
         }
-        else if (block -> block_tag == AstBlock::ABRUPT_TRY_FINALLY)
+        else if (block -> Tag() == AstBlock::ABRUPT_TRY_FINALLY)
         {
             //
             // Ignore the width of the abrupt instruction, because the abrupt
@@ -1971,7 +1995,7 @@ bool ByteCode::ProcessAbruptExit(unsigned level, u2 width,
                 Push(code_attribute -> CodeLength());
             break;
         }
-        else if (block -> block_tag == AstBlock::SYNCHRONIZED)
+        else if (block -> Tag() == AstBlock::SYNCHRONIZED)
         {
             //
             // This code must be safe for asynchronous exceptions.  Note that
@@ -1979,13 +2003,13 @@ bool ByteCode::ProcessAbruptExit(unsigned level, u2 width,
             // synchronized statement catchall handler.
             //
             int variable_index = method_stack -> Block(enclosing_level) ->
-                block_symbol -> try_or_synchronized_variable_index;
+                block_symbol -> helper_variable_index;
             LoadLocal(variable_index, control.Object());
             PutOp(OP_MONITOREXIT);
             method_stack -> HandlerRangeEnd(enclosing_level).
                 Push(code_attribute -> CodeLength());
         }
-        else if (block -> block_tag == AstBlock::TRY_CLAUSE_WITH_CATCH)
+        else if (block -> Tag() == AstBlock::TRY_CLAUSE_WITH_CATCH)
         {
             method_stack -> HandlerRangeEnd(enclosing_level).
                 Push(code_attribute -> CodeLength());
@@ -2000,14 +2024,14 @@ bool ByteCode::ProcessAbruptExit(unsigned level, u2 width,
         unsigned nesting_level = method_stack -> NestingLevel(j);
         unsigned enclosing_level = method_stack -> NestingLevel(j - 1);
         AstBlock* block = method_stack -> Block(nesting_level);
-        if (block -> block_tag == AstBlock::SYNCHRONIZED ||
-            block -> block_tag == AstBlock::TRY_CLAUSE_WITH_CATCH ||
-            block -> block_tag == AstBlock::TRY_CLAUSE_WITH_FINALLY)
+        if (block -> Tag() == AstBlock::SYNCHRONIZED ||
+            block -> Tag() == AstBlock::TRY_CLAUSE_WITH_CATCH ||
+            block -> Tag() == AstBlock::TRY_CLAUSE_WITH_FINALLY)
         {
             method_stack -> HandlerRangeStart(enclosing_level).
                 Push(code_attribute -> CodeLength() + width);
         }
-        else if (block -> block_tag == AstBlock::ABRUPT_TRY_FINALLY)
+        else if (block -> Tag() == AstBlock::ABRUPT_TRY_FINALLY)
         {
             method_stack -> HandlerRangeStart(enclosing_level).
                 Push(code_attribute -> CodeLength());
@@ -2087,7 +2111,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
         //
         // branch_if(!e,c,l) => branch_if(e,!c,l)
         //
-        assert(pre -> pre_unary_tag == AstPreUnaryExpression::NOT);
+        assert(pre -> Tag() == AstPreUnaryExpression::NOT);
         EmitBranchIfExpression(pre -> expression, ! cond, lab, over);
         return;
     }
@@ -2286,7 +2310,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
         else if ((expr -> ThisExpressionCast() ||
                   expr -> SuperExpressionCast() ||
                   expr -> ClassLiteralCast() ||
-                  expr -> ClassInstanceCreationExpressionCast() ||
+                  expr -> ClassCreationExpressionCast() ||
                   expr -> ArrayCreationExpressionCast()) &&
                  left_type -> IsSubtype(right_type))
         {
@@ -2301,9 +2325,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
         {
             EmitExpression(expr);
             PutOp(OP_INSTANCEOF);
-            PutU2(right_type -> num_dimensions
-                  ? RegisterClass(right_type -> signature)
-                  : RegisterClass(right_type));
+            PutU2(RegisterClass(right_type));
             EmitBranch((cond ? OP_IFNE : OP_IFEQ), lab, over);
         }
         return;
@@ -2329,7 +2351,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
 
     TypeSymbol* left_type = left -> Type();
     TypeSymbol* right_type = right -> Type();
-    switch (bp -> binary_tag)
+    switch (bp -> Tag())
     {
     case AstBinaryExpression::AND_AND:
         //
@@ -2446,15 +2468,14 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
             EmitExpression(right, right_type != control.null_type);
             if (left_type == right_type)
             {
-                if (cond ==
-                    (bp -> binary_tag == AstBinaryExpression::EQUAL_EQUAL))
+                if (cond == (bp -> Tag() == AstBinaryExpression::EQUAL_EQUAL))
                 {
                     EmitBranch(OP_GOTO, lab, over);
                 }
             }
             else
             {
-                if (bp -> binary_tag == AstBinaryExpression::EQUAL_EQUAL)
+                if (bp -> Tag() == AstBinaryExpression::EQUAL_EQUAL)
                     EmitBranch(cond ? OP_IFNULL : OP_IFNONNULL, lab, over);
                 else EmitBranch(cond ? OP_IFNONNULL : OP_IFNULL, lab, over);
             }
@@ -2468,7 +2489,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
             (IsOne(left) || IsOne(right)))
         {
             EmitBranchIfExpression(IsOne(left) ? right : left,
-                                   cond == (bp -> binary_tag == AstBinaryExpression::EQUAL_EQUAL),
+                                   cond == (bp -> Tag() == AstBinaryExpression::EQUAL_EQUAL),
                                    lab, over);
             return;
         }
@@ -2490,7 +2511,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
                     // One of the operands is false. Branch on the other.
                     //
                     EmitBranchIfExpression(IsZero(left) ? right : left,
-                                           cond == (bp -> binary_tag != AstBinaryExpression::EQUAL_EQUAL),
+                                           cond == (bp -> Tag() != AstBinaryExpression::EQUAL_EQUAL),
                                            lab, over);
                 }
                 else
@@ -2500,7 +2521,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
                     //
                     EmitExpression(IsZero(left) ? right : left);
 
-                    if (bp -> binary_tag == AstBinaryExpression::EQUAL_EQUAL)
+                    if (bp -> Tag() == AstBinaryExpression::EQUAL_EQUAL)
                         EmitBranch((cond ? OP_IFEQ : OP_IFNE), lab, over);
                     else EmitBranch((cond ? OP_IFNE : OP_IFEQ), lab, over);
                 }
@@ -2510,7 +2531,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
                 EmitExpression(left);
                 EmitExpression(right);
 
-                if (bp -> binary_tag == AstBinaryExpression::EQUAL_EQUAL)
+                if (bp -> Tag() == AstBinaryExpression::EQUAL_EQUAL)
                     EmitBranch((cond ? OP_IF_ICMPEQ : OP_IF_ICMPNE), lab, over);
                 else
                     EmitBranch((cond ? OP_IF_ICMPNE : OP_IF_ICMPEQ), lab, over);
@@ -2528,7 +2549,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
             EmitExpression(left);
             EmitExpression(right);
 
-            if (bp -> binary_tag == AstBinaryExpression::EQUAL_EQUAL)
+            if (bp -> Tag() == AstBinaryExpression::EQUAL_EQUAL)
                 EmitBranch((cond ? OP_IF_ACMPEQ : OP_IF_ACMPNE), lab, over);
             else EmitBranch((cond ? OP_IF_ACMPNE : OP_IF_ACMPEQ), lab, over);
 
@@ -2589,7 +2610,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
     // integral comparison for which no special casing needed.
     // Begin by dealing with non-comparisons
     //
-    switch (bp -> binary_tag)
+    switch (bp -> Tag())
     {
     case AstBinaryExpression::LESS:
     case AstBinaryExpression::LESS_EQUAL:
@@ -2625,7 +2646,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
         if (IsZero(left))
         {
             EmitExpression(right);
-            switch (bp -> binary_tag)
+            switch (bp -> Tag())
             {
             case AstBinaryExpression::LESS:
                 // if (0 < x) same as  if (x > 0)
@@ -2656,7 +2677,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
         {
             EmitExpression(left);
 
-            switch (bp -> binary_tag)
+            switch (bp -> Tag())
             {
             case AstBinaryExpression::LESS:
                 op_true = OP_IFLT;
@@ -2684,7 +2705,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
             EmitExpression(left);
             EmitExpression(right);
 
-            switch (bp -> binary_tag)
+            switch (bp -> Tag())
             {
             case AstBinaryExpression::LESS:
                 op_true = OP_IF_ICMPLT;
@@ -2718,7 +2739,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
         //
         // branch according to result value on stack
         //
-        switch (bp -> binary_tag)
+        switch (bp -> Tag())
         {
         case AstBinaryExpression::EQUAL_EQUAL:
             op_true = OP_IFEQ;
@@ -2754,7 +2775,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
         EmitExpression(left);
         EmitExpression(right);
 
-        switch (bp -> binary_tag)
+        switch (bp -> Tag())
         {
         case AstBinaryExpression::EQUAL_EQUAL:
             opcode = OP_FCMPL;
@@ -2795,7 +2816,7 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
     {
         EmitExpression(left);
         EmitExpression(right);
-        switch (bp -> binary_tag)
+        switch (bp -> Tag())
         {
         case AstBinaryExpression::EQUAL_EQUAL:
             opcode = OP_DCMPL;
@@ -2847,8 +2868,8 @@ void ByteCode::EmitBranchIfExpression(AstExpression* p, bool cond, Label& lab,
 //
 bool ByteCode::EmitSynchronizedStatement(AstSynchronizedStatement* statement)
 {
-    int variable_index = method_stack -> TopBlock() -> block_symbol ->
-        try_or_synchronized_variable_index;
+    int variable_index =
+        method_stack -> TopBlock() -> block_symbol -> helper_variable_index;
 
     Label start_label;
     //
@@ -2985,6 +3006,199 @@ void ByteCode::EmitAssertStatement(AstAssertStatement* assertion)
 }
 
 
+void ByteCode::EmitForeachStatement(AstForeachStatement* foreach)
+{
+    int helper_index =
+        method_stack -> TopBlock() -> block_symbol -> helper_variable_index;
+    bool abrupt;
+    EmitExpression(foreach -> expression);
+    Label loop;
+    Label& comp = method_stack -> TopContinueLabel();
+    Label end;
+    TypeSymbol* expr_type = foreach -> expression -> Type();
+    VariableSymbol* var =
+        foreach -> formal_parameter -> formal_declarator -> symbol;
+    TypeSymbol* component_type = var -> Type();
+    if (expr_type -> IsArray())
+    {
+        //
+        // Turn 'l: for(a b : c) d' into
+        // { expr_type #0 = c;
+        //   int #1 = #0.length;
+        //   l: for(int #2 = 0; #2 < #1; #2++) {
+        //     a b = #0[#2];
+        //     d; }}
+        // Or in bytecode:
+        // eval c onto stack
+        // dup
+        // astore helper_index
+        // arraylength
+        // dup
+        // istore helper_index+1
+        // ifeq end
+        // iconst_0
+        // istore helper_index+2
+        // iconst_0
+        // loop:
+        // aload helper_index
+        // swap
+        // xaload (for x = b, s, i, l, c, f, d, a)
+        // assignment-conversion (if necessary)
+        // xstore b (for x = i, l, f, d, a)
+        // eval d (continue to comp, break to end)
+        // comp:
+        // iinc helper_index+2, 1
+        // iload helper_index+1
+        // iload helper_index+2
+        // dup_x1
+        // if_icmpgt loop
+        // pop
+        // end:
+        //
+        TypeSymbol* expr_subtype = expr_type -> ArraySubtype();
+        if (IsNop(foreach -> statement) &&
+            (! component_type -> Primitive() || expr_subtype -> Primitive()))
+        {
+            //
+            // Optimization (arrays only): no need to increment loop counter
+            // if nothing is done in the loop; and we simply check that the
+            // array is non-null from arraylength. But beware of autounboxing,
+            // which can cause NullPointerException.
+            //
+            PutOp(OP_ARRAYLENGTH);
+            PutOp(OP_POP);
+            return;
+        }
+        PutOp(OP_DUP);
+        StoreLocal(helper_index, expr_type);
+        PutOp(OP_ARRAYLENGTH);
+        PutOp(OP_DUP);
+        StoreLocal(helper_index + 1, control.int_type);
+        EmitBranch(OP_IFEQ, end);
+        PutOp(OP_ICONST_0);
+        StoreLocal(helper_index + 2, control.int_type);
+        PutOp(OP_ICONST_0);
+        DefineLabel(loop);
+        LoadLocal(helper_index, expr_type);
+        PutOp(OP_SWAP);
+        LoadArrayElement(expr_type -> ArraySubtype());
+        EmitCast(component_type, expr_type -> ArraySubtype());
+        u2 var_pc = code_attribute -> CodeLength();        
+        StoreLocal(var -> LocalVariableIndex(), component_type);
+        abrupt = EmitStatement(foreach -> statement);
+        if (control.option.g & JikesOption::VARS)
+        {
+            local_variable_table_attribute ->
+                AddLocalVariable(var_pc, code_attribute -> CodeLength(),
+                                 RegisterName(var -> ExternalIdentity()),
+                                 RegisterUtf8(component_type -> signature),
+                                 var -> LocalVariableIndex());
+        }
+        if (! abrupt || foreach -> statement -> can_complete_normally)
+        {
+            DefineLabel(comp);
+            PutOpIINC(helper_index + 2, 1);
+            LoadLocal(helper_index + 1, control.int_type);
+            LoadLocal(helper_index + 2, control.int_type);
+            PutOp(OP_DUP_X1);
+            EmitBranch(OP_IF_ICMPGT, loop);
+            PutOp(OP_POP);
+        }
+    }
+    else
+    {
+        assert(foreach -> expression -> Type() ->
+               IsSubtype(control.Iterable()));
+        //
+        // Turn 'l: for(a b : c) d' into
+        // for(java.util.Iterator #0 = c.iterator(); #0.hasNext();) {
+        //   a b = (a) c.next();
+        //   d; }
+        // Or in bytecode:
+        // eval c onto stack
+        // invokeinterface java.lang.Iterable.iterator()Ljava/util/Iterator;
+        // dup
+        // invokeinterface java.util.Iterator.hasNext()Z
+        // ifeq cleanup
+        // dup
+        // astore helper_index
+        // loop:
+        // invokeinterface java.util.Iterator.next()Ljava/lang/Object;
+        // checkcast a
+        // astore b
+        // eval d (continue to comp, break to end)
+        // comp:
+        // aload helper_index
+        // dup
+        // invokeinterface java.util.Iterator.hasNext()Z
+        // ifne loop
+        // cleanup:
+        // pop
+        // end:
+        //
+        Label cleanup;
+        PutOp(OP_INVOKEINTERFACE);
+        PutU2(RegisterLibraryMethodref(control.Iterable_iteratorMethod()));
+        PutU1(1);
+        PutU1(0);
+        ChangeStack(1);
+        PutOp(OP_DUP);
+        PutOp(OP_INVOKEINTERFACE);
+        u2 hasNext_index =
+            RegisterLibraryMethodref(control.Iterator_hasNextMethod());
+        PutU2(hasNext_index);
+        PutU1(1);
+        PutU1(0);
+        ChangeStack(1);
+        EmitBranch(OP_IFEQ, cleanup);
+        PutOp(OP_DUP);
+        StoreLocal(helper_index, control.Iterator());
+        DefineLabel(loop);
+        PutOp(OP_INVOKEINTERFACE);
+        PutU2(RegisterLibraryMethodref(control.Iterator_nextMethod()));
+        PutU1(1);
+        PutU1(0);
+        ChangeStack(1);
+        if (component_type != control.Object())
+        {
+            PutOp(OP_CHECKCAST);
+            PutU2(RegisterClass(component_type));
+        }
+        u2 var_pc = code_attribute -> CodeLength();        
+        StoreLocal(var -> LocalVariableIndex(), component_type);
+        abrupt = EmitStatement(foreach -> statement);
+        if (control.option.g & JikesOption::VARS)
+        {
+            local_variable_table_attribute ->
+                AddLocalVariable(var_pc, code_attribute -> CodeLength(),
+                                 RegisterName(var -> ExternalIdentity()),
+                                 RegisterUtf8(component_type -> signature),
+                                 var -> LocalVariableIndex());
+        }
+        if (! abrupt || foreach -> statement -> can_complete_normally)
+        {
+            DefineLabel(comp);
+            LoadLocal(helper_index, control.Iterator());
+            PutOp(OP_DUP);
+            PutOp(OP_INVOKEINTERFACE);
+            PutU2(hasNext_index);
+            PutU1(1);
+            PutU1(0);
+            ChangeStack(1);
+            EmitBranch(OP_IFNE, loop);
+        }
+        else ChangeStack(1);
+        DefineLabel(cleanup);
+        CompleteLabel(cleanup);
+        PutOp(OP_POP);
+    }
+    DefineLabel(end);
+    CompleteLabel(loop);
+    CompleteLabel(comp);
+    CompleteLabel(end);
+}
+
+
 //
 // JLS is Java Language Specification
 // JVM is Java Virtual Machine
@@ -3033,7 +3247,8 @@ int ByteCode::EmitExpression(AstExpression* expression, bool need_value)
         }
         return 0;
     case Ast::CLASS_CREATION:
-        return EmitInstanceCreationExpression((AstClassInstanceCreationExpression*) expression, need_value);
+        return EmitClassCreationExpression
+            ((AstClassCreationExpression*) expression, need_value);
     case Ast::ARRAY_CREATION:
         return EmitArrayCreationExpression((AstArrayCreationExpression*) expression, need_value);
     case Ast::CLASS_LITERAL:
@@ -3041,14 +3256,25 @@ int ByteCode::EmitExpression(AstExpression* expression, bool need_value)
             AstClassLiteral* class_lit = (AstClassLiteral*) expression;
             if (class_lit -> resolution_opt)
                 return GenerateClassAccess(class_lit, need_value);
-            if (need_value)
+            TypeSymbol* type = expression -> symbol -> TypeCast();
+            if (type)
             {
-                VariableSymbol* sym = (VariableSymbol*) expression -> symbol;
-                PutOp(OP_GETSTATIC);
-                PutU2(RegisterFieldref(sym -> owner -> TypeCast(), sym));
-                return 1;
+                // Must load for side effect of class not found
+                assert(type == control.Class());
+                LoadConstantAtIndex(RegisterClass(class_lit -> type ->
+                                                  symbol));
+                if (! need_value)
+                    PutOp(OP_POP);
             }
-            return 0;
+            else if (need_value)
+            {
+                // No side effects for Integer.TYPE and friends.
+                assert(expression -> symbol -> VariableCast());
+                PutOp(OP_GETSTATIC);
+                PutU2(RegisterFieldref((VariableSymbol*) expression ->
+                                       symbol));
+            }
+            return need_value ? 1 : 0;
         }
     case Ast::DOT:
         return EmitFieldAccess((AstFieldAccess*) expression, need_value);
@@ -3142,7 +3368,7 @@ TypeSymbol* ByteCode::VariableTypeResolution(AstExpression* expression,
 }
 
 
-TypeSymbol* ByteCode::MethodTypeResolution(AstExpression* method_name,
+TypeSymbol* ByteCode::MethodTypeResolution(AstExpression* base,
                                            MethodSymbol* msym)
 {
     //
@@ -3153,15 +3379,9 @@ TypeSymbol* ByteCode::MethodTypeResolution(AstExpression* method_name,
     // this is an accessor method, use the owner_type (since the base type
     // relates to the accessed expression, not the accessor method).
     //
-    AstFieldAccess* field = method_name -> FieldAccessCast();
-    AstName* name = method_name -> NameCast();
-    assert(field || name);
-
     TypeSymbol* owner_type = msym -> containing_type;
-    TypeSymbol* base_type = msym -> IsSynthetic() ? owner_type
-        : field ? field -> base -> Type()
-        : name -> resolution_opt ? name -> resolution_opt -> Type()
-        : name -> base_opt ? name -> base_opt -> Type() : unit_type;
+    TypeSymbol* base_type = msym -> ACC_SYNTHETIC() ? owner_type
+        : base ? base -> Type() : unit_type;
     return owner_type == control.Object() ? owner_type : base_type;
 }
 
@@ -3196,10 +3416,12 @@ void ByteCode::EmitFieldAccessLhs(AstExpression* expression)
 
 
 //
-// Generate code for access method used to set class literal fields
+// Generate code for access method used to set class literal fields, when
+// compiling for older VMs.
 //
 void ByteCode::GenerateClassAccessMethod()
 {
+    assert(control.option.target < JikesOption::SDK1_5);
     //
     // Here, we add a line-number attribute entry for this method.
     // Even though this is a generated method, JPDA debuggers will
@@ -3311,12 +3533,14 @@ void ByteCode::GenerateClassAccessMethod()
 
 
 //
-// here to generate code to dymanically initialize the field for a class
-// literal and then return its value
+// Generate code to dymanically initialize the field for a class literal, and
+// return its value. Only generated for older VMs (since newer ones support
+// ldc class).
 //
 int ByteCode::GenerateClassAccess(AstClassLiteral* class_lit,
                                   bool need_value)
 {
+    assert(control.option.target < JikesOption::SDK1_5);
     //
     // Evaluate X.class literal. If X is a primitive type, this is a
     // predefined field, and we emitted it directly rather than relying on
@@ -3556,15 +3780,12 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression* assignment_expre
                 AstExpression* resolve = left_hand_side -> FieldAccessCast()
                     ? left_hand_side -> FieldAccessCast() -> resolution_opt
                     : left_hand_side -> NameCast() -> resolution_opt;
-
                 assert(resolve);
 
-                AstFieldAccess* field_expression = resolve ->
-                    MethodInvocationCast() -> method -> FieldAccessCast();
-
-                assert(field_expression);
-
-                EmitExpression(field_expression -> base);
+                AstExpression* base =
+                    resolve -> MethodInvocationCast() -> base_opt;
+                assert(base);
+                EmitExpression(base);
             }
             else if (left_hand_side -> FieldAccessCast())
                 //
@@ -3607,14 +3828,14 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression* assignment_expre
             if (! casted_left_hand_side &&
                 assignment_expression -> Type() == control.int_type &&
                 assignment_expression -> expression -> IsConstant() &&
-                ((assignment_expression -> assignment_tag ==
+                ((assignment_expression -> Tag() ==
                   AstAssignmentExpression::PLUS_EQUAL) ||
-                 (assignment_expression -> assignment_tag ==
+                 (assignment_expression -> Tag() ==
                   AstAssignmentExpression::MINUS_EQUAL)))
             {
                 IntLiteralValue* vp = DYNAMIC_CAST<IntLiteralValue*>
                     (assignment_expression -> expression -> value);
-                int val = ((assignment_expression -> assignment_tag ==
+                int val = ((assignment_expression -> Tag() ==
                             AstAssignmentExpression::MINUS_EQUAL)
                            ? -(vp -> value) // we treat "a -= x" as "a += (-x)"
                            : vp -> value);
@@ -3651,19 +3872,27 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression* assignment_expre
         //
         // Here for string concatenation.
         //
-        if ((assignment_expression -> assignment_tag ==
+        if ((assignment_expression -> Tag() ==
              AstAssignmentExpression::PLUS_EQUAL) &&
             left_type == control.String())
         {
             PutOp(OP_NEW);
-            PutU2(RegisterClass(control.StringBuffer()));
+            PutU2(RegisterClass(control.option.target >= JikesOption::SDK1_5
+                                ? control.StringBuilder()
+                                : control.StringBuffer()));
             PutOp(OP_DUP_X1);
             PutOp(OP_INVOKESPECIAL);
-            PutU2(RegisterLibraryMethodref(control.StringBuffer_InitMethod()));
+            PutU2(RegisterLibraryMethodref
+                  (control.option.target >= JikesOption::SDK1_5
+                   ? control.StringBuilder_InitMethod()
+                   : control.StringBuffer_InitMethod()));
             EmitStringAppendMethod(control.String());
             AppendString(assignment_expression -> expression, true);
             PutOp(OP_INVOKEVIRTUAL);
-            PutU2(RegisterLibraryMethodref(control.StringBuffer_toStringMethod()));
+            PutU2(RegisterLibraryMethodref
+                  (control.option.target >= JikesOption::SDK1_5
+                   ? control.StringBuilder_toStringMethod()
+                   : control.StringBuffer_toStringMethod()));
             ChangeStack(1); // account for return value
         }
         //
@@ -3681,7 +3910,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression* assignment_expre
             if (control.IsSimpleIntegerValueType(op_type) ||
                 op_type == control.boolean_type)
             {
-                switch (assignment_expression -> assignment_tag)
+                switch (assignment_expression -> Tag())
                 {
                 case AstAssignmentExpression::STAR_EQUAL:
                     opc = OP_IMUL;
@@ -3722,7 +3951,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression* assignment_expre
             }
             else if (op_type == control.long_type)
             {
-                switch (assignment_expression -> assignment_tag)
+                switch (assignment_expression -> Tag())
                 {
                 case AstAssignmentExpression::STAR_EQUAL:
                     opc = OP_LMUL;
@@ -3763,7 +3992,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression* assignment_expre
             }
             else if (op_type == control.float_type)
             {
-                switch (assignment_expression -> assignment_tag)
+                switch (assignment_expression -> Tag())
                 {
                 case AstAssignmentExpression::STAR_EQUAL:
                     opc = OP_FMUL;
@@ -3786,7 +4015,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression* assignment_expre
             }
             else if (op_type == control.double_type)
             {
-                switch (assignment_expression -> assignment_tag)
+                switch (assignment_expression -> Tag())
                 {
                 case AstAssignmentExpression::STAR_EQUAL:
                     opc = OP_DMUL;
@@ -3875,7 +4104,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression* assignment_expre
         {
             assert(assignment_expression -> SimpleAssignment());
             PutOp(OP_CHECKCAST);
-            PutU2(RegisterClass(left_type -> signature));
+            PutU2(RegisterClass(left_type));
         }
         // fallthrough
     case STATIC_VAR:
@@ -3906,7 +4135,7 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
     //
     if (type == control.String())
     {
-        assert(expression -> binary_tag == AstBinaryExpression::PLUS);
+        assert(expression -> Tag() == AstBinaryExpression::PLUS);
         ConcatenateString(expression, need_value);
         if (! need_value)
         {
@@ -3914,7 +4143,10 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
             return 0;
         }
         PutOp(OP_INVOKEVIRTUAL);
-        PutU2(RegisterLibraryMethodref(control.StringBuffer_toStringMethod()));
+        PutU2(RegisterLibraryMethodref
+              (control.option.target >= JikesOption::SDK1_5
+               ? control.StringBuilder_toStringMethod()
+               : control.StringBuffer_toStringMethod()));
         ChangeStack(1); // account for return value
         return 1;
     }
@@ -3925,8 +4157,8 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
     //
     if (! need_value)
     {
-        if ((expression -> binary_tag == AstBinaryExpression::SLASH ||
-             expression -> binary_tag == AstBinaryExpression::MOD) &&
+        if ((expression -> Tag() == AstBinaryExpression::SLASH ||
+             expression -> Tag() == AstBinaryExpression::MOD) &&
             control.IsIntegral(type) &&
             (IsZero(expression -> right_expression) ||
              ! expression -> right_expression -> IsConstant()))
@@ -3953,18 +4185,18 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
             }
             if (type == control.long_type)
             {
-                PutOp(expression -> binary_tag == AstBinaryExpression::SLASH
+                PutOp(expression -> Tag() == AstBinaryExpression::SLASH
                       ? OP_LDIV : OP_LREM);
                 PutOp(OP_POP2);
             }
             else
             {
-                PutOp(expression -> binary_tag == AstBinaryExpression::SLASH
+                PutOp(expression -> Tag() == AstBinaryExpression::SLASH
                       ? OP_IDIV : OP_IREM);
                 PutOp(OP_POP);
             }
         }
-        else if (expression -> binary_tag == AstBinaryExpression::OR_OR)
+        else if (expression -> Tag() == AstBinaryExpression::OR_OR)
         {
             //
             // if (cond || true); => cond;
@@ -3988,7 +4220,7 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
                 CompleteLabel(label);
             }
         }
-        else if (expression -> binary_tag == AstBinaryExpression::AND_AND)
+        else if (expression -> Tag() == AstBinaryExpression::AND_AND)
         {
             //
             // if (cond && true); => cond;
@@ -4034,7 +4266,7 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
             right_expr = ((AstCastExpression*) right_expr) -> expression;
         TypeSymbol* right_type = right_expr -> Type();
 
-        switch (expression -> binary_tag)
+        switch (expression -> Tag())
         {
         case AstBinaryExpression::AND_AND:
             PutOp(OP_ICONST_0);
@@ -4136,14 +4368,14 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
 
     if (IsOne(expression -> left_expression))
     {
-        if (expression -> binary_tag == AstBinaryExpression::STAR)
+        if (expression -> Tag() == AstBinaryExpression::STAR)
         {
             EmitExpression(expression -> right_expression);
             return GetTypeWords(type);
         }
         if (expression -> left_expression -> Type() == control.boolean_type)
         {
-            switch (expression -> binary_tag)
+            switch (expression -> Tag())
             {
             case AstBinaryExpression::EQUAL_EQUAL:
             case AstBinaryExpression::AND_AND:
@@ -4180,7 +4412,7 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
             left_expr = ((AstCastExpression*) left_expr) -> expression;
         TypeSymbol* left_type = left_expr -> Type();
 
-        switch (expression -> binary_tag)
+        switch (expression -> Tag())
         {
         case AstBinaryExpression::EQUAL_EQUAL:
             if (left_type != control.boolean_type)
@@ -4214,7 +4446,7 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
                     FloatLiteralValue* value = DYNAMIC_CAST<FloatLiteralValue*>
                         (expression -> right_expression -> value);
                     if (value -> value.IsPositiveZero() ==
-                        (expression -> binary_tag == AstBinaryExpression::PLUS))
+                        (expression -> Tag() == AstBinaryExpression::PLUS))
                         break;
                 }
                 else if (expression -> right_expression -> Type() ==
@@ -4223,7 +4455,7 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
                     DoubleLiteralValue* value = DYNAMIC_CAST<DoubleLiteralValue*>
                         (expression -> right_expression -> value);
                     if (value -> value.IsPositiveZero() ==
-                        (expression -> binary_tag == AstBinaryExpression::PLUS))
+                        (expression -> Tag() == AstBinaryExpression::PLUS))
                         break;
                 }
             }
@@ -4252,15 +4484,15 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
 
     if (IsOne(expression -> right_expression))
     {
-        if (expression -> binary_tag == AstBinaryExpression::STAR ||
-            expression -> binary_tag == AstBinaryExpression::SLASH)
+        if (expression -> Tag() == AstBinaryExpression::STAR ||
+            expression -> Tag() == AstBinaryExpression::SLASH)
         {
             EmitExpression(expression -> left_expression);
             return GetTypeWords(type);
         }
         if (expression -> right_expression -> Type() == control.boolean_type)
         {
-            switch (expression -> binary_tag)
+            switch (expression -> Tag())
             {
             case AstBinaryExpression::EQUAL_EQUAL:
             case AstBinaryExpression::AND_AND:
@@ -4289,13 +4521,13 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
     // Next, simplify all remaining boolean result expressions.
     //
     if (expression -> left_expression -> Type() == control.boolean_type &&
-        (expression -> binary_tag == AstBinaryExpression::EQUAL_EQUAL ||
-         expression -> binary_tag == AstBinaryExpression::NOT_EQUAL))
+        (expression -> Tag() == AstBinaryExpression::EQUAL_EQUAL ||
+         expression -> Tag() == AstBinaryExpression::NOT_EQUAL))
     {
         EmitExpression(expression -> left_expression);
         EmitExpression(expression -> right_expression);
         PutOp(OP_IXOR);
-        if (expression -> binary_tag == AstBinaryExpression::EQUAL_EQUAL)
+        if (expression -> Tag() == AstBinaryExpression::EQUAL_EQUAL)
         {
             PutOp(OP_ICONST_1);
             PutOp(OP_IXOR);
@@ -4303,7 +4535,7 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
         return 1;
     }
 
-    switch (expression -> binary_tag)
+    switch (expression -> Tag())
     {
     case AstBinaryExpression::OR_OR:
     case AstBinaryExpression::AND_AND:
@@ -4336,7 +4568,7 @@ int ByteCode::EmitBinaryExpression(AstBinaryExpression* expression,
 
     bool integer_type = type == control.boolean_type ||
         control.IsSimpleIntegerValueType(type);
-    switch (expression -> binary_tag)
+    switch (expression -> Tag())
     {
     case AstBinaryExpression::STAR:
         PutOp(integer_type ? OP_IMUL
@@ -4426,7 +4658,7 @@ int ByteCode::EmitInstanceofExpression(AstInstanceofExpression* expr,
     else if ((expr -> expression -> ThisExpressionCast() ||
               expr -> expression -> SuperExpressionCast() ||
               expr -> expression -> ClassLiteralCast() ||
-              expr -> expression -> ClassInstanceCreationExpressionCast() ||
+              expr -> expression -> ClassCreationExpressionCast() ||
               expr -> expression -> ArrayCreationExpressionCast()) &&
              left_type -> IsSubtype(right_type))
     {
@@ -4443,9 +4675,7 @@ int ByteCode::EmitInstanceofExpression(AstInstanceofExpression* expr,
         if (need_value)
         {
             PutOp(OP_INSTANCEOF);
-            PutU2(right_type -> num_dimensions
-                  ? RegisterClass(right_type -> signature)
-                  : RegisterClass(right_type));
+            PutU2(RegisterClass(right_type));
         }
     }
     return need_value ? 1 : 0;
@@ -4567,9 +4797,7 @@ void ByteCode::EmitCast(TypeSymbol* dest_type, TypeSymbol* source_type)
     else
     {
         PutOp(OP_CHECKCAST);
-        PutU2(dest_type -> num_dimensions
-              ? RegisterClass(dest_type -> signature)
-              : RegisterClass(dest_type));
+        PutU2(RegisterClass(dest_type));
     }
 }
 
@@ -4601,12 +4829,12 @@ void ByteCode::EmitCheckForNull(AstExpression* expression, bool need_value)
         return;
     }
     VariableSymbol* variable = expression -> symbol -> VariableCast();
-    if (expression -> ClassInstanceCreationExpressionCast() ||
+    if (expression -> ClassCreationExpressionCast() ||
         expression -> ThisExpressionCast() ||
         expression -> SuperExpressionCast() ||
         expression -> ClassLiteralCast() ||
-        (variable && variable -> IsSynthetic() &&
-         variable -> Identity() == control.this0_name_symbol))
+        (variable && variable -> ACC_SYNTHETIC() &&
+         variable -> Identity() == control.this_name_symbol))
     {
         EmitExpression(expression, need_value);
         return;
@@ -4633,12 +4861,12 @@ void ByteCode::EmitCheckForNull(AstExpression* expression, bool need_value)
     PutOp(OP_POP);
 }
 
-int ByteCode::EmitInstanceCreationExpression(AstClassInstanceCreationExpression* expression,
-                                             bool need_value)
+int ByteCode::EmitClassCreationExpression(AstClassCreationExpression* expr,
+                                          bool need_value)
 {
-    if (expression -> resolution_opt)
-        expression = expression -> resolution_opt;
-    MethodSymbol* constructor = (MethodSymbol*) expression -> symbol;
+    if (expr -> resolution_opt)
+        expr = expr -> resolution_opt;
+    MethodSymbol* constructor = (MethodSymbol*) expr -> symbol;
     TypeSymbol* type = constructor -> containing_type;
 
     PutOp(OP_NEW);
@@ -4652,22 +4880,22 @@ int ByteCode::EmitInstanceCreationExpression(AstClassInstanceCreationExpression*
     //
     int stack_words = 0;
     unsigned i = 0;
-    if (expression -> base_opt)
+    if (expr -> base_opt)
     {
         stack_words++;
-        EmitCheckForNull(expression -> base_opt);
+        EmitCheckForNull(expr -> base_opt);
     }
     if (type -> Anonymous() && type -> super -> EnclosingInstance())
     {
         stack_words++;
-        EmitCheckForNull(expression -> arguments -> Argument(i++));
+        EmitCheckForNull(expr -> arguments -> Argument(i++));
     }
-    for ( ; i < expression -> arguments -> NumArguments(); i++)
-        stack_words += EmitExpression(expression -> arguments -> Argument(i));
-    for (i = 0; i < expression -> arguments -> NumLocalArguments(); i++)
+    for ( ; i < expr -> arguments -> NumArguments(); i++)
+        stack_words += EmitExpression(expr -> arguments -> Argument(i));
+    for (i = 0; i < expr -> arguments -> NumLocalArguments(); i++)
         stack_words +=
-            EmitExpression(expression -> arguments -> LocalArgument(i));
-    if (expression -> arguments -> NeedsExtraNullArgument())
+            EmitExpression(expr -> arguments -> LocalArgument(i));
+    if (expr -> arguments -> NeedsExtraNullArgument())
     {
         PutOp(OP_ACONST_NULL);
         stack_words++;
@@ -4675,7 +4903,7 @@ int ByteCode::EmitInstanceCreationExpression(AstClassInstanceCreationExpression*
 
     PutOp(OP_INVOKESPECIAL);
     ChangeStack(-stack_words);
-    PutU2(RegisterMethodref(type, control.init_name_symbol, constructor));
+    PutU2(RegisterMethodref(type, constructor));
     return 1;
 }
 
@@ -4854,11 +5082,8 @@ int ByteCode::EmitMethodInvocation(AstMethodInvocation* expression,
     AstMethodInvocation* method_call = expression -> resolution_opt
         ? expression -> resolution_opt -> MethodInvocationCast() : expression;
     assert(method_call);
-
     MethodSymbol* msym = (MethodSymbol*) method_call -> symbol;
-    AstFieldAccess* field = method_call -> method -> FieldAccessCast();
-    AstName* name = method_call -> method -> NameCast();
-
+    AstExpression* base = method_call -> base_opt;
     bool is_super = false; // set if super call
 
     if (msym -> ACC_STATIC())
@@ -4870,17 +5095,15 @@ int ByteCode::EmitMethodInvocation(AstMethodInvocation* expression,
         // access an instance method, in which case the base expression
         // will already be evaluated as the first parameter.
         //
-        if (field && (! msym -> accessed_member ||
+        if (base && (! msym -> accessed_member ||
                       msym -> AccessesStaticMember()))
         {
-            EmitExpression(field -> base, false);
+            EmitExpression(base, false);
         }
-        else if (name && name -> base_opt)
-            EmitName(name -> base_opt, false);
     }
     else
     {
-        if (field)
+        if (base)
         {
             //
             // Note that field will be marked IsSuperAccess only in synthetic
@@ -4889,26 +5112,17 @@ int ByteCode::EmitMethodInvocation(AstMethodInvocation* expression,
             // Foo.access$<num>(Foo $1) { $1.bar(); }
             // but must use invokespecial instead of the regular invokevirtual.
             //
-            is_super = field -> base -> SuperExpressionCast() != NULL;
-            EmitExpression(field -> base);
+            is_super = base -> SuperExpressionCast() != NULL;
+            EmitExpression(base);
         }
-        else if (name)
-        {
-            if (name -> resolution_opt) // use resolution if available
-                EmitExpression(name -> resolution_opt);
-            else if (name -> base_opt)
-                EmitName(name -> base_opt, true);
-            else // must be method of current object, so load this
-                PutOp(OP_ALOAD_0);
-        }
-        else assert(false && "unexpected argument to field access");
+        else PutOp(OP_ALOAD_0);
     }
 
     int stack_words = 0; // words on stack needed for arguments
     for (unsigned i = 0; i < method_call -> arguments -> NumArguments(); i++)
         stack_words += EmitExpression(method_call -> arguments -> Argument(i));
 
-    TypeSymbol* type = MethodTypeResolution(method_call -> method, msym);
+    TypeSymbol* type = MethodTypeResolution(method_call -> base_opt, msym);
     PutOp(msym -> ACC_STATIC() ? OP_INVOKESTATIC
           : (is_super || msym -> ACC_PRIVATE()) ? OP_INVOKESPECIAL
           : type -> ACC_INTERFACE() ? OP_INVOKEINTERFACE
@@ -4920,14 +5134,9 @@ int ByteCode::EmitMethodInvocation(AstMethodInvocation* expression,
 int ByteCode::CompleteCall(MethodSymbol* msym, int stack_words,
                            bool need_value, TypeSymbol* base_type)
 {
-    ChangeStack(-stack_words);
-
+    ChangeStack(- stack_words);
     TypeSymbol* type = (base_type ? base_type : msym -> containing_type);
-
-    PutU2(type -> ACC_INTERFACE()
-          ? RegisterInterfaceMethodref(type, msym -> ExternalIdentity(), msym)
-          : RegisterMethodref(type, msym -> ExternalIdentity(), msym));
-
+    PutU2(RegisterMethodref(type, msym));
     if (type -> ACC_INTERFACE())
     {
         PutU1(stack_words + 1);
@@ -4993,6 +5202,7 @@ bool ByteCode::IsNop(AstBlock* block)
     {
         Ast* statement = block -> Statement(i);
         if (statement -> EmptyStatementCast() ||
+            statement -> LocalClassStatementCast() ||
             (statement -> BlockCast() && IsNop((AstBlock*) statement)))
             continue;
         if (statement -> kind == Ast::IF)
@@ -5044,7 +5254,7 @@ void ByteCode::EmitNewArray(unsigned num_dims, const TypeSymbol* type)
     else
     {
         PutOp(OP_MULTIANEWARRAY);
-        PutU2(RegisterClass(type -> signature));
+        PutU2(RegisterClass(type));
         PutU1(num_dims); // load dims count
         ChangeStack(1 - num_dims);
     }
@@ -5072,7 +5282,7 @@ void ByteCode::EmitArrayAccessLhs(AstArrayAccess* expression)
         // or directly used as an array access base.
         //
         PutOp(OP_CHECKCAST);
-        PutU2(RegisterClass(base_type -> signature));
+        PutU2(RegisterClass(base_type));
     }
     EmitExpression(expression -> expression);
 }
@@ -5136,26 +5346,26 @@ void ByteCode::EmitPostUnaryExpressionField(VariableCategory kind,
     if (control.IsSimpleIntegerValueType(expression_type))
     {
         PutOp(OP_ICONST_1);
-        PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
               ? OP_IADD : OP_ISUB);
         EmitCast(expression_type, control.int_type);
     }
     else if (expression_type == control.long_type)
     {
         PutOp(OP_LCONST_1);
-        PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
               ? OP_LADD : OP_LSUB);
     }
     else if (expression_type == control.float_type)
     {
         PutOp(OP_FCONST_1);
-        PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
               ? OP_FADD : OP_FSUB);
     }
     else if (expression_type == control.double_type)
     {
         PutOp(OP_DCONST_1); // load 1.0
-        PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
               ? OP_DADD : OP_DSUB);
     }
 
@@ -5194,7 +5404,7 @@ void ByteCode::EmitPostUnaryExpressionSimple(VariableCategory kind,
         // can we use IINC ??
         LoadVariable(kind, StripNops(expression -> expression), need_value);
         PutOpIINC(expression -> symbol -> VariableCast() -> LocalVariableIndex(),
-                  expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS ? 1 : -1);
+                  expression -> Tag() == AstPostUnaryExpression::PLUSPLUS ? 1 : -1);
         return;
     }
 
@@ -5207,26 +5417,26 @@ void ByteCode::EmitPostUnaryExpressionSimple(VariableCategory kind,
     if (control.IsSimpleIntegerValueType(expression_type))
     {
         PutOp(OP_ICONST_1);
-        PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
               ? OP_IADD : OP_ISUB);
         EmitCast(expression_type, control.int_type);
     }
     else if (expression_type == control.long_type)
     {
         PutOp(OP_LCONST_1);
-        PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
               ? OP_LADD : OP_LSUB);
     }
     else if (expression_type == control.float_type)
     {
         PutOp(OP_FCONST_1);
-        PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
               ? OP_FADD : OP_FSUB);
     }
     else if (expression_type == control.double_type)
     {
         PutOp(OP_DCONST_1); // load 1.0
-        PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
               ? OP_DADD : OP_DSUB);
     }
 
@@ -5262,7 +5472,7 @@ void ByteCode::EmitPostUnaryExpressionArray(AstPostUnaryExpression* expression,
          if (need_value) // save value below saved array base and index
              PutOp(OP_DUP_X2);
          PutOp(OP_ICONST_1);
-         PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
                ? OP_IADD : OP_ISUB);
          PutOp(OP_IASTORE);
     }
@@ -5272,7 +5482,7 @@ void ByteCode::EmitPostUnaryExpressionArray(AstPostUnaryExpression* expression,
          if (need_value) // save value below saved array base and index
              PutOp(OP_DUP_X2);
          PutOp(OP_ICONST_1);
-         PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
                ? OP_IADD : OP_ISUB);
          PutOp(OP_I2B);
          PutOp(OP_BASTORE);
@@ -5283,7 +5493,7 @@ void ByteCode::EmitPostUnaryExpressionArray(AstPostUnaryExpression* expression,
          if (need_value) // save value below saved array base and index
              PutOp(OP_DUP_X2);
          PutOp(OP_ICONST_1);
-         PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
                ? OP_IADD : OP_ISUB);
          PutOp(OP_I2C);
          PutOp(OP_CASTORE);
@@ -5294,7 +5504,7 @@ void ByteCode::EmitPostUnaryExpressionArray(AstPostUnaryExpression* expression,
          if (need_value) // save value below saved array base and index
              PutOp(OP_DUP_X2);
          PutOp(OP_ICONST_1);
-         PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
                ? OP_IADD : OP_ISUB);
          PutOp(OP_I2S);
          PutOp(OP_SASTORE);
@@ -5305,7 +5515,7 @@ void ByteCode::EmitPostUnaryExpressionArray(AstPostUnaryExpression* expression,
          if (need_value) // save value below saved array base and index
              PutOp(OP_DUP2_X2);
          PutOp(OP_LCONST_1);
-         PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
                ? OP_LADD : OP_LSUB);
          PutOp(OP_LASTORE);
     }
@@ -5315,7 +5525,7 @@ void ByteCode::EmitPostUnaryExpressionArray(AstPostUnaryExpression* expression,
          if (need_value) // save value below saved array base and index
              PutOp(OP_DUP_X2);
          PutOp(OP_FCONST_1);
-         PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
                ? OP_FADD : OP_FSUB);
          PutOp(OP_FASTORE);
     }
@@ -5325,7 +5535,7 @@ void ByteCode::EmitPostUnaryExpressionArray(AstPostUnaryExpression* expression,
          if (need_value) // save value below saved array base and index
              PutOp(OP_DUP2_X2);
          PutOp(OP_DCONST_1);
-         PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPostUnaryExpression::PLUSPLUS
                ? OP_DADD : OP_DSUB);
          PutOp(OP_DASTORE);
     }
@@ -5340,41 +5550,36 @@ int ByteCode::EmitPreUnaryExpression(AstPreUnaryExpression* expression,
                                      bool need_value)
 {
     TypeSymbol* type = expression -> Type();
-    if (expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS ||
-        expression -> pre_unary_tag == AstPreUnaryExpression::MINUSMINUS)
+    if (expression -> Tag() == AstPreUnaryExpression::PLUSPLUS ||
+        expression -> Tag() == AstPreUnaryExpression::MINUSMINUS)
     {
         EmitPreUnaryIncrementExpression(expression, need_value);
     }
     else // here for ordinary unary operator without side effects.
     {
-        switch (expression -> pre_unary_tag)
+        EmitExpression(expression -> expression, need_value);
+        if (! need_value)
+            return 0;
+        switch (expression -> Tag())
         {
         case AstPreUnaryExpression::PLUS:
-            // nothing to do (front-end will have done any needed conversions)
-            assert(need_value);
-            EmitExpression(expression -> expression);
+            // Nothing else to do.
             break;
         case AstPreUnaryExpression::MINUS:
-            assert(need_value);
             assert(control.IsNumeric(type) && "unary minus on bad type");
-
-            EmitExpression(expression -> expression);
             PutOp(control.IsSimpleIntegerValueType(type) ? OP_INEG
                   : type == control.long_type ? OP_LNEG
                   : type == control.float_type ? OP_FNEG
                   : OP_DNEG); // double_type
             break;
         case AstPreUnaryExpression::TWIDDLE:
-            assert(need_value);
             if (control.IsSimpleIntegerValueType(type))
             {
-                EmitExpression(expression -> expression);
                 PutOp(OP_ICONST_M1); // -1
                 PutOp(OP_IXOR);      // exclusive or to get result
             }
             else if (type == control.long_type)
             {
-                EmitExpression(expression -> expression);
                 PutOp(OP_LCONST_1); // make -1
                 PutOp(OP_LNEG);
                 PutOp(OP_LXOR);     // exclusive or to get result
@@ -5383,10 +5588,6 @@ int ByteCode::EmitPreUnaryExpression(AstPreUnaryExpression* expression,
             break;
         case AstPreUnaryExpression::NOT:
             assert(type == control.boolean_type);
-
-            EmitExpression(expression -> expression, need_value);
-            if (! need_value)
-                return 0;
             PutOp(OP_ICONST_1);
             PutOp(OP_IXOR); // !(e) <=> (e)^true
             break;
@@ -5394,7 +5595,6 @@ int ByteCode::EmitPreUnaryExpression(AstPreUnaryExpression* expression,
             assert(false && "unknown preunary tag");
         }
     }
-
     return GetTypeWords(type);
 }
 
@@ -5450,7 +5650,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionSimple(VariableCategory kind,
     if (kind == LOCAL_VAR && type == control.int_type)
     {
         PutOpIINC(expression -> symbol -> VariableCast() -> LocalVariableIndex(),
-                  expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS ? 1 : -1);
+                  expression -> Tag() == AstPreUnaryExpression::PLUSPLUS ? 1 : -1);
         LoadVariable(kind, StripNops(expression -> expression), need_value);
         return;
     }
@@ -5461,7 +5661,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionSimple(VariableCategory kind,
     if (control.IsSimpleIntegerValueType(type))
     {
         PutOp(OP_ICONST_1);
-        PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
               ? OP_IADD : OP_ISUB);
         EmitCast(type, control.int_type);
         if (need_value)
@@ -5470,7 +5670,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionSimple(VariableCategory kind,
     else if (type == control.long_type)
     {
         PutOp(OP_LCONST_1);
-        PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
               ? OP_LADD : OP_LSUB);
         if (need_value)
             PutOp(OP_DUP2);
@@ -5478,7 +5678,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionSimple(VariableCategory kind,
     else if (type == control.float_type)
     {
         PutOp(OP_FCONST_1);
-        PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
               ? OP_FADD : OP_FSUB);
         if (need_value)
             PutOp(OP_DUP);
@@ -5486,7 +5686,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionSimple(VariableCategory kind,
     else if (type == control.double_type)
     {
         PutOp(OP_DCONST_1); // load 1.0
-        PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
               ? OP_DADD : OP_DSUB);
         if (need_value)
             PutOp(OP_DUP2);
@@ -5523,7 +5723,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionArray(AstPreUnaryExpression* expre
     {
          PutOp(OP_IALOAD);
          PutOp(OP_ICONST_1);
-         PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
                ? OP_IADD : OP_ISUB);
          if (need_value)
              PutOp(OP_DUP_X2);
@@ -5533,7 +5733,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionArray(AstPreUnaryExpression* expre
     {
          PutOp(OP_BALOAD);
          PutOp(OP_ICONST_1);
-         PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
                ? OP_IADD : OP_ISUB);
          PutOp(OP_I2B);
          if (need_value)
@@ -5544,7 +5744,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionArray(AstPreUnaryExpression* expre
     {
          PutOp(OP_CALOAD);
          PutOp(OP_ICONST_1);
-         PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
                ? OP_IADD : OP_ISUB);
          PutOp(OP_I2C);
          if (need_value)
@@ -5555,7 +5755,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionArray(AstPreUnaryExpression* expre
     {
          PutOp(OP_SALOAD);
          PutOp(OP_ICONST_1);
-         PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
                ? OP_IADD : OP_ISUB);
          PutOp(OP_I2S);
          if (need_value)
@@ -5566,7 +5766,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionArray(AstPreUnaryExpression* expre
     {
          PutOp(OP_LALOAD);
          PutOp(OP_LCONST_1);
-         PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
                ? OP_LADD : OP_LSUB);
          if (need_value)
              PutOp(OP_DUP2_X2);
@@ -5576,7 +5776,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionArray(AstPreUnaryExpression* expre
     {
          PutOp(OP_FALOAD);
          PutOp(OP_FCONST_1);
-         PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
                ? OP_FADD : OP_FSUB);
          if (need_value)
              PutOp(OP_DUP_X2);
@@ -5586,7 +5786,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionArray(AstPreUnaryExpression* expre
     {
          PutOp(OP_DALOAD);
          PutOp(OP_DCONST_1);
-         PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+         PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
                ? OP_DADD : OP_DSUB);
          if (need_value)
              PutOp(OP_DUP2_X2);
@@ -5615,7 +5815,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionField(VariableCategory kind,
     if (control.IsSimpleIntegerValueType(expression_type))
     {
         PutOp(OP_ICONST_1);
-        PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
               ? OP_IADD : OP_ISUB);
         EmitCast(expression_type, control.int_type);
         if (need_value)
@@ -5624,7 +5824,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionField(VariableCategory kind,
     else if (expression_type == control.long_type)
     {
         PutOp(OP_LCONST_1);
-        PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
               ? OP_LADD : OP_LSUB);
         if (need_value)
             PutOp(OP_DUP2_X1);
@@ -5632,7 +5832,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionField(VariableCategory kind,
     else if (expression_type == control.float_type)
     {
         PutOp(OP_FCONST_1);
-        PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
               ? OP_FADD : OP_FSUB);
         if (need_value)
             PutOp(OP_DUP_X1);
@@ -5640,7 +5840,7 @@ void ByteCode::EmitPreUnaryIncrementExpressionField(VariableCategory kind,
     else if (expression_type == control.double_type)
     {
         PutOp(OP_DCONST_1);
-        PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS
+        PutOp(expression -> Tag() == AstPreUnaryExpression::PLUSPLUS
               ? OP_DADD : OP_DSUB);
         if (need_value)
             PutOp(OP_DUP2_X1);
@@ -5699,9 +5899,7 @@ void ByteCode::EmitThisInvocation(AstThisCall* this_call)
     PutOp(OP_INVOKESPECIAL);
     ChangeStack(-stack_words);
 
-    PutU2(RegisterMethodref(unit_type,
-                            this_call -> symbol -> ExternalIdentity(),
-                            this_call -> symbol));
+    PutU2(RegisterMethodref(unit_type, this_call -> symbol));
 }
 
 
@@ -5741,9 +5939,7 @@ void ByteCode::EmitSuperInvocation(AstSuperCall* super_call)
 
     PutOp(OP_INVOKESPECIAL);
     ChangeStack(-stack_words);
-    PutU2(RegisterMethodref(unit_type -> super,
-                            super_call -> symbol -> ExternalIdentity(),
-                            super_call -> symbol));
+    PutU2(RegisterMethodref(unit_type -> super, super_call -> symbol));
 }
 
 
@@ -5762,6 +5958,7 @@ void ByteCode::ConcatenateString(AstBinaryExpression* expression,
     // Use recursion to share a single buffer where possible.
     // If concatenated string is not needed, we must still perform string
     // conversion on all objects, as well as perform side effects of terms.
+    // In 1.5 and later, StringBuilder was added with better performance.
     //
     AstExpression* left_expr = StripNops(expression -> left_expression);
     if (left_expr -> Type() == control.String() &&
@@ -5773,7 +5970,9 @@ void ByteCode::ConcatenateString(AstBinaryExpression* expression,
     else
     {
         PutOp(OP_NEW);
-        PutU2(RegisterClass(control.StringBuffer()));
+        PutU2(RegisterClass(control.option.target >= JikesOption::SDK1_5
+                            ? control.StringBuilder()
+                            : control.StringBuffer()));
         PutOp(OP_DUP);
         if (left_expr -> IsConstant())
         {
@@ -5791,21 +5990,28 @@ void ByteCode::ConcatenateString(AstBinaryExpression* expression,
             {
                 PutOp(OP_INVOKESPECIAL);
                 PutU2(RegisterLibraryMethodref
-                      (control.StringBuffer_InitMethod()));
+                      (control.option.target >= JikesOption::SDK1_5
+                       ? control.StringBuilder_InitMethod()
+                       : control.StringBuffer_InitMethod()));
             }
             else
             {
                 LoadConstantAtIndex(RegisterString(value));
                 PutOp(OP_INVOKESPECIAL);
                 PutU2(RegisterLibraryMethodref
-                      (control.StringBuffer_InitWithStringMethod()));
+                      (control.option.target >= JikesOption::SDK1_5
+                       ? control.StringBuilder_InitWithStringMethod()
+                       : control.StringBuffer_InitWithStringMethod()));
                 ChangeStack(-1); // account for the argument
             }
         }
         else
         {
             PutOp(OP_INVOKESPECIAL);
-            PutU2(RegisterLibraryMethodref(control.StringBuffer_InitMethod()));
+            PutU2(RegisterLibraryMethodref
+                  (control.option.target >= JikesOption::SDK1_5
+                   ? control.StringBuilder_InitMethod()
+                   : control.StringBuffer_InitMethod()));
             //
             // Don't pass stripped left_expr, or ((int)char)+"" would be
             // treated as a char append rather than int append.
@@ -5866,8 +6072,7 @@ void ByteCode::AppendString(AstExpression* expression, bool need_value)
             expression -> BinaryExpressionCast();
         if (binary_expression && type == control.String())
         {
-            assert(binary_expression -> binary_tag ==
-                   AstBinaryExpression::PLUS);
+            assert(binary_expression -> Tag() == AstBinaryExpression::PLUS);
             AppendString(binary_expression -> left_expression, need_value);
             AppendString(binary_expression -> right_expression, need_value);
             return;
@@ -5893,29 +6098,53 @@ void ByteCode::EmitStringAppendMethod(TypeSymbol* type)
     // correct char[].toString(). Treating null as a String is slightly more
     // efficient than as an Object.
     //
-    MethodSymbol* append_method =
-        (type == control.char_type
-         ? control.StringBuffer_append_charMethod()
-         : type == control.boolean_type
-         ? control.StringBuffer_append_booleanMethod()
-         : (type == control.int_type || type == control.short_type ||
-            type == control.byte_type)
-         ? control.StringBuffer_append_intMethod()
-         : type == control.long_type
-         ? control.StringBuffer_append_longMethod()
-         : type == control.float_type
-         ? control.StringBuffer_append_floatMethod()
-         : type == control.double_type
-         ? control.StringBuffer_append_doubleMethod()
-         : (type == control.String() || type == control.null_type)
-         ? control.StringBuffer_append_stringMethod()
-         : IsReferenceType(type)
-         ? control.StringBuffer_append_objectMethod()
-         : control.StringBuffer_InitMethod()); // for assertion
-
-    assert(append_method != control.StringBuffer_InitMethod() &&
+    MethodSymbol* append_method;
+    if (control.option.target >= JikesOption::SDK1_5)
+    {
+        append_method =
+            (type == control.char_type
+             ? control.StringBuilder_append_charMethod()
+             : type == control.boolean_type
+             ? control.StringBuilder_append_booleanMethod()
+             : (type == control.int_type || type == control.short_type ||
+                type == control.byte_type)
+             ? control.StringBuilder_append_intMethod()
+             : type == control.long_type
+             ? control.StringBuilder_append_longMethod()
+             : type == control.float_type
+             ? control.StringBuilder_append_floatMethod()
+             : type == control.double_type
+             ? control.StringBuilder_append_doubleMethod()
+             : (type == control.String() || type == control.null_type)
+             ? control.StringBuilder_append_stringMethod()
+             : IsReferenceType(type)
+             ? control.StringBuilder_append_objectMethod()
+             : (MethodSymbol*) NULL); // for assertion
+    }
+    else
+    {
+        append_method =
+            (type == control.char_type
+             ? control.StringBuffer_append_charMethod()
+             : type == control.boolean_type
+             ? control.StringBuffer_append_booleanMethod()
+             : (type == control.int_type || type == control.short_type ||
+                type == control.byte_type)
+             ? control.StringBuffer_append_intMethod()
+             : type == control.long_type
+             ? control.StringBuffer_append_longMethod()
+             : type == control.float_type
+             ? control.StringBuffer_append_floatMethod()
+             : type == control.double_type
+             ? control.StringBuffer_append_doubleMethod()
+             : (type == control.String() || type == control.null_type)
+             ? control.StringBuffer_append_stringMethod()
+             : IsReferenceType(type)
+             ? control.StringBuffer_append_objectMethod()
+             : (MethodSymbol*) NULL); // for assertion
+    }
+    assert(append_method &&
            "unable to find method for string buffer concatenation");
-
     PutOp(OP_INVOKEVIRTUAL);
     if (control.IsDoubleWordType(type))
         ChangeStack(-1);
@@ -5933,28 +6162,30 @@ static void op_trap()
 
 
 ByteCode::ByteCode(TypeSymbol* type)
-    : ClassFile(),
-      control(type -> semantic_environment -> sem -> control),
-      semantic(*type -> semantic_environment -> sem),
-      unit_type(type),
-      string_overflow(false),
-      library_method_not_found(false),
-      last_op_goto(false),
-      shadow_parameter_offset(0),
-      double_constant_pool_index(NULL),
-      integer_constant_pool_index(NULL),
-      long_constant_pool_index(NULL),
-      float_constant_pool_index(NULL),
-      string_constant_pool_index(NULL),
-
-      utf8_constant_pool_index(segment_pool,
-                               control.Utf8_pool.symbol_pool.Length()),
-      class_constant_pool_index(segment_pool,
-                                control.Utf8_pool.symbol_pool.Length()),
-
-      name_and_type_constant_pool_index(NULL),
-      fieldref_constant_pool_index(NULL),
-      methodref_constant_pool_index(NULL)
+    : ClassFile()
+    , control(type -> semantic_environment -> sem -> control)
+    , semantic(*type -> semantic_environment -> sem)
+    , unit_type(type)
+    , string_overflow(false)
+    , library_method_not_found(false)
+    , last_op_goto(false)
+    , shadow_parameter_offset(0)
+    , code_attribute(NULL)
+    , line_number_table_attribute(NULL)
+    , local_variable_table_attribute(NULL)
+    , inner_classes_attribute(NULL)
+    , double_constant_pool_index(NULL)
+    , integer_constant_pool_index(NULL)
+    , long_constant_pool_index(NULL)
+    , float_constant_pool_index(NULL)
+    , string_constant_pool_index(NULL)
+    , utf8_constant_pool_index(segment_pool,
+                               control.Utf8_pool.symbol_pool.Length())
+    , class_constant_pool_index(segment_pool,
+                                control.Utf8_pool.symbol_pool.Length())
+    , name_and_type_constant_pool_index(NULL)
+    , fieldref_constant_pool_index(NULL)
+    , methodref_constant_pool_index(NULL)
 {
 #ifdef JIKES_DEBUG
     if (! control.option.nowrite)
@@ -5967,7 +6198,8 @@ ByteCode::ByteCode(TypeSymbol* type)
     // strictfp. Also, a non-access flag, the super bit, must be set for
     // classes but not interfaces. For top-level types, this changes nothing
     // except adding the super bit. For nested types, the correct access bits
-    // are emitted later as part of the InnerClasses attribute.
+    // are emitted later as part of the InnerClasses attribute. Also, no class
+    // is marked strictfp.
     //
     SetFlags(unit_type -> Flags());
     if (ACC_PROTECTED())
@@ -5999,6 +6231,10 @@ ByteCode::ByteCode(TypeSymbol* type)
     case JikesOption::SDK1_4:
     case JikesOption::SDK1_4_2:
         major_version = 48;
+        minor_version = 0;
+        break;
+    case JikesOption::SDK1_5:
+        major_version = 49;
         minor_version = 0;
         break;
     default:
@@ -6077,7 +6313,7 @@ void ByteCode::CompleteLabel(Label& lab)
 {
     if (lab.uses.Length())
     {
-        assert((lab.defined) && "label used but with no definition");
+        assert(lab.defined && "label used but with no definition");
 
         //
         // Sanity check - when completing method, make sure nothing jumps out
@@ -6344,7 +6580,9 @@ int ByteCode::LoadVariable(VariableCategory kind, AstExpression* expr,
         assert(name && ! base);
         if (! need_value)
             return 0;
-        LoadLocal(sym -> LocalVariableIndex(), expression_type);
+        if (expr -> IsConstant())
+            LoadLiteral(expr -> value, expression_type);
+        else LoadLocal(sym -> LocalVariableIndex(), expression_type);
         return GetTypeWords(expression_type);
     case ACCESSED_VAR:
         {
@@ -6365,7 +6603,7 @@ int ByteCode::LoadVariable(VariableCategory kind, AstExpression* expr,
         assert(sym -> IsInitialized() || ! sym -> ACC_FINAL());
         if (shadow_parameter_offset && sym -> owner == unit_type &&
             (sym -> accessed_local ||
-             sym -> Identity() == control.this0_name_symbol))
+             sym -> Identity() == control.this_name_symbol))
         {
             //
             // In a constructor, use the parameter that was passed to the
@@ -6456,7 +6694,9 @@ int ByteCode::LoadVariable(VariableCategory kind, AstExpression* expr,
         ChangeStack(1);
     PutU2(RegisterFieldref(VariableTypeResolution(expr, sym), sym));
     if (need_value)
+    {
         return GetTypeWords(expression_type);
+    }
     PutOp(control.IsDoubleWordType(expression_type) ? OP_POP2 : OP_POP);
     return 0;
 }
@@ -6582,8 +6822,7 @@ void ByteCode::StoreVariable(VariableCategory kind, AstExpression* expr)
 
 
 //
-// finish off code by writing SourceFile attribute
-// and InnerClasses attribute (if appropriate)
+// Finish off code by writing remaining type-level attributes.
 //
 void ByteCode::FinishCode()
 {
@@ -6595,62 +6834,26 @@ void ByteCode::FinishCode()
                      (RegisterUtf8(control.SourceFile_literal),
                       RegisterUtf8(unit_type -> file_symbol ->
                                    FileNameLiteral())));
-
-    //
-    // Generate InnerClasses attribute for every CONSTANT_Class_info in the
-    // pool that is nested in another type.
-    //
-    if (unit_type -> IsNested() || unit_type -> NumNestedTypes())
-    {
-        inner_classes_attribute =
-            new InnerClassesAttribute(RegisterUtf8
-                                      (control.InnerClasses_literal));
-
-        //
-        // need to build chain from this type to its owner all the way to the
-        // containing type and then write that out in reverse order (so
-        // containing type comes first), and then write out an entry for each
-        // immediately contained type
-        //
-        Tuple<TypeSymbol*> owners;
-        for (TypeSymbol* t = unit_type;
-             t && t != unit_type -> outermost_type;
-             t = t -> ContainingType())
-        {
-            owners.Next() = t;
-        }
-
-        for (int j = owners.Length() - 1; j >= 0; j--)
-        {
-            TypeSymbol* outer = owners[j];
-            inner_classes_attribute ->
-                AddInnerClass(RegisterClass(outer),
-                              (outer -> IsLocal() ? 0
-                               : RegisterClass(outer -> ContainingType())),
-                              (outer -> Anonymous() ? 0
-                               : RegisterName(outer -> name_symbol)),
-                              outer -> Flags());
-        }
-
-        for (unsigned k = 0; k < unit_type -> NumNestedTypes(); k++)
-        {
-            TypeSymbol* nested = unit_type -> NestedType(k);
-            inner_classes_attribute ->
-                AddInnerClass(RegisterClass(nested),
-                              (nested -> IsLocal() ? 0
-                               : RegisterClass(nested -> ContainingType())),
-                              (nested -> Anonymous() ? 0
-                               : RegisterName(nested -> name_symbol)),
-                              nested -> Flags());
-        }
-
-        attributes.Next() = inner_classes_attribute;
-    }
-
     if (unit_type -> IsDeprecated())
         AddAttribute(CreateDeprecatedAttribute());
-    if (unit_type -> IsSynthetic())
+    if (unit_type -> ACC_SYNTHETIC() &&
+        control.option.target < JikesOption::SDK1_5)
+    {
         AddAttribute(CreateSyntheticAttribute());
+    }
+    if (unit_type -> owner -> MethodCast())
+    {
+        MethodSymbol* enclosing = (MethodSymbol*) unit_type -> owner;
+        AddAttribute(CreateEnclosingMethodAttribute(enclosing));
+    }
+    //
+    // In case they weren't referenced elsewhere, make sure all nested types
+    // of this class are listed in the constant pool.  A side effect of
+    // registering the class is updating the InnerClasses attribute.
+    //
+    unsigned i = unit_type -> NumNestedTypes();
+    while (i--)
+        RegisterClass(unit_type -> NestedType(i));
 }
 
 

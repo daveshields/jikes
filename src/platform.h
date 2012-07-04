@@ -1,4 +1,4 @@
-// $Id: platform.h,v 1.46 2004/01/26 06:07:17 cabbey Exp $ -*- c++ -*-
+// $Id: platform.h,v 1.52 2004/03/25 13:32:28 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -200,6 +200,8 @@ typedef int32_t i4;
 typedef uint64_t u8;
 typedef int64_t i8;
 #endif // HAVE_64BIT_TYPES
+typedef u4 TokenIndex;
+static const TokenIndex BAD_TOKEN = (TokenIndex) 0;
 
 // Rename for readability in double.h.
 #ifdef TYPE_INT32_T_IS_INT
@@ -211,12 +213,10 @@ typedef int64_t i8;
 // and its possible values: "false" and "true"
 //
 #ifndef HAVE_BOOL
-//======================================================================
 // We define the type "bool" and the constants "false" and "true".
 // The type bool as well as the constants false and true are expected
 // to become standard C++. When that happens, these declarations should
 // be removed.
-//======================================================================
 typedef unsigned char bool;
 enum { false = 0, true = 1 };
 #endif
@@ -270,29 +270,28 @@ inline TO DYNAMIC_CAST(FROM f)
 //
 
 #ifndef HAVE_WCSLEN
-    extern size_t wcslen(const wchar_t *);
+    extern size_t wcslen(const wchar_t*);
 #endif
 
 #ifndef HAVE_WCSCPY
-    extern wchar_t *wcscpy(wchar_t *, const wchar_t *);
+    extern wchar_t* wcscpy(wchar_t*, const wchar_t*);
 #endif
 
 #ifndef HAVE_WCSNCPY
-    extern wchar_t *wcsncpy(wchar_t *, const wchar_t *, size_t);
+    extern wchar_t* wcsncpy(wchar_t*, const wchar_t*, size_t);
 #endif
 
 #ifndef HAVE_WCSCAT
-    extern wchar_t *wcscat(wchar_t *, const wchar_t *);
+    extern wchar_t* wcscat(wchar_t*, const wchar_t*);
 #endif
 
 #ifndef HAVE_WCSCMP
-    extern int wcscmp(const wchar_t *, const wchar_t *);
+    extern int wcscmp(const wchar_t*, const wchar_t*);
 #endif
 
 #ifndef HAVE_WCSNCMP
-    extern int wcsncmp(const wchar_t *, const wchar_t *, size_t);
+    extern int wcsncmp(const wchar_t*, const wchar_t*, size_t);
 #endif
-
 
 
 //
@@ -318,11 +317,11 @@ extern void FloatingPointCheck();
 // variants of system functions
 // are declared here and defined in code.cpp
 //
-extern int SystemStat(const char *name, struct stat *stat_struct);
-extern FILE *SystemFopen(const char *name, const char *mode);
-extern size_t SystemFread(char *ptr, size_t element_size, size_t count,
-                          FILE *stream);
-extern int SystemIsDirectory(char *name);
+extern int SystemStat(const char* name, struct stat* stat_struct);
+extern FILE* SystemFopen(const char* name, const char* mode);
+extern size_t SystemFread(char* ptr, size_t element_size, size_t count,
+                          FILE* stream);
+extern int SystemIsDirectory(char* name);
 
 //
 // The symbol used in this environment for separating argument in a system
@@ -330,14 +329,12 @@ extern int SystemIsDirectory(char *name);
 // are separated by a ':', whereas in win95 it is ';'.
 //
 extern char PathSeparator();
-extern int SystemMkdir(char *);
-extern int SystemMkdirhier(char *);
-extern int SystemMkdirhierForFile(char *);
+extern int SystemMkdir(char*);
+extern int SystemMkdirhier(char*);
+extern int SystemMkdirhierForFile(char*);
 
-extern char * strcat3(const char *, const char *, const char *);
-extern char * wstring2string(wchar_t * in);
-
-
+extern char* strcat3(const char*, const char*, const char*);
+extern char* wstring2string(wchar_t* in);
 
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -346,7 +343,6 @@ extern char * wstring2string(wchar_t * in);
 // in this file should work on any system
 //
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
 
 
 // The following comment was part of the original config.h, it explains why
@@ -515,292 +511,182 @@ public:
     //
     // Symbols and operators.
     //
-    static const wchar_t US_AND[], // L"&"
-        US_AND_AND[], // L"&&"
-        US_AND_EQUAL[], // L"&="
-        US_AT[], // L"@"
-        US_COLON[], // L":"
-        US_COMMA[], // L","
-        US_DIVIDE[], // L"/"
-        US_DIVIDE_EQUAL[], // L"/="
-        US_DOT[], // L"."
-        US_DOT_DOT_DOT[], // L"..."
-        US_EMPTY[], // L""
-        US_EQUAL[], // L"="
-        US_EQUAL_EQUAL[], // L"=="
-        US_GREATER[], // L">"
-        US_GREATER_EQUAL[], // L">="
-        US_LBRACE[], // L"{"
-        US_LBRACKET[], // L"["
-        US_LEFT_SHIFT[], // L"<<"
-        US_LEFT_SHIFT_EQUAL[], // L"<<="
-        US_LESS[], // L"<"
-        US_LESS_EQUAL[], // L"<="
-        US_LPAREN[], // L"("
-        US_MINUS[], // L"-"
-        US_MINUS_EQUAL[], // L"-="
-        US_MINUS_MINUS[], // L"--"
-        US_MULTIPLY[], // L"*"
-        US_MULTIPLY_EQUAL[], // L"*="
-        US_NOT[], // L"!"
-        US_NOT_EQUAL[], // L"!="
-        US_OR[], // L"|"
-        US_OR_EQUAL[], // L"|="
-        US_OR_OR[], // L"||"
-        US_PLUS[], // L"+"
-        US_PLUS_EQUAL[], // L"+="
-        US_PLUS_PLUS[], // L"++"
-        US_QUESTION[], // L"?"
-        US_RBRACE[], // L"}"
-        US_RBRACKET[], // L"]"
-        US_REMAINDER[], // L"%"
-        US_REMAINDER_EQUAL[], // L"%="
-        US_RIGHT_SHIFT[], // L">>"
-        US_RIGHT_SHIFT_EQUAL[], // L">>="
-        US_RPAREN[], // L")"
-        US_SEMICOLON[], // L";"
-        US_TWIDDLE[], // L"~"
-        US_UNSIGNED_RIGHT_SHIFT[], // L">>>"
-        US_UNSIGNED_RIGHT_SHIFT_EQUAL[], // L">>>="
-        US_XOR[], // L"^"
-        US_XOR_EQUAL[]; // L"^="
+    static const wchar_t US_AND[]; // L"&"
+    static const wchar_t US_AND_AND[]; // L"&&"
+    static const wchar_t US_AND_EQUAL[]; // L"&="
+    static const wchar_t US_AT[]; // L"@"
+    static const wchar_t US_COLON[]; // L":"
+    static const wchar_t US_COMMA[]; // L";"
+    static const wchar_t US_DIVIDE[]; // L"/"
+    static const wchar_t US_DIVIDE_EQUAL[]; // L"/="
+    static const wchar_t US_DOT[]; // L"."
+    static const wchar_t US_DOT_DOT_DOT[]; // L"..."
+    static const wchar_t US_EMPTY[]; // L""
+    static const wchar_t US_EOF[]; // L"EOF"
+    static const wchar_t US_EQUAL[]; // L"="
+    static const wchar_t US_EQUAL_EQUAL[]; // L"=="
+    static const wchar_t US_GREATER[]; // L">"
+    static const wchar_t US_GREATER_EQUAL[]; // L">="
+    static const wchar_t US_LBRACE[]; // L"{"
+    static const wchar_t US_LBRACKET[]; // L"["
+    static const wchar_t US_LEFT_SHIFT[]; // L"<<"
+    static const wchar_t US_LEFT_SHIFT_EQUAL[]; // L"<<="
+    static const wchar_t US_LESS[]; // L"<"
+    static const wchar_t US_LESS_EQUAL[]; // L"<="
+    static const wchar_t US_LPAREN[]; // L"("
+    static const wchar_t US_MINUS[]; // L"-"
+    static const wchar_t US_MINUS_EQUAL[]; // L"-="
+    static const wchar_t US_MINUS_MINUS[]; // L"--"
+    static const wchar_t US_MULTIPLY[]; // L"*"
+    static const wchar_t US_MULTIPLY_EQUAL[]; // L"*="
+    static const wchar_t US_NOT[]; // L"!"
+    static const wchar_t US_NOT_EQUAL[]; // L"!="
+    static const wchar_t US_OR[]; // L"|"
+    static const wchar_t US_OR_EQUAL[]; // L"|="
+    static const wchar_t US_OR_OR[]; // L"||"
+    static const wchar_t US_PLUS[]; // L"+"
+    static const wchar_t US_PLUS_EQUAL[]; // L"+="
+    static const wchar_t US_PLUS_PLUS[]; // L"++"
+    static const wchar_t US_QUESTION[]; // L"?"
+    static const wchar_t US_RBRACE[]; // L"}"
+    static const wchar_t US_RBRACKET[]; // L"]"
+    static const wchar_t US_REMAINDER[]; // L"%"
+    static const wchar_t US_REMAINDER_EQUAL[]; // L"%="
+    static const wchar_t US_RIGHT_SHIFT[]; // L">>"
+    static const wchar_t US_RIGHT_SHIFT_EQUAL[]; // L">>="
+    static const wchar_t US_RPAREN[]; // L")"
+    static const wchar_t US_SEMICOLON[]; // L";"
+    static const wchar_t US_TWIDDLE[]; // L"~"
+    static const wchar_t US_UNSIGNED_RIGHT_SHIFT[]; // L">>>"
+    static const wchar_t US_UNSIGNED_RIGHT_SHIFT_EQUAL[]; // L">>>="
+    static const wchar_t US_XOR[]; // L"^"
+    static const wchar_t US_XOR_EQUAL[]; // L"^="
+
 
     //
-    // Library classes and methods.
+    // Unicode strings for files and packages.
     //
-    static const wchar_t US_AssertionError[], // L"AssertionError"
-        US_Boolean[], // L"Boolean"
-        US_Byte[], // L"Byte"
-        US_Character[], // L"Character"
-        US_Class[], // L"Class"
-        US_ClassNotFoundException[], // L"ClassNotFoundException"
-        US_Cloneable[], // L"Cloneable"
-        US_Comparable[], // L"Comparable"
-        US_Double[], // L"Double"
-        US_equals[], // L"equals"
-        US_Error[], // L"Error"
-        US_Exception[], // L"Exception"
-        US_Float[],  // L"Float"
-        US_hashCode[], // L"hashCode"
-        US_Integer[], // L"Integer"
-        US_L[], // L"L"
-        US_Long[], // L"Long"
-        US_NoClassDefFoundError[], // L"NoClassDefFoundError"
-        US_Object[], // L"Object"
-        US_PObject[], // L"PObject"
-        US_RuntimeException[], // L"RuntimeException"
-        US_Serializable[], // L"Serializable"
-        US_serialVersionUID[], // L"serialVersionUID"
-        US_Short[], // L"Short"
-        US_String[], // L"String"
-        US_StringBuffer[], // L"StringBuffer"
-        US_TYPE[], // L"TYPE"
-        US_Throwable[], // L"Throwable"
-        US_Void[], // L"Void"
-        US_DO[], // L"."
-        US_DO_DO[], // L".."
-        US_DS[], // L"$"
-        US_LB_RB[], // L"[]"
-        US_LT_clinit_GT[], // L"<clinit>"
-        US_LT_init_GT[], // L"<init>"
-        US_QU_QU[],  // L"??"
-        US_SC[], // L";"
-        US_SL[], // L"/"
-        US_zip[], // L"zip"
-        US_jar[]; // L"jar"
-
-    //
-    // Used in synthetic (compiler-generated) code.
-    //
-    static const wchar_t US_DOLLAR_noassert[], // L"$noassert"
-        US_append[], // L"append"
-        US_array[], // L"array"
-        US_access_DOLLAR[], // L"access$"
-        US_class_DOLLAR[], // L"class$"
-        US_clone[], // L"clone"
-        US_constructor_DOLLAR[], // L"constructor$"
-        US_desiredAssertionStatus[], // L"desiredAssertionStatus"
-        US_forName[], // L"forName"
-        US_getClass[], // L"getClass"
-        US_getComponentType[], // L"getComponentType"
-        US_getMessage[], // L"getMessage"
-        US_initCause[], // L"initCause"
-        US_java_SL_io[], // L"java/io"
-        US_java_SL_lang[], // L"java/lang"
-        US_length[], // L"length"
-        US_this_DOLLAR[], // L"this$"
-        US_this0[], // L"this$0"
-        US_toString[], // L"toString"
-        US_val_DOLLAR[]; // L"val$"
+    static const wchar_t US_DS[]; // L"$"
+    static const wchar_t US_LB_RB[]; // L"[]"
+    static const wchar_t US_MI[]; // L"-"
+    static const wchar_t US_SC[]; // L";"
+    static const wchar_t US_SL[]; // L"/"
+    static const wchar_t US_jar[]; // L"jar"
+    static const wchar_t US_java_SL_io[]; // L"java/io"
+    static const wchar_t US_java_SL_lang[]; // L"java/lang"
+    // L"java/lang/annotation"
+    static const wchar_t US_java_SL_lang_SL_annotation[];
+    static const wchar_t US_java_SL_util[]; // L"java/util"
+    static const wchar_t US_zip[]; // L"zip"
 
     //
     // Java keywords.
     //
-    static const wchar_t US_abstract[], // L"abstract"
-        US_assert[], // L"assert"
-        US_boolean[], // L"boolean"
-        US_break[], // L"break"
-        US_byte[], // L"byte"
-        US_case[], // L"case"
-        US_catch[], // L"catch"
-        US_char[], // L"char"
-        US_class[], // L"class"
-        US_const[], // L"const"
-        US_continue[], // L"continue"
-        US_default[], // L"default"
-        US_do[], // L"do"
-        US_double[], // L"double"
-        US_else[], // L"else"
-        US_enum[], // L"enum"
-        US_extends[], // L"extends"
-        US_false[], // L"false"
-        US_final[], // L"final"
-        US_finally[], // L"finally"
-        US_float[], // L"float"
-        US_for[], // L"for"
-        US_goto[], // L"goto"
-        US_if[], // L"if"
-        US_implements[], // L"implements"
-        US_import[], // L"import"
-        US_instanceof[], // L"instanceof"
-        US_int[], // L"int"
-        US_interface[], // L"interface"
-        US_long[], // L"long"
-        US_native[], // L"native"
-        US_new[], // L"new"
-        US_null[], // L"null"
-        US_package[], // L"package"
-        US_private[], // L"private"
-        US_protected[], // L"protected"
-        US_public[], // L"public"
-        US_return[], // L"return"
-        US_short[], // L"short"
-        US_static[], // L"static"
-        US_strictfp[], // L"strictfp"
-        US_super[], // L"super"
-        US_switch[], // L"switch"
-        US_synchronized[], // L"synchronized"
-        US_this[], // L"this"
-        US_throw[], // L"throw"
-        US_throws[], // L"throws"
-        US_transient[], // L"transient"
-        US_true[], // L"true"
-        US_try[], // L"try"
-        US_void[], // L"void"
-        US_volatile[], // L"volatile"
-        US_while[]; // L"while"
+    static const wchar_t US_abstract[]; // L"abstract"
+    static const wchar_t US_assert[]; // L"assert"
+    static const wchar_t US_boolean[]; // L"boolean"
+    static const wchar_t US_break[]; // L"break"
+    static const wchar_t US_byte[]; // L"byte"
+    static const wchar_t US_case[]; // L"case"
+    static const wchar_t US_catch[]; // L"catch"
+    static const wchar_t US_char[]; // L"char"
+    static const wchar_t US_class[]; // L"class"
+    static const wchar_t US_const[]; // L"const"
+    static const wchar_t US_continue[]; // L"continue"
+    static const wchar_t US_default[]; // L"default"
+    static const wchar_t US_do[]; // L"do"
+    static const wchar_t US_double[]; // L"double"
+    static const wchar_t US_else[]; // L"else"
+    static const wchar_t US_enum[]; // L"enum"
+    static const wchar_t US_extends[]; // L"extends"
+    static const wchar_t US_false[]; // L"false"
+    static const wchar_t US_final[]; // L"final"
+    static const wchar_t US_finally[]; // L"finally"
+    static const wchar_t US_float[]; // L"float"
+    static const wchar_t US_for[]; // L"for"
+    static const wchar_t US_goto[]; // L"goto"
+    static const wchar_t US_if[]; // L"if"
+    static const wchar_t US_implements[]; // L"implements"
+    static const wchar_t US_import[]; // L"import"
+    static const wchar_t US_instanceof[]; // L"instanceof"
+    static const wchar_t US_int[]; // L"int"
+    static const wchar_t US_interface[]; // L"interface"
+    static const wchar_t US_long[]; // L"long"
+    static const wchar_t US_native[]; // L"native"
+    static const wchar_t US_new[]; // L"new"
+    static const wchar_t US_null[]; // L"null"
+    static const wchar_t US_package[]; // L"package"
+    static const wchar_t US_private[]; // L"private"
+    static const wchar_t US_protected[]; // L"protected"
+    static const wchar_t US_public[]; // L"public"
+    static const wchar_t US_return[]; // L"return"
+    static const wchar_t US_short[]; // L"short"
+    static const wchar_t US_static[]; // L"static"
+    static const wchar_t US_strictfp[]; // L"strictfp"
+    static const wchar_t US_super[]; // L"super"
+    static const wchar_t US_switch[]; // L"switch"
+    static const wchar_t US_synchronized[]; // L"synchronized"
+    static const wchar_t US_this[]; // L"this"
+    static const wchar_t US_throw[]; // L"throw"
+    static const wchar_t US_throws[]; // L"throws"
+    static const wchar_t US_transient[]; // L"transient"
+    static const wchar_t US_true[]; // L"true"
+    static const wchar_t US_try[]; // L"try"
+    static const wchar_t US_void[]; // L"void"
+    static const wchar_t US_volatile[]; // L"volatile"
+    static const wchar_t US_while[]; // L"while"
 
     //
     // Miscellaneous strings.
     //
-    static const wchar_t US_EOF[]; // L"EOF"
-
     static const char U8S_help_header[];
     static const char U8S_command_format[];
 
     //
     // Constant pool entries.
     //
-    static const int U8S_ConstantValue_length,
-        U8S_Exceptions_length,
-        U8S_InnerClasses_length,
-        U8S_Synthetic_length,
-        U8S_Deprecated_length,
-        U8S_LineNumberTable_length,
-        U8S_LocalVariableTable_length,
-        U8S_Code_length,
-        U8S_SourceFile_length,
-        U8S_null_length,
-        U8S_this_length;
+    static const char U8S_AnnotationDefault[]; // "AnnotationDefault"
+    static const char U8S_Code[]; // "Code"
+    static const char U8S_ConstantValue[]; // "ConstantValue"
+    static const char U8S_Deprecated[]; // "Deprecated"
+    static const char U8S_EnclosingMethod[]; // "EnclosingMethod"
+    static const char U8S_Exceptions[]; // "Exceptions"
+    static const char U8S_InnerClasses[]; // "InnerClasses"
+    static const char U8S_LineNumberTable[]; // "LineNumberTable"
+    static const char U8S_LocalVariableTable[]; // "LocalVariableTable"
+    static const char U8S_LocalVariableTypeTable[]; // "LocalVariableTypeTable"
+    // "RuntimeInvisibleAnnotations"
+    static const char U8S_RuntimeInvisibleAnnotations[];
+    // "RuntimeInvisibleParameterAnnotations"
+    static const char U8S_RuntimeInvisibleParameterAnnotations[];
+    // "RuntimeVisibleAnnotations"
+    static const char U8S_RuntimeVisibleAnnotations[];
+    // "RuntimeVisibleParameterAnnotations"
+    static const char U8S_RuntimeVisibleParameterAnnotations[];
+    static const char U8S_Signature[]; // "Signature"
+    static const char U8S_SourceFile[]; // "SourceFile"
+    static const char U8S_StackMap[]; // "StackMap"
+    static const char U8S_Synthetic[]; // "Synthetic"
 
-    static const char U8S_AnnotationDefault[], // "AnnotationDefault"
-        U8S_B[], // "B"
-        U8S_C[], // "C"
-        U8S_Code[], // "Code"
-        U8S_ConstantValue[], // "ConstantValue"
-        U8S_D[], // "D"
-        U8S_Deprecated[], // "Deprecated"
-        U8S_EnclosingMethod[], // "EnclosingMethod"
-        U8S_Exceptions[], // "Exceptions"
-        U8S_F[], // "F"
-        U8S_I[], // "I"
-        U8S_InnerClasses[], // "InnerClasses"
-        U8S_J[],  // "J"
-        U8S_LP_C_RP_V[], // "(C)V"
-        U8S_LP_D_RP_V[], // "(D)V"
-        U8S_LP_F_RP_V[], // "(F)V"
-        U8S_LP_I_RP_V[], // "(I)V"
-        U8S_LP_J_RP_V[], // "(J)V"
-        U8S_LP_Object_RP_V[], // "(Ljava/lang/Object;)V"
-        U8S_LP_String_RP_Class[], // "(Ljava/lang/String;)Ljava/lang/Class;"
-        U8S_LP_String_RP_V[], // "(Ljava/lang/String;)V"
-        // "(Ljava/lang/Throwable;)Ljava/lang/Throwable;"
-        U8S_LP_Throwable_RP_Throwable[],
-        U8S_LP_RP_Class[], // "()Ljava/lang/Class;"
-        U8S_LP_RP_String[], // "()Ljava/lang/String;"
-        U8S_LP_RP_V[], // "()V"
-        U8S_LP_RP_Z[], // "()Z"
-        U8S_LP_Z_RP_V[], // "(Z)V"
-        U8S_LineNumberTable[], // "LineNumberTable"
-        U8S_LocalVariableTable[], // "LocalVariableTable"
-        U8S_LocalVariableTypeTable[], // "LocalVariableTypeTable"
-        U8S_RuntimeInvisibleAnnotations[], // "RuntimeInvisibleAnnotations"
-        // "RuntimeInvisibleParameterAnnotations"
-        U8S_RuntimeInvisibleParameterAnnotations[],
-        U8S_RuntimeVisibleAnnotations[], // "RuntimeVisibleAnnotations"
-        // "RuntimeVisibleParameterAnnotations"
-        U8S_RuntimeVisibleParameterAnnotations[],
-        U8S_S[], // "S"
-        U8S_Signature[], // "Signature"
-        U8S_SourceFile[], // "SourceFile"
-        U8S_StackMap[], // "StackMap"
-        U8S_Synthetic[], // "Synthetic"
-        U8S_V[], // "V"
-        U8S_Z[], // "Z"
+    //
+    // ASCII file names.
+    //
+    static const char U8S_DO_class[]; // ".class"
+    static const char U8S_DO_java[]; // ".java"
+    static const char U8S_DO_tok[]; // ".tok"
+    static const char U8S_DO_u[]; // ".u"
+    static const char U8S_LP[]; // "("
+    static const char U8S_RP[]; // ")"
+    static const char U8S_SL[]; // "/"
 
-        U8S_DO[], // "."
-        U8S_DO_DO[], // ".."
-        U8S_DO_class[], // ".class"
-        U8S_DO_java[], // ".java"
-        U8S_DO_tok[], // ".tok"
-        U8S_DO_u[], // ".u"
-        U8S_LP[], // "("
-        U8S_RP[], // ")"
-        U8S_SL[], // "/"
-        U8S_ST[], // "*"
-
-        U8S_class[], // "class"
-        U8S_java[], // "java"
-        // "java/lang/ClassNotFoundException"
-        U8S_java_SL_lang_SL_ClassNotFoundException[],
-        U8S_java_SL_lang_SL_Class[], // "java/lang/Class"
-        U8S_java_SL_lang_SL_InternalError[], // "java/lang/InternalError"
-        // "java/lang/NoClassDefFoundError"
-        U8S_java_SL_lang_SL_NoClassDefFoundError[],
-        U8S_java_SL_lang_SL_StringBuffer[], // "java/lang/StringBuffer"
-        U8S_java_SL_lang_SL_Throwable[], // "java/lang/Throwable"
-        U8S_false[], // "false"
-        U8S_null[], // "null"
-        U8S_quit[], // "quit"
-        U8S_this[], // "this"
-        U8S_true[], // "true"
-
-        U8S_LP_C_RP_StringBuffer[], // "(C)Ljava/lang/StringBuffer;"
-        U8S_LP_Z_RP_StringBuffer[], // "(Z)Ljava/lang/StringBuffer;"
-        U8S_LP_I_RP_StringBuffer[], // "(I)Ljava/lang/StringBuffer;"
-        U8S_LP_J_RP_StringBuffer[], // "(J)Ljava/lang/StringBuffer;"
-        U8S_LP_F_RP_StringBuffer[], // "(F)Ljava/lang/StringBuffer;"
-        U8S_LP_D_RP_StringBuffer[], // "(D)Ljava/lang/StringBuffer;"
-        // "(Ljava/lang/String;)Ljava/lang/StringBuffer;"
-        U8S_LP_String_RP_StringBuffer[],
-        // "(Ljava/lang/Object;)Ljava/lang/StringBuffer;"
-        U8S_LP_Object_RP_StringBuffer[];
-
-    static const char U8S_NaN[], // "NaN"
-        U8S_pos_Infinity[], // "Infinity"
-        U8S_neg_Infinity[], // "-Infinity"
-        U8S_pos_Zero[], // "0.0"
-        U8S_neg_Zero[]; // "-0.0"
+    //
+    // Convert number to string.
+    //
+    static const char U8S_NaN[]; // "NaN"
+    static const char U8S_pos_Infinity[]; // "Infinity"
+    static const char U8S_neg_Infinity[]; // "-Infinity"
+    static const char U8S_pos_Zero[]; // "0.0"
+    static const char U8S_neg_Zero[]; // "-0.0"
 };
 
 
@@ -877,13 +763,13 @@ class IEEEdouble;
 class DoubleToString
 {
 public:
-    DoubleToString(const IEEEdouble &);
+    DoubleToString(const IEEEdouble&);
 
-    const char *String() const { return str; }
+    const char* String() const { return str; }
     int Length() const { return length; }
 
 private:
-    void Format(char *, int, bool);
+    void Format(char*, int, bool);
 
     enum
     {
@@ -903,13 +789,13 @@ class IEEEfloat;
 class FloatToString
 {
 public:
-    FloatToString(const IEEEfloat &);
+    FloatToString(const IEEEfloat&);
 
-    const char *String() const { return str; }
+    const char* String() const { return str; }
     int Length() const   { return length; }
 
 private:
-    void Format(char *, int, bool);
+    void Format(char*, int, bool);
 
     enum
     {
@@ -923,7 +809,6 @@ private:
 };
 
 
-
 class LongInt;
 class ULongInt;
 //
@@ -931,7 +816,7 @@ class ULongInt;
 //
 class Ostream
 {
-    ostream *os;
+    ostream* os;
 
     bool expand_wchar;
 
@@ -941,8 +826,9 @@ public:
                 expand_wchar(false)
     {}
 
-    Ostream(ostream *_os) : os(_os),
-                            expand_wchar(false)
+    Ostream(ostream* _os)
+        : os(_os)
+        , expand_wchar(false)
     {}
 
     void StandardOutput() { os = &cout; }
@@ -950,7 +836,7 @@ public:
     void SetExpandWchar(bool val = true) { expand_wchar = val; }
     bool ExpandWchar() { return expand_wchar; }
 
-    Ostream &operator<<(wchar_t ch)
+    Ostream& operator<<(wchar_t ch)
     {
         // output only printable characters directly
         if (ch == U_CARRIAGE_RETURN || ch == U_LINE_FEED)
@@ -987,51 +873,51 @@ public:
         return *this;
     }
 
-    Ostream &operator<<(const wchar_t *str)
+    Ostream& operator<<(const wchar_t* str)
     {
-        for (; *str; str++)
+        for ( ; *str; str++)
             (*this) << *str;
         return *this;
     }
 
 
-    Ostream &operator<<(char c)
+    Ostream& operator<<(char c)
     {
         *os << c;
         return *this;
     }
 
-    Ostream &operator<<(signed char c)
+    Ostream& operator<<(signed char c)
     {
         *os << c;
         return *this;
     }
 
-    Ostream &operator<<(unsigned char c)
+    Ostream& operator<<(unsigned char c)
     {
         *os << c;
         return *this;
     }
 
-    Ostream &operator<<(const char *c)
+    Ostream& operator<<(const char* c)
     {
         *os << c;
         return *this;
     }
 
-    Ostream &operator<<(const signed char *c)
+    Ostream& operator<<(const signed char* c)
     {
         *os << c;
         return *this;
     }
 
-    Ostream &operator<<(const unsigned char *c)
+    Ostream& operator<<(const unsigned char* c)
     {
 #ifndef HAVE_OSTREAM_CONST_UNSIGNED_CHAR_PTR
 # ifdef HAVE_CONST_CAST
-        *os << const_cast<unsigned char *> (c);
+        *os << const_cast<unsigned char*> (c);
 # else
-        *os << (unsigned char *) c;
+        *os << (unsigned char*) c;
 # endif
 #else
         *os << c;
@@ -1039,40 +925,40 @@ public:
         return *this;
     }
 
-    Ostream &operator<<(int a)
+    Ostream& operator<<(int a)
     {
         *os << a;
         return *this;
     }
 
-    Ostream &operator<<(unsigned int a)
+    Ostream& operator<<(unsigned int a)
     {
         *os << a;
         return *this;
     }
 
-    Ostream &operator<<(long a)
+    Ostream& operator<<(long a)
     {
         *os << a;
         return *this;
     }
 
-    Ostream &operator<<(unsigned long a)
+    Ostream& operator<<(unsigned long a)
     {
         *os << a;
         return *this;
     }
 
-    Ostream &operator<<(LongInt);
-    Ostream &operator<<(ULongInt);
+    Ostream& operator<<(LongInt);
+    Ostream& operator<<(ULongInt);
 
-    Ostream &operator<<(float f)
+    Ostream& operator<<(float f)
     {
         *os << f;
         return *this;
     }
 
-    Ostream &operator<<(double d)
+    Ostream& operator<<(double d)
     {
         *os << d;
         return *this;
@@ -1080,7 +966,7 @@ public:
 
     char fill(char c) { return os -> fill(c); }
 
-    Ostream &flush()
+    Ostream& flush()
     {
         os -> flush();
         return *this;
@@ -1091,13 +977,13 @@ public:
         return os -> width(w);
     }
 
-    Ostream &operator<<(ios &(*f)(ios&))
+    Ostream& operator<<(ios& (*f)(ios&))
     {
         (*f)(*os);
         return *this;
     }
 
-    Ostream &operator<<(ostream &(*f)(ostream&))
+    Ostream& operator<<(ostream& (*f)(ostream&))
     {
         (*f)(*os);
         return *this;

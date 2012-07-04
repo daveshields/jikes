@@ -1,4 +1,4 @@
-// $Id: init.cpp,v 1.25 2004/01/26 13:53:40 ericb Exp $
+// $Id: init.cpp,v 1.27 2004/03/28 20:52:07 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,6 +10,7 @@
 #include "platform.h"
 #include "semantic.h"
 #include "control.h"
+#include "stream.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -25,14 +26,13 @@ void Semantic::ProcessVariableInitializer(AstVariableDeclarator* variable_declar
         return;
     }
 
-    AstArrayInitializer* array_initializer = variable_declarator ->
-        variable_initializer_opt -> ArrayInitializerCast();
+    AstExpression* init =
+        (AstExpression*) variable_declarator -> variable_initializer_opt;
+    AstArrayInitializer* array_initializer = init -> ArrayInitializerCast();
     if (array_initializer)
         ProcessArrayInitializer(array_initializer, symbol -> Type());
     else
     {
-        AstExpression* init =
-            (AstExpression*) variable_declarator -> variable_initializer_opt;
         ProcessExpressionOrStringConstant(init);
         TypeSymbol* field_type = symbol -> Type();
 
@@ -83,6 +83,23 @@ void Semantic::ProcessVariableInitializer(AstVariableDeclarator* variable_declar
             }
         }
     }
+
+    //
+    // A non-static final field initialized to a constant value wastes
+    // space in each instance, so warn about it.
+    //
+    TypeSymbol* containing_type = symbol -> owner -> TypeCast();
+    if (containing_type && ! containing_type -> ACC_INTERFACE() &&
+        symbol -> ACC_FINAL() &&
+        ! symbol -> ACC_STATIC() &&
+        init && init -> IsConstant())
+    {
+        ReportSemError(SemanticError::NON_STATIC_FINAL_CONSTANT_FIELD,
+                       variable_declarator,
+                       lex_stream ->
+                           NameString(variable_declarator -> LeftToken()));
+    }
+
     symbol -> MarkInitialized();
 }
 

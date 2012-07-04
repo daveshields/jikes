@@ -1,4 +1,4 @@
-// $Id: control.cpp,v 1.67 2004/01/20 04:10:22 ericb Exp $
+// $Id: control.cpp,v 1.78 2004/04/04 19:45:48 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -20,79 +20,133 @@ namespace Jikes { // Open namespace Jikes block
 #endif
 
 Control::Control(char** arguments, Option& option_)
-    : return_code(0),
-      option(option_),
-      dot_classpath_index(0),
-      system_table(NULL),
-      system_semantic(NULL),
-      semantic(1024),
-      needs_body_work(1024),
-      type_trash_bin(1024),
-      input_java_file_set(1021),
-      input_class_file_set(1021),
-      expired_file_set(),
-      recompilation_file_set(1021),
-      int_pool(&bad_value),
-      long_pool(&bad_value),
-      float_pool(&bad_value),
-      double_pool(&bad_value),
-      Utf8_pool(&bad_value),
+    : return_code(0)
+    , option(option_)
+    , dot_classpath_index(0)
+    , system_table(NULL)
+    , system_semantic(NULL)
+    , semantic(1024)
+    , needs_body_work(1024)
+    , type_trash_bin(1024)
+    , input_java_file_set(1021)
+    , input_class_file_set(1021)
+    , expired_file_set()
+    , recompilation_file_set(1021)
+    // Type and method cache. These variables are assigned in control.h
+    // accessors, but must be NULL at startup.
+    , Annotation_type(NULL)
+    , AssertionError_type(NULL)
+    , AssertionError_Init_method(NULL)
+    , AssertionError_InitWithChar_method(NULL)
+    , AssertionError_InitWithBoolean_method(NULL)
+    , AssertionError_InitWithInt_method(NULL)
+    , AssertionError_InitWithLong_method(NULL)
+    , AssertionError_InitWithFloat_method(NULL)
+    , AssertionError_InitWithDouble_method(NULL)
+    , AssertionError_InitWithObject_method(NULL)
+    , Boolean_type(NULL)
+    , Boolean_TYPE_field(NULL)
+    , Byte_type(NULL)
+    , Byte_TYPE_field(NULL)
+    , Character_type(NULL)
+    , Character_TYPE_field(NULL)
+    , Class_type(NULL)
+    , Class_forName_method(NULL)
+    , Class_getComponentType_method(NULL)
+    , Class_desiredAssertionStatus_method(NULL)
+    , ClassNotFoundException_type(NULL)
+    , Cloneable_type(NULL)
+    , Comparable_type(NULL)
+    , Double_type(NULL)
+    , Double_TYPE_field(NULL)
+    , ElementType_type(NULL)
+    , ElementType_TYPE_field(NULL)
+    , ElementType_FIELD_field(NULL)
+    , ElementType_METHOD_field(NULL)
+    , ElementType_PARAMETER_field(NULL)
+    , ElementType_CONSTRUCTOR_field(NULL)
+    , ElementType_LOCAL_VARIABLE_field(NULL)
+    , ElementType_ANNOTATION_TYPE_field(NULL)
+    , ElementType_PACKAGE_field(NULL)
+    , Enum_type(NULL)
+    , Enum_Init_method(NULL)
+    , Enum_ordinal_method(NULL)
+    , Enum_valueOf_method(NULL)
+    , Error_type(NULL)
+    , Exception_type(NULL)
+    , Float_type(NULL)
+    , Float_TYPE_field(NULL)
+    , Integer_type(NULL)
+    , Integer_TYPE_field(NULL)
+    , Iterable_type(NULL)
+    , Iterable_iterator_method(NULL)
+    , Iterator_type(NULL)
+    , Iterator_hasNext_method(NULL)
+    , Iterator_next_method(NULL)
+    , Long_type(NULL)
+    , Long_TYPE_field(NULL)
+    , NoClassDefFoundError_type(NULL)
+    , NoClassDefFoundError_Init_method(NULL)
+    , NoClassDefFoundError_InitString_method(NULL)
+    , Object_type(NULL)
+    , Object_getClass_method(NULL)
+    , Overrides_type(NULL)
+    , Retention_type(NULL)
+    , RetentionPolicy_type(NULL)
+    , RetentionPolicy_SOURCE_field(NULL)
+    , RetentionPolicy_CLASS_field(NULL)
+    , RetentionPolicy_RUNTIME_field(NULL)
+    , RuntimeException_type(NULL)
+    , Serializable_type(NULL)
+    , Short_type(NULL)
+    , Short_TYPE_field(NULL)
+    , String_type(NULL)
+    , StringBuffer_type(NULL)
+    , StringBuffer_Init_method(NULL)
+    , StringBuffer_InitWithString_method(NULL)
+    , StringBuffer_toString_method(NULL)
+    , StringBuffer_append_char_method(NULL)
+    , StringBuffer_append_boolean_method(NULL)
+    , StringBuffer_append_int_method(NULL)
+    , StringBuffer_append_long_method(NULL)
+    , StringBuffer_append_float_method(NULL)
+    , StringBuffer_append_double_method(NULL)
+    , StringBuffer_append_string_method(NULL)
+    , StringBuffer_append_object_method(NULL)
+    , StringBuilder_type(NULL)
+    , StringBuilder_Init_method(NULL)
+    , StringBuilder_InitWithString_method(NULL)
+    , StringBuilder_toString_method(NULL)
+    , StringBuilder_append_char_method(NULL)
+    , StringBuilder_append_boolean_method(NULL)
+    , StringBuilder_append_int_method(NULL)
+    , StringBuilder_append_long_method(NULL)
+    , StringBuilder_append_float_method(NULL)
+    , StringBuilder_append_double_method(NULL)
+    , StringBuilder_append_string_method(NULL)
+    , StringBuilder_append_object_method(NULL)
+    , Target_type(NULL)
+    , Throwable_type(NULL)
+    , Throwable_getMessage_method(NULL)
+    , Throwable_initCause_method(NULL)
+    , Void_type(NULL)
+    , Void_TYPE_field(NULL)
+    // storage for all literals seen in source
+    , int_pool(&bad_value)
+    , long_pool(&bad_value)
+    , float_pool(&bad_value)
+    , double_pool(&bad_value)
+    , Utf8_pool(&bad_value)
 #ifdef JIKES_DEBUG
-      input_files_processed(0),
-      class_files_read(0),
-      class_files_written(0),
-      line_count(0),
-#endif
-      Serializable_type(NULL),
-      Object_type(NULL),
-      Cloneable_type(NULL),
-      String_type(NULL),
-      Void_type(NULL),
-      Boolean_type(NULL),
-      Byte_type(NULL),
-      Short_type(NULL),
-      Character_type(NULL),
-      Integer_type(NULL),
-      Long_type(NULL),
-      Float_type(NULL),
-      Double_type(NULL),
-      Comparable_type(NULL),
-      AssertionError_type(NULL),
-      Class_type(NULL),
-      Throwable_type(NULL),
-      Exception_type(NULL),
-      RuntimeException_type(NULL),
-      ClassNotFoundException_type(NULL),
-      Error_type(NULL),
-      NoClassDefFoundError_type(NULL),
-      StringBuffer_type(NULL),
-      Object_getClass_method(NULL),
-      Class_forName_method(NULL),
-      Class_getComponentType_method(NULL),
-      Class_desiredAssertionStatus_method(NULL),
-      AssertionError_Init_method(NULL),
-      AssertionError_InitWithChar_method(NULL),
-      AssertionError_InitWithBoolean_method(NULL),
-      AssertionError_InitWithInt_method(NULL),
-      AssertionError_InitWithLong_method(NULL),
-      AssertionError_InitWithFloat_method(NULL),
-      AssertionError_InitWithDouble_method(NULL),
-      AssertionError_InitWithObject_method(NULL),
-      Throwable_getMessage_method(NULL),
-      Throwable_initCause_method(NULL),
-      NoClassDefFoundError_InitString_method(NULL),
-      NoClassDefFoundError_Init_method(NULL),
-      StringBuffer_Init_method(NULL),
-      StringBuffer_InitWithString_method(NULL),
-      StringBuffer_toString_method(NULL),
-      StringBuffer_append_char_method(NULL),
-      StringBuffer_append_boolean_method(NULL),
-      StringBuffer_append_int_method(NULL),
-      StringBuffer_append_long_method(NULL),
-      StringBuffer_append_float_method(NULL),
-      StringBuffer_append_double_method(NULL),
-      StringBuffer_append_string_method(NULL),
-      StringBuffer_append_object_method(NULL)
+    , input_files_processed(0)
+    , class_files_read(0)
+    , class_files_written(0)
+    , line_count(0)
+#endif // JIKES_DEBUG
+    // Package cache.  unnamed and lang are initialized in constructor body.
+    , annotation_package(NULL)
+    , io_package(NULL)
+    , util_package(NULL)
 {
     ProcessGlobals();
     ProcessUnnamedPackage();
@@ -128,6 +182,7 @@ Control::Control(char** arguments, Option& option_)
 #ifdef JIKES_DEBUG
         input_files_processed++;
 #endif
+        errno = 0;
         scanner -> Scan(file_symbol);
         if (file_symbol -> lex_stream) // did we have a successful scan!
         {
@@ -136,6 +191,14 @@ Control::Control(char** arguments, Option& option_)
                                              ast_pool);
             ProcessPackageDeclaration(file_symbol, package_declaration);
             ast_pool -> Reset();
+        }
+        else
+        {
+            const char* std_err = strerror(errno);
+            ErrorString err_str;
+            err_str << '"' << std_err << '"' << " while trying to open "
+                    << file_symbol -> FileName();
+            general_io_errors.Next() = err_str.SafeArray();
         }
     }
 
@@ -171,7 +234,7 @@ Control::Control(char** arguments, Option& option_)
     if (option.BadMainDisk())
     {
         system_semantic -> ReportSemError(SemanticError::NO_CURRENT_DIRECTORY,
-                                          LexStream::BadToken());
+                                          BAD_TOKEN);
     }
 #endif // WIN32_FILE_SYSTEM
 
@@ -180,22 +243,33 @@ Control::Control(char** arguments, Option& option_)
     {
         system_semantic ->
             ReportSemError(SemanticError::CANNOT_OPEN_PATH_DIRECTORY,
-                           LexStream::BadToken(), bad_dirnames[i]);
+                           BAD_TOKEN, bad_dirnames[i]);
     }
     for (i = 0; i < bad_zip_filenames.Length(); i++)
     {
         system_semantic -> ReportSemError(SemanticError::CANNOT_OPEN_ZIP_FILE,
-                                          LexStream::BadToken(),
-                                          bad_zip_filenames[i]);
+                                          BAD_TOKEN, bad_zip_filenames[i]);
+    }
+    for (i = 0; i < general_io_warnings.Length(); i++)
+    {
+        system_semantic -> ReportSemError(SemanticError::IO_WARNING, BAD_TOKEN,
+                                          general_io_warnings[i]);
+        delete [] general_io_warnings[i];
+    }
+    for (i = 0; i < general_io_errors.Length(); i++)
+    {
+        system_semantic -> ReportSemError(SemanticError::IO_ERROR, BAD_TOKEN,
+                                          general_io_errors[i]);
+        delete [] general_io_errors[i];
     }
 
     //
     // Require the existence of java.lang.
     //
-    if (system_package -> directory.Length() == 0)
+    if (lang_package -> directory.Length() == 0)
     {
         system_semantic -> ReportSemError(SemanticError::PACKAGE_NOT_FOUND,
-                                          LexStream::BadToken(),
+                                          BAD_TOKEN,
                                           StringConstant::US_java_SL_lang);
     }
 
@@ -231,7 +305,7 @@ Control::Control(char** arguments, Option& option_)
                     name[j] = option.directory[j];
                 name[length] = U_NULL;
                 system_semantic -> ReportSemError(SemanticError::CANNOT_OPEN_DIRECTORY,
-                                                  LexStream::BadToken(), name);
+                                                  BAD_TOKEN, name);
                 delete [] name;
             }
         }
@@ -243,8 +317,7 @@ Control::Control(char** arguments, Option& option_)
     for (i = 0; i < bad_input_filenames.Length(); i++)
     {
         system_semantic -> ReportSemError(SemanticError::BAD_INPUT_FILE,
-                                          LexStream::BadToken(),
-                                          bad_input_filenames[i]);
+                                          BAD_TOKEN, bad_input_filenames[i]);
     }
 
     //
@@ -253,7 +326,7 @@ Control::Control(char** arguments, Option& option_)
     for (i = 0; i < unreadable_input_filenames.Length(); i++)
     {
         system_semantic -> ReportSemError(SemanticError::UNREADABLE_INPUT_FILE,
-                                          LexStream::BadToken(),
+                                          BAD_TOKEN,
                                           unreadable_input_filenames[i]);
     }
 
@@ -325,8 +398,7 @@ Control::Control(char** arguments, Option& option_)
                 {
                     system_semantic ->
                         ReportSemError(SemanticError::BAD_INPUT_FILE,
-                                       LexStream::BadToken(),
-                                       bad_input_filenames[i]);
+                                       BAD_TOKEN, bad_input_filenames[i]);
                 }
 
                 //
@@ -336,7 +408,7 @@ Control::Control(char** arguments, Option& option_)
                 {
                     system_semantic ->
                         ReportSemError(SemanticError::UNREADABLE_INPUT_FILE,
-                                       LexStream::BadToken(),
+                                       BAD_TOKEN,
                                        unreadable_input_filenames[i]);
                 }
 
@@ -1291,7 +1363,7 @@ void Control::ProcessBodies(TypeSymbol* type)
                                          type -> declaration))
         {
             // Mark that syntax errors were detected.
-            sem -> compilation_unit -> kind = Ast::BAD_COMPILATION;
+            sem -> compilation_unit -> MarkBad();
         }
         else
         {
@@ -1299,7 +1371,7 @@ void Control::ProcessBodies(TypeSymbol* type)
             if (! parser -> BodyParse(sem -> lex_stream, type -> declaration))
             {
                 // Mark that syntax errors were detected.
-                sem -> compilation_unit -> kind = Ast::BAD_COMPILATION;
+                sem -> compilation_unit -> MarkBad();
             }
             else type -> ProcessExecutableBodies();
         }
@@ -1349,13 +1421,65 @@ void Control::ProcessBodies(TypeSymbol* type)
     }
 
     sem -> types_to_be_processed.RemoveElement(type);
-    if (! option.nocleanup && sem -> types_to_be_processed.Size() == 0)
+
+    if (sem -> types_to_be_processed.Size() == 0)
     {
         // All types belonging to this compilation unit have been processed.
-        CleanUp(sem -> source_file_symbol);
+        CheckForUnusedImports(sem);
+        if (! option.nocleanup)
+        {
+            CleanUp(sem -> source_file_symbol);
+        }
     }
 }
 
+void Control::CheckForUnusedImports(Semantic* sem)
+{
+    if (sem -> NumErrors() != 0 ||
+        sem -> lex_stream -> NumBadTokens() != 0 ||
+        sem -> compilation_unit -> BadCompilationUnitCast())
+    {
+        //
+        // It's not worth checking for unused imports if compilation
+        // wasn't successful; we may well have just not got round to
+        // compiling the relevant code, and if there were errors, the
+        // user has more important things to worry about than unused
+        // imports!
+        //
+        return;
+    }
+
+    for (unsigned i = 0;
+         i < sem -> compilation_unit -> NumImportDeclarations(); ++i)
+    {
+        AstImportDeclaration* import_declaration =
+            sem -> compilation_unit -> ImportDeclaration(i);
+        Symbol* symbol = import_declaration -> name -> symbol;
+        if (import_declaration -> star_token_opt)
+        {
+            PackageSymbol* package = symbol -> PackageCast();
+            if (package &&
+                ! sem -> referenced_package_imports.IsElement(package))
+            {
+                sem -> ReportSemError(SemanticError::UNUSED_PACKAGE_IMPORT,
+                                      import_declaration -> name,
+                                      package -> PackageName());
+            }
+        }
+        else
+        {
+            TypeSymbol* import_type = symbol -> TypeCast();
+            if (import_type &&
+                ! sem -> referenced_type_imports.IsElement(import_type))
+            {
+                sem -> ReportSemError(SemanticError::UNUSED_TYPE_IMPORT,
+                                      import_declaration -> name,
+                                      import_type -> ContainingPackage() -> PackageName(),
+                                      import_type -> ExternalName());
+            }
+        }
+    }
+}
 
 //
 // Introduce the main package and the current package.
@@ -1372,16 +1496,17 @@ void Control::ProcessPackageDeclaration(FileSymbol* file_symbol,
 
     for (unsigned i = 0; i < file_symbol -> lex_stream -> NumTypes(); i++)
     {
-        LexStream::TokenIndex identifier_token =
-            file_symbol -> lex_stream -> Next(file_symbol -> lex_stream -> Type(i));
-        if (file_symbol -> lex_stream -> Kind(identifier_token) == TK_Identifier)
+        TokenIndex identifier_token = file_symbol -> lex_stream ->
+            Next(file_symbol -> lex_stream -> Type(i));
+        if (file_symbol -> lex_stream -> Kind(identifier_token) ==
+            TK_Identifier)
         {
             NameSymbol* name_symbol =
                 file_symbol -> lex_stream -> NameSymbol(identifier_token);
             if (! file_symbol -> package -> FindTypeSymbol(name_symbol))
             {
-                TypeSymbol* type =
-                    file_symbol -> package -> InsertOuterTypeSymbol(name_symbol);
+                TypeSymbol* type = file_symbol -> package ->
+                    InsertOuterTypeSymbol(name_symbol);
                 type -> file_symbol = file_symbol;
                 type -> outermost_type = type;
                 type -> supertypes_closure = new SymbolSet;
@@ -1438,46 +1563,6 @@ void Control::CleanUp(FileSymbol* file_symbol)
 
         file_symbol -> CleanUp();
     }
-}
-
-MethodSymbol* Control::Object_getClassMethod()
-{
-    //
-    // This requires lazy initialization for the case when the user is
-    // compiling java.lang.Object. We don't access the getClass method
-    // until bytecode emission, after the .java file has been processed.
-    //
-    if (! Object_getClass_method)
-    {
-        TypeSymbol* Object_type = Object();
-        if (! Object_type -> Bad())
-        {
-            //
-            // Search for relevant getClass method
-            //
-            for (MethodSymbol* method =
-                     Object_type -> FindMethodSymbol(getClass_name_symbol);
-                 method; method = method -> next_method)
-            {
-                if (strcmp(method -> SignatureString(),
-                           StringConstant::U8S_LP_RP_Class) == 0)
-                {
-                    Object_getClass_method = method;
-                    break;
-                }
-            }
-
-            if (! Object_getClass_method)
-            {
-                system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
-                                                  LexStream::BadToken(),
-                                                  Object_type -> ContainingPackageName(),
-                                                  Object_type -> ExternalName());
-                Object_type -> MarkBad();
-            }
-        }
-    }
-    return Object_getClass_method;
 }
 
 

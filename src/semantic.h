@@ -1,4 +1,4 @@
-// $Id: semantic.h,v 1.90 2004/01/30 14:11:07 ericb Exp $ -*- c++ -*-
+// $Id: semantic.h,v 1.102 2004/03/31 13:56:33 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -24,6 +24,7 @@ namespace Jikes { // Open namespace Jikes block
 
 class Control;
 class TypeShadowSymbol;
+class MethodShadowSymbol;
 class CPClassInfo;
 class ConstantPool;
 
@@ -449,6 +450,9 @@ public:
 
     SymbolSet types_to_be_processed;
 
+    SymbolSet referenced_package_imports;
+    SymbolSet referenced_type_imports;
+
     int return_code;
 
     // The constructor
@@ -509,7 +513,7 @@ public:
         ProcessExprOrStmt[Ast::PARENTHESIZED_EXPRESSION] =
             &Semantic::ProcessParenthesizedExpression;
         ProcessExprOrStmt[Ast::CLASS_CREATION] =
-            &Semantic::ProcessClassInstanceCreationExpression;
+            &Semantic::ProcessClassCreationExpression;
         ProcessExprOrStmt[Ast::ARRAY_CREATION] =
             &Semantic::ProcessArrayCreationExpression;
         ProcessExprOrStmt[Ast::POST_UNARY] =
@@ -531,7 +535,7 @@ public:
         ProcessExprOrStmt[Ast::SUPER_CALL] = &Semantic::ProcessInvalidKind;
         ProcessExprOrStmt[Ast::BLOCK] = &Semantic::ProcessBlock;
         ProcessExprOrStmt[Ast::LOCAL_VARIABLE_DECLARATION] =
-            &Semantic::ProcessLocalVariableDeclarationStatement;
+            &Semantic::ProcessLocalVariableStatement;
         ProcessExprOrStmt[Ast::IF] = &Semantic::ProcessIfStatement;
         ProcessExprOrStmt[Ast::EMPTY_STATEMENT] =
             &Semantic::ProcessEmptyStatement;
@@ -541,6 +545,7 @@ public:
         ProcessExprOrStmt[Ast::WHILE] = &Semantic::ProcessWhileStatement;
         ProcessExprOrStmt[Ast::DO] = &Semantic::ProcessDoStatement;
         ProcessExprOrStmt[Ast::FOR] = &Semantic::ProcessForStatement;
+        ProcessExprOrStmt[Ast::FOREACH] = &Semantic::ProcessForeachStatement;
         ProcessExprOrStmt[Ast::BREAK] = &Semantic::ProcessBreakStatement;
         ProcessExprOrStmt[Ast::CONTINUE] = &Semantic::ProcessContinueStatement;
         ProcessExprOrStmt[Ast::RETURN] = &Semantic::ProcessReturnStatement;
@@ -563,9 +568,9 @@ public:
         DefiniteStmt[Ast::SUPER_CALL] = &Semantic::DefiniteDefaultStatement;
         DefiniteStmt[Ast::BLOCK] = &Semantic::DefiniteBlock;
         DefiniteStmt[Ast::LOCAL_CLASS] =
-            &Semantic::DefiniteLocalClassDeclarationStatement;
+            &Semantic::DefiniteLocalClassStatement;
         DefiniteStmt[Ast::LOCAL_VARIABLE_DECLARATION] =
-            &Semantic::DefiniteLocalVariableDeclarationStatement;
+            &Semantic::DefiniteLocalVariableStatement;
         DefiniteStmt[Ast::IF] = &Semantic::DefiniteIfStatement;
         DefiniteStmt[Ast::EMPTY_STATEMENT] =
             &Semantic::DefiniteDefaultStatement;
@@ -575,6 +580,7 @@ public:
         DefiniteStmt[Ast::WHILE] = &Semantic::DefiniteWhileStatement;
         DefiniteStmt[Ast::DO] = &Semantic::DefiniteDoStatement;
         DefiniteStmt[Ast::FOR] = &Semantic::DefiniteForStatement;
+        DefiniteStmt[Ast::FOREACH] = &Semantic::DefiniteForeachStatement;
         DefiniteStmt[Ast::BREAK] = &Semantic::DefiniteBreakStatement;
         DefiniteStmt[Ast::CONTINUE] = &Semantic::DefiniteContinueStatement;
         DefiniteStmt[Ast::RETURN] = &Semantic::DefiniteReturnStatement;
@@ -591,7 +597,7 @@ public:
         DefiniteExpr[Ast::PARENTHESIZED_EXPRESSION] =
             &Semantic::DefiniteParenthesizedExpression;
         DefiniteExpr[Ast::CLASS_CREATION] =
-            &Semantic::DefiniteClassInstanceCreationExpression;
+            &Semantic::DefiniteClassCreationExpression;
         DefiniteExpr[Ast::ARRAY_CREATION] =
             &Semantic::DefiniteArrayCreationExpression;
         DefiniteExpr[Ast::POST_UNARY] = &Semantic::DefinitePostUnaryExpression;
@@ -741,7 +747,7 @@ public:
 
     // Report a multi-token semantic warning or error.
     void ReportSemError(SemanticError::SemanticErrorKind kind,
-                        LexStream::TokenIndex ltok, LexStream::TokenIndex rtok,
+                        TokenIndex ltok, TokenIndex rtok,
                         const wchar_t* s1 = NULL, const wchar_t* s2 = NULL,
                         const wchar_t* s3 = NULL, const wchar_t* s4 = NULL,
                         const wchar_t* s5 = NULL, const wchar_t* s6 = NULL,
@@ -768,8 +774,7 @@ public:
     }
 
     // Report a single-token semantic warning or error.
-    void ReportSemError(SemanticError::SemanticErrorKind kind,
-                        LexStream::TokenIndex tok,
+    void ReportSemError(SemanticError::SemanticErrorKind kind, TokenIndex tok,
                         const wchar_t* s1 = NULL, const wchar_t* s2 = NULL,
                         const wchar_t* s3 = NULL, const wchar_t* s4 = NULL,
                         const wchar_t* s5 = NULL, const wchar_t* s6 = NULL,
@@ -796,19 +801,16 @@ public:
     void CheckPackage();
     void ProcessTypeNames();
     void ProcessImports();
-    TypeSymbol* ReadType(FileSymbol*, PackageSymbol*, NameSymbol*,
-                         LexStream::TokenIndex);
+    TypeSymbol* ReadType(FileSymbol*, PackageSymbol*, NameSymbol*, TokenIndex);
 
     // Implemented in init.cpp - determines values of final fields.
     void ComputeFinalValue(VariableSymbol*);
 
     // Implemented in class.cpp - reads in a .class file.
-    TypeSymbol* ProcessSignature(TypeSymbol*, const char*&,
-                                 LexStream::TokenIndex);
+    TypeSymbol* ProcessSignature(TypeSymbol*, const char*&, TokenIndex);
     TypeSymbol* ReadTypeFromSignature(TypeSymbol*, const char*, int,
-                                      LexStream::TokenIndex);
-    TypeSymbol* ProcessNestedType(TypeSymbol*, NameSymbol*,
-                                  LexStream::TokenIndex);
+                                      TokenIndex);
+    TypeSymbol* ProcessNestedType(TypeSymbol*, NameSymbol*, TokenIndex);
 
     // Implemented in expr.cpp - semantic checks of expressions
     bool IsConstantTrue(AstExpression* expr);
@@ -829,13 +831,16 @@ private:
 
     // Implemented in decl.cpp - process a .java file for declarations
     void ProcessTypeHeader(AstClassDeclaration*);
+    void ProcessTypeHeader(AstEnumDeclaration*);
     void ProcessTypeHeader(AstInterfaceDeclaration*);
-    void ProcessTypeHeaders(AstClassDeclaration*);
-    void ProcessTypeHeaders(AstInterfaceDeclaration*);
-    void ProcessTypeHeaders(TypeSymbol*, AstClassBody*);
+    void ProcessTypeHeader(AstAnnotationDeclaration*);
+    TypeSymbol* ProcessTypeHeaders(AstClassBody*, TypeSymbol* = NULL);
+    void ProcessSuperinterface(TypeSymbol*, AstTypeName*);
+    void ProcessTypeParameters(TypeSymbol*, AstTypeParameters*);
     void ProcessConstructorMembers(AstClassBody*);
     void ProcessMethodMembers(AstClassBody*);
     void ProcessClassBodyForEffectiveJavaChecks(AstClassBody*);
+    void CheckForSerializationMistakes(AstClassBody*);
     void ProcessFieldMembers(AstClassBody*);
     void ProcessMembers(AstClassBody*);
     void CompleteSymbolTable(AstClassBody*);
@@ -944,38 +949,38 @@ private:
 
     // Implemented in decl.cpp - nested class processing
     void CheckNestedMembers(TypeSymbol*, AstClassBody*);
-    void CheckNestedTypeDuplication(SemanticEnvironment*,
-                                    LexStream::TokenIndex);
+    void CheckNestedTypeDuplication(SemanticEnvironment*, TokenIndex);
     TypeSymbol* ProcessNestedTypeName(TypeSymbol*, AstDeclaredType*);
-    TypeSymbol* FindTypeInShadow(TypeShadowSymbol*, LexStream::TokenIndex);
-    void ReportTypeInaccessible(LexStream::TokenIndex, LexStream::TokenIndex,
-                                TypeSymbol*);
+    TypeSymbol* FindTypeInShadow(TypeShadowSymbol*, TokenIndex);
+    void ReportTypeInaccessible(TokenIndex, TokenIndex, TypeSymbol*);
     void ReportTypeInaccessible(Ast* ast, TypeSymbol* type)
     {
         ReportTypeInaccessible(ast -> LeftToken(), ast -> RightToken(), type);
     }
-    TypeSymbol* GetBadNestedType(TypeSymbol*, LexStream::TokenIndex);
-    TypeSymbol* FindNestedType(TypeSymbol*, LexStream::TokenIndex);
+    TypeSymbol* GetBadNestedType(TypeSymbol*, TokenIndex);
+    TypeSymbol* FindNestedType(TypeSymbol*, TokenIndex);
     TypeSymbol* MustFindNestedType(TypeSymbol*, AstName*);
     void ProcessImportQualifiedName(AstName*);
     void ProcessPackageOrType(AstName*);
     void ProcessTypeImportOnDemandDeclaration(AstImportDeclaration*);
-    TypeSymbol* FindSimpleNameType(PackageSymbol*, LexStream::TokenIndex);
+    TypeSymbol* FindSimpleNameType(PackageSymbol*, TokenIndex);
     void ProcessSingleTypeImportDeclaration(AstImportDeclaration*);
 
     // Implemented in modifier.cpp - process declaration modifiers
     AccessFlags ProcessModifiers(AstModifiers*, const wchar_t*, u2, u2 = 0);
+    AccessFlags ProcessPackageModifiers(AstPackageDeclaration*);
     AccessFlags ProcessTopLevelTypeModifiers(AstDeclaredType*);
     AccessFlags ProcessNestedTypeModifiers(TypeSymbol*, AstDeclaredType*);
-    AccessFlags ProcessLocalClassModifiers(AstClassDeclaration*);
+    AccessFlags ProcessLocalClassModifiers(AstDeclaredType*);
     AccessFlags ProcessFieldModifiers(AstFieldDeclaration*);
-    AccessFlags ProcessLocalModifiers(AstLocalVariableDeclarationStatement*);
+    AccessFlags ProcessLocalModifiers(AstLocalVariableStatement*);
     AccessFlags ProcessFormalModifiers(AstFormalParameter*);
     AccessFlags ProcessMethodModifiers(AstMethodDeclaration*);
     AccessFlags ProcessConstructorModifiers(AstConstructorDeclaration*);
     AccessFlags ProcessInterfaceFieldModifiers(AstFieldDeclaration*);
     AccessFlags ProcessInterfaceMethodModifiers(AstMethodDeclaration*);
     AccessFlags ProcessInitializerModifiers(AstInitializerDeclaration*);
+    AccessFlags ProcessEnumConstantModifiers(AstEnumConstant*);
 
     // Implemented in decl.cpp - process declarations
     void AddDefaultConstructor(TypeSymbol*);
@@ -983,28 +988,29 @@ private:
     void ProcessMethodDeclaration(AstMethodDeclaration*);
     void ProcessFieldDeclaration(AstFieldDeclaration*);
     void ProcessFormalParameters(BlockSymbol*, AstMethodDeclarator*);
-    bool FieldDeclarationIsNotSerialVersionUID(NameSymbol*, TypeSymbol*);
-    TypeSymbol* ImportType(LexStream::TokenIndex, NameSymbol*);
+    void CheckFieldDeclaration(AstFieldDeclaration*, AstVariableDeclaratorId*,
+                               const AccessFlags&);
+    void CheckFieldName(AstVariableDeclaratorId*, NameSymbol*, bool);
+    TypeSymbol* ImportType(TokenIndex, NameSymbol*);
     TypeSymbol* FindPrimitiveType(AstPrimitiveType*);
-    TypeSymbol* FindType(LexStream::TokenIndex);
+    TypeSymbol* FindType(TokenIndex);
+    TypeSymbol* FindInaccessibleType(AstName*);
     TypeSymbol* MustFindType(AstName*);
     void ProcessType(AstType*);
-    void ProcessInterface(TypeSymbol*, AstTypeName*);
 
     // Implemented in decl.cpp - process initializers
     void InitializeVariable(AstFieldDeclaration*, MethodSymbol*);
     void ProcessInitializer(AstInitializerDeclaration*, MethodSymbol*);
     void ProcessStaticInitializers(AstClassBody*);
     void ProcessInstanceInitializers(AstClassBody*);
-    MethodSymbol* GetStaticInitializerMethod(int estimate = 0);
+    MethodSymbol* GetStaticInitializerMethod(unsigned estimate = 0);
 
     // Implemented in expr.cpp - expression processing
     inline bool CanWideningPrimitiveConvert(const TypeSymbol*,
                                             const TypeSymbol*);
     inline bool CanNarrowingPrimitiveConvert(const TypeSymbol*,
                                              const TypeSymbol*);
-    bool CanCastConvert(TypeSymbol*, TypeSymbol*,
-                        LexStream::TokenIndex = LexStream::BadToken());
+    bool CanCastConvert(TypeSymbol*, TypeSymbol*, TokenIndex = 0);
     bool CanMethodInvocationConvert(const TypeSymbol*, const TypeSymbol*);
     bool CanAssignmentConvert(const TypeSymbol*, AstExpression*);
     bool CanAssignmentConvertReference(const TypeSymbol*, const TypeSymbol*);
@@ -1024,13 +1030,14 @@ private:
     void DefiniteLoopBody(BitSet&);
 
     void DefiniteBlock(Ast*);
-    void DefiniteLocalClassDeclarationStatement(Ast*);
-    void DefiniteLocalVariableDeclarationStatement(Ast*);
+    void DefiniteLocalClassStatement(Ast*);
+    void DefiniteLocalVariableStatement(Ast*);
     void DefiniteExpressionStatement(Ast*);
     void DefiniteSynchronizedStatement(Ast*);
     void DefiniteIfStatement(Ast*);
     void DefiniteWhileStatement(Ast*);
     void DefiniteForStatement(Ast*);
+    void DefiniteForeachStatement(Ast*);
     void DefiniteSwitchStatement(Ast*);
     void DefiniteDoStatement(Ast*);
     void DefiniteBreakStatement(Ast*);
@@ -1059,8 +1066,8 @@ private:
                                                DefinitePair&);
     DefiniteAssignmentSet* DefiniteMethodInvocation(AstExpression*,
                                                     DefinitePair&);
-    DefiniteAssignmentSet* DefiniteClassInstanceCreationExpression(AstExpression*,
-                                                                   DefinitePair&);
+    DefiniteAssignmentSet* DefiniteClassCreationExpression(AstExpression*,
+                                                           DefinitePair&);
     DefiniteAssignmentSet* DefiniteArrayCreationExpression(AstExpression*,
                                                            DefinitePair&);
     DefiniteAssignmentSet* DefinitePreUnaryExpression(AstExpression*,
@@ -1120,6 +1127,8 @@ private:
     void ProcessBlockStatements(AstBlock*);
     void ProcessThisCall(AstThisCall*);
     void ProcessSuperCall(AstSuperCall*);
+    void WarnOfAccessibleFieldWithName(SemanticError::SemanticErrorKind,
+                                       AstVariableDeclaratorId*, NameSymbol*);
     void CheckThrow(AstTypeName*, Tuple<AstTypeName*>*);
     void ProcessMethodBody(AstMethodDeclaration*);
     void ProcessConstructorBody(AstConstructorDeclaration*);
@@ -1131,9 +1140,7 @@ private:
     wchar_t* Header(const NameSymbol*, AstArguments*);
     void ReportConstructorNotFound(Ast*, TypeSymbol*);
     void ReportMethodNotFound(AstMethodInvocation*, TypeSymbol*);
-    MethodSymbol* FindConstructor(TypeSymbol*, Ast*,
-                                  LexStream::TokenIndex,
-                                  LexStream::TokenIndex);
+    MethodSymbol* FindConstructor(TypeSymbol*, Ast*, TokenIndex, TokenIndex);
     inline bool MoreSpecific(MethodSymbol*, MethodSymbol*);
     inline bool MoreSpecific(MethodSymbol*, Tuple<MethodSymbol*>&);
     inline bool NoMethodMoreSpecific(Tuple<MethodSymbol*>&, MethodSymbol*);
@@ -1155,11 +1162,11 @@ private:
     void FindVariableInEnvironment(Tuple<VariableSymbol*>&,
                                    SemanticEnvironment*&,
                                    SemanticEnvironment*, NameSymbol*,
-                                   LexStream::TokenIndex);
+                                   TokenIndex);
     VariableSymbol* FindMisspelledVariableName(TypeSymbol*,
                                                AstExpression*);
     VariableSymbol* FindVariableInEnvironment(SemanticEnvironment*&,
-                                              LexStream::TokenIndex);
+                                              TokenIndex);
     VariableSymbol* FindVariableInType(TypeSymbol*, AstExpression*,
                                        NameSymbol* = NULL);
     VariableSymbol* FindLocalVariable(VariableSymbol*, TypeSymbol*);
@@ -1182,6 +1189,8 @@ private:
 
     void (Semantic::*ProcessBinaryExpr[AstBinaryExpression::_num_kinds])(AstBinaryExpression*);
     void ProcessPLUS(AstBinaryExpression*);
+    void ProcessShift(AstBinaryExpression*);
+    void ProcessShiftCount(TypeSymbol*, AstExpression*);
     void ProcessLEFT_SHIFT(AstBinaryExpression*);
     void ProcessRIGHT_SHIFT(AstBinaryExpression*);
     void ProcessUNSIGNED_RIGHT_SHIFT(AstBinaryExpression*);
@@ -1225,9 +1234,11 @@ private:
     void ProcessExpressionOrStringConstant(AstExpression* expr);
 
     // Implemented in body.cpp - statement processing
-    void ProcessLocalVariableDeclarationStatement(Ast*);
+    void CheckForAssignmentUsedAsTruthValue(Ast*);
+    void ProcessLocalVariableStatement(Ast*);
     void ProcessBlock(Ast*);
     void ProcessForStatement(Ast*);
+    void ProcessForeachStatement(Ast*);
     void ProcessSwitchStatement(Ast*);
     void ProcessThrowStatement(Ast*);
     void ProcessTryStatement(Ast*);
@@ -1251,7 +1262,7 @@ private:
                        statement -> RightToken());
     }
 
-    TypeSymbol* GetLocalType(AstClassDeclaration*);
+    TypeSymbol* GetLocalType(AstDeclaredType*);
     void ProcessClassDeclaration(Ast*);
 
     // Implemented in expr.cpp - expression processing
@@ -1277,11 +1288,11 @@ private:
     void ProcessSuperExpression(Ast*);
     void ProcessParenthesizedExpression(Ast*);
     void UpdateLocalConstructors(TypeSymbol*);
-    void GetAnonymousConstructor(AstClassInstanceCreationExpression*,
+    void GetAnonymousConstructor(AstClassCreationExpression*,
                                  TypeSymbol*);
-    TypeSymbol* GetAnonymousType(AstClassInstanceCreationExpression*,
+    TypeSymbol* GetAnonymousType(AstClassCreationExpression*,
                                  TypeSymbol*);
-    void ProcessClassInstanceCreationExpression(Ast*);
+    void ProcessClassCreationExpression(Ast*);
     void ProcessArrayCreationExpression(Ast*);
     void ProcessPostUnaryExpression(Ast*);
     void ProcessPreUnaryExpression(Ast*);
@@ -1298,24 +1309,20 @@ private:
     void CheckMethodOverride(MethodSymbol*, MethodSymbol*, TypeSymbol*);
     void AddInheritedTypes(TypeSymbol*, TypeSymbol*);
     void AddInheritedFields(TypeSymbol*, TypeSymbol*);
-    void AddInheritedMethods(TypeSymbol*, TypeSymbol*,
-                             LexStream::TokenIndex);
-    void ComputeTypesClosure(TypeSymbol*, LexStream::TokenIndex);
-    void ComputeFieldsClosure(TypeSymbol*, LexStream::TokenIndex);
-    void ComputeMethodsClosure(TypeSymbol*, LexStream::TokenIndex);
+    void AddInheritedMethods(TypeSymbol*, TypeSymbol*, TokenIndex);
+    void ComputeTypesClosure(TypeSymbol*, TokenIndex);
+    void ComputeFieldsClosure(TypeSymbol*, TokenIndex);
+    void ComputeMethodsClosure(TypeSymbol*, TokenIndex);
 
     // Implemented in class.cpp - reads in a .class file.
-    TypeSymbol* RetrieveNestedTypes(TypeSymbol*, wchar_t*,
-                                    LexStream::TokenIndex);
+    TypeSymbol* RetrieveNestedTypes(TypeSymbol*, wchar_t*, TokenIndex);
     TypeSymbol* GetType(TypeSymbol*, CPClassInfo*, const ConstantPool&,
-                        LexStream::TokenIndex);
-    void ProcessClassFile(TypeSymbol*, const char*, unsigned,
-                          LexStream::TokenIndex);
-    void ReadClassFile(TypeSymbol*, LexStream::TokenIndex);
+                        TokenIndex);
+    void ProcessClassFile(TypeSymbol*, const char*, unsigned, TokenIndex);
+    void ReadClassFile(TypeSymbol*, TokenIndex);
 
     // Implemented in depend.cpp - class dependence tracking.
     void AddDependence(TypeSymbol*, TypeSymbol*, bool = false);
-    void AddStringConversionDependence(TypeSymbol*);
 };
 
 

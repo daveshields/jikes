@@ -1,4 +1,4 @@
-// $Id: javaprs.h,v 1.29 2004/01/23 12:07:03 ericb Exp $
+// $Id: javaprs.h,v 1.30 2004/03/05 13:12:25 ericb Exp $
 // DO NOT MODIFY THIS FILE - it is generated using jikespg on java.g.
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
@@ -52,7 +52,7 @@ public:
     static const unsigned short scope_suffix[];
     static const unsigned short scope_lhs[];
     static const unsigned char  scope_la[];
-    static const unsigned char  scope_state_set[];
+    static const unsigned short scope_state_set[];
     static const unsigned short scope_rhs[];
     static const unsigned short scope_state[];
     static const unsigned short in_symb[];

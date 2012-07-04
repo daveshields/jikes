@@ -1,14 +1,13 @@
-// $Id: lookup.cpp,v 1.51 2004/01/26 06:07:16 cabbey Exp $
+// $Id: lookup.cpp,v 1.53 2004/02/26 13:43:18 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2003 IBM Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
 #include "lookup.h"
-#include "control.h"
 #include "symbol.h"
 #include "code.h"
 #include "ast.h"
@@ -648,11 +647,7 @@ LiteralValue* IntLiteralTable::FindOrInsertHexInt(LiteralSymbol* literal)
     head--;
 
     for (int i = 0; i < 32 && tail > head; i += 4, tail--)
-    {
-        u4 d = *tail - (Code::IsDigit(*tail) ? U_0
-                        : ((Code::IsLower(*tail) ? U_a : U_A) - 10));
-        uvalue |= (d << i);
-    }
+        uvalue |= Code::Value(*tail) << i;
     return tail > head ? bad_value : FindOrInsert((i4) uvalue);
 }
 
@@ -846,9 +841,8 @@ LongLiteralTable::~LongLiteralTable()
 
 LiteralValue* LongLiteralTable::FindOrInsertHexLong(LiteralSymbol* literal)
 {
-    u4 high = 0,
-       low = 0;
-
+    u4 high = 0;
+    u4 low = 0;
     const wchar_t* head = literal -> Name() + 1; // point to X
     // -2 to skip the 'L' suffix
     const wchar_t* tail = &literal -> Name()[literal -> NameLength() - 2];
@@ -858,18 +852,9 @@ LiteralValue* LongLiteralTable::FindOrInsertHexLong(LiteralSymbol* literal)
     head--;
 
     for (int i = 0; i < 32 && tail > head; i += 4, tail--)
-    {
-        u4 d = *tail - (Code::IsDigit(*tail) ? U_0
-                        : ((Code::IsLower(*tail) ? U_a : U_A) - 10));
-        low |= (d << i);
-    }
-
+        low |= Code::Value(*tail) << i;
     for (int j = 0; j < 32 && tail > head; j += 4, tail--)
-    {
-        u4 d = *tail - (Code::IsDigit(*tail) ? U_0 : (Code::IsLower(*tail)
-                                                      ? U_a : U_A) - 10);
-        high |= (d << j);
-    }
+        high |= Code::Value(*tail) << j;
     return tail > head ? bad_value : FindOrInsert(LongInt(high, low));
 }
 
@@ -1563,11 +1548,13 @@ bool Utf8LiteralTable::EndsInKnownString(AstExpression* expression)
         // We are careful that null is never given a string value unless it is
         // part of a chain of strings, as it is not a compile-time constant.
         //
-        utf8_literals -> Next() = FindOrInsert(StringConstant::U8S_null, 4);
+        //ebb hack. This entire method probably belongs in Semantic, where
+        // we have access to Control.
+        static char null_literal[] = { U_n, U_u, U_l, U_l, U_NU };
+        utf8_literals -> Next() = FindOrInsert(null_literal, 4);
         if (! leftmost_constant_expr)
             leftmost_constant_expr = expression;
-        else
-            expression -> value = FindOrInsert("", 0);
+        else expression -> value = FindOrInsert("", 0);
         return true;
     }
 
@@ -1688,7 +1675,7 @@ bool NameSymbol::Contains(wchar_t character) const
 bool NameSymbol::IsBadStyleForClass() const
 {
     // JLS2 6.8.2
-    return Code::IsLower(*name_) || Contains(U_UNDERSCORE);
+    return Code::IsAsciiLower(*name_) || Contains(U_UNDERSCORE);
 }
 
 bool NameSymbol::IsBadStyleForConstantField() const
@@ -1696,8 +1683,8 @@ bool NameSymbol::IsBadStyleForConstantField() const
     // JLS2 6.8.5
     for (wchar_t* ptr = name_; *ptr; ptr++)
     {
-        if (Code::IsLower(*ptr))
-        return true;
+        if (Code::IsAsciiLower(*ptr))
+            return true;
     }
     return false;
 }
@@ -1717,7 +1704,7 @@ bool NameSymbol::IsBadStyleForMethod() const
 bool NameSymbol::IsBadStyleForVariable() const
 {
     // JLS2 6.8.3, 6.8.4, 6.8.6
-    return Code::IsUpper(*name_) || Contains(U_UNDERSCORE);
+    return Code::IsAsciiUpper(*name_) || Contains(U_UNDERSCORE);
 }
 
 #ifdef HAVE_JIKES_NAMESPACE

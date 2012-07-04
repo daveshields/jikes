@@ -1,4 +1,4 @@
-// $Id: option.cpp,v 1.81 2004/01/21 11:56:26 ericb Exp $
+// $Id: option.cpp,v 1.86 2004/03/25 13:32:28 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,7 +12,7 @@
 #include "error.h"
 #include "case.h"
 #include "tab.h"
-#include "code.h"
+#include "stream.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -173,6 +173,13 @@ const wchar_t* OptionError::GetErrorMessage()
         s << '\"' << name << "\" requires an argument.";
         break;
     case INVALID_SOURCE_ARGUMENT:
+        if (ENABLE_SOURCE_15)
+        {
+            s << "\"-source\" only recognizes Java releases 1.3 (JLS 2 "
+              << "features), 1.4 (assert statement), and 1.5 (partial "
+              << "support beta, see NEWS for supported features).";
+            break;
+        }
         s << "\"-source\" only recognizes Java releases 1.3 (JLS 2 features) "
           << "and 1.4 (assert statement).";
         break;
@@ -255,7 +262,8 @@ void Option::SaveCurrentDirectoryOnDisk(char c)
         if (! disk_directory)
         {
             disk_directory = new char[2];
-            strcpy(disk_directory, StringConstant::U8S_DO);
+            disk_directory[0] = U_DOT;
+            disk_directory[1] = U_NULL;
         }
 
         current_directory[Case::ToAsciiLower(c)] = disk_directory;
@@ -343,7 +351,8 @@ Option::Option(ArgumentExpander& arguments,
                                        main_current_directory);
     if (length > directory_length)
     {
-        strcpy(main_current_directory, StringConstant::U8S_DO);
+        main_current_directory[0] = U_DOT;
+        main_current_directory[1] = U_NULL;
         main_disk = 0;
     }
     else
@@ -566,7 +575,12 @@ Option::Option(ArgumentExpander& arguments,
                      strcmp(arguments.argv[i], "--nowarn") == 0 ||
                      strcmp(arguments.argv[i], "-q") == 0)
             {
-                nowarn = true;
+                tolerance = NO_WARNINGS;
+            }
+            else if (strcmp(arguments.argv[i], "-Werror") == 0)
+            {
+                tolerance = ToleranceLevel(WARNINGS_ARE_ERRORS |
+                                           CAUTIONS_ARE_ERRORS);
             }
             else if (strcmp(arguments.argv[i], "-nowrite") == 0 ||
                      strcmp(arguments.argv[i], "--nowrite") == 0)
@@ -590,10 +604,15 @@ Option::Option(ArgumentExpander& arguments,
                 }
                 // See below for setting the default.
                 i++;
-                if (strcmp(arguments.argv[i], "1.3") == 0)
+                if (! strcmp(arguments.argv[i], "1.3"))
                     source = SDK1_3;
-                else if (strcmp(arguments.argv[i], "1.4") == 0)
+                else if (! strcmp(arguments.argv[i], "1.4"))
                     source = SDK1_4;
+                else if (ENABLE_SOURCE_15 &&
+                         ! strcmp(arguments.argv[i], "1.5"))
+                {
+                    source = SDK1_5;
+                }
                 else
                 {
                     bad_options.Next() =
@@ -628,16 +647,18 @@ Option::Option(ArgumentExpander& arguments,
                 }
                 // See below for setting the default.
                 i++;
-                if (strcmp(arguments.argv[i], "1.1") == 0)
+                if (! strcmp(arguments.argv[i], "1.1"))
                     target = SDK1_1;
-                else if (strcmp(arguments.argv[i], "1.2") == 0)
+                else if (! strcmp(arguments.argv[i], "1.2"))
                     target = SDK1_2;
-                else if (strcmp(arguments.argv[i], "1.3") == 0)
+                else if (! strcmp(arguments.argv[i], "1.3"))
                     target = SDK1_3;
-                else if (strcmp(arguments.argv[i], "1.4") == 0)
+                else if (! strcmp(arguments.argv[i], "1.4"))
                     target = SDK1_4;
-                else if (strcmp(arguments.argv[i], "1.4.2") == 0)
+                else if (! strcmp(arguments.argv[i], "1.4.2"))
                     target = SDK1_4_2;
+                else if (! strcmp(arguments.argv[i], "1.5"))
+                    target = SDK1_5;
                 else
                 {
                     bad_options.Next() =
@@ -845,7 +866,7 @@ Option::Option(ArgumentExpander& arguments,
                 }
 
                 char *p;
-                for (p = image; *p && Code::IsDigit(*p); p++)
+                for (p = image; *p && *p >= '0' && *p <= '9'; p++)
                 {
                     int digit = *p - '0';
                     tab_size = tab_size * 10 + digit;
@@ -864,10 +885,38 @@ Option::Option(ArgumentExpander& arguments,
                 unzip = true;
                 full_check = true;
             }
-            else if (strcmp(arguments.argv[i], "+Z") == 0 ||
-                     strcmp(arguments.argv[i], "--zero-cautions") == 0)
+            else if (strcmp(arguments.argv[i], "--zero-cautions") == 0)
             {
-                zero_defect = true;
+                tolerance = CAUTIONS_ARE_ERRORS;
+            }
+            else if (strncmp(arguments.argv[i], "+Z", 2) == 0)
+            {
+                // We accept +Z, +Z0, +Z1, and +Z2, where +Z means +Z1.
+                char* start = arguments.argv[i] + 2;
+                char* end = 0;
+                int level = (*start == '\0') ? 1 : strtoul(start, &end, 10);
+                if (end && *end != 0) level = 666;
+
+                // Translate the numeric level into a ToleranceLevel.
+                if (level == 0)
+                {
+                    tolerance = NO_WARNINGS;
+                }
+                else if (level == 1)
+                {
+                    tolerance = CAUTIONS_ARE_ERRORS;
+                }
+                else if (level == 2)
+                {
+                    tolerance = ToleranceLevel(WARNINGS_ARE_ERRORS |
+                                               CAUTIONS_ARE_ERRORS);
+                }
+                else
+                {
+                    bad_options.Next() =
+                        new OptionError(OptionError::INVALID_OPTION,
+                                        arguments.argv[i]);
+                }
             }
 #ifdef JIKES_DEBUG
             else if (strcmp(arguments.argv[i], "+A") == 0)
@@ -917,6 +966,9 @@ Option::Option(ArgumentExpander& arguments,
         case SDK1_4:
         case SDK1_4_2:
             source = SDK1_4;
+            break;
+        case SDK1_5:
+            source = ENABLE_SOURCE_15 ? SDK1_5 : SDK1_4;
             break;
         default:
             assert(false && "Unexpected target level");

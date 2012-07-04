@@ -1,15 +1,15 @@
-// $Id: parser.cpp,v 1.24 2002/12/10 15:49:17 ericb Exp $
+// $Id: parser.cpp,v 1.28 2004/03/25 13:32:28 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
 #include "parser.h"
 #include "ast.h"
+#include "stream.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -80,7 +80,7 @@ AstPackageDeclaration* Parser::PackageHeaderParse(LexStream* lex_stream_,
     AstPackageDeclaration* package_declaration = NULL;
     lex_stream_ -> Reset();
 
-    if (lex_stream_ -> Kind(lex_stream_ -> Peek()) == TK_package)
+    if (lex_stream_ -> PackageToken())
     {
         ast_pool = ast_pool_;
         list_node_pool = new StoragePool(lex_stream_ -> NumTokens());
@@ -137,7 +137,7 @@ AstCompilationUnit* Parser::HeaderParse(LexStream* lex_stream_,
             ! compilation_unit -> BadCompilationUnitCast())
         {
             if (compilation_unit -> NumTypeDeclarations() == 0)
-                compilation_unit -> kind = Ast::EMPTY_COMPILATION;
+                compilation_unit -> MarkEmpty();
         }
     }
 
@@ -219,11 +219,8 @@ Ast* Parser::HeaderParse()
             RepairParse(curtok);
 
         if (parse_stack[0] && parse_stack[0] -> CompilationUnitCast())
-            parse_stack[0] -> kind = Ast::BAD_COMPILATION;
-        else
-        {
-            parse_stack[0] = NULL;
-        }
+            ((AstCompilationUnit*) parse_stack[0]) -> MarkBad();
+        else parse_stack[0] = NULL;
     }
 
     return parse_stack[0];
@@ -275,8 +272,7 @@ bool Parser::Body(AstClassBody* class_body)
 
     for (i = 0; i < class_body -> NumMethods(); i++)
     {
-        AstMethodDeclaration *method_decl = class_body -> Method(i);
-
+        AstMethodDeclaration* method_decl = class_body -> Method(i);
         if (method_decl -> method_symbol && method_decl -> method_body_opt)
         {
             AstMethodBody* block = method_decl -> method_body_opt;
@@ -324,7 +320,6 @@ bool Parser::Initializer(AstClassBody* class_body)
          end_token = block -> right_brace_token; // last token in the body
          class_body -> StaticInitializer(i) -> block =
              ParseSegment(block -> left_brace_token);
-
         if (! class_body -> StaticInitializer(i) -> block)
         {
             errors_detected = true;

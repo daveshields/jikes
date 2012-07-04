@@ -1,4 +1,4 @@
-// $Id: stream.h,v 1.49 2004/01/26 06:07:18 cabbey Exp $ -*- c++ -*-
+// $Id: stream.h,v 1.53 2004/03/25 13:32:28 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -56,6 +56,11 @@ public:
         UNTERMINATED_COMMENT,
         UNTERMINATED_STRING_CONSTANT,
         INVALID_HEX_CONSTANT,
+        INVALID_FLOATING_HEX_EXPONENT,
+        INVALID_FLOATING_HEX_MANTISSA,
+        INVALID_FLOATING_HEX_PREFIX,
+        INVALID_OCTAL_CONSTANT,
+        INVALID_FLOATING_EXPONENT,
         INVALID_UNICODE_ESCAPE,
         INVALID_ESCAPE_SEQUENCE,
         LAST_CHARACTER_NOT_NEWLINE, // pedantic only
@@ -132,11 +137,11 @@ protected:
 
 //private: // FIXME : Make vars private once extracted from LexStream!
 
-#if defined(HAVE_ENCODING)
+#ifdef HAVE_ENCODING
 
 #if defined(HAVE_LIBICU_UC)
     UConverter* _decoder;
-#elif defined(HAVE_ICONV_H)
+#elif defined(JIKES_ICONV_ENCODING)
     iconv_t _decoder;
 #endif
 
@@ -162,12 +167,12 @@ protected:
     {
 #if defined(HAVE_LIBICU_UC)
         return _decoder != NULL;
-#elif defined(HAVE_ICONV_H)
+#elif defined(JIKES_ICONV_ENCODING)
         return _decoder != (iconv_t) -1;
 #endif
     }
 
-#endif // defined(HAVE_ENCODING)
+#endif // HAVE_ENCODING
 
     inline void InitializeDataBuffer(const char* buffer, long size)
     {
@@ -189,12 +194,9 @@ protected:
 //
 class LexStream : public Stream
 {
-
     friend class StreamError;
 
 public:
-    typedef unsigned TypeIndex;
-    typedef unsigned TokenIndex;
     typedef unsigned CommentIndex;
     enum { LEX_INFINITY = INT_MAX }; // the largest value for TokenIndex
 
@@ -213,8 +215,6 @@ public:
         return index = (index < end_token ? Next(index)
                         : token_stream.Length() - 1);
     }
-
-    inline static TokenIndex BadToken() { return 0; }
 
     inline unsigned Kind(TokenIndex i)
     {
@@ -334,6 +334,11 @@ public:
     inline unsigned CommentStringLength(CommentIndex i)
     {
         return comments[i].length;
+    }
+
+    inline TokenIndex PackageToken()
+    {
+        return package;
     }
 
     inline unsigned NumBadTokens()
@@ -526,6 +531,7 @@ private:
     ConvertibleArray<unsigned> line_location;
     TokenIndex* types;
     ConvertibleArray<TokenIndex> type_index;
+    TokenIndex package;
 
     void CompressSpace();
 

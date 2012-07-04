@@ -1,9 +1,9 @@
-// $Id: parser.h,v 1.21 2003/10/06 12:48:42 ericb Exp $ -*- c++ -*-
+// $Id: parser.h,v 1.28 2004/03/25 13:32:28 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2003 IBM Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -25,13 +25,14 @@ class AstStatement;
 class AstBlock;
 class AstName;
 class AstType;
+class AstTypeArguments;
 class AstTypeName;
+class AstModifiers;
 class AstPackageDeclaration;
 class AstCompilationUnit;
-class AstModifiers;
 class AstClassBody;
+class AstTypeParameters;
 class AstMethodBody;
-class AstArguments;
 
 enum ParseErrorCode
 {
@@ -126,7 +127,7 @@ protected:
     // xi => ti w.
     //
     //********************************************************************
-    inline LexStream::TokenIndex Token(int i)
+    inline TokenIndex Token(int i)
     {
         return location_stack[state_stack_top + (i - 1)];
     }

@@ -1,4 +1,4 @@
-// $Id: jikesapi.h,v 1.18 2002/11/27 17:34:59 ericb Exp $ -*- c++ -*-
+// $Id: jikesapi.h,v 1.19 2004/02/28 17:09:45 elliott-oss Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -28,9 +28,7 @@ public:
     int optimize;        // Enable optimizations
     int verbose;         // Verbosely track compilation progress
     int depend;          // Require full dependency check
-    int nowarn;          // Disable warnings
     int old_classpath_search_order; // Use older classpath search order
-    int zero_defect;     // Treat warnings as errors
     int help;            // Display a usage help message
     int version;         // Display a version message
 
@@ -62,6 +60,16 @@ public:
     //
     ReleaseLevel source;
     ReleaseLevel target;
+
+    enum ToleranceLevel
+    {
+        NO_WARNINGS = 0,
+        CAUTIONS_ARE_ERRORS = 1,
+        WARNINGS_ARE_ERRORS = 2,
+        DEFAULT = 4
+    };
+
+    ToleranceLevel tolerance;
 
     virtual ~JikesOption();
 

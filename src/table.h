@@ -1,10 +1,9 @@
-// $Id: table.h,v 1.17 2002/12/11 00:55:05 ericb Exp $ -*- c++ -*-
+// $Id: table.h,v 1.18 2004/03/25 13:32:29 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -432,14 +431,14 @@ public:
     }
 
     MethodShadowSymbol* FindOverloadMethodShadow(MethodSymbol* overload_method,
-                                                 Semantic* sem,
-                                                 LexStream::TokenIndex tok)
+                                                 Semantic* sem, TokenIndex tok)
     {
         if (! overload_method -> IsTyped())
             overload_method -> ProcessMethodSignature(sem, tok);
 
         MethodShadowSymbol* method_shadow;
-        for (method_shadow = FindMethodShadowSymbol(overload_method -> name_symbol);
+        for (method_shadow = FindMethodShadowSymbol(overload_method ->
+                                                    name_symbol);
              method_shadow;
              method_shadow = method_shadow -> next_method)
         {

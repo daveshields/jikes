@@ -1,4 +1,4 @@
-// $Id: bytecode.h,v 1.67 2004/01/28 13:42:05 ericb Exp $ -*- c++ -*-
+// $Id: bytecode.h,v 1.71 2004/03/05 13:10:53 ericb Exp $ -*- c++ -*-
 //
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
@@ -532,10 +532,17 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
     }
 
 
-    u2 RegisterFieldref(Utf8LiteralValue* class_name,
-                        Utf8LiteralValue* field_name,
-                        Utf8LiteralValue* field_type_name)
+    //
+    // Register a variable, including full control over the qualifying type
+    // emitted (which is not necessarily the variable's owner).
+    //
+    u2 RegisterFieldref(const TypeSymbol* type, const VariableSymbol* variable)
     {
+        Utf8LiteralValue* class_name = type -> fully_qualified_name;
+        Utf8LiteralValue* field_name =
+            variable -> ExternalIdentity() -> Utf8_literal;
+        Utf8LiteralValue* field_type_name = variable -> signature;
+        assert(variable -> owner -> TypeCast());
         assert(class_name && field_name && field_type_name &&
                "null argument to RegisterFieldref");
 
@@ -553,7 +560,7 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
             // Either the triplet is not in the constant pool, or the constant
             // pool overflowed.
             //
-            u2 class_index = RegisterClass(class_name);
+            u2 class_index = RegisterClass(type);
             index = (u2) constant_pool.Length();
             fieldref_constant_pool_index ->
                 Image(class_name -> index, name_type_index) = index;
@@ -564,31 +571,24 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
         return index;
     }
 
-
-    u2 RegisterFieldref(const TypeSymbol* type, const VariableSymbol* variable)
-    {
-        assert(variable -> owner -> TypeCast());
-        return RegisterFieldref(type -> fully_qualified_name,
-                                variable -> ExternalIdentity() -> Utf8_literal,
-                                variable -> signature);
-    }
-
-
+    //
+    // Shortcut when we want the variable's containing type.
+    //
     u2 RegisterFieldref(const VariableSymbol* variable)
     {
-        assert(variable -> owner -> TypeCast());
-        return RegisterFieldref(variable -> ContainingType() -> fully_qualified_name,
-                                variable -> ExternalIdentity() -> Utf8_literal,
-                                variable -> signature);
+        return RegisterFieldref(variable -> ContainingType(), variable);
     }
 
-
-    u2 RegisterMethodref(CPInfo::ConstantPoolTag kind,
-                         Utf8LiteralValue* class_name,
-                         Utf8LiteralValue* method_name,
-                         Utf8LiteralValue* method_type_name)
+    u2 RegisterMethodref(const TypeSymbol* type, const MethodSymbol* method)
     {
-        assert(class_name && method_name && method_type_name &&
+        CPInfo::ConstantPoolTag kind = type -> ACC_INTERFACE()
+            ? CPInfo::CONSTANT_InterfaceMethodref
+            : CPInfo::CONSTANT_Methodref;
+        Utf8LiteralValue* class_name = type -> fully_qualified_name;
+        Utf8LiteralValue* method_name =
+            method -> ExternalIdentity() -> Utf8_literal;
+        Utf8LiteralValue* method_type = method -> signature;
+        assert(class_name && method_name && method_type &&
                "null argument to RegisterMethodref");
 
         if (! methodref_constant_pool_index)
@@ -596,7 +596,7 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
                 new Triplet(segment_pool,
                             control.Utf8_pool.symbol_pool.Length());
 
-        u2 name_type_index = RegisterNameAndType(method_name, method_type_name);
+        u2 name_type_index = RegisterNameAndType(method_name, method_type);
         u2 index = methodref_constant_pool_index ->
             Image(class_name -> index, name_type_index);
         if (index == 0)
@@ -605,7 +605,7 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
             // Either the triplet is not in the constant pool, or the constant
             // pool overflowed.
             //
-            u2 class_name_index = RegisterClass(class_name);
+            u2 class_name_index = RegisterClass(type);
             index = (u2) constant_pool.Length();
             methodref_constant_pool_index -> Image(class_name -> index,
                                                    name_type_index) = index;
@@ -615,36 +615,13 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
         return index;
     }
 
-
-    u2 RegisterMethodref(const TypeSymbol* class_type,
-                         const NameSymbol* method_name,
-                         const MethodSymbol* method_type)
-    {
-        return RegisterMethodref(CPInfo::CONSTANT_Methodref,
-                                 class_type -> fully_qualified_name,
-                                 method_name -> Utf8_literal,
-                                 method_type -> signature);
-    }
-
-    u2 RegisterInterfaceMethodref(const TypeSymbol* interface_name,
-                                  const NameSymbol* method_name,
-                                  const MethodSymbol* method_type_name)
-    {
-        return RegisterMethodref(CPInfo::CONSTANT_InterfaceMethodref,
-                                 interface_name -> fully_qualified_name,
-                                 method_name -> Utf8_literal,
-                                 method_type_name -> signature);
-    }
-
-
     u2 RegisterLibraryMethodref(const MethodSymbol* method)
     {
+        //
         // The library method must exist. If it does not, flag an error.
+        //
         if (method)
-            return RegisterMethodref(CPInfo::CONSTANT_Methodref,
-                                     method -> containing_type -> fully_qualified_name,
-                                     method -> ExternalIdentity()-> Utf8_literal,
-                                     method -> signature);
+            return RegisterMethodref(method -> containing_type, method);
         library_method_not_found = true;
         return 0;
     }
@@ -799,11 +776,11 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
         return index;
     }
 
-
-    u2 RegisterClass(Utf8LiteralValue* lit)
+    u2 RegisterClass(const TypeSymbol* type)
     {
-        assert(lit && "null argument to RegisterClass");
-
+        Utf8LiteralValue* lit = type -> num_dimensions
+            ? type -> signature : type -> fully_qualified_name;
+        assert(type && lit && "null argument to RegisterClass");
         u2 index = class_constant_pool_index[lit -> index];
         if (index == 0)
         {
@@ -815,13 +792,35 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
             index = (u2) constant_pool.Length();
             class_constant_pool_index[lit -> index] = index;
             constant_pool.SetNext(new CPClassInfo(utf_index));
+            //
+            // All nested classes must appear in the InnerClasses attribute, as
+            // well.
+            //
+            if (type -> IsNested())
+            {
+                if (! inner_classes_attribute)
+                {
+                    inner_classes_attribute = new InnerClassesAttribute
+                        (RegisterUtf8(control.InnerClasses_literal));
+                    AddAttribute(inner_classes_attribute);
+                }
+                AccessFlags flags = type -> Flags();
+                //
+                // Types are never marked strictfp in .class files. This can be
+                // reverse engineered from <init> and <clinit> methods; the
+                // only time when these methods don't exist is in interfaces
+                // that have no runtime expression evaluations, so no
+                // information is lost by clearing the flag.
+                //
+                flags.ResetACC_STRICTFP();
+                inner_classes_attribute ->
+                    AddInnerClass(index, type -> IsLocal() ? 0
+                                  : RegisterClass(type -> ContainingType()),
+                                  type -> Anonymous() ? 0
+                                  : RegisterName(type -> name_symbol), flags);
+            }
         }
         return index;
-    }
-
-    u2 RegisterClass(const TypeSymbol* sym)
-    {
-        return RegisterClass(sym -> fully_qualified_name);
     }
 
 
@@ -834,10 +833,22 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
                                        (control.Deprecated_literal));
     }
 
-
     SyntheticAttribute* CreateSyntheticAttribute()
     {
         return new SyntheticAttribute(RegisterUtf8(control.Synthetic_literal));
+    }
+
+    EnclosingMethodAttribute* CreateEnclosingMethodAttribute(MethodSymbol* sym)
+    {
+        u2 attr_name = RegisterUtf8(control.EnclosingMethod_literal);
+        u2 type_index = RegisterClass(sym -> containing_type);
+        u2 name_type_index =
+            (sym -> name_symbol == control.block_init_name_symbol ||
+             sym -> name_symbol == control.clinit_name_symbol) ? 0
+            : RegisterNameAndType(sym -> ExternalIdentity() -> Utf8_literal,
+                                  sym -> signature);
+        return new EnclosingMethodAttribute(attr_name, type_index,
+                                            name_type_index);
     }
 
 
@@ -852,8 +863,7 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
     int EmitInstanceofExpression(AstInstanceofExpression*, bool);
     int EmitCastExpression(AstCastExpression*, bool);
     void EmitCast(TypeSymbol*, TypeSymbol*);
-    int EmitInstanceCreationExpression(AstClassInstanceCreationExpression*,
-                                        bool);
+    int EmitClassCreationExpression(AstClassCreationExpression*, bool);
     int EmitConditionalExpression(AstConditionalExpression*, bool);
     int EmitFieldAccess(AstFieldAccess*, bool = true);
     AstExpression* VariableExpressionResolution(AstExpression*);
@@ -910,6 +920,7 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
     void CloseSwitchLocalVariables(AstBlock*, u2 op_start);
     void EmitTryStatement(AstTryStatement*);
     void EmitAssertStatement(AstAssertStatement*);
+    void EmitForeachStatement(AstForeachStatement*);
     void EmitBranchIfExpression(AstExpression*, bool, Label&,
                                 AstStatement* = NULL);
     void EmitBranch(Opcode, Label&, AstStatement* = NULL);

@@ -1,10 +1,9 @@
-// $Id: diagnose.h,v 1.17 2002/11/06 00:58:23 ericb Exp $ -*- c++ -*-
+// $Id: diagnose.h,v 1.18 2004/03/25 13:32:27 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 #ifndef diagnose_INCLUDED
@@ -13,10 +12,13 @@
 #include "platform.h"
 #include "parser.h"
 #include "jikesapi.h"
+#include "tuple.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
 #endif
+
+class Control;
 
 struct RepairCandidate
 {
@@ -34,11 +36,11 @@ class ParseErrorInfo: public JikesError
 {
     friend class ParseError;
 public:
-    virtual const wchar_t *getErrorMessage();
-    virtual const wchar_t *getErrorReport();
+    virtual const wchar_t* getErrorMessage();
+    virtual const wchar_t* getErrorReport();
 
     virtual JikesErrorSeverity getSeverity();
-    virtual const char *getFileName();
+    virtual const char* getFileName();
 
     virtual int getLeftLineNo();
     virtual int getLeftColumnNo();
@@ -52,15 +54,15 @@ private:
     int right_column_no;
 
     static bool emacs_style_report;
-    LexStream *lex_stream;
+    LexStream* lex_stream;
 
-    void Initialize(LexStream *);
+    void Initialize(LexStream*);
 
     const wchar_t* regularErrorString();
     const wchar_t* emacsErrorString();
 
-    LexStream::TokenIndex left_token;
-    LexStream::TokenIndex right_token;
+    TokenIndex left_token;
+    TokenIndex right_token;
 
     int name_index;
     int num;
@@ -75,19 +77,18 @@ class ParseError : public javaprs_table
 public:
 
     void Report(int msg_level, ParseErrorCode, int name_index,
-                LexStream::TokenIndex left_token,
-                LexStream::TokenIndex right_token,
+                TokenIndex left_token, TokenIndex right_token,
                 int scope_name_index = 0);
 
     void SortMessages();
 
-    ParseError(Control &control_, LexStream *lex_stream_);
+    ParseError(Control& control_, LexStream* lex_stream_);
     void PrintMessages();
 
 private:
 
-    Control &control;
-    LexStream *lex_stream;
+    Control& control;
+    LexStream* lex_stream;
 
     Tuple<ParseErrorInfo> errors;
 
@@ -99,18 +100,17 @@ class DiagnoseParser : public Parser
 {
 public:
 
-    DiagnoseParser(Control &control_, LexStream *lex_stream_) : next_stack(NULL),
-                                                                prev_stack(NULL),
-                                                                scope_index(NULL),
-                                                                scope_position(NULL),
-                                                                state_pool(256),
-                                                                error(control_, lex_stream_)
+    DiagnoseParser(Control& control_, LexStream* lex_stream_)
+        : next_stack(NULL)
+        , prev_stack(NULL)
+        , scope_index(NULL)
+        , scope_position(NULL)
+        , state_pool(256)
+        , error(control_, lex_stream_)
     {
         lex_stream = lex_stream_;
         memset(list, 0, NUM_SYMBOLS * sizeof(int));
         DiagnoseParse();
-
-        return;
     }
 
     ~DiagnoseParser()
@@ -123,21 +123,22 @@ public:
 
 private:
 
-    int next_stack_top,
-        *next_stack,
+    int next_stack_top;
+    int* next_stack;
 
-        prev_stack_top,
-        *prev_stack,
+    int prev_stack_top;
+    int* prev_stack;
 
-        scope_stack_top,
-        *scope_index,
-        *scope_position;
+    int scope_stack_top;
+    int* scope_index;
+    int* scope_position;
 
     int list[NUM_SYMBOLS + 1];
 
     enum { NIL = -1 };
     Tuple<StateInfo> state_pool;
-    int *state_seen; // this variable is managed entirely by the function "scope_trial"
+    // this variable is managed entirely by the function "scope_trial"
+    int* state_seen;
 
     ParseError error;
 

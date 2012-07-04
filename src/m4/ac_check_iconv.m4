@@ -1,7 +1,7 @@
 dnl @synopsis AC_CHECK_ICONV
 dnl
 dnl Check to see if the iconv functions and libs are present
-dnl @version $Id: ac_check_iconv.m4,v 1.6 2004/01/13 13:31:25 ericb Exp $
+dnl @version $Id: ac_check_iconv.m4,v 1.7 2004/02/02 14:46:49 ericb Exp $
 dnl @author Mo DeJong <mdejong@redhat.com>
 dnl
 AC_DEFUN([AC_CHECK_ICONV],
@@ -12,10 +12,10 @@ dnl No point going on if iconv.h isn't present.
 dnl In this case, we just assume iconv can not be used by the application
 AS_IF([test "$ac_cv_header_iconv_h" = yes],
 [dnl	Check if iconv library is present
-AC_CHECK_LIB(iconv, iconv)
+AC_SEARCH_LIBS([iconv], [iconv])
 
 dnl	Check if we need to link the iconv lib (cygwin)
-AC_CHECK_LIB(iconv, libiconv_open)
+AC_SEARCH_LIBS([libiconv_open], [iconv])
 
 iconv_includes="
 #ifdef HAVE_STRING_H

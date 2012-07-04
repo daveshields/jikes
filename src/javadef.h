@@ -1,4 +1,4 @@
-// $Id: javadef.h,v 1.31 2004/01/23 12:07:03 ericb Exp $
+// $Id: javadef.h,v 1.38 2004/03/24 04:01:16 ericb Exp $
 // DO NOT MODIFY THIS FILE - it is generated using jikespg on java.g.
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
@@ -21,26 +21,26 @@ enum {
       MIN_DISTANCE      = 3,
       MAX_NAME_LENGTH   = 38,
       MAX_TERM_LENGTH   = 38,
-      NUM_STATES        = 457,
+      NUM_STATES        = 681,
 
       NT_OFFSET         = 111,
       BUFF_UBOUND       = 30,
       BUFF_SIZE         = 31,
       STACK_UBOUND      = 127,
       STACK_SIZE        = 128,
-      SCOPE_UBOUND      = 56,
-      SCOPE_SIZE        = 57,
-      LA_STATE_OFFSET   = 5691,
+      SCOPE_UBOUND      = 104,
+      SCOPE_SIZE        = 105,
+      LA_STATE_OFFSET   = 8043,
       MAX_LA            = 1,
-      NUM_RULES         = 410,
+      NUM_RULES         = 566,
       NUM_TERMINALS     = 111,
-      NUM_NON_TERMINALS = 169,
-      NUM_SYMBOLS       = 280,
-      START_STATE       = 706,
-      EOFT_SYMBOL       = 94,
-      EOLT_SYMBOL       = 94,
-      ACCEPT_ACTION     = 5690,
-      ERROR_ACTION      = 5691
+      NUM_NON_TERMINALS = 235,
+      NUM_SYMBOLS       = 346,
+      START_STATE       = 6943,
+      EOFT_SYMBOL       = 96,
+      EOLT_SYMBOL       = 96,
+      ACCEPT_ACTION     = 8042,
+      ERROR_ACTION      = 8043
      };
 
 

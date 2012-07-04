@@ -1,4 +1,4 @@
-// $Id: scanner.cpp,v 1.40 2004/01/26 06:07:17 cabbey Exp $
+// $Id: scanner.cpp,v 1.45 2004/03/25 13:32:28 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -50,26 +50,12 @@ Scanner::Scanner(Control& control_)
     // redesigned !!!
     //
     assert(NUM_TERMINALS < 128);
-
     //
     // If this assertion fails, then gencode.java is at fault.
     //
+#ifdef JIKES_DEBUG
     assert(Code::CodeCheck());
-
-    //
-    // ----------------------------------------------------------------------
-    // We are pulling this code out because we are tired of defending it. We
-    // tought it was obvious that either $ should not have been used for
-    // compiler generated variables or that users should not be allowed to
-    // use in variable names...
-    // ----------------------------------------------------------------------
-    //
-    // Uncommenting this makes the use of $ a hard lexical error.  However,
-    // when this is not an error, we will issue a warning in ClassifyId below.
-    //
-    //    if (! control.option.dollar)
-    //        Code::SetBadCode(U_DOLLAR);
-    //
+#endif // JIKES_DEBUG
 
     //
     // CLASSIFY_TOKEN is a mapping from each character into a
@@ -78,9 +64,12 @@ Scanner::Scanner(Control& control_)
     //
     for (int c = 0; c < 128; c++)
     {
-        if (Code::IsAlpha(c))
+        if (Code::IsAsciiUpper(c) || Code::IsAsciiLower(c) || c == U_DOLLAR ||
+            c == U_UNDERSCORE)
+        {
             classify_token[c] = &Scanner::ClassifyId;
-        else if (Code::IsDigit(c))
+        }
+        else if (Code::IsDecimalDigit(c))
             classify_token[c] = &Scanner::ClassifyNumericLiteral;
         else if (Code::IsSpace(c))
             classify_token[c] = &Scanner::SkipSpaces;
@@ -155,7 +144,7 @@ void Scanner::Initialize(FileSymbol* file_symbol)
         LexStream::Comment* current_comment = &(lex -> comment_stream.Next());
         current_comment -> string = NULL;
         current_comment -> length = 0;
-        current_comment -> previous_token = LexStream::BadToken();
+        current_comment -> previous_token = BAD_TOKEN;
         current_comment -> location = 0;
     }
 #endif // JIKES_DEBUG
@@ -256,9 +245,9 @@ void Scanner::Scan()
     // braces in the input. Each unmatched left brace should point to
     // the EOF token as a substitute for a matching right brace.
     //
-    assert(current_token_index == (unsigned) (lex -> token_stream.Length()) - 1);
+    assert(current_token_index == lex -> token_stream.Length() - 1);
 
-    for (LexStream::TokenIndex left_brace = brace_stack.Top();
+    for (TokenIndex left_brace = brace_stack.Top();
          left_brace; left_brace = brace_stack.Top())
     {
         lex -> token_stream[left_brace].SetRightBrace(current_token_index);
@@ -352,7 +341,7 @@ void Scanner::ScanStarComment()
                         cursor[7] == U_t &&
                         cursor[8] == U_e &&
                         cursor[9] == U_d &&
-                        (Code::IsWhitespace(cursor[10]) ||
+                        (Code::IsWhitespace(cursor + 10) ||
                          cursor[10] == U_STAR))
                     {
                         deprecated = true;
@@ -856,8 +845,8 @@ void Scanner::ClassifyCharLiteral()
         // For generally better parsing and nicer error messages, see if the
         // user tried to do a multiple character alpha-numeric string.
         //
-        while (Code::IsAlnum(*ptr))
-            ptr++;
+        while (Code::IsAlnum(ptr))
+            ptr += Code::Codelength(ptr);
         if (Code::IsNewline(*ptr))
             ptr--;
         if (! bad)
@@ -958,10 +947,10 @@ void Scanner::ClassifyIdOrKeyword()
     const wchar_t* ptr = cursor + 1;
     bool has_dollar = false;
 
-    while (Code::IsAlnum(*ptr))
+    while (Code::IsAlnum(ptr))
     {
         has_dollar = has_dollar || (*ptr == U_DS);
-        ptr++;
+        ptr += Code::Codelength(ptr);
     }
     int len = ptr - cursor;
 
@@ -1005,17 +994,18 @@ void Scanner::ClassifyIdOrKeyword()
         }
     }
     else if (current_token -> Kind() == TK_class ||
+             current_token -> Kind() == TK_enum ||
              current_token -> Kind() == TK_interface)
     {
         //
-        // This type keyword is not nested. When we encounter an occurrence of
-        // the keyword class or interface that is not enclosed in at least one
-        // set of braces, we keep track of it by adding it to a list.
+        // If this is a top-level type keyword (not in braces), we keep track
+        // of it by adding it to a list.
         //
         if (brace_stack.Size() == 0)
             lex -> type_index.Next() = current_token_index;
     }
-
+    else if (current_token -> Kind() == TK_package && ! lex -> package)
+        lex -> package = current_token_index;
     cursor = ptr;
 }
 
@@ -1025,13 +1015,13 @@ void Scanner::ClassifyIdOrKeyword()
 //
 void Scanner::ClassifyId()
 {
-    bool has_dollar = (*cursor == U_DS);
-    const wchar_t* ptr = cursor + 1;
+    const wchar_t* ptr = cursor;
+    bool has_dollar = false;
 
-    while (Code::IsAlnum(*ptr))
+    while (Code::IsAlnum(ptr))
     {
         has_dollar = has_dollar || (*ptr == U_DS);
-        ptr++;
+        ptr += Code::Codelength(ptr);
     }
 
     int len = ptr - cursor;
@@ -1055,7 +1045,6 @@ void Scanner::ClassifyId()
             current_token -> SetKind(control.option.keyword_map[i].key);
         }
     }
-
     cursor = ptr;
 }
 
@@ -1071,55 +1060,116 @@ void Scanner::ClassifyNumericLiteral()
     // Scan the initial sequence of digits, if any.
     //
     const wchar_t* ptr = cursor - 1;
-    while (Code::IsDigit(*++ptr));
+    const wchar_t* tmp;
+    while (Code::IsDecimalDigit(*++ptr));
 
     //
     // We now take an initial crack at classifying the numeric token.
-    // We have two initial cases to consider:
+    // We have three initial cases to consider, and stop parsing before any
+    // exponent or type suffix:
     //
     // 1) If the initial (perhaps empty) sequence of digits is followed by
     //    '.', we have a floating-point constant. We scan the sequence of
-    //    digits (if any) that follows the period.
+    //    digits (if any) that follows the period. When '.' starts the number,
+    //    we already checked that a digit follows before calling this method.
+    // 2) If the initial sequence is "0x" or "0X", we have a hexadecimal
+    //    literal, either integer or floating point.  To be floating point,
+    //    the literal must contain an exponent with 'p' or 'P'; otherwise we
+    //    parse the largest int literal.  There must be at least one hex
+    //    digit after the prefix, and before the (possible) exponent.
     // 2) Otherwise, we have an integer literal. If the initial (non-empty)
-    //    sequence of digits start with "0x" or "0X" we have a hexadecimal
-    //    constant: continue scanning all hex digits that follow the 'x'. If
-    //    the digits start with "0", we have an octal constant: continue
-    //    scanning only octal digits. Note that a non-octal digit starts a
-    //    new numeric literal, although this will cause a syntax error
-    //    downstream. In other words, 019 is parsed as the literal 01 followed
-    //    by the literal 9.
+    //    sequence of digits start with "0", we have an octal constant, and
+    //    for nicer parsing, we simply complain about non-octal digits rather
+    //    than strictly breaking 019 into the two tokens 01 and 9 (because
+    //    it would be a guaranteed syntax error later on). However, it is
+    //    still possible that 019 starts a valid floating point literal, which
+    //    is checked later.
     //
     if (*ptr == U_DOT)
     {
         current_token -> SetKind(TK_DoubleLiteral);
-        while (Code::IsDigit(*++ptr));
+        while (Code::IsDecimalDigit(*++ptr));
     }
     else
     {
         current_token -> SetKind(TK_IntegerLiteral);
         if (*cursor == U_0)
         {
-            if (cursor[1] == U_x || cursor[1] == U_X)
+            if (*ptr == U_x || *ptr == U_X)
             {
-                ptr = cursor + 2;
                 // Don't use isxdigit, it's not platform independent.
-                if (Code::IsHexDigit(*ptr))
+                while (Code::IsHexDigit(*++ptr)); // Skip the 'x'.
+                if (*ptr == U_DOT)
                 {
+                    current_token -> SetKind(TK_DoubleLiteral);
                     while (Code::IsHexDigit(*++ptr));
+                    if (*ptr != U_p && *ptr != U_P)
+                    {
+                        // Missing required 'p' exponent.
+                        lex -> ReportMessage(StreamError::INVALID_FLOATING_HEX_EXPONENT,
+                                             current_token -> Location(),
+                                             ptr - 1 - lex -> InputBuffer());
+                    }
+                    else if (ptr == cursor + 3)
+                    {
+                        // Missing hex digits before exponent, with '.'.
+                        tmp = ptr;
+                        if (Code::IsSign(*++tmp)) // Skip the exponent letter.
+                            tmp++; // Skip the '+' or '-'.
+                        if (Code::IsHexDigit(*tmp))
+                            while (Code::IsHexDigit(*++tmp));
+                        if (*tmp != U_d && *tmp != U_D &&
+                            *tmp != U_f && *tmp != U_F)
+                        {
+                            tmp--;
+                        }
+                        lex -> ReportMessage(StreamError::INVALID_FLOATING_HEX_MANTISSA,
+                                             current_token -> Location(),
+                                             tmp - lex -> InputBuffer());
+                    }
                 }
-                else lex -> ReportMessage(StreamError::INVALID_HEX_CONSTANT,
-                                          current_token -> Location(),
-                                          ptr - lex -> InputBuffer());
+                else if (ptr == cursor + 2) // Found a runt "0x".
+                {
+                    if (*ptr == U_p || *ptr == U_P)
+                    {
+                        // Missing hex digits before exponent, without '.'.
+                        tmp = ptr;
+                        if (Code::IsSign(*++tmp)) // Skip the exponent letter.
+                            tmp++; // Skip the '+' or '-'.
+                        if (Code::IsHexDigit(*tmp))
+                            while (Code::IsHexDigit(*++tmp));
+                        if (*tmp != U_d && *tmp != U_D &&
+                            *tmp != U_f && *tmp != U_F)
+                        {
+                            tmp--;
+                        }
+                        lex -> ReportMessage(StreamError::INVALID_FLOATING_HEX_MANTISSA,
+                                             current_token -> Location(),
+                                             tmp - lex -> InputBuffer());
+                    }
+                    else
+                    {
+                        tmp = (*ptr == U_l || *ptr == U_L) ? ptr : ptr - 1;
+                        lex -> ReportMessage(StreamError::INVALID_HEX_CONSTANT,
+                                             current_token -> Location(),
+                                             tmp - lex -> InputBuffer());
+                    }
+                }
             }
-            else if (! (((*ptr == U_e || *ptr == U_E) &&
-                         (Code::IsDigit(ptr[1]) ||
-                          ((ptr[1] == U_PLUS || ptr[1] == U_MINUS) &&
-                           Code::IsDigit(ptr[2])))) ||
-                        *ptr == U_d || *ptr == U_D ||
-                        *ptr == U_f || *ptr == U_F))
+            // Octal prefix. See if it will become floating point later.
+            else if (*ptr != U_e && *ptr != U_E &&
+                     *ptr != U_d && *ptr != U_D &&
+                     *ptr != U_f && *ptr != U_F)
             {
-                ptr = cursor;
-                while (Code::IsOctalDigit(*++ptr));
+                tmp = cursor;
+                while (Code::IsOctalDigit(*++tmp)); // Skip leading '0'.
+                if (tmp != ptr)
+                {
+                    tmp = (*ptr == U_l || *ptr == U_L) ? ptr : ptr - 1;
+                    lex -> ReportMessage(StreamError::INVALID_OCTAL_CONSTANT,
+                                         current_token -> Location(),
+                                         tmp - lex -> InputBuffer());
+                }
             }
         }
     }
@@ -1130,27 +1180,49 @@ void Scanner::ClassifyNumericLiteral()
     // reclassified and the exponent is scanned. Note that as 'E' and 'e' are
     // legitimate hexadecimal digits, we don't have to worry about a
     // hexadecimal constant being used as the prefix of a floating-point
-    // constant. An exponent overrides an octal literal, as do the float and
-    // double suffixes. However, a missing exponent results in splitting the
-    // token (although this will always cause a downstream syntax error).
+    // constant. A hex floating point requires a hex prefix. An exponent
+    // overrides an octal literal, as do the float and double suffixes. We
+    // stop parsing before any type suffix.
     //
     // For example, 0x123e12 is tokenized as a single hexadecimal digit, while
     // the string 0x123e+12 gets broken down as the hex number 0x123e, the
     // operator '+', and the decimal constant 12. Meanwhile, 019e+0 and 019d
-    // are both tokenized as a single floating-point constant 19.0. But 1e+
-    // is parsed as the integer literal 1, the identifier e, and the operator
-    // '+', which causes a syntax error downstream.
+    // are both tokenized as a single floating-point constant 19.0. Note that
+    // 1e should strictly be parsed as the int 1 followed by identifier e;
+    // 1e+ should be the int 1, identifier e, and operator +; and 1p0d should
+    // be the int 1 and identifier p0d; however all these cases are guaranteed
+    // to be syntax errors later on, so we nicely consume them as a single
+    // invalid floating point token now.
     //
-    if ((*ptr == U_e || *ptr == U_E) &&
-        (Code::IsDigit(ptr[1]) ||
-         ((ptr[1] == U_PLUS || ptr[1] == U_MINUS) &&
-          Code::IsDigit(ptr[2]))))
+    if (*ptr == U_e || *ptr == U_E || *ptr == U_p || *ptr == U_P)
     {
         current_token -> SetKind(TK_DoubleLiteral);
-        ptr++; // Skip the 'e' or 'E'.
-        if (*ptr == U_PLUS || *ptr == U_MINUS)
+        if ((*ptr == U_p || *ptr == U_P) &&
+            ! (cursor[1] == U_x || cursor[1] == U_X))
+        {
+            tmp = ptr;
+            if (Code::IsSign(*++tmp)) // Skip the exponent letter.
+                tmp++; // Skip the '+' or '-'.
+            if (Code::IsDecimalDigit(*tmp))
+                while (Code::IsDecimalDigit(*++tmp));
+            if (*tmp != U_d && *tmp != U_D && *tmp != U_f && *tmp != U_F)
+                tmp--;
+            lex -> ReportMessage(StreamError::INVALID_FLOATING_HEX_PREFIX,
+                                 current_token -> Location(),
+                                 tmp - lex -> InputBuffer());
+        }
+        if (Code::IsSign(*++ptr)) // Skip the exponent letter.
             ptr++; // Skip the '+' or '-'.
-        while (Code::IsDigit(*++ptr));
+        if (Code::IsDecimalDigit(*ptr))
+            while (Code::IsDecimalDigit(*++ptr));
+        else
+        {
+            tmp = (*ptr == U_d || *ptr == U_D || *ptr == U_f || *ptr == U_F)
+                ? ptr : ptr - 1;
+            lex -> ReportMessage(StreamError::INVALID_FLOATING_EXPONENT,
+                                 current_token -> Location(),
+                                 tmp - lex -> InputBuffer());
+        }
     }
 
     //
@@ -1158,7 +1230,6 @@ void Scanner::ClassifyNumericLiteral()
     // what kind of a constant it is. We check for these suffixes here.
     //
     int len;
-
     if (*ptr == U_f || *ptr == U_F)
     {
         len = ++ptr - cursor;
@@ -1198,10 +1269,10 @@ void Scanner::ClassifyNumericLiteral()
     }
     else
     {
+        assert(current_token -> Kind() == TK_DoubleLiteral);
         len = ptr - cursor;
         current_token ->
             SetSymbol(control.double_table.FindOrInsertLiteral(cursor, len));
-        current_token -> SetKind(TK_DoubleLiteral);
     }
     cursor = ptr;
 }
@@ -1414,7 +1485,7 @@ void Scanner::ClassifyMod()
 
 void Scanner::ClassifyPeriod()
 {
-    if (Code::IsDigit(cursor[1])) // Is period immediately followed by digit?
+    if (Code::IsDecimalDigit(cursor[1])) // Is '.' followed by digit?
         ClassifyNumericLiteral();
     else if (cursor[1] == U_DOT && cursor[2] == U_DOT)
     {
@@ -1464,7 +1535,7 @@ void Scanner::ClassifyRbrace()
     // When its matching right brace in encountered, we pop the left brace
     // and make it point to its matching right brace.
     //
-    LexStream::TokenIndex left_brace = brace_stack.Top();
+    TokenIndex left_brace = brace_stack.Top();
     if (left_brace) // This right brace is matched by a left one
     {
         lex -> token_stream[left_brace].SetRightBrace(current_token_index);
@@ -1518,6 +1589,21 @@ void Scanner::ClassifyAt()
 }
 
 
+void Scanner::ClassifyQuestion()
+{
+    current_token -> SetKind(TK_QUESTION);
+    cursor++;
+}
+
+
+void Scanner::ClassifyNonAsciiUnicode()
+{
+    if (Code::IsAlpha(cursor)) // Some kind of non-ascii unicode letter
+        ClassifyId();
+    else ClassifyBadToken();
+}
+
+
 //
 // Anything that doesn't fit above. Note that the lex stream already stripped
 // any concluding ctrl-z, so we don't need to worry about seeing that as a
@@ -1530,7 +1616,7 @@ void Scanner::ClassifyBadToken()
     {
         if ((*cursor < 128 &&
              classify_token[*cursor] != &Scanner::ClassifyBadToken) ||
-            Code::IsAlpha(*cursor))
+            Code::IsAlpha(cursor))
         {
             break;
         }
@@ -1538,21 +1624,6 @@ void Scanner::ClassifyBadToken()
     current_token -> SetKind(0);
     lex -> ReportMessage(StreamError::BAD_TOKEN, current_token -> Location(),
                          cursor - lex -> InputBuffer() - 1);
-}
-
-
-void Scanner::ClassifyQuestion()
-{
-    current_token -> SetKind(TK_QUESTION);
-    cursor++;
-}
-
-
-void Scanner::ClassifyNonAsciiUnicode()
-{
-    if (Code::IsAlpha(*cursor)) // Some kind of non-ascii unicode letter
-        ClassifyId();
-    else ClassifyBadToken();
 }
 
 #ifdef HAVE_JIKES_NAMESPACE

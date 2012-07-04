@@ -1,4 +1,4 @@
-// $Id: decl.cpp,v 1.118 2004/01/31 17:16:02 ericb Exp $
+// $Id: decl.cpp,v 1.138 2004/04/12 12:47:28 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -14,6 +14,7 @@
 #include "tuple.h"
 #include "spell.h"
 #include "option.h"
+#include "stream.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -27,36 +28,38 @@ namespace Jikes { // Open namespace Jikes block
 //
 inline void Semantic::CheckPackage()
 {
-    if (compilation_unit -> package_declaration_opt)
+    if (! compilation_unit -> package_declaration_opt)
+        return;
+    AstPackageDeclaration* package_decl =
+        compilation_unit -> package_declaration_opt;
+    //
+    // Make sure that the package or any of its parents does not match the
+    // name of a type.
+    //
+    for (PackageSymbol* subpackage = this_package,
+             *package = subpackage -> owner;
+         package; subpackage = package, package = package -> owner)
     {
-        //
-        // Make sure that the package or any of its parents does not match the
-        // name of a type.
-        //
-        for (PackageSymbol* subpackage = this_package,
-                 *package = subpackage -> owner;
-             package;
-             subpackage = package, package = package -> owner)
+        FileSymbol* file_symbol =
+            Control::GetFile(control, package, subpackage -> Identity());
+        if (file_symbol)
         {
-            FileSymbol* file_symbol =
-                Control::GetFile(control, package, subpackage -> Identity());
-            if (file_symbol)
-            {
-                char* file_name = file_symbol -> FileName();
-                int length = file_symbol -> FileNameLength();
-                wchar_t* error_name = new wchar_t[length + 1];
-                for (int i = 0; i < length; i++)
-                    error_name[i] = file_name[i];
-                error_name[length] = U_NULL;
+            char* file_name = file_symbol -> FileName();
+            int length = file_symbol -> FileNameLength();
+            wchar_t* error_name = new wchar_t[length + 1];
+            for (int i = 0; i < length; i++)
+                error_name[i] = file_name[i];
+            error_name[length] = U_NULL;
 
-                ReportSemError(SemanticError::PACKAGE_TYPE_CONFLICT,
-                               compilation_unit -> package_declaration_opt -> name,
-                               package -> PackageName(), subpackage -> Name(),
-                               error_name);
-                delete [] error_name;
-            }
+            ReportSemError(SemanticError::PACKAGE_TYPE_CONFLICT,
+                           compilation_unit -> package_declaration_opt -> name,
+                           package -> PackageName(), subpackage -> Name(),
+                           error_name);
+            delete [] error_name;
         }
     }
+    // TODO: Warn about package annotations outside of package-info.java.
+    ProcessPackageModifiers(package_decl);
 }
 
 
@@ -66,7 +69,7 @@ inline void Semantic::CheckPackage()
 //
 void Semantic::ProcessTypeNames()
 {
-    import_on_demand_packages.Next() = control.system_package;
+    import_on_demand_packages.Next() = control.LangPackage();
     compilation_unit = source_file_symbol -> compilation_unit;
 
     //
@@ -96,7 +99,7 @@ void Semantic::ProcessTypeNames()
     {
         for (unsigned i = 0; i < lex_stream -> NumTypes(); i++)
         {
-            LexStream::TokenIndex identifier_token =
+            TokenIndex identifier_token =
                 lex_stream -> Next(lex_stream -> Type(i));
             NameSymbol* name_symbol =
                 lex_stream -> NameSymbol(identifier_token);
@@ -132,7 +135,7 @@ void Semantic::ProcessTypeNames()
     //
     for (unsigned k = 0; k < compilation_unit -> NumTypeDeclarations(); k++)
     {
-        LexStream::TokenIndex identifier_token = LexStream::BadToken();
+        TokenIndex identifier_token = BAD_TOKEN;
         TypeSymbol* type = NULL;
         AstDeclaredType* declaration = compilation_unit -> TypeDeclaration(k);
         if (! declaration -> EmptyDeclarationCast())
@@ -140,62 +143,58 @@ void Semantic::ProcessTypeNames()
             identifier_token = declaration -> class_body -> identifier_token;
             NameSymbol* name_symbol =
                 lex_stream -> NameSymbol(identifier_token);
-            type = this_package -> FindTypeSymbol(name_symbol);
-            if (type)
+            //
+            // Warn against unconventional names.
+            //
+            if (name_symbol -> IsBadStyleForClass())
             {
-                if (! type -> SourcePending())
+                ReportSemError(SemanticError::UNCONVENTIONAL_CLASS_NAME,
+                               identifier_token, name_symbol -> Name());
+            }
+            type = this_package -> FindTypeSymbol(name_symbol);
+            // type was already created in Control::ProcessPackageDeclaration
+            assert(type);
+            if (! type -> SourcePending())
+            {
+                ReportSemError(SemanticError::DUPLICATE_TYPE_DECLARATION,
+                               identifier_token, name_symbol -> Name(),
+                               type -> FileLoc());
+                type = NULL;
+            }
+            else
+            {
+                if (type -> ContainingPackage() == control.UnnamedPackage())
                 {
-                    ReportSemError(SemanticError::DUPLICATE_TYPE_DECLARATION,
-                                   identifier_token, name_symbol -> Name(),
-                                   type -> FileLoc());
-                    type = NULL;
-                }
-                else
-                {
-                    if (type -> ContainingPackage() == control.unnamed_package)
+                    TypeSymbol* old_type = (TypeSymbol*) control.
+                        unnamed_package_types.Image(name_symbol);
+                    if (old_type != type)
                     {
-                        TypeSymbol* old_type = (TypeSymbol*) control.
-                            unnamed_package_types.Image(name_symbol);
-                        if (old_type != type)
-                        {
-                            ReportSemError(SemanticError::DUPLICATE_TYPE_DECLARATION,
-                                           identifier_token,
-                                           name_symbol -> Name(),
-                                           old_type -> FileLoc());
-                        }
+                        ReportSemError(SemanticError::DUPLICATE_TYPE_DECLARATION,
+                                       identifier_token, name_symbol -> Name(),
+                                       old_type -> FileLoc());
                     }
-                    // Save valid type for later processing. See below.
-                    type_list.Next() = type;
-                    type -> MarkSourceNoLongerPending();
-                    type -> semantic_environment =
-                        new SemanticEnvironment(this, type, NULL);
-                    type -> declaration = declaration -> class_body;
-                    type -> SetFlags(ProcessTopLevelTypeModifiers
-                                     (declaration));
-                    //
-                    // Add 3 extra elements for padding. May need a default
-                    // constructor and other support elements.
-                    //
-                    type -> SetSymbolTable(declaration -> class_body ->
-                                           NumClassBodyDeclarations() + 3);
-                    type -> SetLocation();
+                }
+                // Save valid type for later processing. See below.
+                type_list.Next() = type;
+                type -> MarkSourceNoLongerPending();
+                type -> semantic_environment =
+                    new SemanticEnvironment(this, type, NULL);
+                type -> declaration = declaration -> class_body;
+                type -> SetFlags(ProcessTopLevelTypeModifiers(declaration));
+                //
+                // Add 3 extra elements for padding. May need a default
+                // constructor and other support elements.
+                //
+                type -> SetSymbolTable(declaration -> class_body ->
+                                       NumClassBodyDeclarations() + 3);
+                type -> SetLocation();
 
-                    if (lex_stream -> IsDeprecated(declaration -> LeftToken()))
-                        type -> MarkDeprecated();
-                    source_file_symbol -> types.Next() = type;
-                    declaration -> class_body -> semantic_environment =
-                        type -> semantic_environment;
-                    CheckNestedMembers(type, declaration -> class_body);
-                }
-                
-                //
-                // Warn against unconventional names.
-                //
-                if (name_symbol -> IsBadStyleForClass())
-                {
-                    ReportSemError(SemanticError::UNCONVENTIONAL_CLASS_NAME,
-                                   identifier_token, name_symbol -> Name());
-                }
+                if (lex_stream -> IsDeprecated(declaration -> LeftToken()))
+                    type -> MarkDeprecated();
+                source_file_symbol -> types.Next() = type;
+                declaration -> class_body -> semantic_environment =
+                    type -> semantic_environment;
+                CheckNestedMembers(type, declaration -> class_body);
             }
         }
 
@@ -219,7 +218,7 @@ void Semantic::ProcessTypeNames()
                 //
                 if ((this_package -> directory[i] ->
                      FindDirectorySymbol(name_symbol)) &&
-                    this_package != control.unnamed_package)
+                    this_package != control.UnnamedPackage())
                 {
                     char* file_name = type -> file_symbol -> FileName();
                     int length = type -> file_symbol -> FileNameLength();
@@ -296,14 +295,23 @@ void Semantic::CheckNestedMembers(TypeSymbol* containing_type,
     unsigned i;
     for (i = 0; i < class_body -> NumNestedClasses(); i++)
     {
-        AstClassDeclaration* class_declaration = class_body -> NestedClass(i);
-        ProcessNestedTypeName(containing_type, class_declaration);
+        AstClassDeclaration* decl = class_body -> NestedClass(i);
+        ProcessNestedTypeName(containing_type, decl);
+    }
+    for (i = 0; i < class_body -> NumNestedEnums(); i++)
+    {
+        AstEnumDeclaration* decl = class_body -> NestedEnum(i);
+        ProcessNestedTypeName(containing_type, decl);
     }
     for (i = 0; i < class_body -> NumNestedInterfaces(); i++)
     {
-        AstInterfaceDeclaration* interface_declaration =
-            class_body -> NestedInterface(i);
-        ProcessNestedTypeName(containing_type, interface_declaration);
+        AstInterfaceDeclaration* decl = class_body -> NestedInterface(i);
+        ProcessNestedTypeName(containing_type, decl);
+    }
+    for (i = 0; i < class_body -> NumNestedAnnotations(); i++)
+    {
+        AstAnnotationDeclaration* decl = class_body -> NestedAnnotation(i);
+        ProcessNestedTypeName(containing_type, decl);
     }
     for (i = 0; i < class_body -> NumEmptyDeclarations(); i++)
     {
@@ -319,7 +327,7 @@ void Semantic::CheckNestedMembers(TypeSymbol* containing_type,
 // an error for any other accessible types.
 //
 inline TypeSymbol* Semantic::FindTypeInShadow(TypeShadowSymbol* type_shadow_symbol,
-                                              LexStream::TokenIndex identifier_token)
+                                              TokenIndex identifier_token)
 {
     TypeSymbol* type = type_shadow_symbol -> type_symbol;
     unsigned i = 0;
@@ -350,7 +358,7 @@ inline TypeSymbol* Semantic::FindTypeInShadow(TypeShadowSymbol* type_shadow_symb
 
 
 void Semantic::CheckNestedTypeDuplication(SemanticEnvironment* env,
-                                          LexStream::TokenIndex identifier_token)
+                                          TokenIndex identifier_token)
 {
     NameSymbol* name_symbol = lex_stream -> NameSymbol(identifier_token);
 
@@ -465,7 +473,7 @@ TypeSymbol* Semantic::ProcessNestedTypeName(TypeSymbol* containing_type,
             outermost_type -> non_local = new SymbolSet;
         outermost_type -> non_local -> AddElement(inner_type);
     }
-    
+
     //
     // Warn against unconventional names.
     //
@@ -474,7 +482,7 @@ TypeSymbol* Semantic::ProcessNestedTypeName(TypeSymbol* containing_type,
         ReportSemError(SemanticError::UNCONVENTIONAL_CLASS_NAME,
                        class_body -> identifier_token, name_symbol -> Name());
     }
-    
+
     declaration -> class_body -> semantic_environment =
         inner_type -> semantic_environment;
     CheckNestedMembers(inner_type, class_body);
@@ -491,6 +499,15 @@ void Semantic::ProcessImports()
     {
         AstImportDeclaration* import_declaration =
             compilation_unit -> ImportDeclaration(i);
+        if (import_declaration -> static_token_opt)
+        {
+            // TODO: Add static import support for 1.5.
+            //      if (control.option.source < JikesOption::SDK1_5)
+            {
+                ReportSemError(SemanticError::STATIC_IMPORT_UNSUPPORTED,
+                               import_declaration -> static_token_opt);
+            }
+        }
         if (import_declaration -> star_token_opt)
             ProcessTypeImportOnDemandDeclaration(import_declaration);
         else ProcessSingleTypeImportDeclaration(import_declaration);
@@ -512,39 +529,52 @@ void Semantic::ProcessTypeHeader(AstClassDeclaration* declaration)
         return;
 
     //
-    // Special case java.lang.Object, the only class with no supertype.
+    // Special case certain classes in java.lang.  We can't use the
+    // control.Classname() accessor method here, because that causes problems
+    // with recursion or non-existant classes.
     //
-    if (type -> Identity() == control.object_name_symbol &&
-        this_package == control.system_package && ! type -> IsNested())
+    if (this_package == control.LangPackage() && ! type -> IsNested())
     {
-        if (declaration -> super_opt || declaration -> NumInterfaces())
+        // java.lang.Object is the only class with no supertype.
+        if (type -> Identity() == control.Object_name_symbol)
         {
-            ReportSemError(SemanticError::OBJECT_WITH_SUPER_TYPE,
-                           declaration -> LeftToken(),
-                           declaration -> class_body -> left_brace_token - 1);
+            if (declaration -> super_opt || declaration -> NumInterfaces())
+            {
+                ReportSemError(SemanticError::OBJECT_WITH_SUPER_TYPE,
+                               declaration -> LeftToken(),
+                               declaration -> class_body -> left_brace_token - 1);
+            }
+            if (declaration -> type_parameters_opt)
+            {
+                ReportSemError(SemanticError::TYPE_MAY_NOT_HAVE_PARAMETERS,
+                               declaration -> LeftToken(),
+                               declaration -> class_body -> left_brace_token - 1,
+                               type -> ContainingPackageName(),
+                               type -> ExternalName());
+            }
+            type -> MarkHeaderProcessed();
+            return;
         }
-        type -> MarkHeaderProcessed();
-        return;
+        //
+        // java.lang.Enum didn't exist before 1.5.
+        //
+        else if (type -> Identity() == control.Enum_name_symbol)
+            type -> MarkEnum();
     }
 
+    if (declaration -> type_parameters_opt)
+        ProcessTypeParameters(type, declaration -> type_parameters_opt);
+
+    //
+    // Process the supertypes.
+    //
     if (declaration -> super_opt)
     {
         ProcessType(declaration -> super_opt);
         TypeSymbol* super_type = declaration -> super_opt -> symbol;
         assert(! super_type -> SourcePending());
         if (! super_type -> HeaderProcessed())
-        {
-            AstClassDeclaration* class_decl = super_type ->
-                declaration -> owner -> ClassDeclarationCast();
-            AstInterfaceDeclaration* interface_decl = super_type ->
-                declaration -> owner -> InterfaceDeclarationCast();
-            Semantic* sem = super_type -> semantic_environment -> sem;
-            if (class_decl)
-                sem -> ProcessTypeHeaders(class_decl);
-            else if (interface_decl)
-                sem -> ProcessTypeHeaders(interface_decl);
-            else assert(false && "supertype not processed");
-        }
+            super_type -> ProcessTypeHeaders();
         if (control.option.deprecation && state_stack.Size() == 0 &&
             super_type -> IsDeprecated() && ! type -> IsDeprecated())
         {
@@ -553,7 +583,14 @@ void Semantic::ProcessTypeHeader(AstClassDeclaration* declaration)
                            super_type -> ContainingPackageName(),
                            super_type -> ExternalName());
         }
-        if (super_type -> ACC_INTERFACE())
+        if (super_type -> IsEnum())
+        {
+            ReportSemError(SemanticError::SUPER_IS_ENUM,
+                           declaration -> super_opt,
+                           super_type -> ContainingPackageName(),
+                           super_type -> ExternalName());
+        }
+        else if (super_type -> ACC_INTERFACE())
         {
             ReportSemError(SemanticError::NOT_A_CLASS,
                            declaration -> super_opt,
@@ -593,7 +630,7 @@ void Semantic::ProcessTypeHeader(AstClassDeclaration* declaration)
     AddDependence(type, type -> super);
 
     for (unsigned i = 0; i < declaration -> NumInterfaces(); i++)
-        ProcessInterface(type, declaration -> Interface(i));
+        ProcessSuperinterface(type, declaration -> Interface(i));
 
     // if there is a cycle, break it and issue an error message
     if (type -> supertypes_closure -> IsElement(type))
@@ -607,6 +644,47 @@ void Semantic::ProcessTypeHeader(AstClassDeclaration* declaration)
                        type -> ContainingPackageName(),
                        type -> ExternalName());
     }
+    else if (declaration -> type_parameters_opt &&
+             type -> IsSubclass(control.Throwable()))
+    {
+        ReportSemError(SemanticError::TYPE_MAY_NOT_HAVE_PARAMETERS,
+                       declaration -> LeftToken(),
+                       declaration -> class_body -> left_brace_token - 1,
+                       type -> ContainingPackageName(),
+                       type -> ExternalName());
+    }
+}
+
+
+void Semantic::ProcessTypeHeader(AstEnumDeclaration* declaration)
+{
+    TypeSymbol* type =
+        declaration -> class_body -> semantic_environment -> Type();
+    assert(! type -> HeaderProcessed() || type -> Bad());
+    type -> MarkHeaderProcessed();
+    // TODO: Add enum support for 1.5.
+//      if (control.option.source < JikesOption::SDK1_5)
+    {
+        ReportSemError(SemanticError::ENUM_TYPE_UNSUPPORTED,
+                       declaration -> enum_token);
+        type -> super = control.Object();
+        type -> MarkBad();
+    }
+    if (type -> Bad())
+        return;
+
+    //
+    // Process the supertypes.
+    //
+    type -> super = control.Enum();
+    type -> supertypes_closure -> AddElement(control.Enum());
+    type -> MarkEnum(); // Since ACC_ENUM is only for enum constants.
+    control.Enum() -> subtypes -> AddElement(type);
+    AddDependence(type, type -> super);
+    for (unsigned i = 0; i < declaration -> NumInterfaces(); i++)
+        ProcessSuperinterface(type, declaration -> Interface(i));
+    // there will not be a cycle
+    assert(! type -> supertypes_closure -> IsElement(type));
 }
 
 
@@ -616,6 +694,8 @@ void Semantic::ProcessTypeHeader(AstInterfaceDeclaration* declaration)
         declaration -> class_body -> semantic_environment -> Type();
     assert(! type -> HeaderProcessed() || type -> Bad());
     type -> MarkHeaderProcessed();
+    if (declaration -> type_parameters_opt)
+        ProcessTypeParameters(type, declaration -> type_parameters_opt);
 
     //
     // Although interfaces do not have a superclass in source code, in
@@ -624,7 +704,7 @@ void Semantic::ProcessTypeHeader(AstInterfaceDeclaration* declaration)
     type -> super = control.Object();
     AddDependence(type, control.Object());
     for (unsigned k = 0; k < declaration -> NumInterfaces(); k++)
-        ProcessInterface(type, declaration -> Interface(k));
+        ProcessSuperinterface(type, declaration -> Interface(k));
 
     if (type -> supertypes_closure -> IsElement(type))
     {
@@ -642,26 +722,38 @@ void Semantic::ProcessTypeHeader(AstInterfaceDeclaration* declaration)
 }
 
 
-void Semantic::ProcessInterface(TypeSymbol* base_type, AstTypeName* name)
+void Semantic::ProcessTypeHeader(AstAnnotationDeclaration* declaration)
+{
+    TypeSymbol* type =
+        declaration -> class_body -> semantic_environment -> Type();
+    assert(! type -> HeaderProcessed() || type -> Bad());
+    type -> MarkHeaderProcessed();
+    // TODO: Add annotation support for 1.5.
+//      if (control.option.source < JikesOption::SDK1_5)
+    {
+        ReportSemError(SemanticError::ANNOTATION_TYPE_UNSUPPORTED,
+                       declaration -> interface_token - 1,
+                       declaration -> interface_token);
+        type -> MarkBad();
+    }
+    //
+    // All annotations are treated as subclasses of Object and Annotation.
+    //
+    type -> super = control.Object();
+    AddDependence(type, control.Object());
+    type -> AddInterface(control.Annotation());
+    AddDependence(type, control.Annotation());
+}
+
+
+void Semantic::ProcessSuperinterface(TypeSymbol* base_type, AstTypeName* name)
 {
     ProcessType(name);
     TypeSymbol* interf = name -> symbol;
 
     assert(! interf -> SourcePending());
     if (! interf -> HeaderProcessed())
-    {
-        AstClassDeclaration* class_decl =
-            interf -> declaration -> owner -> ClassDeclarationCast();
-        AstInterfaceDeclaration* interface_decl =
-            interf -> declaration -> owner -> InterfaceDeclarationCast();
-        Semantic* sem = interf -> semantic_environment -> sem;
-        if (class_decl)
-            sem -> ProcessTypeHeaders(class_decl);
-        else if (interface_decl)
-            sem -> ProcessTypeHeaders(interface_decl);
-        else assert(false && "supertype not processed");
-    }
-
+        interf -> ProcessTypeHeaders();
     if (control.option.deprecation && state_stack.Size() == 0 &&
         interf -> IsDeprecated() && ! base_type -> IsDeprecated())
     {
@@ -710,89 +802,72 @@ void Semantic::ProcessInterface(TypeSymbol* base_type, AstTypeName* name)
 }
 
 
-void Semantic::ProcessTypeHeaders(AstClassDeclaration* class_declaration)
+//
+// Processes the type parameters of a class or interface.
+//
+void Semantic::ProcessTypeParameters(TypeSymbol* /*type*/,
+                                     AstTypeParameters* parameters)
 {
-    TypeSymbol* type =
-        class_declaration -> class_body -> semantic_environment -> Type();
-
-    if (type -> HeaderProcessed())
-        return; // Possible if a subclass was declared in the same file.
-    ProcessTypeHeader(class_declaration);
-    state_stack.Push(class_declaration -> class_body -> semantic_environment);
-    AstClassBody* class_body = class_declaration -> class_body;
-    for (unsigned i = 0; i < class_body -> NumNestedClasses(); i++)
-    {
-        AstClassDeclaration* nested_class = class_body -> NestedClass(i);
-        ProcessTypeHeaders(nested_class);
-        type -> AddNestedType(nested_class -> class_body ->
-                              semantic_environment -> Type());
-    }
-    for (unsigned j = 0; j < class_body -> NumNestedInterfaces(); j++)
-    {
-        AstInterfaceDeclaration* nested_interface =
-            class_body -> NestedInterface(j);
-        ProcessTypeHeaders(nested_interface);
-        type -> AddNestedType(nested_interface -> class_body ->
-                              semantic_environment -> Type());
-    }
-    state_stack.Pop();
+    // TODO: Add generics support for 1.5.
+    ReportSemError(SemanticError::TYPE_PARAMETERS_UNSUPPORTED, parameters);
 }
 
 
-void Semantic::ProcessTypeHeaders(AstInterfaceDeclaration* interface_declaration)
+//
+// Process the type headers of the owner of body.  Anonymous types have no
+// owner, so anon_type must be non-null only in that case.
+//
+TypeSymbol* Semantic::ProcessTypeHeaders(AstClassBody* body,
+                                         TypeSymbol* anon_type)
 {
-    TypeSymbol* type =
-        interface_declaration -> class_body -> semantic_environment -> Type();
-
+    assert(! body -> owner ^ ! anon_type);
+    SemanticEnvironment* sem = anon_type ? anon_type -> semantic_environment
+        : body -> semantic_environment;
+    TypeSymbol* type = anon_type ? anon_type : sem -> Type();
     if (type -> HeaderProcessed())
-        return; // Possible if a subclass was declared in the same file.
-    ProcessTypeHeader(interface_declaration);
-    state_stack.Push(interface_declaration -> class_body ->
-                     semantic_environment);
-    AstClassBody* class_body = interface_declaration -> class_body;
-    for (unsigned i = 0; i < class_body -> NumNestedClasses(); i++)
+        return type; // Possible if a subclass was declared in the same file.
+    if (anon_type)
+        anon_type -> MarkHeaderProcessed();
+    else if (body -> owner -> ClassDeclarationCast())
+        ProcessTypeHeader((AstClassDeclaration*) body -> owner);
+    else if (body -> owner -> EnumDeclarationCast())
+        ProcessTypeHeader((AstEnumDeclaration*) body -> owner);
+    else if (body -> owner -> InterfaceDeclarationCast())
+        ProcessTypeHeader((AstInterfaceDeclaration*) body -> owner);
+    else
     {
-        AstClassDeclaration* nested_class = class_body -> NestedClass(i);
-        ProcessTypeHeaders(nested_class);
-        type -> AddNestedType(nested_class -> class_body ->
-                              semantic_environment -> Type());
+        assert(body -> owner -> AnnotationDeclarationCast());
+        ProcessTypeHeader((AstAnnotationDeclaration*) body -> owner);
     }
-    for (unsigned j = 0; j < class_body -> NumNestedInterfaces(); j++)
-    {
-        AstInterfaceDeclaration* nested_interface =
-            class_body -> NestedInterface(j);
-        ProcessTypeHeaders(nested_interface);
-        type -> AddNestedType(nested_interface -> class_body ->
-                              semantic_environment -> Type());
-    }
-    state_stack.Pop();
-}
-
-
-void Semantic::ProcessTypeHeaders(TypeSymbol* anon_type, AstClassBody* body)
-{
-    anon_type -> MarkHeaderProcessed();
-    state_stack.Push(anon_type -> semantic_environment);
-    for (unsigned i = 0; i < body -> NumNestedClasses(); i++)
+    state_stack.Push(sem);
+    unsigned i;
+    for (i = 0; i < body -> NumNestedClasses(); i++)
     {
         AstClassDeclaration* nested_class = body -> NestedClass(i);
-        ProcessTypeHeaders(nested_class);
-        anon_type -> AddNestedType(nested_class -> class_body ->
-                                   semantic_environment -> Type());
+        type -> AddNestedType(ProcessTypeHeaders(nested_class -> class_body));
     }
-    for (unsigned j = 0; j < body -> NumNestedInterfaces(); j++)
+    for (i = 0; i < body -> NumNestedEnums(); i++)
     {
-        AstInterfaceDeclaration* nested_interface = body -> NestedInterface(j);
-        ProcessTypeHeaders(nested_interface);
-        anon_type -> AddNestedType(nested_interface -> class_body ->
-                                   semantic_environment -> Type());
+        AstEnumDeclaration* nested_enum = body -> NestedEnum(i);
+        type -> AddNestedType(ProcessTypeHeaders(nested_enum -> class_body));
+    }
+    for (i = 0; i < body -> NumNestedInterfaces(); i++)
+    {
+        AstInterfaceDeclaration* nested = body -> NestedInterface(i);
+        type -> AddNestedType(ProcessTypeHeaders(nested -> class_body));
+    }
+    for (i = 0; i < body -> NumNestedAnnotations(); i++)
+    {
+        AstAnnotationDeclaration* nested = body -> NestedAnnotation(i);
+        type -> AddNestedType(ProcessTypeHeaders(nested -> class_body));
     }
     state_stack.Pop();
+    return type;
 }
 
 
-void Semantic::ReportTypeInaccessible(LexStream::TokenIndex left_tok,
-                                      LexStream::TokenIndex right_tok,
+void Semantic::ReportTypeInaccessible(TokenIndex left_tok,
+                                      TokenIndex right_tok,
                                       TypeSymbol* type)
 {
     ReportSemError(SemanticError::TYPE_NOT_ACCESSIBLE, left_tok, right_tok,
@@ -807,7 +882,7 @@ void Semantic::ReportTypeInaccessible(LexStream::TokenIndex left_tok,
 // caller is responsible for searching for inaccessible member types.
 //
 TypeSymbol* Semantic::FindNestedType(TypeSymbol* type,
-                                     LexStream::TokenIndex identifier_token)
+                                     TokenIndex identifier_token)
 {
     if (type == control.null_type || type -> Bad() || type -> Primitive())
     {
@@ -917,7 +992,7 @@ void Semantic::ProcessClassBodyForEffectiveJavaChecks(AstClassBody* class_body)
 {
     TypeSymbol* this_type = ThisType();
     assert(this_type -> HeaderProcessed());
-    
+
     //
     // Find out about this class' constructors:
     // Does it have any non-default constructors?
@@ -937,14 +1012,14 @@ void Semantic::ProcessClassBodyForEffectiveJavaChecks(AstClassBody* class_body)
         {
             has_private_constructor = true;
         }
-            
+
         if (class_body -> default_constructor == NULL ||
             constructor != class_body -> default_constructor -> constructor_symbol)
         {
             has_non_default_constructor = true;
         }
     }
-    
+
     //
     // Find out about equals and hashCode, and count how many instance methods
     // we have (the NumMethods member function returns the sum of both the
@@ -954,7 +1029,7 @@ void Semantic::ProcessClassBodyForEffectiveJavaChecks(AstClassBody* class_body)
     AstMethodDeclaration* equals_method = NULL;
     AstMethodDeclaration* hashCode_method = NULL;
     int instance_method_count = 0;
-    
+
     for (unsigned i = 0; i < class_body -> NumMethods(); ++i)
     {
         AstMethodDeclaration* method_declaration = class_body -> Method(i);
@@ -979,7 +1054,7 @@ void Semantic::ProcessClassBodyForEffectiveJavaChecks(AstClassBody* class_body)
                 has_correct_equals_method = (method -> FormalParameter(0) ->
                                              Type() == control.Object());
             }
-            
+
             //
             // Is it "int hashCode()"?
             //
@@ -991,7 +1066,7 @@ void Semantic::ProcessClassBodyForEffectiveJavaChecks(AstClassBody* class_body)
             }
         }
     }
-    
+
     //
     // Warn about problems with equals and hashCode.
     //
@@ -1013,7 +1088,7 @@ void Semantic::ProcessClassBodyForEffectiveJavaChecks(AstClassBody* class_body)
                        hashCode_method -> method_declarator -> identifier_token,
                        this_type -> Name());
     }
-    
+
     //
     // Warn against utility classes that don't have a private constructor.
     // Empty classes don't count. They're not very useful, but they do
@@ -1038,7 +1113,7 @@ void Semantic::ProcessClassBodyForEffectiveJavaChecks(AstClassBody* class_body)
                        class_body -> identifier_token,
                        this_type -> Name());
     }
-    
+
     //
     // Warn against interfaces that don't define any behavior.
     //
@@ -1059,6 +1134,49 @@ void Semantic::ProcessClassBodyForEffectiveJavaChecks(AstClassBody* class_body)
                            class_body -> identifier_token,
                            this_type -> Name());
         }
+    }
+
+    CheckForSerializationMistakes(class_body);
+}
+
+
+void Semantic::CheckForSerializationMistakes(AstClassBody* class_body)
+{
+    TypeSymbol* this_type = ThisType();
+
+    if (! this_type -> Implements(control.Serializable()))
+        return;
+
+    if (this_type -> IsInner())
+    {
+        // FIXME: If the class implements the readObject and writeObject
+        // methods, it should be okay. But would anyone really do that?
+        ReportSemError(SemanticError::EJ_SERIALIZABLE_INNER_CLASS,
+                       class_body -> identifier_token);
+    }
+
+    //
+    // Warn against Serializable classes without an explicit serialVersionUID.
+    //
+    bool found_serialVersionUID = false;
+    for (unsigned i = 0; i < class_body -> NumClassVariables(); ++i)
+    {
+        AstFieldDeclaration* fd = class_body -> ClassVariable(i);
+        for (unsigned j = 0; j < fd -> NumVariableDeclarators(); ++j)
+        {
+            AstVariableDeclarator* vd = fd -> VariableDeclarator(j);
+            NameSymbol* name_symbol = lex_stream -> NameSymbol(vd ->
+                variable_declarator_name -> identifier_token);
+            if (name_symbol == control.serialVersionUID_name_symbol)
+            {
+                found_serialVersionUID = true;
+            }
+        }
+    }
+    if (! found_serialVersionUID)
+    {
+        ReportSemError(SemanticError::MISSING_SERIAL_VERSION_UID,
+                       class_body -> identifier_token);
     }
 }
 
@@ -1110,7 +1228,7 @@ void Semantic::CompleteSymbolTable(AstClassBody* class_body)
 
     state_stack.Push(class_body -> semantic_environment);
     TypeSymbol* this_type = ThisType();
-    LexStream::TokenIndex identifier = class_body -> identifier_token;
+    TokenIndex identifier = class_body -> identifier_token;
 
     assert(this_type -> ConstructorMembersProcessed());
     assert(this_type -> MethodMembersProcessed());
@@ -1347,10 +1465,8 @@ void Semantic::CleanUpType(TypeSymbol* type)
 }
 
 
-TypeSymbol* Semantic::ReadType(FileSymbol* file_symbol,
-                               PackageSymbol* package,
-                               NameSymbol* name_symbol,
-                               LexStream::TokenIndex tok)
+TypeSymbol* Semantic::ReadType(FileSymbol* file_symbol, PackageSymbol* package,
+                               NameSymbol* name_symbol, TokenIndex tok)
 {
     TypeSymbol* type;
 
@@ -1380,6 +1496,11 @@ TypeSymbol* Semantic::ReadType(FileSymbol* file_symbol,
             ReportSemError(SemanticError::TYPE_NOT_FOUND, tok,
                            type -> ContainingPackageName(),
                            type -> ExternalName());
+        }
+        else if (file_symbol -> semantic -> NumErrors())
+        {
+            ReportSemError(SemanticError::INVALID_TYPE_FOUND, tok,
+                           name_symbol -> Name());
         }
     }
     else if (file_symbol)
@@ -1432,13 +1553,12 @@ TypeSymbol* Semantic::ReadType(FileSymbol* file_symbol,
                            type -> ExternalName());
         }
     }
-
     return type;
 }
 
 
 TypeSymbol* Semantic::GetBadNestedType(TypeSymbol* type,
-                                       LexStream::TokenIndex identifier_token)
+                                       TokenIndex identifier_token)
 {
     NameSymbol* name_symbol = lex_stream -> NameSymbol(identifier_token);
 
@@ -1570,7 +1690,7 @@ void Semantic::ProcessImportQualifiedName(AstName* name)
         // import statement. Class names in import statements must be the
         // canonical version.
         //
-        TypeSymbol* type = FindSimpleNameType(control.unnamed_package,
+        TypeSymbol* type = FindSimpleNameType(control.UnnamedPackage(),
                                               name -> identifier_token);
 
         //
@@ -1762,7 +1882,7 @@ void Semantic::ProcessTypeImportOnDemandDeclaration(AstImportDeclaration* import
 
 
 TypeSymbol* Semantic::FindSimpleNameType(PackageSymbol* package,
-                                         LexStream::TokenIndex identifier_token)
+                                         TokenIndex identifier_token)
 {
     NameSymbol* name_symbol = lex_stream -> NameSymbol(identifier_token);
     TypeSymbol* type = package -> FindTypeSymbol(name_symbol);
@@ -1847,7 +1967,7 @@ void Semantic::ProcessSingleTypeImportDeclaration(AstImportDeclaration* import_d
         AstName* name = import_declaration -> name;
         package = name -> base_opt
             ? name -> base_opt -> symbol -> PackageCast()
-            : control.unnamed_package;
+            : control.UnnamedPackage();
 
         //
         // It's ok to import a type that is being compiled...
@@ -1905,17 +2025,6 @@ void Semantic::ProcessSingleTypeImportDeclaration(AstImportDeclaration* import_d
                        type -> ContainingPackageName(),
                        type -> ExternalName());
     }
-}
-
-
-//
-// Helper method for Semantic::ProcessFieldDeclaration.
-//
-bool Semantic::FieldDeclarationIsNotSerialVersionUID(NameSymbol* name_symbol,
-                                                     TypeSymbol* field_type)
-{
-    return (name_symbol != control.serialVersionUID_name_symbol ||
-            field_type != control.long_type);
 }
 
 
@@ -1985,6 +2094,12 @@ void Semantic::ProcessFieldDeclaration(AstFieldDeclaration* field_declaration)
         }
         else
         {
+            if (name_symbol != control.serialVersionUID_name_symbol)
+            {
+                WarnOfAccessibleFieldWithName(SemanticError::HIDDEN_FIELD,
+                                              name, name_symbol);
+            }
+
             VariableSymbol* variable =
                 this_type -> InsertVariableSymbol(name_symbol);
             unsigned dims =
@@ -2007,40 +2122,89 @@ void Semantic::ProcessFieldDeclaration(AstFieldDeclaration* field_declaration)
             if (deprecated_declarations)
                 variable -> MarkDeprecated();
         }
-        
+
+        CheckFieldDeclaration(field_declaration, name, access_flags);
+    }
+}
+
+
+void Semantic::CheckFieldDeclaration(AstFieldDeclaration* field_declaration,
+                                     AstVariableDeclaratorId* name,
+                                     const AccessFlags& access_flags)
+{
+    TypeSymbol* field_type = field_declaration -> type -> symbol;
+    NameSymbol* name_symbol = lex_stream ->
+        NameSymbol(name -> identifier_token);
+
+    //
+    // Warn against public static final array fields.
+    //
+    bool is_constant_field = (access_flags.ACC_FINAL() &&
+                              access_flags.ACC_STATIC());
+    if (access_flags.ACC_PUBLIC() &&
+        is_constant_field &&
+        field_type -> IsArray())
+    {
+        // FIXME: shouldn't warn if it's a zero-length array.
+        ReportSemError(SemanticError::EJ_PUBLIC_STATIC_FINAL_ARRAY_FIELD,
+                       name, name_symbol -> Name());
+    }
+
+    if (name_symbol == control.serialVersionUID_name_symbol)
+    {
         //
-        // Warn against public static final array fields.
+        // Warn about serialVersionUID mistakes.
         //
-        bool is_constant_field = (access_flags.ACC_FINAL() &&
-                                  access_flags.ACC_STATIC());
-        if (access_flags.ACC_PUBLIC() &&
-            is_constant_field &&
-            field_type -> IsArray())
+        TypeSymbol* this_type = ThisType();
+        bool is_serializable = this_type -> Implements(control.Serializable());
+        if (! is_serializable)
         {
-            // FIXME: shouldn't warn if it's a zero-length array.
-            ReportSemError(SemanticError::EJ_PUBLIC_STATIC_FINAL_ARRAY_FIELD,
-                           name -> identifier_token,
-                           name_symbol -> Name());
+            ReportSemError(SemanticError::UNNEEDED_SERIAL_VERSION_UID,
+                           name);
         }
-        
-        //
-        // Warn against unconventional names. We need to ignore fields called
-        // serialVersionUID, because that name is used in versioned classes
-        // for a static final long field.
-        //
-        if (is_constant_field &&
-            name_symbol -> IsBadStyleForConstantField() &&
-            FieldDeclarationIsNotSerialVersionUID(name_symbol, field_type))
+        else if (field_type != control.long_type ||
+                 is_constant_field == false ||
+                 access_flags.ACC_PUBLIC() ||
+                 access_flags.ACC_PROTECTED())
         {
-            ReportSemError(SemanticError::UNCONVENTIONAL_CONSTANT_FIELD_NAME,
-                           name -> identifier_token, name_symbol -> Name());
+            ReportSemError(SemanticError::BAD_SERIAL_VERSION_UID,
+                           field_declaration);
         }
-        else if (! is_constant_field &&
-                 name_symbol -> IsBadStyleForField())
-        {
-            ReportSemError(SemanticError::UNCONVENTIONAL_FIELD_NAME,
-                           name -> identifier_token, name_symbol -> Name());
-        }
+    }
+    else if (name_symbol == control.serialPersistentFields_name_symbol)
+    {
+        //
+        // FIXME: Warn about serialPersistentFields mistakes; has anyone
+        // ever seen this used in the wild?
+        //
+    }
+    else
+    {
+        //
+        // Warn against unconventional field names. This doesn't apply to
+        // the serialization fields above, because their names are mandated
+        // names that break conventions, and aren't likely to be fixed.
+        //
+        CheckFieldName(name, name_symbol, is_constant_field);
+    }
+}
+
+
+void Semantic::CheckFieldName(AstVariableDeclaratorId* name,
+                              NameSymbol* name_symbol,
+                              bool is_constant_field)
+{
+    if (is_constant_field &&
+        name_symbol -> IsBadStyleForConstantField())
+    {
+        ReportSemError(SemanticError::UNCONVENTIONAL_CONSTANT_FIELD_NAME,
+                       name -> identifier_token, name_symbol -> Name());
+    }
+    else if (! is_constant_field &&
+             name_symbol -> IsBadStyleForField())
+    {
+        ReportSemError(SemanticError::UNCONVENTIONAL_FIELD_NAME,
+                       name -> identifier_token, name_symbol -> Name());
     }
 }
 
@@ -2051,6 +2215,12 @@ void Semantic::ProcessConstructorDeclaration(AstConstructorDeclaration* construc
 
     AccessFlags access_flags =
         ProcessConstructorModifiers(constructor_declaration);
+    if (constructor_declaration -> type_parameters_opt)
+    {
+        // TODO: Add generics support for 1.5.
+        ReportSemError(SemanticError::TYPE_PARAMETERS_UNSUPPORTED,
+                       constructor_declaration -> type_parameters_opt);
+    }
 
     AstMethodDeclarator* constructor_declarator =
         constructor_declaration -> constructor_declarator;
@@ -2132,13 +2302,13 @@ void Semantic::ProcessConstructorDeclaration(AstConstructorDeclaration* construc
     if (this_type -> EnclosingType())
     {
         VariableSymbol* this0_variable =
-            block_symbol -> InsertVariableSymbol(control.this0_name_symbol);
+            block_symbol -> InsertVariableSymbol(control.this_name_symbol);
         this0_variable -> SetType(this_type -> ContainingType());
         this0_variable -> SetOwner(constructor);
         this0_variable -> SetLocalVariableIndex(block_symbol ->
                                                 max_variable_index++);
         this0_variable -> MarkComplete();
-        this0_variable -> MarkSynthetic();
+        this0_variable -> SetACC_SYNTHETIC();
     }
 
     for (unsigned i = 0;
@@ -2154,9 +2324,9 @@ void Semantic::ProcessConstructorDeclaration(AstConstructorDeclaration* construc
         if (control.IsDoubleWordType(symbol -> Type()))
             block_symbol -> max_variable_index++;
         symbol -> declarator = formal_declarator;
+        symbol -> SetLocation();
         constructor -> AddFormalParameter(symbol);
     }
-
     constructor -> SetSignature(control);
 
     for (unsigned k = 0; k < constructor_declaration -> NumThrows(); k++)
@@ -2196,22 +2366,21 @@ void Semantic::AddDefaultConstructor(TypeSymbol* type)
     if (type -> EnclosingType())
     {
         VariableSymbol* this0_variable =
-            block_symbol -> InsertVariableSymbol(control.this0_name_symbol);
+            block_symbol -> InsertVariableSymbol(control.this_name_symbol);
         this0_variable -> SetType(type -> ContainingType());
         this0_variable -> SetOwner(constructor);
         this0_variable -> SetLocalVariableIndex(block_symbol ->
                                                 max_variable_index++);
         this0_variable -> MarkComplete();
-        this0_variable -> MarkSynthetic();
+        this0_variable -> SetACC_SYNTHETIC();
     }
-
     constructor -> SetSignature(control);
 
     AstClassBody* class_body = type -> declaration;
     if (class_body)
     {
-        LexStream::TokenIndex left_loc = class_body -> identifier_token;
-        LexStream::TokenIndex right_loc = class_body -> left_brace_token - 1;
+        TokenIndex left_loc = class_body -> identifier_token;
+        TokenIndex right_loc = class_body -> left_brace_token - 1;
 
         AstMethodDeclarator* method_declarator =
             compilation_unit -> ast_pool -> GenMethodDeclarator();
@@ -2287,8 +2456,8 @@ void Semantic::CheckMethodOverride(MethodSymbol* method,
         return;
     }
 
-    LexStream::TokenIndex left_tok;
-    LexStream::TokenIndex right_tok;
+    TokenIndex left_tok;
+    TokenIndex right_tok;
 
     if (method -> containing_type == base_type && ThisType() == base_type)
     {
@@ -2323,11 +2492,16 @@ void Semantic::CheckMethodOverride(MethodSymbol* method,
         // void->primitive, or void->Object). When loading from .java files,
         // however, we enforce exact return type matching.
         //
-        if (method -> containing_type -> file_symbol -> IsClass() &&
-            hidden_method -> Type() -> IsSubtype(control.Object()) &&
+        if (hidden_method -> Type() -> IsSubtype(control.Object()) &&
             method -> Type() -> IsSubtype(hidden_method -> Type()))
         {
             // Silent acceptance. TODO: Should we add a pedantic warning?
+            // This must work, because the 1.5 library (including
+            // System.out.println("")) is covariant, even for -source 1.4!
+//              if (control.option.source < JikesOption::SDK1_5)
+//                  ReportSemError(SemanticError::COVARIANCE_UNSUPPORTED,
+//                                 left_tok, right_tok, method -> Header(),
+//                                 hidden_method -> Header());
         }
         else if (method -> containing_type == base_type)
         {
@@ -2708,7 +2882,7 @@ void Semantic::AddInheritedFields(TypeSymbol* base_type,
         // the base_type.
         //
         else if (! variable -> ACC_PRIVATE() &&
-                 ! variable -> IsSynthetic() &&
+                 ! variable -> ACC_SYNTHETIC() &&
                  variable_shadow_symbol -> NumConflicts())
         {
             assert(variable -> owner != super_type);
@@ -2736,8 +2910,7 @@ void Semantic::AddInheritedFields(TypeSymbol* base_type,
 
 
 void Semantic::AddInheritedMethods(TypeSymbol* base_type,
-                                   TypeSymbol* super_type,
-                                   LexStream::TokenIndex tok)
+                                   TypeSymbol* super_type, TokenIndex tok)
 {
     if (super_type -> Bad())
     {
@@ -2767,7 +2940,7 @@ void Semantic::AddInheritedMethods(TypeSymbol* base_type,
         if ((base_type -> ACC_INTERFACE() &&
              super_type -> ACC_INTERFACE() &&
              method -> containing_type == control.Object()) ||
-            method -> IsSynthetic())
+            method -> ACC_SYNTHETIC())
         {
             continue;
         }
@@ -2781,13 +2954,12 @@ void Semantic::AddInheritedMethods(TypeSymbol* base_type,
             (! method -> ACC_PRIVATE() &&
              super_type -> ContainingPackage() == base_package))
         {
-            MethodShadowSymbol* shadow = base_expanded_table ->
-                FindOverloadMethodShadow(method, this, tok);
-
             //
             // Check that method is compatible with every method it
             // overrides.
             //
+            MethodShadowSymbol* shadow = base_expanded_table ->
+                FindOverloadMethodShadow(method, this, tok);
             if (shadow)
             {
                 CheckMethodOverride(shadow -> method_symbol, method,
@@ -2863,9 +3035,10 @@ void Semantic::AddInheritedMethods(TypeSymbol* base_type,
                 // override or hide the old. Warn the user about this fact,
                 // although it is usually not an error.
                 //
-                assert(shadow -> method_symbol -> containing_type == base_type);
-                LexStream::TokenIndex left_tok,
-                                      right_tok;
+                assert(shadow -> method_symbol -> containing_type ==
+                       base_type);
+                TokenIndex left_tok;
+                TokenIndex right_tok;
 
                 if (ThisType() == base_type)
                 {
@@ -2929,7 +3102,7 @@ void Semantic::AddInheritedMethods(TypeSymbol* base_type,
                 super_expanded_table -> symbol_pool[i];
             MethodSymbol* method = method_shadow_symbol -> method_symbol;
             if (! method -> ACC_PUBLIC() && ! method -> ACC_PROTECTED() &&
-                ! method -> ACC_PRIVATE() && ! method -> IsSynthetic() &&
+                ! method -> ACC_PRIVATE() && ! method -> ACC_SYNTHETIC() &&
                 method_shadow_symbol -> NumConflicts() == 0)
             {
                 // found a non-inherited package scope method
@@ -2947,21 +3120,10 @@ void Semantic::AddInheritedMethods(TypeSymbol* base_type,
 }
 
 
-void Semantic::ComputeTypesClosure(TypeSymbol* type, LexStream::TokenIndex tok)
+void Semantic::ComputeTypesClosure(TypeSymbol* type, TokenIndex tok)
 {
     if (! type -> HeaderProcessed())
-    {
-        AstClassDeclaration* class_decl =
-            type -> declaration -> owner -> ClassDeclarationCast();
-        AstInterfaceDeclaration* interface_decl =
-            type -> declaration -> owner -> InterfaceDeclarationCast();
-        Semantic* sem = type -> semantic_environment -> sem;
-        if (class_decl)
-            sem -> ProcessTypeHeaders(class_decl);
-        else if (interface_decl)
-            sem -> ProcessTypeHeaders(interface_decl);
-        else assert(false && "type not processed");
-    }
+        type -> ProcessTypeHeaders();
     type -> expanded_type_table = new ExpandedTypeTable();
 
     TypeSymbol* super_class = type -> super;
@@ -2996,8 +3158,7 @@ void Semantic::ComputeTypesClosure(TypeSymbol* type, LexStream::TokenIndex tok)
 }
 
 
-void Semantic::ComputeFieldsClosure(TypeSymbol* type,
-                                    LexStream::TokenIndex tok)
+void Semantic::ComputeFieldsClosure(TypeSymbol* type, TokenIndex tok)
 {
     type -> expanded_field_table = new ExpandedFieldTable();
 
@@ -3036,8 +3197,7 @@ void Semantic::ComputeFieldsClosure(TypeSymbol* type,
 }
 
 
-void Semantic::ComputeMethodsClosure(TypeSymbol* type,
-                                     LexStream::TokenIndex tok)
+void Semantic::ComputeMethodsClosure(TypeSymbol* type, TokenIndex tok)
 {
     type -> expanded_method_table = new ExpandedMethodTable();
 
@@ -3077,7 +3237,7 @@ void Semantic::ComputeMethodsClosure(TypeSymbol* type,
     // interfaces and are necessarily abstract; but if the first method
     // is not abstract, it implements all the conflicts.
     //
-    if (super_class && (! type -> ACC_INTERFACE()))
+    if (super_class && ! type -> ACC_INTERFACE())
         AddInheritedMethods(type, super_class, tok);
     for (unsigned k = 0; k < type -> NumInterfaces(); k++)
         AddInheritedMethods(type, type -> Interface(k), tok);
@@ -3111,6 +3271,18 @@ void Semantic::ProcessFormalParameters(BlockSymbol* block,
         else symbol = block -> InsertVariableSymbol(name_symbol);
 
         unsigned dims = parm_type -> num_dimensions + name -> NumBrackets();
+        if (parameter -> ellipsis_token_opt)
+        {
+            assert(i == method_declarator -> NumFormalParameters() - 1);
+            dims++;
+            access_flags.SetACC_VARARGS();
+            // TODO: Add varargs support for 1.5.
+            //            if (control.option.source < JikesOption::SDK1_5)
+            {
+                ReportSemError(SemanticError::VARARGS_UNSUPPORTED,
+                               parameter -> ellipsis_token_opt);
+            }
+        }
         symbol -> SetType(parm_type -> GetArrayType(this, dims));
         symbol -> SetFlags(access_flags);
         symbol -> MarkComplete();
@@ -3137,6 +3309,12 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration* method_declaration
     if (this_type -> ACC_STRICTFP())
         access_flags.SetACC_STRICTFP();
 
+    if (method_declaration -> type_parameters_opt)
+    {
+        // TODO: Add generics support for 1.5.
+        ReportSemError(SemanticError::TYPE_PARAMETERS_UNSUPPORTED,
+                       method_declaration -> type_parameters_opt);
+    }
     //
     // A method enclosed in an inner type may not be declared static.
     //
@@ -3190,7 +3368,7 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration* method_declaration
                        method_declarator -> identifier_token,
                        name_symbol -> Name());
     }
-    
+
     //
     // Warn against unconventional names.
     //
@@ -3235,7 +3413,7 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration* method_declaration
     method -> SetContainingType(this_type);
     method -> SetBlockSymbol(block_symbol);
     method -> declaration = method_declaration;
-    method-> SetLocation();
+    method -> SetLocation();
     for (unsigned i = 0; i < method_declarator -> NumFormalParameters(); i++)
     {
         AstVariableDeclarator* formal_declarator =
@@ -3248,6 +3426,7 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration* method_declaration
         if (control.IsDoubleWordType(symbol -> Type()))
             block_symbol -> max_variable_index++;
         symbol -> declarator = formal_declarator;
+        symbol -> SetLocation();
         method -> AddFormalParameter(symbol);
     }
     method -> SetSignature(control);
@@ -3313,7 +3492,7 @@ TypeSymbol* Semantic::FindPrimitiveType(AstPrimitiveType* primitive_type)
 // accessible ones. It will issue an error if the only way an accessible type
 // was found is non-canonical. If no type is found, NULL is returned.
 //
-TypeSymbol* Semantic::ImportType(LexStream::TokenIndex identifier_token,
+TypeSymbol* Semantic::ImportType(TokenIndex identifier_token,
                                  NameSymbol* name_symbol)
 {
     //
@@ -3399,6 +3578,11 @@ TypeSymbol* Semantic::ImportType(LexStream::TokenIndex identifier_token,
                        type -> ContainingPackageName(),
                        type -> ExternalName());
     }
+
+    // Keep track of referenced types.
+    if (type && location)
+        referenced_package_imports.AddElement(location);
+
     return type;
 }
 
@@ -3409,7 +3593,7 @@ TypeSymbol* Semantic::ImportType(LexStream::TokenIndex identifier_token,
 // process. Note that inaccessible types are skipped - if the caller wishes
 // to use an inaccessible type, they must search for it.
 //
-TypeSymbol* Semantic::FindType(LexStream::TokenIndex identifier_token)
+TypeSymbol* Semantic::FindType(TokenIndex identifier_token)
 {
     TypeSymbol* type;
     NameSymbol* name_symbol = lex_stream -> NameSymbol(identifier_token);
@@ -3439,6 +3623,24 @@ TypeSymbol* Semantic::FindType(LexStream::TokenIndex identifier_token)
 
     if (env) // The type was found in some enclosing environment?
     {
+        //
+        // A static type cannot access a non-static member type of an enclosing
+        // class by simple name.
+        //
+        TypeSymbol* this_type = ThisType();
+        assert(this_type);
+        if (this_type -> ACC_STATIC() && ! type -> ACC_STATIC() &&
+            ! this_type -> IsSubclass(type -> ContainingType()))
+        {
+            ReportSemError(SemanticError::STATIC_TYPE_ACCESSING_MEMBER_TYPE,
+                           identifier_token,
+                           this_type -> ContainingPackageName(),
+                           this_type -> ExternalName(),
+                           type -> ContainingPackageName(),
+                           type -> ExternalName(),
+                           env -> Type() -> ContainingPackageName(),
+                           env -> Type() -> ExternalName());
+        }
         //
         // If the type was inherited, give a warning if it shadowed another
         // type of the same name within an enclosing lexical scope.
@@ -3518,7 +3720,11 @@ TypeSymbol* Semantic::FindType(LexStream::TokenIndex identifier_token)
     {
         type = single_type_imports[i];
         if (name_symbol == type -> Identity())
+        {
+            // Keep track of referenced types.
+            referenced_type_imports.AddElement(type);
             return type;
+        }
     }
 
     //
@@ -3564,6 +3770,36 @@ TypeSymbol* Semantic::FindType(LexStream::TokenIndex identifier_token)
 
 
 //
+// Returns an inaccessible type of the given name, or 0 if there is none.
+// No errors are reported by this method.
+//
+TypeSymbol* Semantic::FindInaccessibleType(AstName* name)
+{
+    assert(! name -> base_opt);
+    NameSymbol* name_symbol =
+        lex_stream -> NameSymbol(name -> identifier_token);
+
+    // Check for inaccessible member type.
+    if (state_stack.Size())
+    {
+        for (TypeSymbol* super_type = ThisType() -> super;
+             super_type; super_type = super_type -> super)
+        {
+            assert(super_type -> expanded_type_table);
+            TypeShadowSymbol* type_shadow_symbol = super_type ->
+                expanded_type_table -> FindTypeShadowSymbol(name_symbol);
+            if (type_shadow_symbol)
+            {
+                return type_shadow_symbol -> type_symbol;
+            }
+        }
+    }
+    // Check for an inaccessible import.
+    return ImportType(name -> identifier_token, name_symbol);
+}
+
+
+//
 // Finds a type by the given name, and add the dependence information. If one
 // exists, but is not accessible, it is returned after an error. After other
 // errors, control.no_type is returned.
@@ -3576,32 +3812,12 @@ TypeSymbol* Semantic::MustFindType(AstName* name)
     if (! name -> base_opt)
     {
         type = FindType(name -> identifier_token);
-
         //
         // If the type was not found, generate an appropriate error message.
         //
         if (! type)
         {
-            // Check for inaccessible member type.
-            if (state_stack.Size())
-            {
-                for (TypeSymbol* super_type = ThisType() -> super;
-                     super_type; super_type = super_type -> super)
-                {
-                    assert(super_type -> expanded_type_table);
-                    TypeShadowSymbol* type_shadow_symbol = super_type ->
-                        expanded_type_table -> FindTypeShadowSymbol(name_symbol);
-                    if (type_shadow_symbol)
-                    {
-                        type = type_shadow_symbol -> type_symbol;
-                        break;
-                    }
-                }
-            }
-            // Check for an inaccessible import.
-            if (! type)
-                type = ImportType(name -> identifier_token, name_symbol);
-            // Report the error.
+            type = FindInaccessibleType(name);
             if (type)
                 ReportTypeInaccessible(name, type);
             else
@@ -3657,7 +3873,13 @@ TypeSymbol* Semantic::MustFindType(AstName* name)
                            type -> ExternalName());
         }
     }
-    if (type -> IsSynthetic() && ! type -> Bad())
+    if (type -> Anonymous() && ! type -> Bad())
+    {
+        ReportSemError(SemanticError::UNNAMED_TYPE_ACCESS, name,
+                       type -> ContainingPackageName(),
+                       type -> ExternalName());
+    }
+    if (type -> ACC_SYNTHETIC() && ! type -> Bad())
     {
         ReportSemError(SemanticError::SYNTHETIC_TYPE_ACCESS, name,
                        type -> ContainingPackageName(),
@@ -3669,10 +3891,19 @@ TypeSymbol* Semantic::MustFindType(AstName* name)
 
 void Semantic::ProcessType(AstType* type_expr)
 {
+    if (type_expr -> symbol)
+        return; // already processed
     AstArrayType* array_type = type_expr -> ArrayTypeCast();
     AstType* actual_type = array_type ? array_type -> type : type_expr;
     AstTypeName* name = actual_type -> TypeNameCast();
     AstPrimitiveType* primitive_type = actual_type -> PrimitiveTypeCast();
+    AstWildcard* wildcard_type = actual_type -> WildcardCast();
+    if (wildcard_type)
+    {
+        ReportSemError(SemanticError::WILDCARD_UNSUPPORTED, type_expr);
+        type_expr -> symbol = control.no_type;
+        return;
+    }
     assert(name || primitive_type);
     //
     // Occaisionally, MustFindType finds a bad type (for example, if we
@@ -3683,12 +3914,28 @@ void Semantic::ProcessType(AstType* type_expr)
     TypeSymbol* type;
     if (primitive_type)
         type = FindPrimitiveType(primitive_type);
-    else type = MustFindType(name -> name);
+    else
+    {
+        if (name -> base_opt)
+        {
+            ProcessType(name -> base_opt);
+            type = MustFindNestedType(name -> base_opt -> symbol,
+                                      name -> name);
+        }
+        else type = MustFindType(name -> name);
+        if (name -> type_arguments_opt)
+        {
+            // TODO: Add generics support for 1.5.
+            ReportSemError(SemanticError::TYPE_ARGUMENTS_UNSUPPORTED,
+                           name -> type_arguments_opt,
+                           type -> ContainingPackageName(),
+                           type -> ExternalName());
+        }
+    }
     if (type -> Bad() && NumErrors() == error_count)
         ReportSemError(SemanticError::INVALID_TYPE_FOUND, actual_type,
                        lex_stream -> NameString(type_expr ->
                                                 IdentifierToken()));
-
     if (array_type)
         type = type -> GetArrayType(this, array_type -> NumBrackets());
     type_expr -> symbol = type;
@@ -3808,14 +4055,14 @@ inline void Semantic::ProcessInitializer(AstInitializerDeclaration* initializer,
 // assert statement is encountered (since assertions require an initialized
 // static variable to operate).
 //
-MethodSymbol* Semantic::GetStaticInitializerMethod(int estimate)
+MethodSymbol* Semantic::GetStaticInitializerMethod(unsigned estimate)
 {
     TypeSymbol* this_type = ThisType();
     if (this_type -> static_initializer_method)
         return this_type -> static_initializer_method;
 
     StoragePool* ast_pool = compilation_unit -> ast_pool;
-    LexStream::TokenIndex loc = this_type -> declaration -> identifier_token;
+    TokenIndex loc = this_type -> declaration -> identifier_token;
 
     // The symbol table associated with this block has no elements.
     BlockSymbol* block_symbol = new BlockSymbol(0);
@@ -3844,9 +4091,9 @@ MethodSymbol* Semantic::GetStaticInitializerMethod(int estimate)
 
     // The method symbol.
     init_method -> SetType(control.void_type);
-    init_method -> SetACC_PRIVATE();
-    init_method -> SetACC_FINAL();
-    init_method -> SetACC_STATIC();
+    init_method -> SetFlags(AccessFlags::ACCESS_PRIVATE |
+                            AccessFlags::ACCESS_FINAL |
+                            AccessFlags::ACCESS_STATIC);
     if (this_type -> ACC_STRICTFP())
         init_method -> SetACC_STRICTFP();
     init_method -> SetContainingType(this_type);
@@ -3881,23 +4128,29 @@ void Semantic::ProcessStaticInitializers(AstClassBody* class_body)
     assert(FinalFields());
 
     //
+    // Work out how many statements we'll need.
+    //
+    unsigned estimate = class_body -> NumStaticInitializers();
+    for (unsigned i = 0; i < class_body -> NumClassVariables(); ++i)
+    {
+        estimate += class_body -> ClassVariable(i) -> NumVariableDeclarators();
+    }
+    MethodSymbol* init_method = GetStaticInitializerMethod(estimate);
+
+    //
     // The static initializers and class variable initializers are executed
     // in textual order, with the exception that assignments may occur before
     // declaration. See JLS 8.5.
     //
     unsigned j = 0;
     unsigned k = 0;
-    unsigned estimate = class_body -> NumClassVariables() +
-        class_body -> NumStaticInitializers();
-    MethodSymbol* init_method = GetStaticInitializerMethod(estimate);
     while (j < class_body -> NumClassVariables() &&
            k < class_body -> NumStaticInitializers())
     {
         if (class_body -> ClassVariable(j) -> semicolon_token <
             class_body -> StaticInitializer(k) -> block -> right_brace_token)
         {
-            InitializeVariable(class_body -> ClassVariable(j++),
-                               init_method);
+            InitializeVariable(class_body -> ClassVariable(j++), init_method);
         }
         else
         {
@@ -3970,7 +4223,7 @@ void Semantic::ProcessInstanceInitializers(AstClassBody* class_body)
     TypeSymbol* this_type = ThisType();
     LocalBlockStack().max_size = 1;
     StoragePool* ast_pool = compilation_unit -> ast_pool;
-    LexStream::TokenIndex loc = this_type -> declaration -> identifier_token;
+    TokenIndex loc = this_type -> declaration -> identifier_token;
 
     // The symbol table associated with this block has one element, the
     // current instance 'this'.
@@ -3999,11 +4252,11 @@ void Semantic::ProcessInstanceInitializers(AstClassBody* class_body)
 
     // The method symbol.
     init_method -> SetType(control.void_type);
-    init_method -> SetACC_PRIVATE();
-    init_method -> SetACC_FINAL();
+    init_method -> SetFlags(AccessFlags::ACCESS_PRIVATE |
+                            AccessFlags::ACCESS_FINAL |
+                            AccessFlags::ACCESS_SYNTHETIC);
     if (this_type -> ACC_STRICTFP())
         init_method -> SetACC_STRICTFP();
-    init_method -> MarkSynthetic();
     init_method -> SetContainingType(this_type);
     init_method -> SetBlockSymbol(block_symbol);
     init_method -> SetSignature(control);
@@ -4029,15 +4282,23 @@ void Semantic::ProcessInstanceInitializers(AstClassBody* class_body)
     }
 
     //
-    // Initialization code is executed by every constructor, just after the
-    // superclass constructor is called, in textual order along with any
-    // instance variable initializations.
+    // Work out how many statements we'll need.
+    //
+    unsigned estimate = class_body -> NumInstanceInitializers();
+    for (unsigned i = 0; i < class_body -> NumInstanceVariables(); ++i)
+    {
+        estimate += class_body -> InstanceVariable(i) ->
+            NumVariableDeclarators();
+    }
+    block -> AllocateStatements(estimate);
+
+    //
+    // Initialization code is executed by every constructor that does not call
+    // this(), just after the superclass constructor is called, in textual
+    // order along with any instance variable initializations.
     //
     unsigned j = 0;
     unsigned k = 0;
-    unsigned estimate = class_body -> NumInstanceVariables() +
-        class_body -> NumInstanceInitializers();
-    block -> AllocateStatements(estimate);
     while (j < class_body -> NumInstanceVariables() &&
            k < class_body -> NumInstanceInitializers())
     {

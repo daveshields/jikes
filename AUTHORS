@@ -3,6 +3,7 @@ Originally written by Philippe Charles and David Shields of IBM Research.
 Subsequent contributors include, but are not limited to:
 Chris Abbey
 C. Scott Ananian
+Musachy Barroso
 Joe Berkovitz
 Eric Blake
 Norris Boyd
@@ -21,9 +22,12 @@ Andrew M. Inggs
 C. Brian Jones
 Marko Kreen
 David Lum
+Phil Norman
 Takashi Okamoto
+Emil Ong
 Andrew Pimlott
 Daniel Resare
+Mark Richters
 Kumaran Santhanam
 Gregory Steuck
 Brian Sullivan
@@ -31,5 +35,6 @@ Andrew G. Tereschenko
 Russ Trotter
 Andrew Vajoczki
 Jerry Veldhuis
+Dirk Weigenand
 Vadim Zaliva
 Henner Zeller

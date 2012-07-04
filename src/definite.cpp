@@ -1,4 +1,4 @@
-// $Id: definite.cpp,v 1.61 2004/01/22 13:07:14 ericb Exp $
+// $Id: definite.cpp,v 1.67 2004/03/26 13:58:22 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -115,7 +115,7 @@ DefiniteAssignmentSet* Semantic::DefiniteName(AstExpression* expression,
     //
     VariableSymbol* variable = name -> symbol
         ? name -> symbol -> VariableCast() : (VariableSymbol*) NULL;
-    if (variable && ! variable -> IsSynthetic() && ! name -> base_opt &&
+    if (variable && ! variable -> ACC_SYNTHETIC() && ! name -> base_opt &&
         (variable -> IsLocal(ThisMethod()) || variable -> IsFinal(ThisType())))
     {
         int index = variable -> LocalVariableIndex(this);
@@ -150,19 +150,20 @@ DefiniteAssignmentSet* Semantic::DefiniteMethodInvocation(AstExpression* express
                                                           DefinitePair& def_pair)
 {
     AstMethodInvocation* method_call = (AstMethodInvocation*) expression;
-    DefiniteExpression(method_call -> method, def_pair);
+    if (method_call -> base_opt)
+        DefiniteExpression(method_call -> base_opt, def_pair);
     for (unsigned i = 0; i < method_call -> arguments -> NumArguments(); i++)
         DefiniteExpression(method_call -> arguments -> Argument(i), def_pair);
     return NULL;
 }
 
 
-DefiniteAssignmentSet* Semantic::DefiniteClassInstanceCreationExpression(AstExpression* expression,
-                                                                         DefinitePair& def_pair)
+DefiniteAssignmentSet* Semantic::DefiniteClassCreationExpression(AstExpression* expression,
+                                                                 DefinitePair& def_pair)
 {
     unsigned i;
-    AstClassInstanceCreationExpression* class_creation =
-        (AstClassInstanceCreationExpression*) expression;
+    AstClassCreationExpression* class_creation =
+        (AstClassCreationExpression*) expression;
     if (class_creation -> resolution_opt)
         class_creation = class_creation -> resolution_opt;
     if (class_creation -> base_opt)
@@ -268,7 +269,7 @@ DefiniteAssignmentSet* Semantic::DefinitePLUSPLUSOrMINUSMINUS(AstExpression* exp
     {
         if ((variable -> IsLocal(ThisMethod()) ||
              variable -> IsFinal(ThisType())) &&
-            ! variable -> IsSynthetic() &&
+            ! variable -> ACC_SYNTHETIC() &&
             (*BlankFinals())[variable -> LocalVariableIndex(this)])
         {
             ReportSemError(SemanticError::VARIABLE_NOT_DEFINITELY_UNASSIGNED,
@@ -285,7 +286,7 @@ DefiniteAssignmentSet* Semantic::DefinitePLUSPLUSOrMINUSMINUS(AstExpression* exp
         }
 
         // Mark it assigned, to catch further errors.
-        if (variable -> IsFinal(ThisType()) && ! variable -> IsSynthetic())
+        if (variable -> IsFinal(ThisType()) && ! variable -> ACC_SYNTHETIC())
             def_pair.du_set.RemoveElement(variable -> LocalVariableIndex(this));
     }
     return NULL;
@@ -334,7 +335,7 @@ DefiniteAssignmentSet* Semantic::DefinitePreUnaryExpression(AstExpression* expre
 {
     AstPreUnaryExpression* prefix_expression =
         (AstPreUnaryExpression*) expression;
-    return (this ->* DefinitePreUnaryExpr[prefix_expression -> pre_unary_tag])
+    return (this ->* DefinitePreUnaryExpr[prefix_expression -> Tag()])
         (prefix_expression -> expression, def_pair);
 }
 
@@ -437,7 +438,7 @@ DefiniteAssignmentSet* Semantic::DefiniteBinaryExpression(AstExpression* express
 {
     AstBinaryExpression* binary_expression =
         (AstBinaryExpression*) expression;
-    return (this ->* DefiniteBinaryExpr[binary_expression -> binary_tag])
+    return (this ->* DefiniteBinaryExpr[binary_expression -> Tag()])
         (binary_expression, def_pair);
 }
 
@@ -757,7 +758,7 @@ inline void Semantic::DefiniteVariableInitializer(AstVariableDeclarator* variabl
     // TODO: Sun has never given any nice official word on this.
     //
     if (DefiniteBlocks() &&
-        DefiniteBlocks() -> TopBlock() -> block_tag == AstBlock::SWITCH &&
+        DefiniteBlocks() -> TopBlock() -> Tag() == AstBlock::SWITCH &&
         (! init || ! init -> IsConstant()))
     {
         BlankFinals() -> AddElement(variable_declarator -> symbol ->
@@ -837,10 +838,9 @@ void Semantic::DefiniteBlock(Ast* stmt)
 }
 
 
-void Semantic::DefiniteLocalClassDeclarationStatement(Ast* stmt)
+void Semantic::DefiniteLocalClassStatement(Ast* stmt)
 {
-    AstLocalClassDeclarationStatement* local_decl =
-        (AstLocalClassDeclarationStatement*) stmt;
+    AstLocalClassStatement* local_decl = (AstLocalClassStatement*) stmt;
     TypeSymbol* local_type = local_decl -> declaration -> class_body ->
         semantic_environment -> Type();
     assert(local_type -> LocalClassProcessingCompleted());
@@ -859,11 +859,9 @@ void Semantic::DefiniteLocalClassDeclarationStatement(Ast* stmt)
 }
 
 
-void Semantic::DefiniteLocalVariableDeclarationStatement(Ast* stmt)
+void Semantic::DefiniteLocalVariableStatement(Ast* stmt)
 {
-    AstLocalVariableDeclarationStatement* local_decl =
-        (AstLocalVariableDeclarationStatement*) stmt;
-
+    AstLocalVariableStatement* local_decl = (AstLocalVariableStatement*) stmt;
     for (unsigned i = 0; i < local_decl -> NumVariableDeclarators(); i++)
     {
         AstVariableDeclarator* variable_declarator =
@@ -1091,6 +1089,71 @@ void Semantic::DefiniteForStatement(Ast* stmt)
 }
 
 
+void Semantic::DefiniteForeachStatement(Ast* stmt)
+{
+    AstForeachStatement* for_statement = (AstForeachStatement*) stmt;
+
+    //
+    // Note that in constructing the Ast, the parser encloses each
+    // for-statement in its own block, so that the loop variable defined in
+    // the formal parameter has scope limited to the for loop. Thus, we do
+    // not need to worry about declaring or reclaiming variables in the
+    // for-init section in this method.
+    //
+    // For example, the following sequence of statements is legal:
+    //
+    //     for (int i : new int[0]);
+    //     for (int i : new int[0]);
+    //
+    AstVariableDeclarator* variable_declarator =
+        for_statement -> formal_parameter -> formal_declarator;
+    VariableSymbol* variable_symbol = variable_declarator -> symbol;
+    if (variable_symbol)
+    {
+        int index = variable_symbol -> LocalVariableIndex(this);
+        if (control.option.g & JikesOption::VARS)
+        {
+#ifdef DUMP
+            Coutput << "(3.6) Foreach Variable \"" << variable_symbol -> Name()
+                    << " #" << index << "\" is declared at line "
+                    << lex_stream -> Line(variable_declarator -> LeftToken())
+                    << endl;
+#endif // DUMP
+            DefiniteBlocks() -> TopBlock() ->
+                AddLocallyDefinedVariable(variable_symbol);
+        }
+        DefinitelyAssignedVariables() -> AssignElement(index);
+    }
+
+    DefiniteExpression(for_statement -> expression,
+                       *DefinitelyAssignedVariables());
+    BitSet starting_set(DefinitelyAssignedVariables() -> du_set);
+    DefinitePair before_statement(*DefinitelyAssignedVariables());
+    DefiniteFinalAssignments() -> Push();
+
+    //
+    // We have already given a warning if the statement is unreachable
+    //
+    if (for_statement -> statement -> is_reachable)
+        DefiniteBlock(for_statement -> statement);
+
+    //
+    // Compute the set of variables that are definitely assigned after the
+    // contained statement and after every continue statement that may exit
+    // the body of the for statement.
+    //
+    *DefinitelyAssignedVariables() *= DefiniteBlocks() -> TopContinuePair();
+    DefiniteLoopBody(starting_set);
+
+    //
+    // Compute the set of variables that are DA before every break statement
+    // that may exit the for statement.
+    //
+    *DefinitelyAssignedVariables() =
+        DefiniteBlocks() -> TopBreakPair() * before_statement;        
+}
+
+
 void Semantic::DefiniteDoStatement(Ast* stmt)
 {
     AstDoStatement* do_statement = (AstDoStatement*) stmt;
@@ -1134,7 +1197,9 @@ void Semantic::DefiniteSwitchStatement(Ast* stmt)
 
     //
     // Recall that the parser inserts an empty statement if necessary after
-    // the last label, so that all SwitchBlockStatementGroups have statements
+    // the last label, so that all SwitchBlockStatementGroups have statements.
+    // The standard does not allow us to optimize for a constant switch, or
+    // for enumerating all 256 byte cases with no default.
     //
     unsigned i;
     for (i = 0; i < block_body -> NumStatements(); i++)
@@ -1145,14 +1210,9 @@ void Semantic::DefiniteSwitchStatement(Ast* stmt)
         *DefinitelyAssignedVariables() *= starting_pair;
         DefiniteBlockStatements(switch_block_statement);
     }
-
-    //
-    // TODO: What if the switch enumerates all 256 byte cases without a
-    // default label?
-    //
-    if (switch_statement -> DefaultCase())
-        *DefinitelyAssignedVariables() *= DefiniteBlocks() -> TopBreakPair();
-    else *DefinitelyAssignedVariables() = starting_pair;
+    if (! switch_statement -> DefaultCase())
+        *DefinitelyAssignedVariables() *= starting_pair;
+    *DefinitelyAssignedVariables() *= DefiniteBlocks() -> TopBreakPair();
 
     //
     // Remove all variables that just went out of scope
@@ -1670,7 +1730,7 @@ void Semantic::DefiniteSetup()
     {
         VariableSymbol* variable_symbol = this_type -> VariableSym(i);
         if (variable_symbol -> ACC_FINAL() &&
-            ! variable_symbol -> IsSynthetic())
+            ! variable_symbol -> ACC_SYNTHETIC())
         {
             variable_symbol -> SetLocalVariableIndex(size++);
             FinalFields() -> Next() = variable_symbol;

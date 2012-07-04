@@ -3,7 +3,7 @@ dnl
 dnl Try an encoding ($1) and possibly byte swapping it ($2)
 dnl  I choose ISO-8859-1 as the source encoding because it
 dnl  seems the safest... I could be wrong.
-dnl @version $Id: ac_try_encoding.m4,v 1.7 2004/01/13 13:31:27 ericb Exp $
+dnl @version $Id: ac_try_encoding.m4,v 1.8 2004/02/02 14:46:49 ericb Exp $
 dnl @author Christopher Abbey <chris_abbey@yahoo.com>
 
 AC_DEFUN([AC_TRY_AN_ENCODING], [
@@ -74,8 +74,8 @@ AC_DEFUN([AC_TRY_AN_ENCODING], [
   else
     return 4;
   ]])],
-  [is_good=$1
-   AC_MSG_RESULT(works)],
-  [AC_MSG_RESULT(nope)],
+  [ac_cv_jikes_iconv_encoding=$1
+   AC_MSG_RESULT($1)],
+  [AC_MSG_RESULT(no)],
   [AC_MSG_RESULT([cross-compiling, you must supply correct answer in cache])])
 ])

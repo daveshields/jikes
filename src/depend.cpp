@@ -1,4 +1,4 @@
-// $Id: depend.cpp,v 1.36 2004/01/17 14:10:19 ericb Exp $
+// $Id: depend.cpp,v 1.42 2004/04/07 13:08:20 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,6 +12,7 @@
 #include "ast.h"
 #include "semantic.h"
 #include "option.h"
+#include "stream.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -27,7 +28,7 @@ inline void TypeCycleChecker::ReverseTypeList()
     for (int head = 0, tail = type_list.Length() - 1;
          head < tail; head++, tail--)
     {
-        TypeSymbol *temp = type_list[head];
+        TypeSymbol* temp = type_list[head];
         type_list[head] = type_list[tail];
         type_list[tail] = temp;
     }
@@ -67,14 +68,14 @@ void TypeCycleChecker::PartialOrder(Tuple<Semantic*>& semantic, int start)
 }
 
 
-void TypeCycleChecker::PartialOrder(SymbolSet &types)
+void TypeCycleChecker::PartialOrder(SymbolSet& types)
 {
     //
     // assert that the "index" of all types that should be checked is initially
     // set to OMEGA
     //
-    for (TypeSymbol *type = (TypeSymbol *) types.FirstElement();
-         type; type = (TypeSymbol *) types.NextElement())
+    for (TypeSymbol* type = (TypeSymbol*) types.FirstElement();
+         type; type = (TypeSymbol*) types.NextElement())
     {
         if (type -> index == OMEGA)
             ProcessSubtypes(type);
@@ -84,7 +85,7 @@ void TypeCycleChecker::PartialOrder(SymbolSet &types)
 }
 
 
-void TypeCycleChecker::ProcessSubtypes(TypeSymbol *type)
+void TypeCycleChecker::ProcessSubtypes(TypeSymbol* type)
 {
     stack.Push(type);
     int indx = stack.Size();
@@ -92,10 +93,10 @@ void TypeCycleChecker::ProcessSubtypes(TypeSymbol *type)
 
     type -> subtypes_closure = new SymbolSet;
     type -> subtypes_closure -> Union(*(type -> subtypes));
-    TypeSymbol *subtype;
-    for (subtype = (TypeSymbol *) type -> subtypes -> FirstElement();
+    TypeSymbol* subtype;
+    for (subtype = (TypeSymbol*) type -> subtypes -> FirstElement();
          subtype;
-         subtype = (TypeSymbol *) type -> subtypes -> NextElement())
+         subtype = (TypeSymbol*) type -> subtypes -> NextElement())
     {
         //
         // Only worry about top-level types.
@@ -110,7 +111,7 @@ void TypeCycleChecker::ProcessSubtypes(TypeSymbol *type)
 
     if (type -> index == indx)
     {
-        TypeSymbol *scc_subtype;
+        TypeSymbol* scc_subtype;
         do
         {
             scc_subtype = stack.Top();
@@ -123,11 +124,11 @@ void TypeCycleChecker::ProcessSubtypes(TypeSymbol *type)
 }
 
 
-ConstructorCycleChecker::ConstructorCycleChecker(AstClassBody *class_body)
+ConstructorCycleChecker::ConstructorCycleChecker(AstClassBody* class_body)
 {
     for (unsigned k = 0; k < class_body -> NumConstructors(); k++)
     {
-        AstConstructorDeclaration *constructor_declaration =
+        AstConstructorDeclaration* constructor_declaration =
             class_body -> Constructor(k);
         if (constructor_declaration -> index == OMEGA)
             CheckConstructorCycles(constructor_declaration);
@@ -135,27 +136,27 @@ ConstructorCycleChecker::ConstructorCycleChecker(AstClassBody *class_body)
 }
 
 
-void ConstructorCycleChecker::CheckConstructorCycles(AstConstructorDeclaration *constructor_declaration)
+void ConstructorCycleChecker::CheckConstructorCycles(AstConstructorDeclaration* constructor_declaration)
 {
     stack.Push(constructor_declaration);
     int indx = stack.Size();
     constructor_declaration -> index = indx;
 
-    AstConstructorDeclaration *called_constructor_declaration = NULL;
+    AstConstructorDeclaration* called_constructor_declaration = NULL;
 
-    AstMethodBody *constructor_block =
+    AstMethodBody* constructor_block =
         constructor_declaration -> constructor_body;
     if (constructor_block -> explicit_constructor_opt)
     {
-        AstThisCall *this_call =
+        AstThisCall* this_call =
             constructor_block -> explicit_constructor_opt -> ThisCallCast();
-        MethodSymbol *called_constructor =
-            (MethodSymbol *) (this_call ? this_call -> symbol : NULL);
+        MethodSymbol* called_constructor =
+            (MethodSymbol*) (this_call ? this_call -> symbol : NULL);
 
         if (called_constructor)
         {
             called_constructor_declaration =
-                (AstConstructorDeclaration *) called_constructor -> declaration;
+                (AstConstructorDeclaration*) called_constructor -> declaration;
 
             if (called_constructor_declaration -> index == OMEGA)
                 CheckConstructorCycles(called_constructor_declaration);
@@ -192,17 +193,16 @@ void ConstructorCycleChecker::CheckConstructorCycles(AstConstructorDeclaration *
                 called_constructor_declaration -> index = CYCLE_INFINITY;
 
                 constructor_block =
-                    (AstMethodBody *) called_constructor_declaration ->
+                    (AstMethodBody*) called_constructor_declaration ->
                     constructor_body;
-                AstMethodDeclarator *constructor_declarator =
+                AstMethodDeclarator* constructor_declarator =
                     called_constructor_declaration -> constructor_declarator;
 
-                Semantic *sem = called_constructor_declaration ->
+                Semantic* sem = called_constructor_declaration ->
                     constructor_symbol -> containing_type ->
                     semantic_environment -> sem;
                 sem -> ReportSemError(SemanticError::CIRCULAR_THIS_CALL,
-                                      constructor_block -> explicit_constructor_opt -> LeftToken(),
-                                      constructor_block -> explicit_constructor_opt -> RightToken(),
+                                      constructor_block -> explicit_constructor_opt,
                                       sem -> lex_stream -> NameString(constructor_declarator -> identifier_token));
             } while (called_constructor_declaration != constructor_declaration);
         }
@@ -216,13 +216,13 @@ void ConstructorCycleChecker::CheckConstructorCycles(AstConstructorDeclaration *
 //
 void TypeDependenceChecker::PartialOrder()
 {
-    for (FileSymbol *file_symbol = (FileSymbol *) file_set.FirstElement();
-                     file_symbol;
-                     file_symbol = (FileSymbol *) file_set.NextElement())
+    for (FileSymbol* file_symbol = (FileSymbol*) file_set.FirstElement();
+         file_symbol;
+         file_symbol = (FileSymbol*) file_set.NextElement())
     {
         for (unsigned j = 0; j < file_symbol -> types.Length(); j++)
         {
-            TypeSymbol *type = file_symbol -> types[j];
+            TypeSymbol* type = file_symbol -> types[j];
             if (type -> incremental_index == OMEGA)
                 ProcessType(type);
         }
@@ -230,14 +230,14 @@ void TypeDependenceChecker::PartialOrder()
 
     for (unsigned k = 0; k < type_trash_bin.Length(); k++)
     {
-        TypeSymbol *type = type_trash_bin[k];
+        TypeSymbol* type = type_trash_bin[k];
         if (type -> incremental_index == OMEGA)
             ProcessType(type);
     }
 }
 
 
-void TypeDependenceChecker::ProcessType(TypeSymbol *type)
+void TypeDependenceChecker::ProcessType(TypeSymbol* type)
 {
     stack.Push(type);
     int indx = stack.Size();
@@ -248,21 +248,22 @@ void TypeDependenceChecker::ProcessType(TypeSymbol *type)
     type -> dependents_closure = new SymbolSet;
     // compute reflexive transitive closure
     type -> dependents_closure -> AddElement(type);
-    TypeSymbol *dependent;
-    for (dependent = (TypeSymbol *) type -> dependents -> FirstElement();
+    TypeSymbol* dependent;
+    for (dependent = (TypeSymbol*) type -> dependents -> FirstElement();
          dependent;
-         dependent = (TypeSymbol *) type -> dependents -> NextElement())
+         dependent = (TypeSymbol*) type -> dependents -> NextElement())
     {
         if (dependent -> incremental_index == OMEGA)
              ProcessType(dependent);
         type -> incremental_index = Min(type -> incremental_index,
                                         dependent -> incremental_index);
-        type -> dependents_closure -> Union(*(dependent -> dependents_closure));
+        type -> dependents_closure ->
+            Union(*(dependent -> dependents_closure));
     }
 
     if (type -> incremental_index == indx)
     {
-        TypeSymbol *scc_dependent;
+        TypeSymbol* scc_dependent;
         do
         {
             scc_dependent = stack.Top();
@@ -276,22 +277,23 @@ void TypeDependenceChecker::ProcessType(TypeSymbol *type)
 }
 
 
-void TypeDependenceChecker::OutputMake(FILE *outfile, char *output_name,
-                                       Tuple<FileSymbol *> &file_list)
+void TypeDependenceChecker::OutputMake(FILE* outfile, char* output_name,
+                                       Tuple<FileSymbol*>& file_list)
 {
     assert(outfile);
 
     for (unsigned i = 0; i < file_list.Length(); i++)
     {
-        FileSymbol *file_symbol = file_list[i];
-        char *name = file_symbol -> FileName();
+        FileSymbol* file_symbol = file_list[i];
+        char* name = file_symbol -> FileName();
         int length = file_symbol -> FileNameLength() -
             (file_symbol -> IsJava() ? FileSymbol::java_suffix_length
              : FileSymbol::class_suffix_length);
 
-        char *class_name = new char[length + FileSymbol::class_suffix_length +
+        char* class_name = new char[length + FileSymbol::class_suffix_length +
                                    1];
-        char *java_name = new char[length + FileSymbol::java_suffix_length + 1];
+        char* java_name =
+            new char[length + FileSymbol::java_suffix_length + 1];
 
         strncpy(class_name, name, length);
         strcpy(&class_name[length], FileSymbol::class_suffix);
@@ -311,7 +313,7 @@ void TypeDependenceChecker::OutputMake(FILE *outfile, char *output_name,
 }
 
 
-void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
+void TypeDependenceChecker::OutputMake(FileSymbol* file_symbol)
 {
     //
     //
@@ -332,8 +334,8 @@ void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
         name = file_symbol -> Utf8Name();
         length = strlen(name);
 
-        DirectorySymbol *dir_symbol = file_symbol -> OutputDirectory();
-        char *dir_name = dir_symbol -> DirectoryName();
+        DirectorySymbol* dir_symbol = file_symbol -> OutputDirectory();
+        char* dir_name = dir_symbol -> DirectoryName();
         int dir_length = strlen(dir_name);
 
         buf = new char[length + FileSymbol::class_suffix_length + dir_length +
@@ -353,8 +355,8 @@ void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
 
 
 
-    char *output_name = new char[length + FileSymbol::class_suffix_length + 1],
-         *u_name = new char[length + strlen(StringConstant::U8S_DO_u) + 1];
+    char* output_name = new char[length + FileSymbol::class_suffix_length + 1];
+    char* u_name = new char[length + strlen(StringConstant::U8S_DO_u) + 1];
 
     strncpy(output_name, name, length);
     strncpy(u_name, name, length);
@@ -367,13 +369,13 @@ void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
     SymbolSet file_set;
     for (unsigned i = 0; i < file_symbol -> types.Length(); i++)
     {
-        TypeSymbol *type = file_symbol -> types[i];
-        TypeSymbol *parent;
-        for (parent = (TypeSymbol *) type -> parents_closure -> FirstElement();
+        TypeSymbol* type = file_symbol -> types[i];
+        TypeSymbol* parent;
+        for (parent = (TypeSymbol*) type -> parents_closure -> FirstElement();
              parent;
-             parent = (TypeSymbol *) type -> parents_closure -> NextElement())
+             parent = (TypeSymbol*) type -> parents_closure -> NextElement())
         {
-            FileSymbol *symbol = parent -> file_symbol;
+            FileSymbol* symbol = parent -> file_symbol;
             if (symbol && (! symbol -> IsZip()))
                 file_set.AddElement(symbol);
         }
@@ -383,13 +385,13 @@ void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
     //
     //
     //
-    Tuple<FileSymbol *> file_list(file_set.Size());
+    Tuple<FileSymbol*> file_list(file_set.Size());
     file_list.Next() = file_symbol;
-    for (FileSymbol *symbol = (FileSymbol *) file_set.FirstElement();
-         symbol; symbol = (FileSymbol *) file_set.NextElement())
+    for (FileSymbol* symbol = (FileSymbol*) file_set.FirstElement();
+         symbol; symbol = (FileSymbol*) file_set.NextElement())
         file_list.Next() = symbol;
 
-    FILE *outfile = SystemFopen(u_name, "w");
+    FILE* outfile = SystemFopen(u_name, "w");
     if (outfile == NULL)
         Coutput << "*** Cannot open output Makefile " << u_name << endl;
     else
@@ -411,49 +413,49 @@ void TypeDependenceChecker::OutputDependences()
     unsigned i;
     for (i = 0; i < type_list.Length(); i++)
     {
-        TypeSymbol *type = type_list[i];
+        TypeSymbol* type = type_list[i];
         type -> parents_closure = new SymbolSet;
 
-        FileSymbol *file_symbol = type -> file_symbol;
+        FileSymbol* file_symbol = type -> file_symbol;
         if (file_symbol && (! file_symbol -> IsZip()))
             new_file_set.AddElement(file_symbol);
     }
 
     for (i = 0; i < type_list.Length(); i++)
     {
-        TypeSymbol *parent = type_list[i];
-        TypeSymbol *dependent;
-        for (dependent = (TypeSymbol *) parent -> dependents_closure -> FirstElement();
+        TypeSymbol* parent = type_list[i];
+        TypeSymbol* dependent;
+        for (dependent = (TypeSymbol*) parent -> dependents_closure -> FirstElement();
              dependent;
-             dependent = (TypeSymbol *) parent -> dependents_closure -> NextElement())
+             dependent = (TypeSymbol*) parent -> dependents_closure -> NextElement())
         {
             dependent -> parents_closure -> AddElement(parent);
         }
     }
 
-    for (FileSymbol *symbol = (FileSymbol *) new_file_set.FirstElement();
-         symbol; symbol = (FileSymbol *) new_file_set.NextElement())
+    for (FileSymbol* symbol = (FileSymbol*) new_file_set.FirstElement();
+         symbol; symbol = (FileSymbol*) new_file_set.NextElement())
     {
         OutputMake(symbol);
     }
 
     for (i = 0; i < type_list.Length(); i++)
     {
-        TypeSymbol *type = type_list[i];
+        TypeSymbol* type = type_list[i];
         delete type -> parents_closure;
         type -> parents_closure = NULL;
     }
 }
 
 
-void TopologicalSort::Process(TypeSymbol *type)
+void TopologicalSort::Process(TypeSymbol* type)
 {
     pending -> AddElement(type);
 
-    TypeSymbol *super_type;
-    for (super_type = (TypeSymbol *) type -> supertypes_closure -> FirstElement();
+    TypeSymbol* super_type;
+    for (super_type = (TypeSymbol*) type -> supertypes_closure -> FirstElement();
          super_type;
-         super_type = (TypeSymbol *) type -> supertypes_closure -> NextElement())
+         super_type = (TypeSymbol*) type -> supertypes_closure -> NextElement())
     {
         if (type_collection.IsElement(super_type))
         {
@@ -470,8 +472,8 @@ void TopologicalSort::Sort()
 {
     type_list.Reset();
 
-    for (TypeSymbol *type = (TypeSymbol *) type_collection.FirstElement();
-         type; type = (TypeSymbol *) type_collection.NextElement())
+    for (TypeSymbol* type = (TypeSymbol*) type_collection.FirstElement();
+         type; type = (TypeSymbol*) type_collection.NextElement())
     {
         if (! pending -> IsElement(type))
             Process(type);
@@ -481,10 +483,10 @@ void TopologicalSort::Sort()
 }
 
 
-TopologicalSort::TopologicalSort(SymbolSet &type_collection_,
-                                 Tuple<TypeSymbol *> &type_list_)
-    : type_collection(type_collection_),
-      type_list(type_list_)
+TopologicalSort::TopologicalSort(SymbolSet& type_collection_,
+                                 Tuple<TypeSymbol*>& type_list_)
+    : type_collection(type_collection_)
+    , type_list(type_list_)
 {
     pending = new SymbolSet(type_collection.Size());
 }
@@ -496,14 +498,28 @@ TopologicalSort::~TopologicalSort()
 }
 
 
+//
+// Depend on the base enclosing class. For example, with class A { class B{} },
+// using the type A.B[] will add a dependence on A, because it is A.java that
+// must exist for the compiler to redefine B.class, and B.class that will be
+// used by the VM to define B[]. We cannot add dependences on the primitive
+// types, because there is no .java file that defines them.
+// 
 void Semantic::AddDependence(TypeSymbol* base_type, TypeSymbol* parent_type,
                              bool static_access)
 {
-    if (base_type -> Bad() || parent_type -> Bad())
+    assert(! base_type -> IsArray() && ! base_type -> Primitive());
+    if (parent_type -> IsArray())
+    {
+        parent_type = parent_type -> base_type;
+    }
+    if (base_type -> Bad() || parent_type -> Bad() ||
+        parent_type == control.null_type || parent_type -> Primitive())
+    {
         return;
+    }
     base_type = base_type -> outermost_type;
     parent_type = parent_type -> outermost_type;
-
     parent_type -> dependents -> AddElement(base_type);
     if (static_access)
         base_type -> static_parents -> AddElement(parent_type);
@@ -514,30 +530,11 @@ void Semantic::AddDependence(TypeSymbol* base_type, TypeSymbol* parent_type,
     // imports, it is impossible to reference a class in the unnamed
     // package from a package.
     //
-    assert(parent_type -> ContainingPackage() != control.unnamed_package ||
-           base_type -> ContainingPackage() == control.unnamed_package);
-}
-
-void Semantic::AddStringConversionDependence(TypeSymbol* type)
-{
-    if (type == control.null_type)
-        ; // no dependence
-    else if (type == control.boolean_type)
-        AddDependence(ThisType(), control.Boolean());
-    else if (type == control.char_type)
-        AddDependence(ThisType(), control.Character());
-    else if (type == control.int_type)
-        AddDependence(ThisType(), control.Integer());
-    else if (type == control.long_type)
-        AddDependence(ThisType(), control.Long());
-    else if (type == control.float_type)
-        AddDependence(ThisType(), control.Float());
-    else // (type == control.double_type)
-        AddDependence(ThisType(), control.Double());
+    assert(parent_type -> ContainingPackage() != control.UnnamedPackage() ||
+           base_type -> ContainingPackage() == control.UnnamedPackage());
 }
 
 
 #ifdef HAVE_JIKES_NAMESPACE
 } // Close namespace Jikes block
 #endif
-

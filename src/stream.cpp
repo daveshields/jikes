@@ -1,4 +1,4 @@
-// $Id: stream.cpp,v 1.80 2004/01/26 06:07:18 cabbey Exp $
+// $Id: stream.cpp,v 1.85 2004/03/25 13:32:28 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -55,7 +55,21 @@ const wchar_t* StreamError::getErrorMessage()
     case UNTERMINATED_STRING_CONSTANT:
         return L"String constant not properly terminated.";
     case INVALID_HEX_CONSTANT:
-        return L"The prefix 0x must be followed by at least one hex digit.";
+        return L"The hexadecimal prefix '0x' must be followed by at least one "
+            L"hex digit.";
+    case INVALID_FLOATING_HEX_EXPONENT:
+        return L"A hexadecimal floating point literal must have an exponent "
+            L"'p' designator.";
+    case INVALID_FLOATING_HEX_MANTISSA:
+        return L"A hexadecimal floating point literal must have at least one "
+            L"hex digit between the prefix '0x' and exponent 'p'.";
+    case INVALID_FLOATING_HEX_PREFIX:
+        return L"A hexadecimal floating point literal must start with the "
+            L"prefix '0x'.";
+    case INVALID_OCTAL_CONSTANT:
+        return L"The octal prefix '0' must not be followed by '8' or '9'.";
+    case INVALID_FLOATING_EXPONENT:
+        return L"A floating point exponent must have at least one digit.";
     case INVALID_UNICODE_ESCAPE:
         return L"Invalid unicode escape character.";
     case INVALID_ESCAPE_SEQUENCE:
@@ -155,7 +169,7 @@ Stream::Stream()
       input_buffer_length(0)
 #if defined(HAVE_LIBICU_UC)
     , _decoder(NULL)
-#elif defined(HAVE_ICONV_H)
+#elif defined(JIKES_ICONV_ENCODING)
     , _decoder((iconv_t) - 1)
 #endif
 {
@@ -164,12 +178,12 @@ Stream::Stream()
 Stream::~Stream()
 {
     DestroyInput();
-#if defined(HAVE_ENCODING)
+#ifdef HAVE_ENCODING
     DestroyEncoding();
-#endif
+#endif // HAVE_ENCODING
 }
 
-#if defined(HAVE_ENCODING)
+#ifdef HAVE_ENCODING
 
 // This method will return true is the given encoding
 // can be supported, it is static because we need to
@@ -190,12 +204,12 @@ bool Stream::SetEncoding(char* encoding)
     assert(encoding);
     DestroyEncoding();
 
-#if defined(HAVE_LIBICU_UC)
+# if defined(HAVE_LIBICU_UC)
     UErrorCode err = U_ZERO_ERROR;
     _decoder = ucnv_open(encoding, &err);
-#elif defined(HAVE_ICONV_H)
+# elif defined(JIKES_ICONV_ENCODING)
     _decoder = iconv_open(JIKES_ICONV_ENCODING, encoding);
-#endif
+# endif
 
     return HaveDecoder();
 }
@@ -204,13 +218,13 @@ void Stream::DestroyEncoding()
 {
     if (HaveDecoder())
     {
-#if defined(HAVE_LIBICU_UC)
+# if defined(HAVE_LIBICU_UC)
         ucnv_close(_decoder);
         _decoder = NULL;
-#elif defined(HAVE_ICONV_H)
+# elif defined(JIKES_ICONV_ENCODING)
         iconv_close(_decoder);
         _decoder = (iconv_t)-1;
-#endif
+# endif
     }
 }
 
@@ -225,7 +239,7 @@ wchar_t Stream::DecodeNextCharacter()
     wchar_t next;
     error_decode_next_character = false;
 
-#if defined(HAVE_LIBICU_UC)
+# if defined(HAVE_LIBICU_UC)
 
     if (!HaveDecoder())
         return (wchar_t) *source_ptr++;
@@ -243,7 +257,7 @@ wchar_t Stream::DecodeNextCharacter()
         return 0;
     }
 
-#elif defined(HAVE_ICONV_H)
+# elif defined(JIKES_ICONV_ENCODING)
 
     if (!HaveDecoder()) {
         // you can't just cast a char to a wchar_t, since that would
@@ -259,9 +273,9 @@ wchar_t Stream::DecodeNextCharacter()
 
  try_it_again:
     size_t n = iconv(_decoder,
-# ifdef HAVE_ERROR_CALL_ICONV_CONST
+#  ifdef HAVE_ERROR_CALL_ICONV_CONST
                      (char**)
-# endif // HAVE_ERROR_CALL_ICONV_CONST
+#  endif // HAVE_ERROR_CALL_ICONV_CONST
                      &source_ptr, &srcl,
                      (char**) &chp, &chl);
 
@@ -282,28 +296,27 @@ wchar_t Stream::DecodeNextCharacter()
         }
     }
 
-# if JIKES_ICONV_NEEDS_BYTE_SWAP
+#  if JIKES_ICONV_NEEDS_BYTE_SWAP
     char tmp;
     char* targ = (char*) &next;
-#  if SIZEOF_WCHAR_T == 2
+#   if SIZEOF_WCHAR_T == 2
     tmp = targ[0];
     targ[0] = targ[1];
     targ[1] = tmp;
-#  elif SIZEOF_WCHAR_T == 4
+#   elif SIZEOF_WCHAR_T == 4
     tmp = targ[0];
     targ[0] = targ[3];
     targ[3] = tmp;
     tmp = targ[1];
     targ[1] = targ[2];
     targ[2] = tmp;
-#  else
-    assert(0 && "sizeof(wchar_t) is not one I can cope with, this should "
-           "never have got past configure!!");
-#  endif //sizeof(wchar_t)
+#   else
+#    error sizeof(wchar_t) unworkable, this should not have passed configure
+#   endif //sizeof(wchar_t)
 
-# endif //byteswap
+#  endif // JIKES_ICONV_NEEDS_BYTE_SWAP
 
-#endif //iconv
+# endif // JIKES_ICONV_ENCODING
 
     if (before == source_ptr)
     {
@@ -315,7 +328,7 @@ wchar_t Stream::DecodeNextCharacter()
     return next;
 }
 
-#endif // defined(HAVE_ENCODING)
+#endif // HAVE_ENCODING
 
 
 // Class LexStream
@@ -332,6 +345,7 @@ LexStream::LexStream(Control& control_, FileSymbol* file_symbol_)
       comment_stream(10, 8),
       locations(NULL),
       line_location(12, 8),
+      package(0),
       initial_reading_of_input(true),
       comment_buffer(NULL),
       control(control_)
@@ -1215,7 +1229,7 @@ void LexStream::ReportMessage(StreamError::StreamErrorKind kind,
                               unsigned start_location,
                               unsigned end_location)
 {
-    if (! control.option.nowarn ||
+    if (control.option.tolerance != JikesOption::NO_WARNINGS ||
         kind < StreamError::DEPRECATED_IDENTIFIER_ASSERT)
     {
         bad_tokens.Next().Initialize(kind, start_location, end_location, this);
@@ -1339,7 +1353,7 @@ void LexStream::PrintMessages()
                 name[length] = U_NULL;
                 control.system_semantic ->
                     ReportSemError(SemanticError::CANNOT_REOPEN_FILE,
-                                   BadToken(), name);
+                                   BAD_TOKEN, name);
                 delete [] name;
             }
             else

@@ -1,10 +1,9 @@
-// $Id: diagnose.cpp,v 1.34 2003/03/02 04:27:29 cabbey Exp $
+// $Id: diagnose.cpp,v 1.37 2004/04/11 18:37:14 elliott-oss Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -14,6 +13,7 @@
 #include "case.h"
 #include "spell.h"
 #include "option.h"
+#include "stream.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -526,14 +526,14 @@ RepairCandidate DiagnoseParser::PrimaryPhase(TokenObject error_token)
 /*****************************************************************/
 int DiagnoseParser::MergeCandidate(int state, int buffer_position)
 {
-    int i,
-        k,
-        len,
-        len1,
-        len2;
+    int i;
+    int k;
+    int len;
+    int len1;
+    int len2;
 
-    const wchar_t *p1,
-                  *p2;
+    const wchar_t* p1;
+    const wchar_t* p2;
 
     wchar_t str[MAX_TERM_LENGTH + 1];
 
@@ -550,7 +550,7 @@ int DiagnoseParser::MergeCandidate(int state, int buffer_position)
 
     if (len <= MAX_TERM_LENGTH)
     {
-        wchar_t *p0;
+        wchar_t* p0;
 
         p0 = &str[0];
         for (i = 0; i < len1; i++)
@@ -564,7 +564,7 @@ int DiagnoseParser::MergeCandidate(int state, int buffer_position)
             k = terminal_index[asr[i]];
             if (len == name_length[k])
             {
-                const char *p3 = &string_buffer[name_start[k]];
+                const char* p3 = &string_buffer[name_start[k]];
 
                 p0 = &str[0];
                 while (*p0 != U_NULL)
@@ -1161,7 +1161,7 @@ int DiagnoseParser::Misspell(int sym, TokenObject tok)
 {
     int len = name_length[terminal_index[sym]];
 
-    wchar_t *keyword = new wchar_t[len + 1];
+    wchar_t* keyword = new wchar_t[len + 1];
     for (int i = name_start[terminal_index[sym]], j = 0; j < len; i++, j++)
     {
         wchar_t c = string_buffer[i];
@@ -1485,7 +1485,7 @@ RepairCandidate DiagnoseParser::SecondaryPhase(TokenObject error_token)
         for (k = 3; k < BUFF_UBOUND; k++)
             buffer[k] = lex_stream -> Next(buffer[k - 1]);
 
-        buffer[BUFF_UBOUND] = lex_stream -> BadToken();/* elmt not available */
+        buffer[BUFF_UBOUND] = BAD_TOKEN; /* elmt not available */
 
         /*********************************************************/
         /* If we are at the end of the input stream, compute the */
@@ -1585,7 +1585,7 @@ RepairCandidate DiagnoseParser::SecondaryPhase(TokenObject error_token)
         for (k = 3; k < BUFF_UBOUND; k++)
             buffer[k] = lex_stream -> Next(buffer[k - 1]);
 
-        buffer[BUFF_UBOUND] = lex_stream -> BadToken();/* elmt not available */
+        buffer[BUFF_UBOUND] = BAD_TOKEN; /* elmt not available */
 
         location_stack[next_stack_top] = Loc(buffer[2]);
         last_index = next_last_index;
@@ -1878,7 +1878,7 @@ void DiagnoseParser::SecondaryDiagnosis(SecondaryRepairInfo repair)
 }
 
 
-ParseError::ParseError(Control &control_, LexStream *lex_stream_)
+ParseError::ParseError(Control& control_, LexStream* lex_stream_)
     : control(control_),
       lex_stream(lex_stream_),
       errors(256)
@@ -1992,12 +1992,9 @@ void ParseError::SortMessages()
 // This routine simply stores all necessary information about
 // the message into an array: error.
 //
-void ParseError::Report(int msg_level,
-                        ParseErrorCode msg_code,
-                        int name_index,
-                        LexStream::TokenIndex left_token,
-                        LexStream::TokenIndex right_token,
-                        int scope_name_index)
+void ParseError::Report(int msg_level, ParseErrorCode msg_code,
+                        int name_index, TokenIndex left_token,
+                        TokenIndex right_token, int scope_name_index)
 {
     int i = errors.NextIndex();
 
@@ -2012,6 +2009,7 @@ void ParseError::Report(int msg_level,
 
     if (control.option.dump_errors)
     {
+        lex_stream -> RereadInput();
         PrintMessage(i);
         errors.Reset(1);
         // we only need to indicate that at least one error was detected...
@@ -2019,7 +2017,7 @@ void ParseError::Report(int msg_level,
     }
 }
 
-void ParseErrorInfo::Initialize(LexStream *l)
+void ParseErrorInfo::Initialize(LexStream* l)
 {
     lex_stream = l;
 
@@ -2039,16 +2037,16 @@ JikesError::JikesErrorSeverity ParseErrorInfo::getSeverity()
     return JikesError::JIKES_ERROR;
 }
 
-const char *ParseErrorInfo::getFileName()
+const char* ParseErrorInfo::getFileName()
 {
     assert(lex_stream);
     return lex_stream -> FileName();
 }
 
-const wchar_t *ParseErrorInfo::getErrorMessage()
+const wchar_t* ParseErrorInfo::getErrorMessage()
 {
     ErrorString s;
-    const char *name = NULL;
+    const char* name = NULL;
     int i, len = 0;
 
 #if defined(FULL_DIAGNOSIS)
@@ -2173,7 +2171,7 @@ const wchar_t *ParseErrorInfo::getErrorMessage()
 
 bool ParseErrorInfo::emacs_style_report = false;
 
-const wchar_t *ParseErrorInfo::getErrorReport()
+const wchar_t* ParseErrorInfo::getErrorReport()
 {
     return emacs_style_report ? emacsErrorString() : regularErrorString();
 }
@@ -2198,7 +2196,7 @@ const wchar_t* ParseErrorInfo::emacsErrorString()
       << ':' << left_line_no  << ':' << left_column_no
       << ':' << right_line_no << ':' << right_column_no
       << ": Syntax " << getSeverityString() << ": "
-      << getErrorMessage() << endl;
+      << getErrorMessage();
 
     return s.Array();
 }
@@ -2227,15 +2225,14 @@ void ParseError::PrintMessages()
 
     if (! lex_stream -> InputBuffer())
     {
-        char *file_name = lex_stream -> FileName();
+        char* file_name = lex_stream -> FileName();
         int length = lex_stream -> FileNameLength();
-        wchar_t *name = new wchar_t[length + 1];
+        wchar_t* name = new wchar_t[length + 1];
         for (int i = 0; i < length; i++)
             name[i] = file_name[i];
         name[length] = U_NULL;
         control.system_semantic ->
-            ReportSemError(SemanticError::CANNOT_REOPEN_FILE,
-                           LexStream::BadToken(), name);
+            ReportSemError(SemanticError::CANNOT_REOPEN_FILE, BAD_TOKEN, name);
         delete [] name;
         return;
     }

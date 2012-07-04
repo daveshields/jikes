@@ -1,4 +1,4 @@
-// $Id: platform.cpp,v 1.42 2004/01/26 06:07:17 cabbey Exp $
+// $Id: platform.cpp,v 1.47 2004/03/23 14:03:56 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1210,6 +1210,7 @@ const wchar_t StringConstant::US_DOT[] = {U_DO, U_NU}; // L"."
 const wchar_t StringConstant::US_DOT_DOT_DOT[] = {
     U_DO, U_DO, U_DO, U_NU}; // L"..."
 const wchar_t StringConstant::US_EMPTY[] = {U_NU}; // L""
+const wchar_t StringConstant::US_EOF[] = {U_E, U_O, U_F, U_NU}; // L"EOF"
 const wchar_t StringConstant::US_EQUAL[] = {U_EQ, U_NU}; // L"="
 const wchar_t StringConstant::US_EQUAL_EQUAL[] = {U_EQ, U_EQ, U_NU}; // L"=="
 const wchar_t StringConstant::US_GREATER[] = {U_GT, U_NU}; // L">"
@@ -1258,132 +1259,23 @@ const wchar_t StringConstant::US_XOR_EQUAL[] = {U_CA, U_EQ, U_NU}; // L"^="
 //
 // Common constant pool entries
 //
-const wchar_t StringConstant::US_AssertionError[] = {
-    U_A, U_s, U_s, U_e, U_r, U_t, U_i, U_o, U_n,
-    U_E, U_r, U_r, U_o, U_r, U_NU}; // L"AssertionError"
-const wchar_t StringConstant::US_Boolean[] = {
-    U_B, U_o, U_o, U_l, U_e, U_a, U_n, U_NU}; // L"Boolean"
-const wchar_t StringConstant::US_Byte[] = {
-    U_B, U_y, U_t, U_e, U_NU}; // L"Byte"
-const wchar_t StringConstant::US_Character[] = {
-    U_C, U_h, U_a, U_r, U_a, U_c, U_t, U_e, U_r, U_NU}; // L"Character"
-const wchar_t StringConstant::US_Class[] = {
-    U_C, U_l, U_a, U_s, U_s, U_NU}; // L"Class"
-const wchar_t StringConstant::US_ClassNotFoundException[] = {
-    U_C, U_l, U_a, U_s, U_s, U_N, U_o, U_t, U_F, U_o, U_u, U_n, U_d,
-    U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n,
-    U_NU}; // L"ClassNotFoundException"
-const wchar_t StringConstant::US_Cloneable[] = {
-    U_C, U_l, U_o, U_n, U_e, U_a, U_b, U_l, U_e, U_NU}; // L"Cloneable"
-const wchar_t StringConstant::US_Comparable[] = {
-    U_C, U_o, U_m, U_p, U_a, U_r, U_a, U_b, U_l, U_e, U_NU}; // L"Comparable"
-const wchar_t StringConstant::US_Double[] = {
-    U_D, U_o, U_u, U_b, U_l, U_e, U_NU}; // L"Double"
-const wchar_t StringConstant::US_equals[] = {
-    U_e, U_q, U_u, U_a, U_l, U_s, U_NU}; // L"equals"
-const wchar_t StringConstant::US_Error[] = {
-    U_E, U_r, U_r, U_o, U_r, U_NU}; // L"Error"
-const wchar_t StringConstant::US_Exception[] = {
-    U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n, U_NU}; // L"Exception"
-const wchar_t StringConstant::US_Float[] = {
-    U_F, U_l, U_o, U_a, U_t, U_NU};  // L"Float"
-const wchar_t StringConstant::US_hashCode[] = {
-    U_h, U_a, U_s, U_h, U_C, U_o, U_d, U_e, U_NU}; // L"hashCode"
-const wchar_t StringConstant::US_Integer[] = {
-    U_I, U_n, U_t, U_e, U_g, U_e, U_r, U_NU}; // L"Integer"
-const wchar_t StringConstant::US_L[] = {U_L, U_NU}; // L"L"
-const wchar_t StringConstant::US_Long[]  = {
-    U_L, U_o, U_n, U_g, U_NU}; // L"Long"
-const wchar_t StringConstant::US_NoClassDefFoundError[] = {
-    U_N, U_o, U_C, U_l, U_a, U_s, U_s, U_D, U_e, U_f, U_F, U_o, U_u, U_n, U_d,
-    U_E, U_r, U_r, U_o, U_r, U_NU}; // L"NoClassDefFoundError"
-const wchar_t StringConstant::US_Object[] = {
-    U_O, U_b, U_j, U_e, U_c, U_t, U_NU}; // L"Object"
-const wchar_t StringConstant::US_PObject[] = {
-    U_P, U_O, U_b, U_j, U_e, U_c, U_t, U_NU}; // L"PObject"
-const wchar_t StringConstant::US_RuntimeException[] = {
-    U_R, U_u, U_n, U_t, U_i, U_m, U_e,
-    U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n, U_NU}; // L"RuntimeException"
-const wchar_t StringConstant::US_Serializable[] = {
-    U_S, U_e, U_r, U_i, U_a, U_l, U_i, U_z, U_a, U_b, U_l, U_e,
-    U_NU}; // L"Serializable"
-const wchar_t StringConstant::US_serialVersionUID[] = {
-    U_s, U_e, U_r, U_i, U_a, U_l, U_V, U_e, U_r, U_s, U_i, U_o,
-    U_n, U_U, U_I, U_D, U_NU}; // L"serialVersionUID"
-const wchar_t StringConstant::US_Short[] = {
-    U_S, U_h, U_o, U_r, U_t, U_NU}; // L"Short"
-const wchar_t StringConstant::US_String[] = {
-    U_S, U_t, U_r, U_i, U_n, U_g, U_NU}; // L"String"
-const wchar_t StringConstant::US_StringBuffer[] = {
-    U_S, U_t, U_r, U_i, U_n, U_g,
-    U_B, U_u, U_f, U_f, U_e, U_r, U_NU}; // L"StringBuffer"
-const wchar_t StringConstant::US_TYPE[] = {
-    U_T, U_Y, U_P, U_E, U_NU}; // L"TYPE"
-const wchar_t StringConstant::US_Throwable[] = {
-    U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e, U_NU}; // L"Throwable"
-const wchar_t StringConstant::US_Void[] = {
-    U_V, U_o, U_i, U_d, U_NU}; // L"Void"
-const wchar_t StringConstant::US_DO[] = {U_DO, U_NU}; // L"."
-const wchar_t StringConstant::US_DO_DO[] = {U_DO, U_DO, U_NU}; // L".."
 const wchar_t StringConstant::US_DS[] = {U_DS, U_NU}; // L"$"
 const wchar_t StringConstant::US_LB_RB[] = {U_LB, U_RB, U_NU}; // L"[]"
-const wchar_t StringConstant::US_LT_clinit_GT[] = {
-    U_LT, U_c, U_l, U_i, U_n, U_i, U_t, U_GT, U_NU}; // L"<clinit>"
-const wchar_t StringConstant::US_LT_init_GT[] = {
-    U_LT, U_i, U_n, U_i, U_t, U_GT, U_NU}; // L"<init>"
-const wchar_t StringConstant::US_QU_QU[] = {U_QU, U_QU, U_NU};  // L"??"
+const wchar_t StringConstant::US_MI[] = {U_MI, U_NU}; // L"-"
 const wchar_t StringConstant::US_SC[] = {U_SC, U_NU}; // L";"
 const wchar_t StringConstant::US_SL[] = {U_SL, U_NU}; // L"/"
-const wchar_t StringConstant::US_zip[] = {U_z, U_i, U_p, U_NU}; // L"zip"
 const wchar_t StringConstant::US_jar[] = {U_j, U_a, U_r, U_NU}; // L"jar"
-
-//
-// Used in synthetic (compiler-generated) code.
-//
-const wchar_t StringConstant::US_DOLLAR_noassert[] = {
-    U_DS, U_n, U_o, U_a, U_s, U_s, U_e, U_r, U_t, U_NU}; // L"$noassert"
-const wchar_t StringConstant::US_append[] = {
-    U_a, U_p, U_p, U_e, U_n, U_d, U_NU}; // L"append"
-const wchar_t StringConstant::US_array[] = {
-    U_a, U_r, U_r, U_a, U_y, U_NU}; // L"array"
-const wchar_t StringConstant::US_access_DOLLAR[] = {
-    U_a, U_c, U_c, U_e, U_s, U_s, U_DS, U_NU}; // L"access$"
-const wchar_t StringConstant::US_class_DOLLAR[] = {
-    U_c, U_l, U_a, U_s, U_s, U_DS, U_NU}; // L"class$"
-const wchar_t StringConstant::US_clone[] = {
-    U_c, U_l, U_o, U_n, U_e, U_NU}; // L"clone"
-const wchar_t StringConstant::US_constructor_DOLLAR[] = {
-    U_c, U_o, U_n, U_s, U_t, U_r, U_u, U_c, U_t, U_o, U_r, U_DS,
-    U_NU}; // L"constructor$"
-const wchar_t StringConstant::US_desiredAssertionStatus[] = {
-    U_d, U_e, U_s, U_i, U_r, U_e, U_d,
-    U_A, U_s, U_s, U_e, U_r, U_t, U_i, U_o, U_n,
-    U_S, U_t, U_a, U_t, U_u, U_s, U_NU}; // L"desiredAssertionStatus"
-const wchar_t StringConstant::US_forName[] = {
-    U_f, U_o, U_r, U_N, U_a, U_m, U_e, U_NU}; // L"forName"
-const wchar_t StringConstant::US_getClass[] = {
-    U_g, U_e, U_t, U_C, U_l, U_a, U_s, U_s, U_NU}; // L"getClass"
-const wchar_t StringConstant::US_getComponentType[] = {
-    U_g, U_e, U_t, U_C, U_o, U_m, U_p, U_o, U_n, U_e, U_n, U_t,
-    U_T, U_y, U_p, U_e, U_NU}; // L"getComponentType"
-const wchar_t StringConstant::US_getMessage[] = {
-    U_g, U_e, U_t, U_M, U_e, U_s, U_s, U_a, U_g, U_e, U_NU}; // L"getMessage"
-const wchar_t StringConstant::US_initCause[] = {
-    U_i, U_n, U_i, U_t, U_C, U_a, U_u, U_s, U_e, U_NU}; // L"initCause"
 const wchar_t StringConstant::US_java_SL_io[] = {
     U_j, U_a, U_v, U_a, U_SL, U_i, U_o, U_NU}; // L"java/io"
 const wchar_t StringConstant::US_java_SL_lang[] = {
     U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_NU}; // L"java/lang"
-const wchar_t StringConstant::US_length[] = {
-    U_l, U_e, U_n, U_g, U_t, U_h, U_NU}; // L"length"
-const wchar_t StringConstant::US_this_DOLLAR[] = {
-    U_t, U_h, U_i, U_s, U_DS, U_NU}; // L"this$"
-const wchar_t StringConstant::US_this0[] = {
-    U_t, U_h, U_i, U_s, U_DS, U_0, U_NU}; // L"this$0"
-const wchar_t StringConstant::US_toString[] = {
-    U_t, U_o, U_S, U_t, U_r, U_i, U_n, U_g, U_NU}; // L"toString"
-const wchar_t StringConstant::US_val_DOLLAR[] = {
-    U_v, U_a, U_l, U_DS, U_NU}; // L"val$"
+const wchar_t StringConstant::US_java_SL_lang_SL_annotation[] = {
+    U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
+    U_a, U_n, U_n, U_o, U_t, U_a, U_t, U_i, U_o, U_n,
+    U_NU}; // L"java/lang/annotation"
+const wchar_t StringConstant::US_java_SL_util[] = {
+    U_j, U_a, U_v, U_a, U_SL, U_u, U_t, U_i, U_l, U_NU}; // L"java/util"
+const wchar_t StringConstant::US_zip[] = {U_z, U_i, U_p, U_NU}; // L"zip"
 
 //
 // Java keywords.
@@ -1493,8 +1385,6 @@ const wchar_t StringConstant::US_while[] = {
 //
 // Miscellaneous strings.
 //
-const wchar_t StringConstant::US_EOF[] = {U_E, U_O, U_F, U_NU}; // L"EOF"
-
 const char StringConstant::U8S_help_header[] =
     "Jikes Compiler - " JIKES_VERSION_STRING
     "\nCopyright (C) IBM Corporation 1997-2003, 2004.\n"
@@ -1508,13 +1398,10 @@ const char StringConstant::U8S_command_format[] =
 const char StringConstant::U8S_AnnotationDefault[] = {
     U_A, U_n, U_n, U_o, U_t, U_a, U_t, U_i, U_o, U_n,
     U_D, U_e, U_f, U_a, U_u, U_l, U_t, U_NU}; // "AnnotationDefault
-const char StringConstant::U8S_B[] = {U_B, U_NU}; // "B"
-const char StringConstant::U8S_C[] = {U_C, U_NU}; // "C"
 const char StringConstant::U8S_Code[] = {U_C, U_o, U_d, U_e, U_NU}; // "Code"
 const char StringConstant::U8S_ConstantValue[] = {
     U_C, U_o, U_n, U_s, U_t, U_a, U_n, U_t,
     U_V, U_a, U_l, U_u, U_e, U_NU}; // "ConstantValue"
-const char StringConstant::U8S_D[] = {U_D, U_NU}; // "D"
 const char StringConstant::U8S_Deprecated[] = {
     U_D, U_e, U_p, U_r, U_e, U_c, U_a, U_t, U_e, U_d, U_NU}; // "Deprecated"
 const char StringConstant::U8S_EnclosingMethod[] = {
@@ -1522,52 +1409,9 @@ const char StringConstant::U8S_EnclosingMethod[] = {
     U_M, U_e, U_t, U_h, U_o, U_d, U_NU}; // "EnclosingMethod"
 const char StringConstant::U8S_Exceptions[] = {
     U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n, U_s, U_NU}; // "Exceptions"
-const char StringConstant::U8S_F[] = {U_F, U_NU}; // "F"
-const char StringConstant::U8S_I[] = {U_I, U_NU}; // "I"
 const char StringConstant::U8S_InnerClasses[] = {
     U_I, U_n, U_n, U_e, U_r,
     U_C, U_l, U_a, U_s, U_s, U_e, U_s, U_NU}; // "InnerClasses"
-const char StringConstant::U8S_J[] = {U_J, U_NU};  // "J"
-const char StringConstant::U8S_LP_C_RP_V[] = {
-    U_LP, U_C, U_RP, U_V, U_NU}; // "(C)V"
-const char StringConstant::U8S_LP_D_RP_V[] = {
-    U_LP, U_D, U_RP, U_V, U_NU}; // "(D)V"
-const char StringConstant::U8S_LP_F_RP_V[] = {
-    U_LP, U_F, U_RP, U_V, U_NU}; // "(F)V"
-const char StringConstant::U8S_LP_I_RP_V[] = {
-    U_LP, U_I, U_RP, U_V, U_NU}; // "(I)V"
-const char StringConstant::U8S_LP_J_RP_V[] = {
-    U_LP, U_J, U_RP, U_V, U_NU}; // "(J)V"
-const char StringConstant::U8S_LP_Object_RP_V[] = {
-    U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_O, U_b, U_j, U_e, U_c, U_t, U_SC, U_RP, U_V,
-    U_NU}; // "(Ljava/lang/Object;)V"
-const char StringConstant::U8S_LP_String_RP_Class[] = {
-    U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_RP,
-    U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_C, U_l, U_a, U_s, U_s, U_SC,
-    U_NU}; // "(Ljava/lang/String;)Ljava/lang/Class;"
-const char StringConstant::U8S_LP_Throwable_RP_Throwable[] = {
-    U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e, U_SC, U_RP,
-    U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e, U_SC,
-    U_NU}; // "(Ljava/lang/Throable;)Ljava/lang/Throwable;"
-const char StringConstant::U8S_LP_String_RP_V[] = {
-    U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_RP, U_V,
-    U_NU}; // "(Ljava/lang/String;)V"
-const char StringConstant::U8S_LP_RP_Class[] = {
-    U_LP, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_C, U_l, U_a, U_s, U_s, U_SC, U_NU}; // "()Ljava/lang/Class;"
-const char StringConstant::U8S_LP_RP_String[] = {
-    U_LP, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_NU}; // "()Ljava/lang/String;"
-const char StringConstant::U8S_LP_RP_V[] = {U_LP, U_RP, U_V, U_NU}; // "()V"
-const char StringConstant::U8S_LP_RP_Z[] = {U_LP, U_RP, U_Z, U_NU}; // "()Z"
-const char StringConstant::U8S_LP_Z_RP_V[] = {
-    U_LP, U_Z, U_RP, U_V, U_NU}; // "(Z)V"
 const char StringConstant::U8S_LineNumberTable[] = {
     U_L, U_i, U_n, U_e, U_N, U_u, U_m, U_b, U_e, U_r,
     U_T, U_a, U_b, U_l, U_e, U_NU}; // "LineNumberTable"
@@ -1598,7 +1442,6 @@ const char StringConstant::U8S_RuntimeVisibleParameterAnnotations[] = {
     U_P, U_a, U_r, U_a, U_m, U_e, U_t, U_e, U_r,
     U_A, U_n, U_n, U_o, U_t, U_a, U_t, U_i, U_o, U_n, U_s,
     U_NU}; // 'RuntimeVisibleParameterAnnotations"
-const char StringConstant::U8S_S[] = {U_S, U_NU}; // "S"
 const char StringConstant::U8S_Signature[] = {
     U_S, U_i, U_g, U_n, U_a, U_t, U_u, U_r, U_e, U_NU}; // "Signature"
 const char StringConstant::U8S_SourceFile[] = {
@@ -1607,11 +1450,10 @@ const char StringConstant::U8S_StackMap[] = {
     U_S, U_t, U_a, U_c, U_k, U_M, U_a, U_p, U_NU}; // "StackMap"
 const char StringConstant::U8S_Synthetic[] = {
     U_S, U_y, U_n, U_t, U_h, U_e, U_t, U_i, U_c, U_NU}; // "Synthetic"
-const char StringConstant::U8S_V[] = {U_V, U_NU}; // "V"
-const char StringConstant::U8S_Z[] = {U_Z, U_NU}; // "Z"
 
-const char StringConstant::U8S_DO[] = {U_DO, U_NU}; // "."
-const char StringConstant::U8S_DO_DO[] = {U_DO, U_DO, U_NU}; // ".."
+//
+// ASCII file names.
+//
 const char StringConstant::U8S_DO_class[] = {
     U_DO, U_c, U_l, U_a, U_s, U_s, U_NU}; // ".class"
 const char StringConstant::U8S_DO_java[] = {
@@ -1622,80 +1464,10 @@ const char StringConstant::U8S_DO_u[] = {U_DO, U_u, U_NU}; // ".u"
 const char StringConstant::U8S_LP[] = {U_LP, U_NU}; // "("
 const char StringConstant::U8S_RP[] = {U_RP, U_NU}; // ")"
 const char StringConstant::U8S_SL[] = {U_SL, U_NU}; // "/"
-const char StringConstant::U8S_ST[] = {U_ST, U_NU}; // "*"
 
-const char StringConstant::U8S_class[] = {
-    U_c, U_l, U_a, U_s, U_s, U_NU}; // "class"
-const char StringConstant::U8S_java[] = {U_j, U_a, U_v, U_a, U_NU}; // "java"
-const char StringConstant::U8S_java_SL_lang_SL_ClassNotFoundException[] = {
-    U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_C, U_l, U_a, U_s, U_s, U_N, U_o, U_t, U_F, U_o, U_u, U_n, U_d,
-    U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n,
-    U_NU}; // "java/lang/ClassNotFoundException"
-const char StringConstant::U8S_java_SL_lang_SL_Class[] = {
-    U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_C, U_l, U_a, U_s, U_s, U_NU}; // "java/lang/Class"
-const char StringConstant::U8S_java_SL_lang_SL_InternalError[] = {
-    U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_I, U_n, U_t, U_e, U_r, U_n, U_a, U_l, U_E, U_r, U_r, U_o, U_r,
-    U_NU}; // "java/lang/InternalError"
-const char StringConstant::U8S_java_SL_lang_SL_NoClassDefFoundError[] = {
-    U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_N, U_o, U_C, U_l, U_a, U_s, U_s,
-    U_D, U_e, U_f, U_F, U_o, U_u, U_n, U_d,
-    U_E, U_r, U_r, U_o, U_r, U_NU}; // "java/lang/NoClassDefFoundError"
-const char StringConstant::U8S_java_SL_lang_SL_StringBuffer[] = {
-    U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r,
-    U_NU}; // "java/lang/StringBuffer"
-const char StringConstant::U8S_java_SL_lang_SL_Throwable[] = {
-    U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e,
-    U_NU}; // "java/lang/Throwable"
-const char StringConstant::U8S_false[] = {
-    U_f, U_a, U_l, U_s, U_e, U_NU}; // "false"
-const char StringConstant::U8S_null[] = {U_n, U_u, U_l, U_l, U_NU}; // "null"
-const char StringConstant::U8S_quit[] = {U_q, U_u, U_i, U_t, U_NU}; // "quit"
-const char StringConstant::U8S_this[] = {U_t, U_h, U_i, U_s, U_NU}; // "this"
-const char StringConstant::U8S_true[] = {U_t, U_r, U_u, U_e, U_NU}; // "true"
-
-const char StringConstant::U8S_LP_C_RP_StringBuffer[] = {
-    U_LP, U_C, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
-    U_NU}; // "(C)Ljava/lang/StringBuffer;"
-const char StringConstant::U8S_LP_Z_RP_StringBuffer[] = {
-    U_LP, U_Z, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
-    U_NU}; // "(Z)Ljava/lang/StringBuffer;"
-const char StringConstant::U8S_LP_I_RP_StringBuffer[] = {
-    U_LP, U_I, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
-    U_NU}; // "(I)Ljava/lang/StringBuffer;"
-const char StringConstant::U8S_LP_J_RP_StringBuffer[] = {
-    U_LP, U_J, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
-    U_NU}; // "(J)Ljava/lang/StringBuffer;"
-const char StringConstant::U8S_LP_F_RP_StringBuffer[] = {
-    U_LP, U_F, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
-    U_NU}; // "(F)Ljava/lang/StringBuffer;"
-const char StringConstant::U8S_LP_D_RP_StringBuffer[] = {
-    U_LP, U_D, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
-    U_NU}; // "(D)Ljava/lang/StringBuffer;"
-const char StringConstant::U8S_LP_String_RP_StringBuffer[] = {
-    U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_RP,
-    U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
-    U_NU}; // "(Ljava/lang/String;)Ljava/lang/StringBuffer;"
-const char StringConstant::U8S_LP_Object_RP_StringBuffer[] = {
-    U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_O, U_b, U_j, U_e, U_c, U_t, U_SC, U_RP,
-    U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
-    U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
-    U_NU}; // "(Ljava/lang/Object;)Ljava/lang/StringBuffer;"
-
+//
+// Convert number to string.
+//
 const char StringConstant::U8S_NaN[] = {U_N, U_a, U_N, U_NU}; // "NaN"
 const char StringConstant::U8S_pos_Infinity[] = {
     U_I, U_n, U_f, U_i, U_n, U_i, U_t, U_y, U_NU}; // "Infinity"
@@ -1704,21 +1476,6 @@ const char StringConstant::U8S_neg_Infinity[] = {
 const char StringConstant::U8S_pos_Zero[] = {U_0, U_DOT, U_0, U_NU}; // "0.0"
 const char StringConstant::U8S_neg_Zero[] = {
     U_MINUS, U_0, U_DOT, U_0, U_NU}; // "-0.0"
-
-const int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue);
-const int StringConstant::U8S_Exceptions_length = strlen(U8S_Exceptions);
-const int StringConstant::U8S_InnerClasses_length = strlen(U8S_InnerClasses);
-const int StringConstant::U8S_Synthetic_length = strlen(U8S_Synthetic);
-const int StringConstant::U8S_Deprecated_length = strlen(U8S_Deprecated);
-const int StringConstant::U8S_LineNumberTable_length =
-    strlen(U8S_LineNumberTable);
-const int StringConstant::U8S_LocalVariableTable_length =
-    strlen(U8S_LocalVariableTable);
-const int StringConstant::U8S_Code_length = strlen(U8S_Code);
-const int StringConstant::U8S_SourceFile_length = strlen(U8S_SourceFile);
-const int StringConstant::U8S_null_length = strlen(U8S_null);
-const int StringConstant::U8S_this_length = strlen(U8S_this);
-
 
 Ostream Coutput;
 

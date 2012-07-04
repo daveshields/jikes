@@ -1,10 +1,9 @@
-// $Id: modifier.cpp,v 1.30 2002/12/07 00:27:20 ericb Exp $
+// $Id: modifier.cpp,v 1.33 2004/03/25 13:32:28 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -12,6 +11,7 @@
 #include "semantic.h"
 #include "option.h"
 #include "javasym.h"
+#include "stream.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -37,11 +37,30 @@ AccessFlags Semantic::ProcessModifiers(AstModifiers* modifiers,
     if (! modifiers)
         return AccessFlags(implicit_flags);
     AccessFlags access_flags;
-    for (LexStream::TokenIndex index = modifiers -> left_modifier_token;
-         index <= modifiers -> right_modifier_token; index++)
+    bool seen_keyword = false;
+    for (unsigned i = 0; i < modifiers -> NumModifiers(); i++)
     {
+        Ast* mod = modifiers -> Modifier(i);
+        AstAnnotation* annotation = mod -> AnnotationCast();
+        AstModifierKeyword* keyword = mod -> ModifierKeywordCast();
+        if (annotation)
+        {
+            if (seen_keyword)
+            {
+                ReportSemError(SemanticError::RECOMMENDED_ANNOTATION_ORDER,
+                               mod,
+                               lex_stream -> NameString(annotation -> name ->
+                                                        identifier_token));
+            }
+            // TODO: Add annotation support for 1.5.
+            ReportSemError(SemanticError::ANNOTATION_MODIFIER_UNSUPPORTED,
+                           mod);
+            continue;
+        }
+        assert(keyword);
+        seen_keyword = true;
         u2 flag;
-        switch (lex_stream -> Kind(index))
+        switch (lex_stream -> Kind(keyword -> modifier_token))
         {
         case TK_abstract: flag = AccessFlags::ACCESS_ABSTRACT; break;
         case TK_final: flag = AccessFlags::ACCESS_FINAL; break;
@@ -59,33 +78,36 @@ AccessFlags Semantic::ProcessModifiers(AstModifiers* modifiers,
         }
         if ((flag & valid_flags) == 0)
         {
-            ReportSemError(SemanticError::INVALID_MODIFIER, index,
-                           lex_stream -> NameString(index),
+            ReportSemError(SemanticError::INVALID_MODIFIER, mod,
+                           lex_stream -> NameString(keyword -> modifier_token),
                            declaration_kind_name);
         }
         else if ((flag & AccessFlags::ACCESS_ACCESS) &&
                  (access_flags.Flags() & AccessFlags::ACCESS_ACCESS))
         {
-            ReportSemError(SemanticError::DUPLICATE_ACCESS_MODIFIER, index);
+            ReportSemError(SemanticError::DUPLICATE_ACCESS_MODIFIER, mod);
         }
         else if (access_flags.IsSet(flag))
         {
-            ReportSemError(SemanticError::DUPLICATE_MODIFIER, index,
-                       lex_stream -> NameString(index));
+            ReportSemError(SemanticError::DUPLICATE_MODIFIER, mod,
+                           lex_stream -> NameString(keyword ->
+                                                    modifier_token));
         }
         else
         {
             // We have a valid flag if it is alone.
             if ((flag & implicit_flags) != 0)
             {
-                ReportSemError(SemanticError::REDUNDANT_MODIFIER, index,
-                               lex_stream -> NameString(index),
+                ReportSemError(SemanticError::REDUNDANT_MODIFIER, mod,
+                               lex_stream -> NameString(keyword ->
+                                                        modifier_token),
                                declaration_kind_name);
             }
             if (! access_flags.RecommendedOrder(flag))
             {
-                ReportSemError(SemanticError::RECOMMENDED_MODIFIER_ORDER,
-                               index, lex_stream -> NameString(index));
+                ReportSemError(SemanticError::RECOMMENDED_MODIFIER_ORDER, mod,
+                               lex_stream -> NameString(keyword ->
+                                                        modifier_token));
             }
             access_flags.SetFlags(flag);
             if (access_flags.ACC_FINAL())
@@ -93,14 +115,15 @@ AccessFlags Semantic::ProcessModifiers(AstModifiers* modifiers,
                 if (access_flags.ACC_VOLATILE())
                 {
                     // We know it's a field because of volatile.
-                    ReportSemError(SemanticError::VOLATILE_FINAL_FIELD,
-                                   index, lex_stream -> NameString(index));
+                    ReportSemError(SemanticError::VOLATILE_FINAL_FIELD, mod,
+                                   lex_stream -> NameString(keyword ->
+                                                            modifier_token));
                     access_flags.ResetFlags(flag);
                 }
                 else if (access_flags.ACC_ABSTRACT())
                 {
-                    ReportSemError(SemanticError::FINAL_ABSTRACT_ENTITY,
-                                   index, declaration_kind_name);
+                    ReportSemError(SemanticError::FINAL_ABSTRACT_ENTITY, mod,
+                                   declaration_kind_name);
                     access_flags.ResetFlags(flag);
                 }
             }
@@ -117,13 +140,13 @@ AccessFlags Semantic::ProcessModifiers(AstModifiers* modifiers,
                     access_flags.ACC_STATIC() || access_flags.ACC_STRICTFP())
                 {
                     ReportSemError(SemanticError::BAD_ABSTRACT_METHOD_MODIFIER,
-                                   index);
+                                   mod);
                     access_flags.ResetFlags(flag);
                 }
             }
             else if (access_flags.ACC_STRICTFP() && access_flags.ACC_NATIVE())
             {
-                ReportSemError(SemanticError::STRICTFP_NATIVE_METHOD, index);
+                ReportSemError(SemanticError::STRICTFP_NATIVE_METHOD, mod);
                 access_flags.ResetFlags(flag);
             }
         }
@@ -133,42 +156,106 @@ AccessFlags Semantic::ProcessModifiers(AstModifiers* modifiers,
 }
 
 //
+// Process modifiers of packages (annotations only, added in 1.5).
+//
+AccessFlags Semantic::ProcessPackageModifiers(AstPackageDeclaration* package)
+{
+    return ProcessModifiers(package -> modifiers_opt, L"a package", 0);
+}
+
+
+//
 // Process modifiers of top-level types.
 //
-AccessFlags Semantic::ProcessTopLevelTypeModifiers(AstDeclaredType* declaration)
+AccessFlags Semantic::ProcessTopLevelTypeModifiers(AstDeclaredType* decl)
 {
-    AstClassDeclaration* class_declaration =
-        declaration -> ClassDeclarationCast();
-    if (class_declaration)
-        return ProcessModifiers(class_declaration -> modifiers_opt,
-                                L"a top-level class",
-                                (AccessFlags::ACCESS_ABSTRACT |
-                                 AccessFlags::ACCESS_FINAL |
-                                 AccessFlags::ACCESS_PUBLIC |
-                                 AccessFlags::ACCESS_STRICTFP));
-    AstInterfaceDeclaration* interface_declaration =
-        declaration -> InterfaceDeclarationCast();
-    assert(interface_declaration);
-    return ProcessModifiers(interface_declaration -> modifiers_opt,
-                            L"a top-level interface",
-                            (AccessFlags::ACCESS_ABSTRACT |
-                             AccessFlags::ACCESS_PUBLIC |
-                             AccessFlags::ACCESS_STRICTFP),
-                            (AccessFlags::ACCESS_INTERFACE |
-                             AccessFlags::ACCESS_ABSTRACT));
+    AstClassDeclaration* class_decl = decl -> ClassDeclarationCast();
+    AstEnumDeclaration* enum_decl = decl -> EnumDeclarationCast();
+    AstInterfaceDeclaration* interface_decl =
+        decl -> InterfaceDeclarationCast();
+    AstAnnotationDeclaration* annotation_decl =
+        decl -> AnnotationDeclarationCast();
+    u2 valid_flags;
+    u2 implicit_flags = 0;
+    const wchar_t* context;
+    if (class_decl)
+    {
+        context = L"a top-level class";
+        valid_flags = AccessFlags::ACCESS_ABSTRACT |
+            AccessFlags::ACCESS_FINAL | AccessFlags::ACCESS_PUBLIC |
+            AccessFlags::ACCESS_STRICTFP;
+    }
+    else if (enum_decl)
+    {
+        valid_flags = AccessFlags::ACCESS_ABSTRACT |
+            AccessFlags::ACCESS_FINAL | AccessFlags::ACCESS_PUBLIC |
+            AccessFlags::ACCESS_STRICTFP;
+        implicit_flags = AccessFlags::ACCESS_FINAL;
+        for (unsigned i = 0; i < enum_decl -> NumEnumConstants(); i++)
+        {
+            if (enum_decl -> EnumConstant(i) -> class_body_opt)
+            {
+                valid_flags &= ~ AccessFlags::ACCESS_FINAL;
+                implicit_flags = 0;
+                break;
+            }
+        }
+        context = implicit_flags
+            ? L"a top-level enumeration (all enum constants without a body)"
+            : L"a top-level enumeration (some enum constants with a body)";
+    }
+    else
+    {
+        valid_flags = AccessFlags::ACCESS_ABSTRACT |
+            AccessFlags::ACCESS_PUBLIC | AccessFlags::ACCESS_STRICTFP;
+        implicit_flags = AccessFlags::ACCESS_INTERFACE |
+            AccessFlags::ACCESS_ABSTRACT;
+        if (interface_decl)
+            context = L"a top-level interface";
+        else
+        {
+            assert(annotation_decl);
+            context = L"a top-level annotation type";
+            implicit_flags |= AccessFlags::ACCESS_ANNOTATION;
+        }
+    }
+    return ProcessModifiers(decl -> modifiers_opt, context, valid_flags,
+                            implicit_flags);
 }
 
 
 //
 // Process modifiers of local classes declared as a statement in a method.
 //
-AccessFlags Semantic::ProcessLocalClassModifiers(AstClassDeclaration* class_declaration)
+AccessFlags Semantic::ProcessLocalClassModifiers(AstDeclaredType* decl)
 {
-    return ProcessModifiers(class_declaration -> modifiers_opt,
-                            L"a local inner class",
-                            (AccessFlags::ACCESS_ABSTRACT |
-                             AccessFlags::ACCESS_FINAL |
-                             AccessFlags::ACCESS_STRICTFP));
+    AstClassDeclaration* class_decl = decl -> ClassDeclarationCast();
+    AstEnumDeclaration* enum_decl = decl -> EnumDeclarationCast();
+    u2 valid_flags = AccessFlags::ACCESS_ABSTRACT |
+        AccessFlags::ACCESS_FINAL | AccessFlags::ACCESS_STRICTFP;
+    u2 implicit_flags = 0;
+    const wchar_t* context;
+    if (class_decl)
+        context = L"a local inner class";
+    else
+    {
+        assert(enum_decl);
+        implicit_flags = AccessFlags::ACCESS_FINAL;
+        for (unsigned i = 0; i < enum_decl -> NumEnumConstants(); i++)
+        {
+            if (enum_decl -> EnumConstant(i) -> class_body_opt)
+            {
+                valid_flags &= ~ AccessFlags::ACCESS_FINAL;
+                implicit_flags = 0;
+                break;
+            }
+        }
+        context = implicit_flags
+            ? L"a local enumeration (all enum constants without a body)"
+            : L"a local enumeration (some enum constants with a body)";
+    }
+    return ProcessModifiers(decl -> modifiers_opt, context, valid_flags,
+                            implicit_flags);
 }
 
 
@@ -176,14 +263,18 @@ AccessFlags Semantic::ProcessLocalClassModifiers(AstClassDeclaration* class_decl
 // Process modifiers of nested and inner types.
 //
 AccessFlags Semantic::ProcessNestedTypeModifiers(TypeSymbol* containing_type,
-                                                 AstDeclaredType* declaration)
+                                                 AstDeclaredType* decl)
 {
+    AstClassDeclaration* class_decl = decl -> ClassDeclarationCast();
+    AstEnumDeclaration* enum_decl = decl -> EnumDeclarationCast();
+    AstInterfaceDeclaration* interface_decl =
+        decl -> InterfaceDeclarationCast();
+    AstAnnotationDeclaration* annotation_decl =
+        decl -> AnnotationDeclarationCast();
     u2 valid_flags;
     u2 implicit_flags = 0;
     const wchar_t* context;
-    AstClassDeclaration* class_declaration =
-        declaration -> ClassDeclarationCast();
-    if (class_declaration)
+    if (class_decl || enum_decl)
     {
         if (containing_type -> ACC_INTERFACE())
         {
@@ -199,13 +290,28 @@ AccessFlags Semantic::ProcessNestedTypeModifiers(TypeSymbol* containing_type,
                 AccessFlags::ACCESS_FINAL | AccessFlags::ACCESS_ACCESS |
                 AccessFlags::ACCESS_STATIC | AccessFlags::ACCESS_STRICTFP;
         }
-        context = L"a member class";
+        if (class_decl)
+            context = L"a member class";
+        else
+        {
+            implicit_flags |= AccessFlags::ACCESS_FINAL |
+                AccessFlags::ACCESS_STATIC;
+            for (unsigned i = 0; i < enum_decl -> NumEnumConstants(); i++)
+            {
+                if (enum_decl -> EnumConstant(i) -> class_body_opt)
+                {
+                    valid_flags &= ~ AccessFlags::ACCESS_FINAL;
+                    implicit_flags &= ~ AccessFlags::ACCESS_FINAL;
+                    break;
+                }
+            }
+            context = (implicit_flags & AccessFlags::ACCESS_FINAL)
+                ? L"a member enumeration (all enum constants without a body)"
+                : L"a member enumeration (some enum constants with a body)";
+        }
     }
     else
     {
-        AstInterfaceDeclaration* interface_declaration =
-            declaration -> InterfaceDeclarationCast();
-        assert(interface_declaration);
         if (containing_type -> ACC_INTERFACE())
         {
             valid_flags = AccessFlags::ACCESS_ABSTRACT |
@@ -223,10 +329,17 @@ AccessFlags Semantic::ProcessNestedTypeModifiers(TypeSymbol* containing_type,
             implicit_flags = AccessFlags::ACCESS_INTERFACE |
                 AccessFlags::ACCESS_ABSTRACT | AccessFlags::ACCESS_STATIC;
         }
-        context = L"a member interface";
+        if (interface_decl)
+            context = L"a member interface";
+        else
+        {
+            assert(annotation_decl);
+            context = L"a member annotation type";
+            implicit_flags |= AccessFlags::ACCESS_ANNOTATION;
+        }
     }
-    return ProcessModifiers(declaration -> modifiers_opt, context,
-                            valid_flags, implicit_flags);
+    return ProcessModifiers(decl -> modifiers_opt, context, valid_flags,
+                            implicit_flags);
 }
 
 
@@ -247,35 +360,30 @@ AccessFlags Semantic::ProcessFieldModifiers(AstFieldDeclaration* field_declarati
 
 //
 // Process modifiers of local variables.
-// Note: Technically, this could be factored out from the grammar, since
-// only final is valid.
 //
-AccessFlags Semantic::ProcessLocalModifiers(AstLocalVariableDeclarationStatement* local_declaration)
+AccessFlags Semantic::ProcessLocalModifiers(AstLocalVariableStatement* decl)
 {
-    return ProcessModifiers(local_declaration -> modifiers_opt,
-                            L"a local variable", AccessFlags::ACCESS_FINAL);
+    return ProcessModifiers(decl -> modifiers_opt, L"a local variable",
+                            AccessFlags::ACCESS_FINAL);
 }
 
 
 //
 // Process modifiers of parameters.
-// Note: Technically, this could be factored out from the grammar, since
-// only final is valid.
 //
-AccessFlags Semantic::ProcessFormalModifiers(AstFormalParameter* parameter_declaration)
+AccessFlags Semantic::ProcessFormalModifiers(AstFormalParameter* decl)
 {
-    return ProcessModifiers(parameter_declaration -> modifiers_opt,
-                            L"a formal parameter", AccessFlags::ACCESS_FINAL);
+    return ProcessModifiers(decl -> modifiers_opt, L"a formal parameter",
+                            AccessFlags::ACCESS_FINAL);
 }
 
 
 //
 // Process modifiers of methods declared in classes.
 //
-AccessFlags Semantic::ProcessMethodModifiers(AstMethodDeclaration* method_declaration)
+AccessFlags Semantic::ProcessMethodModifiers(AstMethodDeclaration* decl)
 {
-    return ProcessModifiers(method_declaration -> modifiers_opt,
-                            L"a class's member method",
+    return ProcessModifiers(decl -> modifiers_opt, L"a class's member method",
                             (AccessFlags::ACCESS_ACCESS |
                              AccessFlags::ACCESS_STATIC |
                              AccessFlags::ACCESS_STRICTFP |
@@ -313,9 +421,9 @@ AccessFlags Semantic::ProcessConstructorModifiers(AstConstructorDeclaration* con
 //
 // Process modifiers of fields declared in interfaces.
 //
-AccessFlags Semantic::ProcessInterfaceFieldModifiers(AstFieldDeclaration* field_declaration)
+AccessFlags Semantic::ProcessInterfaceFieldModifiers(AstFieldDeclaration* decl)
 {
-    return ProcessModifiers(field_declaration -> modifiers_opt,
+    return ProcessModifiers(decl -> modifiers_opt,
                             L"an interface's member field",
                             (AccessFlags::ACCESS_PUBLIC |
                              AccessFlags::ACCESS_STATIC |
@@ -324,6 +432,7 @@ AccessFlags Semantic::ProcessInterfaceFieldModifiers(AstFieldDeclaration* field_
                              AccessFlags::ACCESS_STATIC |
                              AccessFlags::ACCESS_FINAL));
 }
+
 
 //
 // Process static and instance initializer modifiers.
@@ -335,7 +444,19 @@ AccessFlags Semantic::ProcessInitializerModifiers(AstInitializerDeclaration* ini
                             AccessFlags::ACCESS_STATIC);
 }
 
+
+//
+// Process static and instance initializer modifiers.
+//
+AccessFlags Semantic::ProcessEnumConstantModifiers(AstEnumConstant* decl)
+{
+    return ProcessModifiers(decl -> modifiers_opt, L"an enum constant", 0,
+                            (AccessFlags::ACCESS_PUBLIC |
+                             AccessFlags::ACCESS_STATIC |
+                             AccessFlags::ACCESS_FINAL |
+                             AccessFlags::ACCESS_ENUM));
+}
+
 #ifdef HAVE_JIKES_NAMESPACE
 } // Close namespace Jikes block
 #endif
-

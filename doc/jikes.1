@@ -129,7 +129,8 @@ Machine (ignored for compatibility).
 \fB\-\-nowarn
 .TP
 \fB\-q
-Do not issue warning messages.
+Do not issue warning messages. For greater control over warnings
+and cautions, see the +Z option.
 
 .TP
 \fB\-nowrite
@@ -214,6 +215,10 @@ Print a version message, and contact information, then exit. Overrides
 all other options except \fB\-\-help\fP, and nothing is compiled.
 
 .TP
+\fB\-Werror
+Equivalent to +Z2, provided for javac compatibility.
+
+.TP
 \fB\-Xstdout
 Write error messages to standard output, not stderr. At the moment,
 this is incompatible with javac, which takes an argument as the name
@@ -291,22 +296,38 @@ Jikes (for compatibility).
 .\" Someone should document how this differs from regular search order.
 
 .TP
-\fB\+P\fP[\fIflags\fP]
-Pedantic compilation - issues lots of warnings. This option may be
-listed multiple times, with cumulative effect. With no flags, this
-turns on the default set of pedantic warnings. Specifying a flag will
-then turn on or off a particular warning, depending on the presence of
-the \fIno-\fP prefix. At present, the recognized flags are
+\fB\+P\fP[\fIgroup-name\fP]
+Pedantic compilation - issues lots of warnings.
+With no group name, this
+turns on a default set of pedantic warnings which does not correspond
+to any of the named groups of warnings.
+Specifying a group name turns on or off that particular named group of
+warnings, depending on the presence of the \fIno-\fP prefix. Some named
+groups are enabled by default. These are marked as such in the output
+of \fBjikes --help\fP.
+At present, the recognized group names are
+\fBeffective-java\fP, which warns about the anti-patterns mentioned
+in Joshua Bloch's book "Effective Java";
 \fBmodifier-order\fP, which warns about the recommended ordering of
-multiple modifiers; \fBredundant-modifiers\fP, which warns about
-explicitly mentioning an implied modifier; \fBswitchcheck\fP, which
-warns about fallthrough between cases of switch statements; and
+multiple modifiers;
+\fBredundant-modifiers\fP, which warns about explicitly mentioning
+an implied modifier;
+\fBserial\fP, which warns about serializable classes without
+serialVersionUID fields;
+\fBshadow\fP, which warns about shadowing and hiding of fields;
+\fBswitchcheck\fP, which
+warns about fallthrough between cases of switch statements;
 \fBnaming-convention\fP, which warns about names that violate Java
-naming conventions.  Only switchcheck and naming-convention are
-included in plain \fB\+P\fP; the others must be asked for by
-name. Multiple \fB\+P\fP options are cumulative in effect. For
+naming conventions;
+\fBunused-type-imports\fP, which warns about unused single-type
+import statements;
+and \fBunused-package-imports\fP, which warns about unused package
+import statements.
+In addition, the pseudo-group \fBall\fP stands for all named groups
+of warnings, but not the anonymous group controlled by \fB+P\fP.
+Multiple \fB\+P\fP options are cumulative in effect. For
 example, to get all pedantic warnings except modifier ordering, use
-\fB\+P \+Pno-modifier-order\fP. To get just warnings about redundant
+\fB\+P \+Pall \+Pno-modifier-order\fP. To get just warnings about redundant
 modifiers, without other pedantic warnings, use
 \fB\+Predundant-modifiers\fP.
 
@@ -327,11 +348,23 @@ Set value of tab to \fIn\fP spaces. If not specified, the default is 8.
 Do full dependence check including Zip and Jar files.
 
 .TP
+\fB\+Z0
+Do not issue warning messages.
+
+.TP
+\fB\+Z1
+Treat cautions as errors.
+
+.TP
+\fB\+Z2
+Treat both warnings and cautions as errors.
+
+.TP
 \fB\+Z
 .TP
 \fB\-\-zero-cautions
-Treat cautions as errors. Unfortunately, at the moment, this will not
-promote warnings, just cautions.
+Equivalent to \fB+Z1\fP for compatibility with earlier versions of
+\fBJikes\fP.
 
 .PP
 An argument may have the form \fI@file\fP, which names a \fIfile\fP

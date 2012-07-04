@@ -1,10 +1,9 @@
-// $Id: jikesapi.cpp,v 1.44 2002/12/11 00:55:03 ericb Exp $
+// $Id: jikesapi.cpp,v 1.46 2004/03/20 04:48:17 jikesadmin Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -111,14 +110,13 @@ JikesOption::JikesOption()
       optimize(false),
       verbose(false),
       depend(false),
-      nowarn(false),
       old_classpath_search_order(false),
-      zero_defect(false),
       help(false),
       version(false),
       g(SOURCE | LINES),
       source(UNKNOWN),
-      target(UNKNOWN)
+      target(UNKNOWN),
+      tolerance(DEFAULT)
 {
 }
 

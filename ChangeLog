@@ -1,3 +1,893 @@
+2004-04-18  Chris Abbey  <jikes@cabbey.net>
+
+	Release 1.20.
+
+2004-04-17  Chris Abbey  <jikes@cabbey.net>
+
+	* src/expr.cpp: convert ExtremaForType, ReportOverflow, and 
+	CheckIntegerAddition from static to inline to allow compilation
+	on AIX.
+	
+2004-04-17  Eric Blake  <ebb9@byu.net>
+
+	* src/m4/ac_cxx_exceptions.m4: Delete - this file is no longer
+	needed, because jikes doesn't use exceptions.
+	* src/Makefile.in: Regenerate.
+
+2004-04-16  Chris Abbey  <jikes@cabbey.net>
+
+	* src/Makefile.in: trivial hand patch, looks like  src/m4/
+	was not up to date the last time this was regen'd.
+
+2004-04-15  Eric Blake  <ebb9@byu.net>
+
+	* NEWS: More news blurbs.
+	* configure.ac: Bump jikes version, and update to automake 1.8.3.
+	* config.guess: Regenerate.
+	* config.sub: Regenerate.
+	* configure: Regenerate.
+	* install-sh: Regenerate.
+	* mkinstalldirs: Regenerate.
+
+2004-04-14  Chris Abbey	 <jikes@cabbey.net>
+
+	* src/error.cpp (SemanticError::InitializeMessageGroups): turn
+	the defaults down for Effective Java and Naming Conventions
+	diagnostics.
+
+2004-04-14  Eric Blake  <ebb9@byu.net>
+
+	* NEWS: My shot at 1.20 release notes.
+
+2004-04-13  Chris Abbey  <jikes@cabbey.net>
+
+	* src/symbol.ccp: revert to using strcmp and wcscmp instead of
+	comparing just the first char. Fixes bug 3920. Thanks to Elliott
+	for pointing out the subtle difference of the equivalent to
+	changing from s.equals(".") to s.startsWith(".").
+
+2004-04-12  Eric Blake  <ebb9@byu.net>
+
+	* src/error.h (STATIC_TYPE_ACCESSING_MEMBER_TYPE): New error.
+	* src/error.cpp: Ditto.
+	* src/decl.cpp (FindType): Emit it when appropriate.
+
+2004-04-11  Eric Blake  <ebb9@byu.net>
+
+	* src/symbol.cpp (UnlinkFromParents): Fix compile-time error with
+	poor choice of identifier.
+
+2004-04-11  Elliott Hughes  <enh@acm.org>
+
+	* AUTHORS: Credit where credit's due.
+
+2004-04-11  Elliott Hughes  <enh@acm.org>
+
+	* src/diagnose.cpp: Remove an extraneous endl that caused blank
+	lines to appear in +E or +D output when there were syntax (rather
+	than lexical or semantic) errors. There are still some cases where
+	Jikes outputs extra blank lines in its regular output, but they're
+	less noticeable when the output isn't very tight anyway, and I haven't
+	found them in the source, either.
+
+2004-04-11  Phil Norman  <cuvy.abezna@virgin.net>
+
+	* src/symbol.h, src/symbol.cpp: Fix bug 3446. Added a method
+	TypeSymbol::UnlinkFromParents which removes references from the
+	subtypes and dependents sets of the TypeSymbol's 'super' and set
+	of implemented interfaces. Used this method in the method
+	SymbolTable::DeleteAnonymousTypes so that destroyed anonymous
+	types will be properly unlinked. Bug 3446 was caused by things such
+	as the TypeSymbol representing java.lang.Object keeping references
+	to a destroyed TypeSymbol, and so causing segfaults.
+
+2004-04-08  Eric Blake  <ebb9@byu.net>
+
+	* src/class.cpp (Init) [!JIKES_DEBUG]: Fix regression in non-debug
+	builds from previous patch.
+
+2004-04-07  Eric Blake  <ebb9@byu.net>
+
+	* src/depend.cpp (AddDependence): Move array, primitive processing
+	here from elsewhere. Once again allows int[].class in a package.
+	* src/expr.cpp (ProcessAmbiguousName, ProcessFieldAccess),
+	(ProcessMethodName, GetAnonymousType): Use updates to
+	AddDependence.
+
+2004-04-04  Eric Blake  <ebb9@byu.net>
+
+	* src/class.cpp (Init): Silence compiler warning.
+
+2004-04-04  Musachy Barroso <insanus@bellsouth.net>
+
+	Jikes patch 432.
+	* src/control.cpp (Control): Check for system I/O errors.
+	* src/control.h (general_io_errors, general_io_warnings): New
+	fields.
+	* src/error.cpp (SafeArray): New method for persistent strings.
+	* src/error.h (IO_WARNING, IO_ERROR): New errors.
+	* src/system.cpp (ProcessBootClassPath): 
+	* src/system.cpp (ProcessExtDirs): 
+	* src/system.cpp (ProcessClassPath): 
+
+2004-04-04  Eric Blake  <ebb9@byu.net>
+
+	* src/class.h (GetN): Return NULL-terminated byte arrays. 
+	(CPUtf8Info::Bytes): Change to reflect the actual contents of the
+	bytes array rather than debugging view - fixes bug 3913.
+	(CPUtf8Info::contents, Init): Use contents only when debugging.
+	* src/class.cpp: Update all callers.
+	* src/symbol.cpp (UnboxedType): Adds missing Byte.
+	* src/error.cpp: Fix some typos.
+	(PrintFile): Be forgiving of NULL filename.
+
+2004-04-04  Elliott Hughes  <enh@acm.org>
+
+	* src/symbol.cpp (BoxedType): Adds the missing primitive type 'byte'.
+
+2004-04-04  Elliott Hughes  <enh@acm.org>
+
+	* src/expr.cpp (GetAnonymousType): Fix bug 3692. If we failed to
+	get a default constructor, we should give up before we require it.
+
+2004-04-03  Elliott Hughes  <enh@acm.org>
+
+	* src/error.cpp: Correctly fix the text of *all* package-related
+	errors.
+
+2004-04-03  Elliott Hughes  <enh@acm.org>
+
+	* src/diagnose.cpp, src/error.cpp: Fix +D so that it outputs the
+	correct column numbers, instead of always reporting column 0
+	because we hadn't re-read the input to be able to translate token
+	indexes into column numbers.
+
+2004-04-02  Elliott Hughes  <enh@acm.org>
+
+	* src/error.cpp: Fix a few package-related errors; packages should
+	be reported as "java.lang", not "java/lang".
+
+2004-03-31  Eric Blake  <ebb9@byu.net>
+
+	* src/ast.cpp [JIKES_DEBUG]: Move stream.h include outside of the
+	namespace.
+	* src/depend.cpp: Formatting.
+	(BoxedTypeForPrimitiveType, AddStringConversionDependence): Delete
+	- with autoboxing in JSR 201, this information better belongs in
+	TypeSymbol.
+	* src/semantic.h: Ditto.
+	* src/expr.cpp (ReportVariableNotFound): Use NULL, not 0, when we
+	mean a pointer.
+	(ProcessClassLiteral): Restore class dependence on non-primitive
+	types, that Elliott's patch regressed on.
+	(ProcessPLUS): Depend on the boxed type.
+	(CreateAccessToScopedVariable, ProcessAmbiguousName): Don't allow
+	static class to access constant instance variable of enclosing
+	class, bug 3536.
+	* src/symbol.h (BoxedType, UnboxedType): New methods.
+	* src/symbol.cpp: Implement.
+
+2004-03-31  Elliott Hughes  <enh@acm.org>
+
+	* src/expr.cpp: Fix a null-pointer access caused by trying to be too
+	clever; all that effort I put into not crashing on valid source, and
+	not a thought given to invalid source like "class C{C(){this.c=0;}}".
+
+2004-03-28  Elliott Hughes  <enh@acm.org>
+
+	* src/decl.cpp: Compiling GNU Classpath from CVS and looking at Jikes'
+	complaints was a good reminder that we shouldn't warn about hiding of
+	the serialVersionUID field; that's the way it's supposed to be used.
+
+2004-03-28  Elliott Hughes  <enh@acm.org>
+
+	* src/init.cpp: Warn about non-static final fields initialized by a
+	constant expression; these can be made static to save space in each
+	instance.
+	* src/error.cpp, src/error.h: The new diagnostic.
+
+2004-03-28  Elliott Hughes  <enh@acm.org>
+
+	* src/decl.cpp: Accept default access for serialVersionUID; it's
+	common existing practice.
+	* src/error.cpp: Put all the serialization-related warnings
+	together in the +Pserial group.
+
+2004-03-28  Elliott Hughes  <enh@acm.org>
+
+	* src/expr.cpp: Fix another assertion compiling Sun's
+	JDK 1.4.1 source; don't ask FindInaccessibleType to try with an
+	AstName whose base_opt is non-null, because it doesn't handle
+	that case. We can now compile the JDK as well as javac again.
+
+2004-03-28  Elliott Hughes  <enh@acm.org>
+
+	* src/expr.cpp: Fix an assertion compiling Sun's
+	JDK 1.4.1 source; it looks like the call to AddDependence in
+	ProcessClassLiteral was lifted too high, and the dependence should
+	be on the java.lang class that wraps the primitive type, not
+	the primitive type itself.
+	* src/depend.cpp, src/semantic.h: A new method to translate from
+	a primitive type to its java.lang wrapper type.
+
+2004-03-28  Elliott Hughes  <enh@acm.org>
+
+	* src/class.h (CPUtf8Info): Fix uninitialized member data.
+
+2004-03-27  Eric Blake  <ebb9@byu.net>
+
+	* src/depend.cpp (AddDependence): Don't create dependencies on
+	null, jikes bug 3701.
+	* src/class.h (ClassFile::GetN): Make more robust (I crashed my
+	system by 0-filling several megabytes on a short but invalid
+	.class file).
+	(UnknownAttribute): New class, split out from AttributeInfo to
+	reduce attribute memory needs.
+	* src/class.cpp: Ditto.
+
+2004-03-26  Eric Blake  <ebb9@byu.net>
+
+	* src/definite.cpp (DefiniteSwitchStatement): Fix problems with
+	switch statements without a default label.
+
+2004-03-25  Eric Blake  <ebb9@byu.net>
+
+	* configure.ac (AC_CXX_RTTI): Compilers have improved in 2 years,
+	don't cripple the RTTI check.
+	* aclocal.m4: Regenerate with automake 1.8.3.
+	* Makefile.in: Regenerate.
+	* configure: Ditto.
+	* doc/Makefile.in: Ditto.
+	* src/Makefile.in: Ditto.
+
+	* src/stream.h (TokenIndex, BadToken): Move to...
+	* src/platform.h (TokenIndex, BAD_TOKEN): ...here. This reduces
+	the number of files that depend on stream.h.
+	* src/ast.cpp: Use the new TokenIndex.
+	* src/ast.h: Ditto.
+	* src/body.cpp: Ditto.
+	* src/class.cpp: Ditto.
+	* src/control.cpp: Ditto.
+	* src/decl.cpp: Ditto.
+	* src/depend.cpp: Ditto.
+	* src/diagnose.cpp: Ditto.
+	* src/diagnose.h: Ditto.
+	* src/error.cpp: Ditto.
+	* src/error.h: Ditto.
+	* src/expr.cpp: Ditto.
+	* src/incrmnt.cpp: Ditto.
+	* src/init.cpp: Ditto.
+	* src/java.g: Ditto.
+	* src/lpginput.h: Ditto.
+	* src/modifier.cpp: Ditto.
+	* src/option.cpp: Ditto.
+	* src/parser.cpp: Ditto.
+	* src/parser.h: Ditto.
+	* src/scanner.cpp: Ditto.
+	* src/scanner.h: Ditto.
+	* src/semantic.h: Ditto.
+	* src/stream.cpp: Ditto.
+	* src/symbol.cpp: Ditto.
+	* src/symbol.h: Ditto.
+	* src/system.cpp: Ditto.
+	* src/table.h: Ditto.
+	* src/unparse.cpp: Ditto.
+	* src/javaact.cpp: Regenerate.
+
+2004-03-23  Eric Blake  <ebb9@byu.net>
+
+	* src/ast.h (AstEnumDeclaration, AstEnumConstant),
+	(AstAnnotationDeclaration): Final new classes to fully parse JDK
+	1.5 grammar (but semantics are still a ways off).
+	* src/error.h (ANNOTATION_TYPE_UNSUPPORTED, ENUM_TYPE_UNSUPPORTED),
+	(SUPER_IS_ENUM, CANNOT_CONSTRUCT_ENUM): New errors.
+	* src/error.cpp: Ditto.
+	* src/ast.cpp: Rough support for enum and annotation types.
+	* src/body.cpp: Ditto.
+	* src/control.h: Ditto.
+	* src/decl.cpp: Ditto.
+	* src/expr.cpp: Ditto.
+	* src/java.g: Ditto.
+	* src/modifier.cpp: Ditto.
+	* src/parser.h: Ditto.
+	* src/scanner.cpp: Ditto.
+	* src/semantic.h: Ditto.
+	* src/symbol.cpp: Ditto.
+	* src/symbol.h: Ditto.
+	* src/system.cpp: Ditto.
+	* src/unparse.cpp: Ditto.
+	* src/javaact.cpp: Regenerate.
+	* src/javaact.h: Ditto.
+	* src/javadcl.h: Ditto.
+	* src/javadef.h: Ditto.
+	* src/javasym.h: Ditto.
+
+2004-03-23  Eric Blake  <ebb9@byu.net>
+
+	* src/control.h: Reorder accessor cache variables.
+	(FIELD_ACCESSOR): Similar to TYPE_ACCESSOR, to access fields like
+	Integer.TYPE and ElementType.FIELD.
+	* src/control.cpp: Ditto.
+	* src/system.cpp (ProcessSystemField): New.
+	* src/expr.cpp (ProcessClassLiteral): Use field accessors.
+	(GetAnonymousType): Use '-' instead of '$' in 1.5 anon types.
+	* src/platform.cpp (US_MI): New.
+	* src/platform.h: Ditto.
+
+2004-03-16  Eric Blake  <ebb9@byu.net>
+
+	* src/ast.cpp: Backport the ability to parse JSR 14 from the
+	generics-branch (but not the semantic passes). Now mainline and
+	generics are in sync on the grammar.
+	* src/ast.h: Ditto.
+	* src/body.cpp: Ditto.
+	* src/bytecode.cpp: Ditto.
+	* src/decl.cpp: Ditto.
+	* src/error.cpp: Ditto.
+	* src/error.h: Ditto.
+	* src/expr.cpp: Ditto.
+	* src/java.g: Ditto.
+	* src/jikes.cpp: Ditto.
+	* src/jikesapi.cpp: Ditto.
+	* src/parser.cpp: Ditto.
+	* src/parser.h: Ditto.
+	* src/scanner.cpp: Ditto.
+	* src/semantic.h: Ditto.
+	* src/symbol.cpp: Ditto.
+	* src/unparse.cpp: Ditto.
+	* src/javaact.cpp: Regenerate.
+	* src/javaact.h: Ditto.
+	* src/javadcl.h: Ditto.
+	* src/javadef.h: Ditto.
+	* src/javasym.h: Ditto.
+
+2004-03-14  Elliott Hughes  <enh@acm.org>
+
+	* src/decl.cpp, src/semantic.h: Bug 3378 - the previous fix made the
+	diagnostic worse in the case where the problem was an inaccessible
+	field, because it would report 'type not found' rather than
+	'no accessible field'. A new method, FindInaccessibleType, finds only
+	inaccessible types (unlike FindType), and doesn't report anything
+	directly (unlike MustFindType). MustFindType uses the newly-extracted
+	method.
+	* src/expr.cpp (ReportVariableNotFound): use new method.
+
+2004-03-14  Elliott Hughes  <enh@acm.org>
+
+	* src/expr.cpp (ReportVariableNotFound): fix for bug 3378; if we can't
+	find an accessible type, look for an inaccessible one as a plausible
+	cause of the error.
+
+2004-03-13  Elliott Hughes  <enh@acm.org>
+
+	* src/control.cpp: only check for unused imports if compilation
+	is successful. Seemingly unused imports may well be used by code
+	we couldn't compile, so we can't be sure they're unused.
+
+2004-03-12  Eric Blake  <ebb9@byu.net>
+
+	* src/ast.h (AstMethodInvocation): Split method into base_opt and
+	identifier_token.
+	* src/ast.cpp (Clone, Print): Use updated AST.
+	* src/bytecode.cpp (MethodTypeResolution),
+	(EmitAssignmentExpression, EmitMethodInvocation): Ditto.
+	* src/definite.cpp (DefiniteMethodInvocation): Ditto.
+	* src/expr.cpp (Header, FindMisspelledMethodName),
+	(FindMethodInType, FindMethodInEnvironment, CreateAccessToType),
+	(CreateAccessToScopedVariable, CreateAccessToScopedMethod),
+	(FindVariableMember, FindMethodMember, ProcessMethodName): Ditto.
+	* src/java.g (MethodInvocation): Ditto.
+	* src/parser.h: Ditto.
+	* src/unparse.cpp (Unparse): Ditto.
+	* src/javaact.cpp: Regenerate.
+	* src/javaact.h: Ditto.
+	* src/javadcl.h: Ditto.
+	* src/javadef.h: Ditto.
+
+2004-03-11  Elliott Hughes  <enh@acm.org>
+
+	* src/error.cpp: Bug 3896 - failure to find .java files mentioned
+	on the command-line should be an error, not a warning. Non .java
+	files should also be treated as errors (most likely incorrect
+	arguments).
+
+2004-03-11  Elliott Hughes  <enh@acm.org>
+
+	* src/body.cpp, src/semantic.h: add warnings about boolean assignment
+	used as a truth value in an if, while, or do expression.
+	* src/error.cpp, src/error.h: new diagnostic.
+
+2004-03-10  Eric Blake  <ebb9@byu.net>
+
+	* src/decl.cpp (ReadType): Bug 3852 - fix at least the simple test
+	case, where valid A referring to valid B referring to invalid C
+	was not caught in A.
+
+2004-03-09  Elliott Hughes  <enh@acm.org>
+
+	* src/expr.cpp (GetAnonymousType): Fix invalid assertion that was
+	triggering during placeholder types - bug 3884.
+
+2004-03-07  Elliott Hughes  <enh@acm.org>
+
+	* src/decl.cpp (ProcessInstanceInitializers),
+	(ProcessStaticInitializers):
+	fix compilation of classes such as Sun's implementation of
+	java.lang.Character which use field declarations that declare more
+	than one field. The misleading names NumInstanceVariables and
+	NumClassVariables actually give the number of field declarations,
+	not the number of variables declared (i.e. "int i = 0, j = 1;" was
+	being treated as one rather than two).
+
+2004-03-05  Eric Blake  <ebb9@byu.net>
+
+	* src/ast.h (AstMemberValue, AstMemberValuePair, AstAnnotation),
+	(AstModifierKeyword): New classes.
+	(AstModifiers): Redo, to annotations in addition to keywords, per
+	JSR 175.
+	(AstPackageDeclaration): Add modifiers_opt.
+	(AstLocalVariableStatement, AstLocalClassStatement),
+	(AstClassCreationExpression): Rename to be shorter names.
+	* src/decl.cpp (CheckPackage): Check for package annotations,
+	although this needs more work.
+	* src/error.h (ANNOTATION_MODIFIER_UNSUPPORTED),
+	(RECOMMENDED_ANNOTATION_ORDER, DUPLICATE_ANNOTATION): New errors.
+	* src/error.cpp: Ditto.
+	* src/stream.h (PackageToken): New method, to allow for package
+	modifiers.
+	* src/stream.cpp: Reflect changes to stream.
+	* src/parser.cpp (PackageHeaderParse): Ditto.
+	* src/parser.h: Ditto.
+	* src/scanner.cpp (ClassifyIdOrKeyword): Ditto.
+	* src/semantic.h (ProcessPackageModifiers): New method.
+	* src/ast.cpp: Reflect changes to AST.
+	* src/body.cpp: Ditto.
+	* src/bytecode.cpp: Ditto.
+	* src/bytecode.h: Ditto.
+	* src/definite.cpp: Ditto.
+	* src/expr.cpp: Ditto.
+	* src/modifier.cpp: Ditto.
+	* src/symbol.cpp: Ditto.
+	* src/symbol.h: Ditto.
+	* src/unparse.cpp: Ditto.
+	* src/java.g: Ditto.
+	(CompilationUnit, PackageDeclaration, Modifier): Parse annotation
+	modifiers (but not yet for annotation types).
+	* src/javaact.cpp: Regenerate.
+	* src/javaact.h: Ditto.
+	* src/javadcl.h: Ditto.
+	* src/javadef.h: Ditto.
+	* src/javaprs.h: Ditto.
+	* src/javasym.h: Ditto.
+
+2004-03-02  Elliott Hughes  <enh@acm.org>
+
+	* src/control.cpp, src/decl.cpp: remove checks for +P from referenced
+	import checks; as long as +Punused-package-imports doesn't imply +P --
+	which it's hard to envisage as long as +P also turns on the anonymous
+	pedantic checks -- having +Punused-package-imports seemingly
+	non-functional is going to get us more bug reports.
+	* src/error.cpp: fix the diagnostic text to output the package name
+	in Java source form rather than internal form.
+
+2004-03-02  Elliott Hughes  <enh@acm.org>
+
+	* src/option.cpp: Implement -Werror as a javac-compatible synonym
+	for +Z2.
+	* src/jikes.cpp, doc/jikes.1: Document new -Werror option.
+
+2004-03-01  Eric Blake  <ebb9@byu.net>
+
+	* src/ast.h (Ast, StoragePool): Backport improved type-safety,
+	reduced object size, and placement operator new from
+	generics-branch.  Affects all Ast classes.
+	* src/ast.cpp: Ditto.
+	* src/body.cpp: Ditto.
+	* src/bytecode.cpp: Ditto.
+	* src/control.cpp: Ditto.
+	* src/definite.cpp: Ditto.
+	* src/expr.cpp: Ditto.
+	* src/java.g: Ditto.
+	* src/parser.cpp: Ditto.
+	* src/javaact.cpp: Regenerate.
+
+2004-02-29  Elliott Hughes  <enh@acm.org>
+
+	* src/error.cpp: Also allow +Pno-all to turn off all named groups. This
+	is useful to turn off any named groups enabled by default, without
+	having to know what they are or explicitly list them.
+	* doc/jikes.1: Better document new +Pno-all option.
+
+2004-02-29  Elliott Hughes  <enh@acm.org>
+
+	* src/error.cpp: Fix "jikes --help" to show which +P groups are enabled
+	by default, rather than misleadingly trying (and failing) to show what
+	bare +P does. This whole area is something of a mess, so I expect to
+	be back soon.
+	Also add a new +Pall option to allow command-lines of the form "jikes
+	+Pall +Pno-redundant-modifier +Pno-modifier-order +Pno-serial", for
+	people who'd rather enable everything and explicitly disable what they
+	don't like than explicitly enable everything they want.
+	* doc/jikes.1: Document new +Pall option. The whole +P section was
+	rather misleading and inaccurate, so I've rewritten it to correspond
+	jikes' current behavior.
+
+2004-02-28  Elliott Hughes  <enh@acm.org>
+
+	* NEWS: Try to keep track of what I've done, so I don't have to
+	read through the ChangeLog when we're getting ready to release 1.20.
+
+2004-02-28  Elliott Hughes  <enh@acm.org>
+
+	* src/error.cpp: Implement upgrading of warnings to errors, as well
+	as the old optional upgrading of cautions. Fixes bug 665.
+	* src/jikesapi.cpp, jikesapi.h: Replace the nowarn and zero_defect
+	boolean fields with a new field that represents the level of tolerance
+	we show towards warnings and cautions.
+	* src/option.cpp: Parse +Z0, +Z1 and +Z2, and re-implement -nowarn, +Z
+	and --zero-cautions in terms of the new tolerance level.
+	variable; or hiding of fields when declaring a field.
+	* src/stream.cpp: Tracks the API change for testing whether warnings
+	should be generated.
+	* src/jikes.cpp, doc/jikes.1: Document new +Z sub-options.
+
+2004-02-27  Elliott Hughes  <enh@acm.org>
+
+	* src/body.cpp, src/semantic.h: Add a method to check for an
+	accessible field with a given name (WarnOfAccessibleFieldWithName).
+	* src/error.cpp, error.h: New error messages, and +P[no-]shadow.
+	* src/body.cpp, src/decl.cpp: Check for shadowing of fields
+	when declaring a local variable, a foreach variable, a catch
+	variable; or hiding of fields when declaring a field.
+	* doc/jikes.1: Document +P[no-]shadow.
+
+2004-02-27  Eric Blake  <ebb9@byu.net>
+
+	* src/ast.h (AstImportDeclaration::static_token_opt): New field.
+	* src/ast.cpp (AstImportDeclaration::Clone, Print): Support it.
+	* src/unparse.cpp (AstImportDeclaration::Unparse): Ditto.
+	* src/decl.cpp (ProcessImports): Note that static imports are not
+	supported yet.
+	* src/error.h (STATIC_IMPORT_UNSUPPORTED): New error.
+	* src/error.cpp: Ditto.
+	* src/java.g (ImportDeclaration): Parse static imports, from JSR
+	201.
+	* src/javaact.cpp: Regenerate.
+	* src/javaact.h: Ditto.
+	* src/javadcl.h: Ditto.
+	* src/javadef.h: Ditto.
+	* src/javasym.h: Ditto.
+
+2004-02-27  Eric Blake  <ebb9@byu.net>
+
+	* src/option.cpp (SaveCurrentDirectoryOnDisk, nocleanup): Fix
+	mingw build.
+	* src/symbol.cpp (ReadDirectory): Ditto.
+	* src/system.cpp (ProcessExtDirs): Ditto.
+
+2004-02-26  Eric Blake  <ebb9@byu.net>
+
+	* src/ast.h (AstFormalParameter::ellipsis_token_opt): New field.
+	* src/ast.cpp (AstFormalParameter::Clone, Print): Support it.
+	* src/unparse.cpp (AstFormalParameter::Unparse): Ditto.
+	* src/body.cpp (ProcessForeachStatement, ProcessTryStatement):
+	Ditto.
+	* src/decl.cpp (ProcessFormalParameters): Note that varargs are
+	not supported yet.
+	* src/error.h (VARARGS_UNSUPPORTED): New error.
+	* src/error.cpp: Ditto.
+	* src/parser.h: Forward declare AstFormalParameter.
+	* src/java.g (FormalParameter, FormalParameterList),
+	(LocalVariableDeclaration): Parse varargs, from JSR 201.
+	* src/javaact.cpp: Regenerate.
+	* src/javaact.h: Ditto.
+	* src/javadcl.h: Ditto.
+	* src/javadef.h: Ditto.
+	* src/javasym.h: Ditto.
+
+2004-02-26  Eric Blake  <ebb9@byu.net>
+
+	* src/expr.cpp (ProcessPLUS): Remove bad assertion ('true +
+	false', while illegal, can reach this point).
+
+2004-02-26  Eric Blake  <ebb9@byu.net>
+
+	* AUTHORS: Give credit where due.
+	* src/bytecode.cpp (EmitAssignmentExpression),
+	(EmitBinaryExpression, ConcatenateString, EmitStringAppendMethod):
+	Use faster StringBuilder (added in 1.5) when available.
+	* src/control.h (*_name_symbol): Rearrange the name_symbols to be
+	in alphabetic order.
+	(GetPrimitiveType): Improve the signature.
+	* src/system.cpp: Implement changes to control.h.
+	* src/platform.h: Delete lots of unused string constants, now that
+	they are more easily generated in system.cpp.
+	* src/control.cpp: Whitespace cleanup, and use changes in
+	control.h and platform.h.
+	* src/decl.cpp: Ditto.
+	* src/error.cpp: Ditto.
+	* src/error.h: Ditto.
+	* src/expr.cpp: Ditto.
+	* src/lookup.cpp: Ditto.
+	* src/platform.cpp: Ditto.
+	* src/symbol.cpp: Ditto.
+
+2004-02-23  Emil Ong  <emilong@cs.berkeley.edu>, 
+            Mark Richters  <mr@Informatik.Uni-Bremen.DE>
+	
+	* doc/jikes.1: Documented new pedantic flags unused-type-imports
+	and unused-package-imports; originally by Mark Richters for 1.12,
+	ported to current by Emil Ong, ported to cvs HEAD by cabbey.
+
+	* src/control.cpp (ProcessBodies): If pedantic option is turned
+	on, call CheckForUnusedImports after all types of a body have been
+	processed.
+	(CheckForUnusedImports): New method checks and warns about
+	unnecessary import declarations.
+	* src/control.h (class Control): Declare new method
+	CheckForUnusedImports.
+	* src/decl.cpp (ImportType): If pedantic option is set, keep track
+	of packages from which types are imported as a result of a
+	type-import-on-demand.
+	(FindType): If pedantic option is set, keep track of types which
+	are found by a single-type-import.
+	* src/error.cpp (StaticInitializer): Initialize new named warnings
+	UNUSED_TYPE_IMPORT and UNUSED_PACKAGE_IMPORT.
+	(named_errors[]): Added new named warnings UNUSED_TYPE_IMPORT 
+	and UNUSED_PACKAGE_IMPORT.
+	(InitializeMessages): Added messages for new named warnings 
+	UNUSED_TYPE_IMPORT and UNUSED_PACKAGE_IMPORT.
+	* src/error.h (class SemanticError): Added UNUSED_TYPE_IMPORT and
+	UNUSED_PACKAGE_IMPORT to enum SemanticErrorKind.
+	* src/semantic.h (class Semantic): Added SymbolSets
+	referenced_package_imports and referenced_type_imports.
+
+2004-02-23  Eric Blake  <ebb9@byu.net>
+
+	* configure.ac: Fix typo in --enable-source15 test.
+	* configure: Regenerate.
+	* src/config.h.in: Ditto.
+	* src/access.h (Print): Minor improvement.
+	* src/expr.cpp (CastValue): Ditto.
+	* src/parser.h: Ditto.
+
+	* src/control.h (system_package, unnamed_package): Replace with
+	LangPackage() and UnnamedPackage().
+	(TYPE_ACCESSOR, METHOD_ACCESSOR): Utility macros to make adding
+	new system symbols easier.
+	* src/control.cpp: Update accordingly.
+	* src/system.cpp: Ditto.
+	* src/class.cpp: Ditto.
+	* src/decl.cpp: Ditto.
+	* src/depencd.cpp: Ditto.
+	* src/platform.h: Add several new string constants. This file
+	could stand a cleanup after the control refactor.
+	* src/platform.cpp: Update accordingly.
+
+	* NEWS: Document the addition of enhanced for loops.
+	* src/ast.h (AstForeachStatement): New class.
+	* src/ast.cpp: Support it.
+	* src/unparse.cpp: Ditto.
+	* src/semantic.h (ProcessForeachStatement),
+	(DefiniteForeachStatement): New methods.
+	* src/body.cpp (ProcessForeachStatement),
+	(ProcessContinueStatement): Support foreach loops.
+	* src/definite.cpp (DefiniteForeachStatement): Ditto.
+	* src/bytecode.h (EmitForeachStatement): New method.
+	* src/bytecode.cpp: Support foreach loops.
+	* src/error.h (INCOMPATIBLE_TYPE_FOR_FOREACH, TYPE_NOT_ITERABLE),
+	(FOREACH_UNSUPPORTED): New errors.
+	* src/error.cpp: Support foreach loops.
+	* src/symbol.h (helper_variable_index): Rename from
+	try_or_synchronized_variable_index, for use by foreach.
+	* src/symbol.cpp: Support rename.
+	* src/java.g (FormalParameter): Refactor, to allow LALR(1) grammar
+	with the previously refactored LocalVariableDeclaration.
+	(ForeachStatement): Parse new construct.
+	* src/javaact.cpp: Regenerate.
+	* src/javaact.h: Ditto.
+	* src/javadcl.h: Ditto.
+	* src/javadef.h: Ditto.
+	* src/javasym.h: Ditto.
+
+2004-02-22  Elliott Hughes  <enh@acm.org>
+
+	* body.cpp (ProcessLocalVariableDeclarationStatement): Make the
+	duplicate local variable declaration checking more similar to that
+	in ProcessTryStatement.
+	* body.cpp (ProcessTryStatement):
+	* decl.cpp (ProcessConstructorDeclaration, ProcessMethodDeclaration):
+	Invoke SetLocation on formal parameters. We can't do it in
+	ProcessFormalParameters, because that's invoked before the variable
+	symbols can have an owner -- how else do you check for duplicate
+	signatures? -- but we do need to come back and do it eventually.
+	The problems was noticed with reporting the location of the
+	original occurrence of a local variable, where the location would
+	be given as "".
+
+2004-02-17  Eric Blake  <ebb9@byu.net>
+
+	* ChangeLog: Reformat to fit 80 columns.
+
+	* configure.ac: Add --enable-source15 to turn on beta 1.5
+	features, without making it default.
+	* NEWS: Document configure option.
+	* src/option.cpp (GetErrorMessage, Option): Use it.
+	* src/Makefile.am (JAVAC): Silence code.h regen warnings.
+	* configure: Regenerate.
+	* src/Makefile.in: Ditto.
+	* src/config.h.in: Ditto.
+	* src/access.h (ACC_ANNOTATION): Now 0x2000, per updated JSR 175.
+	* src/bytecode.cpp (EmitExpression, GenerateClassAccessMethod),
+	(GenerateClassAccess): Utilize 1.5 class format change that allows
+	ldc class.
+	* src/expr.cpp (ProcessClassLiteral): Ditto.
+	* src/class.cpp (Signature, SignatureLength): Signature parsing is
+	experimental on the generics-branch; disable it completely here to
+	allow -source 1.5 to work.
+
+	* src/gencode.java: Update to support Unicode 4.0 surrogate pairs,
+	now legal in 1.5.
+	* src/code.h: Regenerate.
+	* src/code.cpp: Ditto.
+	* src/lookup.cpp: Use adjusted Code methods.
+	* src/scanner.cpp: Ditto.
+	(ClassifyNumericLiteral): Scan hex floating point. In the process,
+	make some floating point errors nicer.
+	* src/double.cpp (IEEEfloat(char*), IEEEdouble(char*)): Resolve
+	hex floating point.
+	* src/expr.cpp (ProcessFloatLiteral, ProcessDoubleLiteral): Accept
+	hex floating point.
+	* src/error.cpp (HEX_FLOATING_POINT_UNSUPPORTED): New error.
+	* src/error.h: Ditto.
+	* src/stream.cpp (INVALID_FLOATING_HEX_EXPONENT),
+	(INVALID_FLOATING_HEX_MANTISSA, INVALID_FLOATING_HEX_PREFIX),
+	(INVALID_OCTAL_CONSTANT, INVALID_FLOATING_EXPONENT): Ditto.
+	* src/stream.h: Ditto.
+
+2004-02-17  Elliott Hughes  <enh@acm.org>
+
+	* doc/jikes.1: Document new +Peffective-java and +Pserial switches.
+	* src/control.h, src/platform.cpp, src/platform.h, src/system.cpp: Adds
+	new serialPersistentFields name symbol.
+	* src/decl.cpp (CheckForSerializationMistakes): Don't warn about
+	the companion field to serialVersionUID, serialPersistentFields.
+	Add the new serialization checks from Java 1.5's javac.
+	(CheckFieldDeclaration, CheckFieldName): Factor out the field
+	checking, now there's more of it.
+	* double.cpp, src/double.h: Use Int::MIN_INT and Int::MAX_INT.
+	* src/error.cpp: New errors. Proper support for command-line +P
+	switches that turn groups of warnings on/off (previously there was
+	a single special case for +Pnaming).
+	* src/error.h: Ditto.
+	* src/expr.cpp: Adds overflow checking for integer constant
+	expressions.
+	* src/expr.cpp (FindMethodMember, FindVariableMember): Check for class
+	methods or fields accessed via an instance rather than the class.
+	* src/expr.cpp (ProcessShift, ProcessShiftCount, ProcessLEFT_SHIFT,
+	ProcessRIGHT_SHIFT): check for over-large or negative shift counts,
+	factor out some duplicated code. (These checks would have helped the
+	submitter of the recently-fixed code generation bug for prefix unary
+	operators.) (The new overflow-related code might be better in a
+	new file overflow.h)
+	* src/long.h: New class Int, analogous to LongInt, so we can get hold
+	of MIN_INT and MAX_INT in a similar manner.
+	* src/semantic.h: New prototypes.
+
+2004-02-16  Elliott Hughes  <enh@acm.org>
+
+	* src/class.cpp (AnnotationComponentAnnotation::Print): Fix
+	non-JIKES_DEBUG build.
+
+2004-02-12  Eric Blake  <ebb9@byu.net>
+
+	* src/access.h (ACCESS_ANNOTATION): Add, from JSR 175? According
+	to Sun, the value of this flag may still change before 1.5 is
+	final.
+	* src/bytecode.h (RegisterFieldRef, RegisterMethodref),
+	(RegisterClass): Decrease number of overloads, in order to better
+	track inner classes. Don't emit the currently forbidden
+	ACC_STRICTFP for inner classes.
+	* src/bytecode.cpp: Change all callers of updated Register*.
+	(LoadVariable): Don't load String constants, fixes bug 3850.
+	* src/class.h (CPInfo::tag): Change type to ConstantPoolTag.
+	(ConstantPool::invalid): Move inline.
+	(ATTRIBUTE_LocalVariableTypeTable): Implement, shares code with
+	LocalVariableTable.
+	(AnnotationComponentValue): Rename from AnnotationMemberValue.
+	(AnnotationComponentConstant, AnnotationComponentEnum),
+	(AnnotationComponentAnnotation, AnnotationComponentArray): Break
+	into subclasses for better implementation.
+	(Annotation): Rename from AnnotationValue, and make easier to
+	dynamically grow.
+	(Signature, SignatureLength): Update method signatures to allow
+	checking -source 1.5; fixes bug 3853.
+	* src/class.cpp: Implement.
+	* src/symbol.h (IsNested, IsInner, IsLocal): Const-ify.
+
+2004-02-06  Elliott Hughes  <enh@acm.org>
+
+	* src/bytecode.cpp (EmitPreUnaryExpression): Fix bad assertion -
+	patch 433.	
+	* src/error.cpp (EJ_AVOID_OVERLOADING_EQUALS): Fix message typo -
+	Patch 435.
+	* src/expr (ProcessAND_AND, ProcessOR_OR),
+	(ProcessConditionalExpression): Improve comments - Patch 434.
+
+2004-02-06  Eric Blake  <ebb9@byu.net>
+
+	* src/access.h (ACCESS_BRIDGE, ACCESS_VARARGS, ACCESS_ENUM),
+	(ACCESS_SYNTHETIC): New access flags in JDK 1.5. (If only JSR 202
+	were public already...).
+	(Print): Take an argument now, adjust all callers.
+	* src/bytecode.cpp (DeclareField, BeginMethod),
+	(MethodTypeResolution, ByteCode, FinishCode): Use .class file and
+	symbol updates; emit EnclosingMethod attribute now.
+	(EmitTryStatement): Debug catch clause parameters.
+	* src/bytecode.h (CreateEnclosingMethodAttribute): New method.
+	* src/class.h (ATTRIBUTE_RuntimeVisibleAnnotations),
+	(ATTRIBUTE_RuntimeInvisibleAnnotations),
+	(ATTRIBUTE_RuntimeVisibleParameterAnnotations),
+	(ATTRIBUTE_RuntimeInvisibleParameterAnnotations),
+	(ATTRIBUTE_AnnotationDefault, ATTRIBUTE_EnclosingMethod): New,
+	from JSR 175 and 202.
+	* src/class.cpp: Implement.
+	* src/control.h (EnclosingMethod_literal): New field.
+	* src/decl.cpp (ProcessConstructorDeclaration),
+	(AddDefaultConstructor, AddInheritedFields, AddInheritedMethods),
+	(MustFindType, GetStaticInitializer, ProcessInstanceInitializer):
+	Use symbol updates.
+	* src/definite.cpp (DefiniteName, DefinitePLUSPLUSOrMINUSMINUS),
+	(DefiniteSetup): Ditto.
+	* src/error.h (UNNAMED_TYPE_ACCESS): New error.
+	* src/error.cpp: Implement.
+	* src/expr.cpp (FindConstructor, FindMethodInType),
+	(FindMethodInEnvironment, FindVariableInType),
+	(FindVariableInEnvironment, GetAnonymousConstructor): Use symbol
+	updates.
+	* src/platform.h (U8S_*_length): Delete, unneeded.
+	* src/platform.cpp: Ditto.
+	* src/symbol.cpp (GetArrayType, InsertThis0),
+	(FindOrInsertClassLiteralMethod, FindOrInsertClassLiteral),
+	(FindOrInsertAssertVariable, FindOrInsertLocalShadow),
+	(GetReadAccessMethod, GetReadAccessConstructor),
+	(GetWriteAccessMethod, GetWriteAccessFromReadAccess): Use symbol
+	updates.
+	* src/symbol.h (PackageSymbol::DEPRECATED): Add, in preparation
+	for JSR 175 allowing package modifiers.
+	(MarkDeprecated, IsDeprecated): Delete, as now covered by
+	AccessFlags.
+	* src/system.cpp (EnclosingMethod_literal): Initialize.
+
+2004-02-02  Eric Blake  <ebb9@byu.net>
+
+	* NEWS (1.19a): Placeholder for changes to future 1.20.
+	* AUTHORS: Add credit where it is due.
+	* src/Makefile.am [MAINTAINER_MODE]: Remove race in parallel
+	builds, from automake FAQ.
+	* configure.ac: Bump version to 1.19a for CVS development. Fix
+	more autoconf style issues.
+	* src/m4/ac_check_iconv.m4: Improve iconv checks. Allow configure
+	to continue for systems with broken iconv (such as current cygwin).
+	* src/m4/ac_find_encoding.m4: Ditto.
+	* src/m4/ac_try_encoding.m4: Ditto.
+	* src/stream.h [HAVE_ENCODING]: Key off of JIKES_ICONV_ENCODING
+	rather than HAVE_ICONV_H, so systems with broken iconv can still
+	make it through configure, but without -encoding support.
+	* src/stream.cpp [HAVE_ENCODING]: Ditto.
+	* src/.cvsignore: Update for new witness files.
+	* configure: Regenerate.
+	* src/Makefile.in: Ditto.
+	* src/config.h.in: Ditto.
+
+2004-02-02  Dirk Weigenand  <Dirk.Weigenand@smb-tec.com>
+
+	* NEWS: fixed my (cabbey's) bad spelling.
+
+2004-02-01  Chris Abbey  <jikes@cabbey.net>
+
+	Release 1.19.
+
 2004-01-31  Elliott Hughes  <enh@acm.org>
 
 	* src/decl.cpp (ProcessClassBodyForEffectiveJavaChecks): Patch
@@ -71,7 +961,8 @@
 	(REDUNDANT_MODIFIER, RECOMMENDED_MODIFER_ORDER): remove from
 	default +P set, must ask for these explicitly now.
 	* src/error.h:
-	* src/error.cpp: add a meta +P switch for all naming convention warnings
+	* src/error.cpp: add a meta +P switch for all naming convention
+	warnings
 	* src/scanner.cpp: make the new l vs L warning pedantic 
 	
 2004-01-25  Elliott Hughes  <enh@acm.org>
@@ -85,8 +976,8 @@
 	* src/platform.cpp:
 	* src/platform.h: Add 'serialVersionUID' symbol.
 	* src/error.cpp: Improves the message for unconventional names.
-	* src/decl.cpp: Ignore empty classes when suggesting private constructors
-	for utility classes.
+	* src/decl.cpp: Ignore empty classes when suggesting private
+	constructors for utility classes.
 	* src/body.cpp: Warn about unconventional names, returning null instead
 	of a zero-length array, empty catch and finally blocks, and overly
 	general throws clauses.
@@ -94,12 +985,13 @@
 	* src/semantic.h:
 	* src/decl.cpp: Warn about unconventional names, overloaded equals
 	methods, equals without hashCode and vice versa, use of Latin, utility
-	classes without a private constructor, interfaces that don't define types,
-	and public static final array fields.
+	classes without a private constructor, interfaces that don't
+	define types, and public static final array fields.
 	* src/error.cpp:
 	* src/error.h: Add all the new errors.
 	* src/lookup.cpp:
-	* src/lookup.h: Add NameSymbol methods for finding unconventional names.
+	* src/lookup.h: Add NameSymbol methods for finding unconventional
+	names.
 	* src/platform.cpp:
 	* src/platform.h: Add 'equals' and 'hashCode' string constants.
 	* src/scanner.cpp: Warn about use of l instead of L as a suffix.
@@ -2098,7 +2990,8 @@
 
 2002-05-16  Eric Blake  <ebb9@email.byu.edu>
 
-	* src/error.cpp (PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL):
+	* src/error.cpp
+	(PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL):
 	* src/decl.cpp (FindType): Improve error message.
 
 2002-05-15  Andrew Pimlott  <jikes-dev@andrew.pimlott.net>
@@ -5776,9 +6669,10 @@
 
 2000-04-05  Vadim Zaliva  <lord@crocodile.org>
 
-	* expr.cpp (ConstructorAccessCheck): corrected problem with not reporting
-	illegal access to protected constructor from other pckage.
-	problem reportred by:  Garrick Olson <garrick_olson@hotmail.com>
+	* expr.cpp (ConstructorAccessCheck): corrected problem with not
+	reporting illegal access to protected constructor from other
+	pckage. problem reportred by:  Garrick Olson
+	<garrick_olson@hotmail.com>
 
 2000-03-31  Chris Abbey <cabbey@home.net>
 
@@ -5806,21 +6700,23 @@
 
 2000-03-15  Vadim Zaliva  <lord@crocodile.org>
 
-	* stream.cpp (ProcessInputUnicode): corrected problem with losing last source file
-	character when using 'iconv' function for charset conversion.
+	* stream.cpp (ProcessInputUnicode): corrected problem with losing
+	last source file character when using 'iconv' function for charset
+	conversion.
 
 2000-03-14  Vadim Zaliva  <lord@crocodile.org>
 
 	* modifier.cpp (ProcessStaticNestedInterfaceModifiers): simplification.
-	(ProcessNestedInterfaceModifiers): possibility of specifying duplicate 'static'
-	declarations removed.
+	(ProcessNestedInterfaceModifiers): possibility of specifying
+	duplicate 'static' declarations removed.
 
 2000-03-08 Ziqiang Tang   <ztang@lcs.mit.edu>
 
 	* decl.cpp:
 	* semantic.h:
 	* modifier.cpp: added correct support for interface-contained
-	interfaces (public, static) using Semantic::ProcessStaticNestedInterfaceModifiers.
+	interfaces (public, static) using
+	Semantic::ProcessStaticNestedInterfaceModifiers.
 
 2000-03-13  Vadim Zaliva  <lord@crocodile.org>
 
@@ -5843,18 +6739,20 @@
 
 	* Switched to ICU-1.4.0
 
-	* option.cpp (Option): small problem with compilation while both ICU and
-	ICONV are present.
+	* option.cpp (Option): small problem with compilation while both
+	ICU and ICONV are present.
 
 	* stream.cpp:
 	* option.h: new ICU header names.
 
-	* configure.in (LDFLAGS): checking for u_getVersion to check is ICU is installed.
+	* configure.in (LDFLAGS): checking for u_getVersion to check is
+	ICU is installed.
 
 2000-02-21  Vadim Zaliva  <lord@crocodile.org>
 
-	* jikesapi.h (class JikesAPI): reader and writer factories removed - they are
-	duplicating read/write methods functionality. read/write made virtual.
+	* jikesapi.h (class JikesAPI): reader and writer factories removed
+	- they are duplicating read/write methods
+	functionality. read/write made virtual.
 
 	* jikesapi.cpp:
 	* jikesapi.h: method of readers and writers renamed to follow
@@ -6163,14 +7061,15 @@
 	* option.cpp:
 	* symbol.h:
 	* system.cpp:
-	Patches from Mike Ernst that correct a few minor problems with Jikes 1.10:
+	Patches from Mike Ernst that correct a few minor problems with
+	Jikes 1.10:
 	 * some formatting
 	 * repeated declarations
-	 * parenthesize assignments used as conditionals, to flag that use and to
-	   suppress gcc -Wall warnings
-	 * reorder constructor initializers, to put them in the same order as the
-	   declarations.  This makes them easier to read and suppresses gcc -Wall
-	   warnings.
+	 * parenthesize assignments used as conditionals, to flag that use
+	   and to suppress gcc -Wall warnings
+	 * reorder constructor initializers, to put them in the same order
+	   as the declarations.  This makes them easier to read and
+	   suppresses gcc -Wall warnings.
 	 * a couple of comments
 	 * add #ifdef around a declaration used only under Win32
 
@@ -6310,7 +7209,8 @@ that
 
 	* symbol.h:
 	* symbol.cpp:
-	Add code from Mike Ernst to help resolve compilation problems on Win/NT.
+	Add code from Mike Ernst to help resolve compilation problems on
+	Win/NT.
 
 1999-10-20    <shields@jikes.watson.ibm.com>
 
@@ -6449,7 +7349,8 @@ that
 	
 1999-10-16    <shields@jikes.watson.ibm.com>
 	* configure.in:
-	Add check from Moses DeJong for sufficiently recent version of autoconf.
+	Add check from Moses DeJong for sufficiently recent version of
+	autoconf.
 
 1999-10-16    <shields@jikes.watson.ibm.com>
 	* lookup.cpp:
@@ -6473,8 +7374,8 @@ that
 	* java.g:
 	* symbol.cpp: (look for TODO-ERNST)
 	* system.cpp:
-	Make changes, in some case commenting out code, or making it conditional,
-	so can compile cleanly on Win/NT.
+	Make changes, in some case commenting out code, or making it
+	conditional, so can compile cleanly on Win/NT.
 
 1999-10-15    <shields@jikes.watson.ibm.com>
 
@@ -6559,8 +7460,8 @@ that
 	* stream.h: Delete extraneous ",' that causes AIX xlC to complain
 
 	* jikes.cpp:
-	Update version to 1.07, and revise descriptive text printed when Jikes is
-	invoked with no arguments.
+	Update version to 1.07, and revise descriptive text printed when
+	Jikes is invoked with no arguments.
 
 	* expr.cpp:
 	* symbol.cpp:
@@ -6570,16 +7471,16 @@ that
 
 	* stream.cpp:
 	vz1013a: code from Vadim, who writes:
-	Attached is modified version of stream.cpp. It handles very rare situation
-	when one code page character could be repesented by more that one unicode
-	chars.
+	Attached is modified version of stream.cpp. It handles very rare
+	situation when one code page character could be repesented by more
+	that one unicode chars.
 
-	One of situations, when this could happen is when character is represented
-	by UNICODE "surrogates"*
+	One of situations, when this could happen is when character is
+	represented by UNICODE "surrogates"*
 
-	Anyway, even though not tested, I suggest to include this code. It will not make
-	current implementation worse (currently it dumps core if such character
-	will be used in source).
+	Anyway, even though not tested, I suggest to include this code. It
+	will not make current implementation worse (currently it dumps
+	core if such character will be used in source).
 
 	* class.h:
 	* pc1013b: add code that should have been in pc1013a.
@@ -6640,7 +7541,8 @@ that
 
 1999-10-10    <shields@jikes.watson.ibm.com>
 
-	* option.cpp: Fix compilation error by adding conditional defines for ICU
+	* option.cpp: Fix compilation error by adding conditional defines
+	for ICU
 
 	* stream.cpp:
 	Fix typos: TRUE->true, FALSE->false
@@ -6657,8 +7559,10 @@ that
 
 1999-10-07  Vadim Zaliva  <lord@crocodile.org>
 
-	* stream.cpp (ProcessInput): reimplemented to facilitate ICU for code page conversion.
-	* option.cpp (Option): added test for unsupported encoding end error reporting.
+	* stream.cpp (ProcessInput): reimplemented to facilitate ICU for
+	code page conversion.
+	* option.cpp (Option): added test for unsupported encoding end
+	error reporting.
 
 1999-10-06  Vadim Zaliva  <lord@crocodile.org>
 
@@ -6666,8 +7570,10 @@ that
 	* option.cpp (Option):
 	* config.cpp:
 	* jikes.cpp (main): Added -encoding option
-	* Makefile.in (LIBS): added LIBS variable to link with extra libraries (detected by autoconf).
-	* configure.in (LDFLAGS): Added checks for "IBM Classes for Unicode" library.
+	* Makefile.in (LIBS): added LIBS variable to link with extra
+	libraries (detected by autoconf).
+	* configure.in (LDFLAGS): Added checks for "IBM Classes for
+	Unicode" library.
 
 1999-10-09  Dave Shields  <shields@watson.ibm.com>
 	* Makefile.in:
@@ -6695,8 +7601,10 @@ that
 
 1999-10-07  Vadim Zaliva  <lord@crocodile.org>
 
-	* stream.cpp (ProcessInput): reimplemented to facilitate ICU for code page conversion.
-	* option.cpp (Option): added test for unsupported encoding end error reporting.
+	* stream.cpp (ProcessInput): reimplemented to facilitate ICU for
+	code page conversion.
+	* option.cpp (Option): added test for unsupported encoding end
+	error reporting.
 
 1999-10-06  Vadim Zaliva  <lord@crocodile.org>
 
@@ -6704,8 +7612,10 @@ that
 	* option.cpp (Option):
 	* config.cpp:
 	* jikes.cpp (main): Added -encoding option
-	* Makefile.in (LIBS): added LIBS variable to link with extra libraries (detected by autoconf).
-	* configure.in (LDFLAGS): Added checks for "IBM Classes for Unicode" library.
+	* Makefile.in (LIBS): added LIBS variable to link with extra
+	libraries (detected by autoconf).
+	* configure.in (LDFLAGS): Added checks for "IBM Classes for
+	Unicode" library.
 
 1999-10-09    <shields@jikes.watson.ibm.com>
 
@@ -7205,8 +8115,9 @@ that
 	Include patch from C. Scott Ananian (cananian@lesser-magoo.lcs.mit.edu)
 	submitted to jikes-patches on 3 April 1999, who wrote:
 	  The following short patch using autoconf lets jikes build properly on
-	  libc5 systems -- or others where wchar.h is broken.  This has allowed me
-	  to release RPMs of jikes for RedHat 4.2 and earlier linux systems.
+	  libc5 systems -- or others where wchar.h is broken.  This has
+	  allowed me to release RPMs of jikes for RedHat 4.2 and earlier
+	  linux systems.
 
 	* jikes.1:
 	Start man page, first draft generously provided by Pierpaolo

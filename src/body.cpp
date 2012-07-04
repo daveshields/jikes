@@ -1,4 +1,4 @@
-// $Id: body.cpp,v 1.92 2004/01/26 06:07:15 cabbey Exp $
+// $Id: body.cpp,v 1.102 2004/03/25 13:32:26 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,6 +11,7 @@
 #include "semantic.h"
 #include "control.h"
 #include "option.h"
+#include "stream.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -133,7 +134,7 @@ void Semantic::ProcessBlock(Ast* stmt)
     //     l: a = b;
     //     l: b = c;
     //
-    if (block_body -> label_opt != lex_stream -> BadToken())
+    if (block_body -> label_opt != BAD_TOKEN)
     {
         NameSymbol* name_symbol =
             lex_stream -> NameSymbol(block_body -> label_opt);
@@ -172,10 +173,43 @@ void Semantic::ProcessBlock(Ast* stmt)
 }
 
 
-void Semantic::ProcessLocalVariableDeclarationStatement(Ast* stmt)
+void Semantic::WarnOfAccessibleFieldWithName(SemanticError::SemanticErrorKind problem,
+                                             AstVariableDeclaratorId* name,
+                                             NameSymbol* name_symbol)
 {
-    AstLocalVariableDeclarationStatement* local_decl =
-        (AstLocalVariableDeclarationStatement*) stmt;
+    TypeSymbol* this_type = ThisType();
+    for (TypeSymbol* type = this_type; type != 0; type = type -> super)
+    {
+        //
+        // Try to find a variable with the same name_symbol, first in the
+        // type itself, then in any of its implemented interfaces.
+        //
+        VariableSymbol* variable = type -> FindVariableSymbol(name_symbol);
+        for (unsigned i = 0; variable == 0 && i < type -> NumInterfaces(); ++i)
+        {
+            variable = type -> Interface(i) -> FindVariableSymbol(name_symbol);
+        }
+
+        //
+        // Warn if we found an accessible field with the same name_symbol.
+        //
+        if (variable && MemberAccessCheck(this_type, variable, 0))
+        {
+            TypeSymbol* containing_type = variable -> ContainingType();
+            ReportSemError(problem,
+                           name -> identifier_token,
+                           name_symbol -> Name(),
+                           containing_type -> ContainingPackageName(),
+                           containing_type -> ExternalName());
+            return;
+        }
+    }
+}
+
+
+void Semantic::ProcessLocalVariableStatement(Ast* stmt)
+{
+    AstLocalVariableStatement* local_decl = (AstLocalVariableStatement*) stmt;
     ProcessType(local_decl -> type);
     TypeSymbol* field_type = local_decl -> type -> symbol;
     AccessFlags access_flags = ProcessLocalModifiers(local_decl);
@@ -193,18 +227,21 @@ void Semantic::ProcessLocalVariableDeclarationStatement(Ast* stmt)
         // According to JLS2 14.4.2, only check for a duplicate in
         // the local class scope; don't worry about enclosing classes
         //
-        if (LocalSymbolTable().FindVariableSymbol(name_symbol))
+        VariableSymbol* duplicate =
+            LocalSymbolTable().FindVariableSymbol(name_symbol);
+        if (duplicate)
         {
             ReportSemError(SemanticError::DUPLICATE_LOCAL_VARIABLE_DECLARATION,
                            name -> identifier_token, name_symbol -> Name(),
-                           LocalSymbolTable().
-                           FindVariableSymbol(name_symbol) -> FileLoc());
+                           duplicate -> FileLoc());
         }
         else
         {
+            WarnOfAccessibleFieldWithName(SemanticError::LOCAL_SHADOWS_FIELD,
+                                          name, name_symbol);
             AstBlock* block = LocalBlockStack().TopBlock();
             SymbolTable* table;
-            if (block -> block_tag == AstBlock::SWITCH)
+            if (block -> Tag() == AstBlock::SWITCH)
             {
                 //
                 // Local variables declared in a switch statement are in scope
@@ -227,7 +264,6 @@ void Semantic::ProcessLocalVariableDeclarationStatement(Ast* stmt)
             symbol -> SetOwner(ThisMethod());
             symbol -> declarator = variable_declarator;
             symbol -> SetLocation();
-
             symbol -> SetLocalVariableIndex(block -> block_symbol ->
                                             max_variable_index++);
             if (control.IsDoubleWordType(symbol -> Type()))
@@ -240,14 +276,15 @@ void Semantic::ProcessLocalVariableDeclarationStatement(Ast* stmt)
             // style for constant fields. We recommend the local variable
             // style, somewhat arbitrarily.
             //
-            if (!symbol -> ACC_FINAL() && name_symbol -> IsBadStyleForVariable())
+            if (! symbol -> ACC_FINAL() &&
+                name_symbol -> IsBadStyleForVariable())
             {
                 ReportSemError(SemanticError::UNCONVENTIONAL_VARIABLE_NAME,
                                name -> identifier_token, name_symbol -> Name());
             }
             else if (symbol -> ACC_FINAL() &&
-                     (name_symbol -> IsBadStyleForVariable() &&
-                      name_symbol -> IsBadStyleForConstantField()))
+                     name_symbol -> IsBadStyleForVariable() &&
+                     name_symbol -> IsBadStyleForConstantField())
             {
                 ReportSemError(SemanticError::UNCONVENTIONAL_VARIABLE_NAME,
                                name -> identifier_token, name_symbol -> Name());
@@ -319,9 +356,9 @@ void Semantic::ProcessSynchronizedStatement(Ast* stmt)
     //
     BlockSymbol* enclosing_block_symbol = enclosing_block -> block_symbol;
     // first such statement encountered in enclosing block?
-    if (enclosing_block_symbol -> try_or_synchronized_variable_index < 0)
+    if (enclosing_block_symbol -> helper_variable_index < 0)
     {
-        enclosing_block_symbol -> try_or_synchronized_variable_index =
+        enclosing_block_symbol -> helper_variable_index =
             enclosing_block_symbol -> max_variable_index;
         enclosing_block_symbol -> max_variable_index += 2;
         if (ThisMethod() -> Type() != control.void_type)
@@ -364,6 +401,29 @@ void Semantic::ProcessSynchronizedStatement(Ast* stmt)
 }
 
 
+void Semantic::CheckForAssignmentUsedAsTruthValue(Ast* expression)
+{
+    //
+    // Warn about boolean assignments within if/while guards, i.e.
+    // code such as "if (booleanLocal = booleanMethod())"
+    // instead of "if (booleanLocal == booleanMethod())".
+    //
+    // We deliberately don't do anything like StripNops because
+    // we want to allow the same compiler-quitening fix as gcc:
+    // "if ((booleanLocal = booleanMethod()))".
+    //
+    AstAssignmentExpression* assignment_expression =
+        expression -> AssignmentExpressionCast();
+    if (assignment_expression &&
+        assignment_expression -> SimpleAssignment() &&
+        assignment_expression -> Type() == control.boolean_type)
+    {
+        ReportSemError(SemanticError::ASSIGNMENT_USED_AS_TRUTH_VALUE,
+                       expression);
+    }
+}
+
+
 void Semantic::ProcessIfStatement(Ast* stmt)
 {
     AstIfStatement* if_statement = (AstIfStatement*) stmt;
@@ -378,6 +438,7 @@ void Semantic::ProcessIfStatement(Ast* stmt)
                        cond_type -> ContainingPackageName(),
                        cond_type -> ExternalName());
     }
+    CheckForAssignmentUsedAsTruthValue(if_statement -> expression);
 
     //
     // Recall that the parser enclosed both true and false statements in
@@ -438,6 +499,7 @@ void Semantic::ProcessWhileStatement(Ast* stmt)
                        cond_type -> ContainingPackageName(),
                        cond_type -> ExternalName());
     }
+    CheckForAssignmentUsedAsTruthValue(while_statement -> expression);
 
     ProcessBlock(enclosed_statement);
 
@@ -547,6 +609,168 @@ void Semantic::ProcessForStatement(Ast* stmt)
     if (block_body -> can_complete_normally)
         for_statement -> can_complete_normally = true;
 
+    BreakableStatementStack().Pop();
+    ContinuableStatementStack().Pop();
+}
+
+
+//
+// Enhanced for loops (or foreach loops) were added in JDK 1.5, by JSR 201.
+//
+void Semantic::ProcessForeachStatement(Ast* stmt)
+{
+    AstForeachStatement* foreach = (AstForeachStatement*) stmt;
+
+    //
+    // Note that in constructing the Ast, the parser encloses each
+    // for-statement whose for-init-statements starts with a local
+    // variable declaration in its own block. Therefore a redeclaration
+    // of another local variable with the same name in a different loop
+    // at the same nesting level will not cause any conflict.
+    //
+    // For example, the following sequence of statements is legal:
+    //
+    //     for (int i : new int[0]);
+    //     for (int i : new int[0]);
+    //
+    // Recall that each for statement is enclosed in a unique block by the
+    // parser, as is the loop body.
+    //
+    AstBlock* enclosing_block = LocalBlockStack().TopBlock();
+    BlockSymbol* enclosing_block_symbol = enclosing_block -> block_symbol;
+    assert(enclosing_block_symbol -> helper_variable_index < 0);
+    BreakableStatementStack().Push(enclosing_block);
+    ContinuableStatementStack().Push(enclosing_block);
+
+    //
+    // The contained statement of a foreach is reachable iff the foreach is
+    // reachable.
+    //
+    AstBlock* enclosed_statement = foreach -> statement;
+    enclosed_statement -> is_reachable = foreach -> is_reachable;
+
+    ProcessType(foreach -> formal_parameter -> type);
+    assert(! foreach -> formal_parameter -> ellipsis_token_opt);
+    TypeSymbol* index_type = foreach -> formal_parameter -> type -> symbol;
+    AccessFlags access_flags =
+        ProcessFormalModifiers(foreach -> formal_parameter);
+    AstVariableDeclarator* variable_declarator =
+        foreach -> formal_parameter -> formal_declarator;
+    AstVariableDeclaratorId* name =
+        variable_declarator -> variable_declarator_name;
+    NameSymbol* name_symbol =
+        lex_stream -> NameSymbol(name -> identifier_token);
+    VariableSymbol* duplicate =
+        LocalSymbolTable().FindVariableSymbol(name_symbol);
+    if (duplicate)
+    {
+        ReportSemError(SemanticError::DUPLICATE_LOCAL_VARIABLE_DECLARATION,
+                       name -> identifier_token, name_symbol -> Name(),
+                       duplicate -> FileLoc());
+    }
+    else
+    {
+        WarnOfAccessibleFieldWithName(SemanticError::LOCAL_SHADOWS_FIELD,
+                                      name, name_symbol);
+        SymbolTable* table = LocalSymbolTable().Top();
+        VariableSymbol* symbol = table -> InsertVariableSymbol(name_symbol);
+        variable_declarator -> symbol = symbol;
+        unsigned dims = index_type -> num_dimensions + name -> NumBrackets();
+        symbol -> SetType(index_type -> GetArrayType(this, dims));
+        symbol -> SetFlags(access_flags);
+        symbol -> SetOwner(ThisMethod());
+        symbol -> declarator = variable_declarator;
+        symbol -> SetLocation();
+        symbol -> SetLocalVariableIndex(enclosing_block_symbol ->
+                                        max_variable_index++);
+        if (control.IsDoubleWordType(symbol -> Type()))
+            enclosing_block_symbol -> max_variable_index++;
+
+        //
+        // Warn against unconventional names. Note that there's no
+        // strong convention for final local variables, so we allow
+        // both the usual style for local variables and the usual
+        // style for constant fields. We recommend the local variable
+        // style, somewhat arbitrarily.
+        //
+        if (! symbol -> ACC_FINAL() && name_symbol -> IsBadStyleForVariable())
+        {
+            ReportSemError(SemanticError::UNCONVENTIONAL_VARIABLE_NAME,
+                           name -> identifier_token, name_symbol -> Name());
+        }
+        else if (symbol -> ACC_FINAL() &&
+                 name_symbol -> IsBadStyleForVariable() &&
+                 name_symbol -> IsBadStyleForConstantField())
+        {
+            ReportSemError(SemanticError::UNCONVENTIONAL_VARIABLE_NAME,
+                           name -> identifier_token, name_symbol -> Name());
+        }
+    }
+
+    ProcessExpression(foreach -> expression);
+    TypeSymbol* cond_type = foreach -> expression -> Type();
+    TypeSymbol* component_type;
+    if (control.option.source < JikesOption::SDK1_5)
+    {
+        ReportSemError(SemanticError::FOREACH_UNSUPPORTED,
+                       stmt -> RightToken(),
+                       foreach -> statement -> LeftToken() - 1);
+    }
+    else if (cond_type -> IsArray())
+    {
+        component_type = cond_type -> ArraySubtype();
+        if (! CanAssignmentConvertReference(index_type, component_type))
+        {
+            ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_FOREACH,
+                           foreach -> expression,
+                           component_type -> ContainingPackageName(),
+                           component_type -> ExternalName(),
+                           index_type -> ContainingPackageName(),
+                           index_type -> ExternalName());
+        }
+        // Need local variabls to stash array, array.length, and counter.
+        enclosing_block_symbol -> helper_variable_index =
+            enclosing_block_symbol -> max_variable_index;
+        enclosing_block_symbol -> max_variable_index += 3;
+    }
+    else if (cond_type -> IsSubtype(control.Iterable()))
+    {
+        // FIXME: Support generics. Until then, we blindly accept all types,
+        // and cause a ClassCastException if the user was wrong (this is not
+        // semantically correct, but it allows testing).
+        component_type = control.Object();
+        if (! CanAssignmentConvertReference(index_type, component_type))
+        {
+            // HACK. Only complain about primitives, until generics are
+            // fully supported and we can see if cond_type is parameterized,
+            // and until autounboxing is implemented.
+            if (index_type -> Primitive())
+            ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_FOREACH,
+                           foreach -> expression,
+                           component_type -> ContainingPackageName(),
+                           component_type -> ExternalName(),
+                           index_type -> ContainingPackageName(),
+                           index_type -> ExternalName());
+            
+        }
+        // Need synthetic local variable to stash iterator.
+        enclosing_block_symbol -> helper_variable_index =
+            enclosing_block_symbol -> max_variable_index;
+        enclosing_block_symbol -> max_variable_index++;
+    }
+    else if (cond_type != control.no_type)
+    {
+        ReportSemError(SemanticError::TYPE_NOT_ITERABLE, foreach -> expression,
+                       cond_type -> ContainingPackageName(),
+                       cond_type -> ExternalName());
+    }
+    ProcessBlock(enclosed_statement);
+
+    //
+    // Foreach statements can always complete normally, if reachable, because
+    // the array/iterator length could be 0.
+    //
+    foreach -> can_complete_normally = foreach -> is_reachable;
     BreakableStatementStack().Pop();
     ContinuableStatementStack().Pop();
 }
@@ -826,6 +1050,7 @@ void Semantic::ProcessDoStatement(Ast* stmt)
                        type -> ContainingPackageName(),
                        type -> ExternalName());
     }
+    CheckForAssignmentUsedAsTruthValue(do_statement -> expression);
 
     //
     // A do statement can complete normally, iff at least one of the following
@@ -970,6 +1195,8 @@ void Semantic::ProcessContinueStatement(Ast* stmt)
         AstForStatement* for_statement = loop_statement -> ForStatementCast();
         AstWhileStatement* while_statement =
             loop_statement -> WhileStatementCast();
+        AstForeachStatement* foreach_statement =
+            loop_statement -> ForeachStatementCast();
 
         AstBlock* enclosed_statement = (do_statement
                                         ? do_statement -> statement
@@ -977,6 +1204,8 @@ void Semantic::ProcessContinueStatement(Ast* stmt)
                                         ? for_statement -> statement
                                         : while_statement
                                         ? while_statement -> statement
+                                        : foreach_statement
+                                        ? foreach_statement -> statement
                                         : (AstBlock*) NULL);
         if (enclosed_statement)
         {
@@ -1289,10 +1518,10 @@ void Semantic::ProcessTryStatement(Ast* stmt)
     if (try_statement -> finally_clause_opt)
     {
         BlockSymbol* enclosing_block_symbol = enclosing_block -> block_symbol;
-        if (enclosing_block_symbol -> try_or_synchronized_variable_index < 0)
+        if (enclosing_block_symbol -> helper_variable_index < 0)
         {
             // first such statement encountered in enclosing block?
-            enclosing_block_symbol -> try_or_synchronized_variable_index =
+            enclosing_block_symbol -> helper_variable_index =
                 enclosing_block_symbol -> max_variable_index;
             enclosing_block_symbol -> max_variable_index += 2;
             if (ThisMethod() -> Type() != control.void_type)
@@ -1359,6 +1588,7 @@ void Semantic::ProcessTryStatement(Ast* stmt)
     {
         AstCatchClause* clause = try_statement -> CatchClause(i);
         AstFormalParameter* parameter = clause -> formal_parameter;
+        assert(! parameter -> ellipsis_token_opt);
         AstVariableDeclaratorId* name =
             parameter -> formal_declarator -> variable_declarator_name;
 
@@ -1389,6 +1619,8 @@ void Semantic::ProcessTryStatement(Ast* stmt)
                            name -> identifier_token, name_symbol -> Name(),
                            duplicate -> FileLoc());
         }
+        WarnOfAccessibleFieldWithName(SemanticError::LOCAL_SHADOWS_FIELD,
+                                      name, name_symbol);
 
         AstBlock* block_body = clause -> block;
         
@@ -1396,9 +1628,7 @@ void Semantic::ProcessTryStatement(Ast* stmt)
         // Warn about empty catch blocks.
         //
         if (control.option.pedantic && block_body -> NumStatements() == 0)
-        {
             ReportSemError(SemanticError::EJ_EMPTY_CATCH_BLOCK, block_body);
-        }
 
         //
         // Guess that the number of elements in the table will not exceed the
@@ -1419,7 +1649,8 @@ void Semantic::ProcessTryStatement(Ast* stmt)
         symbol -> SetLocalVariableIndex(block -> max_variable_index++);
         symbol -> MarkComplete();
         symbol -> declarator = parameter -> formal_declarator;
-
+        symbol -> SetLocation();
+        parameter -> formal_declarator -> symbol = symbol;
         clause -> parameter_symbol = symbol;
 
         //
@@ -1692,7 +1923,7 @@ void Semantic::ProcessEmptyStatement(Ast* stmt)
 }
 
 
-TypeSymbol* Semantic::GetLocalType(AstClassDeclaration* class_declaration)
+TypeSymbol* Semantic::GetLocalType(AstDeclaredType* class_declaration)
 {
     NameSymbol* name_symbol = lex_stream ->
         NameSymbol(class_declaration -> class_body -> identifier_token);
@@ -1714,7 +1945,8 @@ TypeSymbol* Semantic::GetLocalType(AstClassDeclaration* class_declaration)
         name_symbol -> NameLength(); // +1 for $
     wchar_t* external_name = new wchar_t[length + 1]; // +1 for '\0';
     wcscpy(external_name, this_type -> ExternalName());
-    wcscat(external_name, StringConstant::US_DS);
+    wcscat(external_name, (control.option.target < JikesOption::SDK1_5
+                           ? StringConstant::US_DS : StringConstant::US_MI));
     wcscat(external_name, value.String());
     wcscat(external_name, name_symbol -> Name());
 
@@ -1731,9 +1963,8 @@ TypeSymbol* Semantic::GetLocalType(AstClassDeclaration* class_declaration)
 
 void Semantic::ProcessClassDeclaration(Ast* stmt)
 {
-    AstLocalClassDeclarationStatement* class_statement =
-        (AstLocalClassDeclarationStatement*) stmt;
-    AstClassDeclaration* class_declaration = class_statement -> declaration;
+    AstLocalClassStatement* class_statement = (AstLocalClassStatement*) stmt;
+    AstDeclaredType* class_declaration = class_statement -> declaration;
     AstClassBody* class_body = class_declaration -> class_body;
 
     CheckNestedTypeDuplication(state_stack.Top(),
@@ -1768,7 +1999,7 @@ void Semantic::ProcessClassDeclaration(Ast* stmt)
     // Save environment for processing bodies later.
     class_body -> semantic_environment = inner_type -> semantic_environment;
     CheckNestedMembers(inner_type, class_body);
-    ProcessTypeHeaders(class_declaration);
+    ProcessTypeHeaders(class_body);
 
     ProcessMembers(class_body);
     CompleteSymbolTable(class_body);
@@ -1784,6 +2015,11 @@ void Semantic::ProcessThisCall(AstThisCall* this_call)
     // Signal that we are about to process an explicit constructor invocation.
     ExplicitConstructorInvocation() = this_call;
 
+    if (this_call -> type_arguments_opt)
+    {
+        ReportSemError(SemanticError::EXPLICIT_TYPE_ARGUMENTS_UNSUPPORTED,
+                       this_call -> type_arguments_opt);
+    }
     bool bad_argument = ProcessArguments(this_call -> arguments);
     if (! bad_argument)
     {
@@ -1894,6 +2130,11 @@ void Semantic::ProcessSuperCall(AstSuperCall* super_call)
                 CreateAccessToType(super_call, super_type -> EnclosingType());
     }
 
+    if (super_call -> type_arguments_opt)
+    {
+        ReportSemError(SemanticError::EXPLICIT_TYPE_ARGUMENTS_UNSUPPORTED,
+                       super_call -> type_arguments_opt);
+    }
     MethodSymbol* constructor = NULL;
     bool bad_argument = ProcessArguments(super_call -> arguments);
     if (! bad_argument)
@@ -2187,7 +2428,7 @@ void Semantic::ProcessConstructorBody(AstConstructorDeclaration* constructor_dec
     }
     else if (super_type)
     {
-        LexStream::TokenIndex loc = constructor_block -> LeftToken();
+        TokenIndex loc = constructor_block -> LeftToken();
         super_call = compilation_unit -> ast_pool -> GenSuperCall();
         super_call -> super_token = loc;
         super_call -> arguments =
@@ -2249,7 +2490,7 @@ void Semantic::ProcessConstructorBody(AstConstructorDeclaration* constructor_dec
 
 void Semantic::ProcessExecutableBodies(AstClassBody* class_body)
 {
-    if (compilation_unit -> kind == Ast::BAD_COMPILATION)
+    if (compilation_unit -> BadCompilationUnitCast())
         return; // errors were detected, exit now
 
     state_stack.Push(class_body -> semantic_environment);
