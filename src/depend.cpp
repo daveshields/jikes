@@ -1,4 +1,4 @@
-// $Id: depend.cpp,v 1.32 2002/07/30 16:30:01 ericb Exp $
+// $Id: depend.cpp,v 1.33 2002/10/07 22:06:13 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,6 +12,7 @@
 #include "control.h"
 #include "ast.h"
 #include "semantic.h"
+#include "option.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block

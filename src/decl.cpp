@@ -1,4 +1,4 @@
-// $Id: decl.cpp,v 1.100 2002/09/11 17:06:00 ericb Exp $
+// $Id: decl.cpp,v 1.103 2002/11/11 14:51:18 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -14,6 +14,8 @@
 #include "table.h"
 #include "tuple.h"
 #include "spell.h"
+#include "javasym.h"
+#include "option.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -461,9 +463,9 @@ inline TypeSymbol *Semantic::FindTypeInShadow(TypeShadowSymbol *type_shadow_symb
                        identifier_token,
                        identifier_token,
                        type -> Name(),
-                       type -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
+                       type -> owner -> TypeCast() -> ContainingPackageName(),
                        type -> owner -> TypeCast() -> ExternalName(),
-                       type_shadow_symbol -> Conflict(i) -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
+                       type_shadow_symbol -> Conflict(i) -> owner -> TypeCast() -> ContainingPackageName(),
                        type_shadow_symbol -> Conflict(i) -> owner -> TypeCast() -> ExternalName());
     }
 
@@ -795,7 +797,7 @@ void Semantic::ProcessTypeHeader(AstClassDeclaration *class_declaration)
             ReportSemError(SemanticError::DEPRECATED_TYPE,
                            class_declaration -> super_opt -> LeftToken(),
                            class_declaration -> super_opt -> RightToken(),
-                           super_type -> ContainingPackage() -> PackageName(),
+                           super_type -> ContainingPackageName(),
                            super_type -> ExternalName());
         }
         if (super_type -> ACC_INTERFACE())
@@ -803,7 +805,7 @@ void Semantic::ProcessTypeHeader(AstClassDeclaration *class_declaration)
             ReportSemError(SemanticError::NOT_A_CLASS,
                            class_declaration -> super_opt -> LeftToken(),
                            class_declaration -> super_opt -> RightToken(),
-                           super_type -> ContainingPackage() -> PackageName(),
+                           super_type -> ContainingPackageName(),
                            super_type -> ExternalName());
         }
         else if (super_type -> ACC_FINAL())
@@ -811,7 +813,7 @@ void Semantic::ProcessTypeHeader(AstClassDeclaration *class_declaration)
             ReportSemError(SemanticError::SUPER_IS_FINAL,
                            class_declaration -> super_opt -> LeftToken(),
                            class_declaration -> super_opt -> RightToken(),
-                           super_type -> ContainingPackage() -> PackageName(),
+                           super_type -> ContainingPackageName(),
                            super_type -> ExternalName());
         }
         else if (super_type -> Bad())
@@ -851,7 +853,7 @@ void Semantic::ProcessTypeHeader(AstClassDeclaration *class_declaration)
         ReportSemError(SemanticError::CIRCULAR_CLASS,
                        class_declaration -> identifier_token,
                        class_declaration -> class_body -> LeftToken() - 1,
-                       type -> ContainingPackage() -> PackageName(),
+                       type -> ContainingPackageName(),
                        type -> ExternalName());
     }
 }
@@ -883,7 +885,7 @@ void Semantic::ProcessTypeHeader(AstInterfaceDeclaration *interface_declaration)
         ReportSemError(SemanticError::CIRCULAR_INTERFACE,
                        interface_declaration -> identifier_token,
                        interface_declaration -> left_brace_token - 1,
-                       type -> ContainingPackage() -> PackageName(),
+                       type -> ContainingPackageName(),
                        type -> ExternalName());
     }
 }
@@ -914,7 +916,7 @@ void Semantic::ProcessInterface(TypeSymbol *base_type, AstExpression *name)
         ReportSemError(SemanticError::DEPRECATED_TYPE,
                        name -> LeftToken(),
                        name -> RightToken(),
-                       interf -> ContainingPackage() -> PackageName(),
+                       interf -> ContainingPackageName(),
                        interf -> ExternalName());
     }
     if (! interf -> ACC_INTERFACE())
@@ -924,7 +926,7 @@ void Semantic::ProcessInterface(TypeSymbol *base_type, AstExpression *name)
             ReportSemError(SemanticError::NOT_AN_INTERFACE,
                            name -> LeftToken(),
                            name -> RightToken(),
-                           interf -> ContainingPackage() -> PackageName(),
+                           interf -> ContainingPackageName(),
                            interf -> ExternalName());
         }
 
@@ -939,7 +941,7 @@ void Semantic::ProcessInterface(TypeSymbol *base_type, AstExpression *name)
                 ReportSemError(SemanticError::DUPLICATE_INTERFACE,
                                name -> LeftToken(),
                                name -> RightToken(),
-                               interf -> ContainingPackage() -> PackageName(),
+                               interf -> ContainingPackageName(),
                                interf -> ExternalName(),
                                base_type -> ExternalName());
 
@@ -1048,7 +1050,7 @@ void Semantic::ReportTypeInaccessible(LexStream::TokenIndex left_tok,
     ReportSemError(SemanticError::TYPE_NOT_ACCESSIBLE,
                    left_tok,
                    right_tok,
-                   type -> ContainingPackage() -> PackageName(),
+                   type -> ContainingPackageName(),
                    type -> ExternalName(),
                    type -> AccessString());
 }
@@ -1353,9 +1355,9 @@ void Semantic::CompleteSymbolTable(SemanticEnvironment *environment,
                                        identifier_token,
                                        identifier_token,
                                        method -> Header(),
-                                       containing_type -> ContainingPackage() -> PackageName(),
+                                       containing_type -> ContainingPackageName(),
                                        containing_type -> ExternalName(),
-                                       this_type -> ContainingPackage() -> PackageName(),
+                                       this_type -> ContainingPackageName(),
                                        this_type -> ExternalName());
                     }
                 }
@@ -1454,9 +1456,9 @@ void Semantic::CompleteSymbolTable(SemanticEnvironment *environment,
                                    identifier_token,
                                    identifier_token,
                                    method -> Header(),
-                                   containing_type -> ContainingPackage() -> PackageName(),
+                                   containing_type -> ContainingPackageName(),
                                    containing_type -> ExternalName(),
-                                   this_type -> ContainingPackage() -> PackageName(),
+                                   this_type -> ContainingPackageName(),
                                    this_type -> ExternalName());
                 }
                 if (method_clash)
@@ -1465,13 +1467,13 @@ void Semantic::CompleteSymbolTable(SemanticEnvironment *environment,
                     ReportSemError(SemanticError::UNIMPLEMENTABLE_CLASS,
                                    identifier_token,
                                    identifier_token,
-                                   this_type -> ContainingPackage() -> PackageName(),
+                                   this_type -> ContainingPackageName(),
                                    this_type -> ExternalName(),
                                    method_clash -> Header(),
-                                   base_type -> ContainingPackage() -> PackageName(),
+                                   base_type -> ContainingPackageName(),
                                    base_type -> ExternalName(),
                                    method -> Header(),
-                                   containing_type -> ContainingPackage() -> PackageName(),
+                                   containing_type -> ContainingPackageName(),
                                    containing_type -> ExternalName());
                 }
             }
@@ -1659,10 +1661,8 @@ TypeSymbol *Semantic::ReadType(FileSymbol *file_symbol,
             type -> file_symbol = file_symbol;
             file_symbol -> types.Next() = type;
 
-            ReportSemError(SemanticError::TYPE_NOT_FOUND,
-                           tok,
-                           tok,
-                           type -> ContainingPackage() -> PackageName(),
+            ReportSemError(SemanticError::TYPE_NOT_FOUND, tok,
+                           type -> ContainingPackageName(),
                            type -> ExternalName());
         }
     }
@@ -1713,12 +1713,9 @@ TypeSymbol *Semantic::ReadType(FileSymbol *file_symbol,
             type -> SetSignature(control);
             control.ProcessBadType(type);
             type -> MarkBad();
-            if (package -> directory.Length())
-                ReportSemError(SemanticError::TYPE_NOT_FOUND,
-                               tok,
-                               tok,
-                               type -> ContainingPackage() -> PackageName(),
-                               type -> ExternalName());
+            ReportSemError(SemanticError::TYPE_NOT_FOUND, tok,
+                           type -> ContainingPackageName(),
+                           type -> ExternalName());
         }
     }
 
@@ -1756,8 +1753,7 @@ TypeSymbol *Semantic::GetBadNestedType(TypeSymbol *type,
     if (! type -> Bad())
         ReportSemError(SemanticError::TYPE_NOT_FOUND,
                        identifier_token,
-                       identifier_token,
-                       inner_type -> ContainingPackage() -> PackageName(),
+                       inner_type -> ContainingPackageName(),
                        inner_type -> ExternalName());
 
     delete [] external_name;
@@ -1805,7 +1801,7 @@ void Semantic::ProcessImportQualifiedName(AstExpression *name)
                                field_access -> LeftToken(),
                                field_access -> RightToken(),
                                name_symbol -> Name(),
-                               inner_type -> ContainingPackage() -> PackageName(),
+                               inner_type -> ContainingPackageName(),
                                inner_type -> ExternalName());
             }
             else if (inner_type -> ACC_PRIVATE() ||
@@ -2071,7 +2067,7 @@ void Semantic::ProcessTypeImportOnDemandDeclaration(AstImportDeclaration *import
         ReportSemError(SemanticError::DEPRECATED_TYPE,
                        import_declaration -> name -> LeftToken(),
                        import_declaration -> name -> RightToken(),
-                       type -> ContainingPackage() -> PackageName(),
+                       type -> ContainingPackageName(),
                        type -> ExternalName());
     }
 }
@@ -2244,7 +2240,7 @@ void Semantic::ProcessSingleTypeImportDeclaration(AstImportDeclaration *import_d
         ReportSemError(SemanticError::DEPRECATED_TYPE,
                        import_declaration -> name -> LeftToken(),
                        import_declaration -> name -> RightToken(),
-                       type -> ContainingPackage() -> PackageName(),
+                       type -> ContainingPackageName(),
                        type -> ExternalName());
     }
 }
@@ -2717,7 +2713,7 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                     ReportSemError(SemanticError::UNIMPLEMENTABLE_INTERFACE,
                                    left_tok,
                                    right_tok,
-                                   base_type -> ContainingPackage() -> PackageName(),
+                                   base_type -> ContainingPackageName(),
                                    base_type -> ExternalName(),
                                    method -> Header(),
                                    hidden_method -> Header());
@@ -2730,7 +2726,7 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                                right_tok,
                                method -> Header(),
                                hidden_method -> Header(),
-                               hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
+                               hidden_method -> containing_type -> ContainingPackageName(),
                                hidden_method -> containing_type -> ExternalName());
                 base_type -> MarkBad();
             }
@@ -2742,10 +2738,10 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                            right_tok,
                            base_type -> ExternalName(),
                            method -> Header(),
-                           method -> containing_type -> ContainingPackage() -> PackageName(),
+                           method -> containing_type -> ContainingPackageName(),
                            method -> containing_type -> ExternalName(),
                            hidden_method -> Header(),
-                           hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
+                           hidden_method -> containing_type -> ContainingPackageName(),
                            hidden_method -> containing_type -> ExternalName());
             base_type -> MarkBad();
         }
@@ -2776,7 +2772,7 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                            right_tok,
                            method -> Header(),
                            hidden_method -> Header(),
-                           hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
+                           hidden_method -> containing_type -> ContainingPackageName(),
                            hidden_method -> containing_type -> ExternalName());
         }
         base_type -> MarkBad();
@@ -2797,7 +2793,7 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                            right_tok,
                            method -> Header(),
                            hidden_method -> Header(),
-                           hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
+                           hidden_method -> containing_type -> ContainingPackageName(),
                            hidden_method -> containing_type -> ExternalName());
         }
         else
@@ -2808,10 +2804,10 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                            right_tok,
                            base_type -> ExternalName(),
                            method -> Header(),
-                           method -> containing_type -> ContainingPackage() -> PackageName(),
+                           method -> containing_type -> ContainingPackageName(),
                            method -> containing_type -> ExternalName(),
                            hidden_method -> Header(),
-                           hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
+                           hidden_method -> containing_type -> ContainingPackageName(),
                            hidden_method -> containing_type -> ExternalName());
         }
         base_type -> MarkBad();
@@ -2834,7 +2830,7 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                                method -> AccessString(),
                                hidden_method -> Header(),
                                StringConstant::US_public,
-                               hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
+                               hidden_method -> containing_type -> ContainingPackageName(),
                                hidden_method -> containing_type -> ExternalName());
                 base_type -> MarkBad();
             }
@@ -2846,11 +2842,11 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                                base_type -> ExternalName(),
                                method -> Header(),
                                method -> AccessString(),
-                               method -> containing_type -> ContainingPackage() -> PackageName(),
+                               method -> containing_type -> ContainingPackageName(),
                                method -> containing_type -> ExternalName(),
                                hidden_method -> Header(),
                                StringConstant::US_public,
-                               hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
+                               hidden_method -> containing_type -> ContainingPackageName(),
                                hidden_method -> containing_type -> ExternalName());
                 base_type -> MarkBad();
             }
@@ -2868,7 +2864,7 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                            method -> AccessString(),
                            hidden_method -> Header(),
                            StringConstant::US_protected,
-                           hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
+                           hidden_method -> containing_type -> ContainingPackageName(),
                            hidden_method -> containing_type -> ExternalName());
             base_type -> MarkBad();
         }
@@ -2882,7 +2878,7 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                        StringConstant::US_private,
                        hidden_method -> Header(),
                        StringConstant::US_default,
-                       hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
+                       hidden_method -> containing_type -> ContainingPackageName(),
                        hidden_method -> containing_type -> ExternalName());
         base_type -> MarkBad();
     }
@@ -2940,7 +2936,7 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                                    right_tok,
                                    exception -> Name(),
                                    hidden_method -> Header(),
-                                   hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
+                                   hidden_method -> containing_type -> ContainingPackageName(),
                                    hidden_method -> containing_type -> ExternalName());
                     base_type -> MarkBad();
                 }
@@ -2953,10 +2949,10 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                                base_type -> ExternalName(),
                                exception -> Name(),
                                method -> Header(),
-                               method -> containing_type -> ContainingPackage() -> PackageName(),
+                               method -> containing_type -> ContainingPackageName(),
                                method -> containing_type -> ExternalName(),
                                hidden_method -> Header(),
-                               hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
+                               hidden_method -> containing_type -> ContainingPackageName(),
                                hidden_method -> containing_type -> ExternalName());
                 base_type -> MarkBad();
             }
@@ -3296,9 +3292,9 @@ void Semantic::AddInheritedMethods(TypeSymbol *base_type,
                                    left_tok,
                                    right_tok,
                                    method -> Header(),
-                                   base_type -> ContainingPackage() -> PackageName(),
+                                   base_type -> ContainingPackageName(),
                                    base_type -> ExternalName(),
-                                   super_type -> ContainingPackage() -> PackageName(),
+                                   super_type -> ContainingPackageName(),
                                    super_type -> ExternalName());
                 }
             }
@@ -3820,7 +3816,7 @@ TypeSymbol *Semantic::ImportType(LexStream::TokenIndex identifier_token,
         ReportSemError(SemanticError::IMPORT_NOT_CANONICAL,
                        identifier_token, identifier_token,
                        type -> Name(),
-                       type -> ContainingPackage() -> PackageName(),
+                       type -> ContainingPackageName(),
                        type -> ExternalName());
     }
     return type;
@@ -3884,9 +3880,9 @@ TypeSymbol *Semantic::FindType(LexStream::TokenIndex identifier_token)
                                    identifier_token,
                                    identifier_token,
                                    lex_stream -> NameString(identifier_token),
-                                   type -> ContainingPackage() -> PackageName(),
+                                   type -> ContainingPackageName(),
                                    type -> ExternalName(),
-                                   env -> Type() -> ContainingPackage() -> PackageName(),
+                                   env -> Type() -> ContainingPackageName(),
                                    env -> Type() -> ExternalName());
                     break;
                 }
@@ -3903,7 +3899,7 @@ TypeSymbol *Semantic::FindType(LexStream::TokenIndex identifier_token)
                                        identifier_token,
                                        identifier_token,
                                        lex_stream -> NameString(identifier_token),
-                                       supertype -> ContainingPackage() -> PackageName(),
+                                       supertype -> ContainingPackageName(),
                                        supertype -> ExternalName(),
                                        ((MethodSymbol *) outer_type -> owner) -> Name());
                         break;
@@ -3924,9 +3920,9 @@ TypeSymbol *Semantic::FindType(LexStream::TokenIndex identifier_token)
                                        identifier_token,
                                        identifier_token,
                                        lex_stream -> NameString(identifier_token),
-                                       supertype -> ContainingPackage() -> PackageName(),
+                                       supertype -> ContainingPackageName(),
                                        supertype -> ExternalName(),
-                                       env2 -> Type() -> ContainingPackage() -> PackageName(),
+                                       env2 -> Type() -> ContainingPackageName(),
                                        env2 -> Type() -> ExternalName());
                         break;
                     }
@@ -4095,7 +4091,7 @@ TypeSymbol *Semantic::MustFindType(Ast *name)
             ReportSemError(SemanticError::DEPRECATED_TYPE,
                            name -> LeftToken(),
                            name -> RightToken(),
-                           type -> ContainingPackage() -> PackageName(),
+                           type -> ContainingPackageName(),
                            type -> ExternalName());
         }
     }

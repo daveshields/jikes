@@ -1,3 +1,252 @@
+2002-11-21  Eric Blake  <ebb9@email.byu.edu>
+
+	* 1.18 release.
+
+2002-11-18  Eric Blake  <ebb9@email.byu.edu>
+
+	* NEWS:
+	* jikes.spec:
+	* configure.in: Prepare for releasing 1.18.
+	* configure: Regenerate.
+
+2002-11-16  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/definite.cpp (DefiniteBlock): Don't mark variables declared
+	in a loop with continue as multiply assigned - bug 3306.
+
+2002-11-14  Eric Blake  <ebb9@email.byu.edu>
+
+	* COPYING: Revert - Jikes is not under the GPL.
+	* autogen.sh: 
+	* configure.in (AM_INIT_AUTOMAKE): Fix so that COPYING will not be
+	overwritten again.
+	* Makefile.in:
+	* doc/Makefile.in:
+	* src/Makefile.in: Regenerate.
+
+2002-11-14  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/Makefile.in: Regenerate after fixing a bug in automake 1.7.1
+	- see patch 371.
+
+2002-11-12  Eric Blake  <ebb9@email.byu.edu>
+
+	* configure.in: Modify version, update to autoconf 2.54 and
+	friends.
+	* src/m4/ac_cxx_bool.m4:
+	* src/m4/ac_cxx_check_set_new_handler.m4:
+	* src/m4/ac_cxx_const_cast.m4:
+	* src/m4/ac_cxx_dynamic_cast.m4:
+	* src/m4/ac_cxx_exceptions.m4:
+	* src/m4/ac_cxx_explicit.m4:
+	* src/m4/ac_cxx_have_std.m4:
+	* src/m4/ac_cxx_member_constants.m4:
+	* src/m4/ac_cxx_namespaces.m4:
+	* src/m4/ac_cxx_reinterpret_cast.m4:
+	* src/m4/ac_cxx_rtti.m4:
+	* src/m4/ac_cxx_static_cast.m4: Update obsolete autoconf-isms.
+	* COPYING:
+	* INSTALL:
+	* aclocal.m4:
+	* config.guess:
+	* config.sub:
+	* configure:
+	* depcomp:
+	* install-sh:
+	* missing:
+	* mkinstalldirs:
+	* Makefile.in:
+	* doc/Makefile.in:
+	* src/config.h.in:
+	* src/Makefile.in: Regenerate.
+
+2002-11-11  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/symbol.h (ContainingPackageName): New method.
+	* src/body.cpp:
+	* src/bytecode.cpp:
+	* src/control.cpp:
+	* src/decl.cpp:
+	* src/definite.cpp:
+	* src/expr.cpp:
+	* src/init.cpp:
+	* src/symbol.cpp:
+	* src/system.cpp: Use the method.
+
+2002-11-09  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/bytecode.cpp (AppendString): String concatenation broken
+	when using (int)char - bug 3363.
+	* src/expr.cpp (ProcessAmbiguousName): Another case of
+	placeholder_type assertion - bug 3359.
+
+2002-11-09  Chris Dennis  <chris.dennis@invidi.com>
+
+	* src/error.cpp (InitializeMessages): For loop variables (again).
+
+2002-11-07  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/error.cpp (NotDot): Fix logic.
+
+2002-11-06  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/error.h:
+	* src/error.cpp (FILE_FILE_CONFLICT): Restore error I accidentally
+	deleted in last patch.
+
+2002-11-05  Elliott Hughes  <enh@acm.org>
+
+	* src/error.cpp:
+	* src/error.h: Massive rewrite. Use printf style strings and
+	consolidate formatting into common routines. Improves output of
+	filenames, and adds some infrastructure for naming (and thus
+	suppressing) arbitrary errors - based on patch 368.
+	(ErrorString::Array): Fix a memory leak.
+	* src/body.cpp:
+	* src/diagnose.h:
+	* src/diagnose.cpp:
+	* src/jikes.cpp:
+	* src/jikesapi.h:
+	* src/modifier.cpp:
+	* src/option.cpp:
+	* src/option.h:
+	* src/semantic.h:
+	* src/stream.cpp:
+	* src/stream.h:
+	* doc/jikes.1: Fallout from the error changes. More const safety,
+	slight changes to command line arguments.
+	* src/Makefile.am: Update dependences.
+	* src/Makefile.in: Regenerate.
+
+2002-11-02  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/semantic.h (class Semantic): Fix prototype.
+
+2002-11-02  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/modifier.cpp (ProcessAccessFlag): Overdid last commit -
+	restore behavior of pedantic_modifier_order.
+
+2002-11-02  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/expr.cpp (ReportConstructorNotFound, ProcessTypeExpression),
+	(GetAnonymousType): Minor touchups.
+	* src/bytecode.cpp (ByteCode): Move ACC_SUPER logic here...
+	* src/class.h (class ClassFile): from here, since modifier.cpp
+	should not implicitly set it.
+
+2002-11-02  Elliott Hughes  <enh@acm.org>
+
+	* src/access.h: Helper functions for the changes to modifier.cpp.
+	* src/error.cpp:
+	* src/error.h: Consolidate some modifier error messages.
+	* src/modifier.cpp: Removal of duplicate code, regularization of
+	checking.
+	* src/semantic.h (ReportSemError) A new form for the common case
+	where there's only a single token involved, not a span.
+	(ProcessAccessFlag) New prototype.
+
+2002-10-31  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/unparse.cpp (Unparse): Fix unparse output typo.
+
+2002-10-28  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/error.cpp (PrintCATCH_ARRAY_TYPE): Fix typo.
+	* src/body.cpp (ProcessTryStatement): Detect array catch types,
+	and reduce spurious catch clause duplication warnings - bug 3343.
+
+2002-10-14  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/body.cpp (ProcessExecutableBodies): Pedantic warning for
+	strange interface throws clauses - bug 3232.
+	* src/expr.cpp (ProcessTypeExpression),
+	(ProcessClassInstanceCreationExpression): Catch bad types that were
+	found in right file but have invalid contents - bugs 3318, 3319.
+	* src/error.h:
+	* src/error.cpp (INVALID_TYPE_FOUND): New error message.
+	* src/symbol.cpp (GetArrayType): Don't make array of bad type.
+
+2002-10-14  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/expr.cpp (GetAnonymousType): Avoid segfault on bad anonymous
+	class - bug 3322.
+
+2002-10-14  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/decl.cpp (ReadType): Always report when a type is not found
+	- solves core dumps reported in bug 3319.
+
+2002-10-14  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/expr.cpp (CanCastConvert): Fix recognition of incompatible
+	casts between classes - bug 3320.
+
+2002-10-10  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/scanner.cpp (ScanKeyword7): Fix fallthrough that treated
+	"befault" as a keyword.
+
+2002-10-07  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/m4/ac_define_integer_bits.m4: New file.
+	* acinclude.m4: Include it.
+	* configure.in: Determine types of exact bitwidths required.
+	* src/Makefile.am: Update file dependencies.
+	* aclocal.m4:
+	* configure:
+	* Makefile.in:
+	* doc/Makefile.in:
+	* src/Makefile.in:
+	* src/config.h.in: Regenerate.
+	* src/platform.h (i1, i2, i4, i8, u1, u2, u4, u8): Use types of
+	known size.
+	* src/ast.h:
+	* src/bytecode.h:
+	* src/class.h:
+	* src/control.h:
+	* src/error.h:
+	* src/option.h:
+	* src/platform.h:
+	* src/scanner.h:
+	* src/semantic.h:
+	* src/set.h:
+	* src/stream.h:
+	* src/symbol.h: Optimize to include fewer unnecessary headers;
+	helping to speed compilation time slightly.
+	* src/ast.cpp (CaseElement::Value, AstExpression::Type):
+	* src/body.cpp:
+	* src/decl.cpp:
+	* src/definite.cpp:
+	* src/depend.cpp:
+	* src/diagnose.cpp:
+	* src/error.cpp (Semantic::PrintMessages, class ErrorString):
+	* src/expr.cpp:
+	* src/getclass.cpp:
+	* src/jikesapi.cpp:
+	* src/modifier.cpp:
+	* src/option.cpp:
+	* src/platform.cpp:
+	* src/scanner.cpp:
+	* src/stream.cpp (RightColumn, NameString, NameStringLength),
+	(LineLength, LineSegmentLength, FindColumn):
+	* src/symbol.cpp (IsClassSuffix, IsJavaSuffix):
+	* src/system.cpp: Include necessary headers, and move some code
+	around to avoid dependencies.
+
+2002-10-04  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/symbol.cpp (GetReadAccessConstructor): Avoid bug when
+	accessor constructor is created during final field evaluation -
+	bug 3310.
+	* src/ast.h (AstBreakStatement, AstContinueStatement): Initialize
+	nesting_level, to avoid coredump found on generics-branch.
+
+2002-10-02  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/bytecode.cpp (EmitConditionalExpression): Fix verifyerror in
+	non-boolean ?: expressions - bug 3311.
+
 2002-09-27  Chris Abbey  <jikes@cabbey.net>
 
 	* 1.17 release.
@@ -146,7 +395,7 @@
 	accessor methods required for classname.super when inner class and
 	enclosing class extend same superclass - bug 3240.
 
-2002-08-26  ??  <nobody@ibm.com>
+2002-08-26  ??  <lecharny@libertysurf.fr>
 
 	* src/option.cpp (Option): Fix bad logic with drive letters in -d
 	for Windows - bug 3238.

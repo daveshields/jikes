@@ -1,4 +1,4 @@
-// $Id: diagnose.cpp,v 1.28 2002/08/02 21:29:44 ericb Exp $
+// $Id: diagnose.cpp,v 1.30 2002/11/06 00:58:22 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -13,6 +13,7 @@
 #include "semantic.h"
 #include "case.h"
 #include "spell.h"
+#include "option.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -2177,7 +2178,7 @@ const wchar_t *ParseErrorInfo::getErrorReport()
     return emacs_style_report ? emacsErrorString() : regularErrorString();
 }
 
-wchar_t *ParseErrorInfo::regularErrorString()
+const wchar_t* ParseErrorInfo::regularErrorString()
 {
     ErrorString s;
 
@@ -2188,7 +2189,7 @@ wchar_t *ParseErrorInfo::regularErrorString()
     return s.Array();
 }
 
-wchar_t *ParseErrorInfo::emacsErrorString()
+const wchar_t* ParseErrorInfo::emacsErrorString()
 {
     ErrorString s;
 

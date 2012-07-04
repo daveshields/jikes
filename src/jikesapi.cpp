@@ -1,4 +1,4 @@
-// $Id: jikesapi.cpp,v 1.41 2002/07/31 21:05:25 ericb Exp $
+// $Id: jikesapi.cpp,v 1.42 2002/10/07 22:06:16 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,6 +11,7 @@
 #include "platform.h"
 #include "control.h"
 #include "jikesapi.h"
+#include "option.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 using namespace Jikes;

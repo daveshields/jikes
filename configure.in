@@ -1,18 +1,19 @@
-# $Id: configure.in,v 1.39 2002/09/28 04:29:41 cabbey Exp $
+# $Id: configure.in,v 1.44 2002/11/18 23:43:32 ericb Exp $
 dnl	This file is an input file used by the GNU "autoconf" program to
 dnl	generate the file "configure", which is run to configure the
 dnl	Makefile in this directory.
 
-AC_INIT(ChangeLog)
-AM_INIT_AUTOMAKE(jikes, 1.17)
-AC_DEFINE(JIKES_VERSION_STRING, "Version 1.17 - 27 September 2002",
-    [A string to indicate the release of jikes: Version 1.15 - 26 Sept 2001])
+dnl Set up the name and version
+AC_INIT([jikes], [1.18])
+AM_INIT_AUTOMAKE([foreign check-news dist-bzip2 1.7.1])
+AC_DEFINE(JIKES_VERSION_STRING, "Version 1.18 - 21 November 2002",
+    [A string to indicate the release of jikes: Version 1.17 - 27 Sept 2002])
 
-AC_PREREQ(2.53)
+AC_PREREQ(2.54)
 
 dnl AC_CACHE_LOAD
 
-AM_CONFIG_HEADER(src/config.h)
+AC_CONFIG_HEADERS([src/config.h])
 AH_TOP([/* This software is subject to the terms of the IBM Jikes
 Compiler License Agreement available at the following URL:
 http://ibm.com/developerworks/opensource/jikes.
@@ -67,14 +68,11 @@ else
 fi
 
 dnl	Tell the system that we are going to use the C++ language
-AC_LANG_CPLUSPLUS()
+AC_LANG([C++])
 
 dnl	Have the system search for and test out the C++ compiler
 dnl	We expect AC_PROG_CXX to automatically find a cross compiler
 AC_PROG_CXX()
-
-dnl	Do cygwin and migwin checks (gnu on win32)
-AC_CYGWIN()
 
 dnl	Find the object file extension (like .o or .obj) and subst it
 AC_OBJEXT()
@@ -112,7 +110,7 @@ AC_HEADER_STDC()
 AC_CHECK_HEADERS(stdio.h assert.h limits.h ctype.h time.h float.h)
 
 dnl	Check for some headers which are not present on all supported platforms
-AC_CHECK_HEADERS(windows.h direct.h dirent.h sys/cygwin.h langinfo.h locale.h)
+AC_CHECK_HEADERS(windows.h direct.h dirent.h sys/cygwin.h locale.h)
 
 dnl	Check for math.h and see if we need to link to the math library
 AC_CHECK_MATHLIB()
@@ -289,36 +287,30 @@ else
   AC_MSG_RESULT([native])
 fi
 
-dnl Check for broken compilers that do not support the long long type!
-AC_CHECK_TYPE(unsigned long long)
 
-if test "$ac_cv_type_unsigned_long_long" != "yes" ; then
-  dnl GROAN!! need to "support" systems that do not define
-  dnl a 64 bit long long type (some folks refuse to use gcc).
-  dnl What about the u_int64_t type, would that work too?
+dnl Ensure that we have exact type sizes.
+AC_DEFINE_INTEGER_BITS(int8_t, signed char, __int8, char)
+AC_DEFINE_INTEGER_BITS(uint8_t, unsigned int8_t, unsigned char,
+                       unsigned __int8, char)
+AC_DEFINE_INTEGER_BITS(int16_t, signed short, signed int, __int16,
+                       short, int)
+AC_DEFINE_INTEGER_BITS(uint16_t, unsigned int16_t, unsigned short, unsigned,
+                       unsigned __int16)
+AC_DEFINE_INTEGER_BITS(int32_t, signed, signed long, __int32, int, long)
+AC_DEFINE_INTEGER_BITS(uint32_t, unsigned int32_t, unsigned, unsigned long,
+                       unsigned __int32)
+AC_DEFINE_INTEGER_BITS(int64_t, signed long, signed long long,
+                       __int64, long long)
+AC_DEFINE_INTEGER_BITS(uint64_t, unsigned int64_t, unsigned long,
+                       unsigned long long, unsigned __int64)
 
-  AC_CHECK_TYPE(unsigned __int64)
-  if test "$ac_cv_type_unsigned___int64" = "yes" ; then
-    AC_DEFINE(HAVE_UNSIGNED_INT64, ,
-      [Defined when the compiler supports the unsigned __int64 type])
-    AC_DEFINE(HAVE_64BIT_TYPES, ,
-      [Defined when the compiler supports 64 bit integer math])
-  else
-    dnl   Check for endianness
-    AC_C_BIGENDIAN()
-  fi
+if test "$i8" = no; then
+  dnl Check for endianness
+  AC_C_BIGENDIAN()
 else
-  AC_DEFINE(HAVE_UNSIGNED_LONG_LONG, ,
-    [Defined when the compiler supports the unsigned long long type])
   AC_DEFINE(HAVE_64BIT_TYPES, ,
     [Defined when the compiler supports 64 bit integer math])
 fi
-
-
-# FIXME : we would need to readdress this when porting to new systems
-AC_DEFINE(HAVE_32BIT_TYPES, ,
-    [Defined when bit sizes are int = 32, short = 16, char = 8])
-
 
 
 dnl	Check the stat() system call to find out how many
@@ -484,4 +476,5 @@ AC_SUBST(JIKESPG)
 
 dnl AC_CACHE_SAVE
 
-AC_OUTPUT([Makefile doc/Makefile src/Makefile])
+AC_CONFIG_FILES([Makefile doc/Makefile src/Makefile])
+AC_OUTPUT

@@ -1,4 +1,4 @@
-// $Id: diagnose.h,v 1.16 2002/08/02 21:29:44 ericb Exp $ -*- c++ -*-
+// $Id: diagnose.h,v 1.17 2002/11/06 00:58:23 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -56,8 +56,8 @@ private:
 
     void Initialize(LexStream *);
 
-    wchar_t *regularErrorString();
-    wchar_t *emacsErrorString();
+    const wchar_t* regularErrorString();
+    const wchar_t* emacsErrorString();
 
     LexStream::TokenIndex left_token;
     LexStream::TokenIndex right_token;

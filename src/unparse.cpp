@@ -1,4 +1,4 @@
-// $Id: unparse.cpp,v 1.30 2002/08/05 23:56:30 ericb Exp $
+// $Id: unparse.cpp,v 1.31 2002/11/01 00:16:10 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -378,7 +378,7 @@ void AstSuperCall::Unparse(Ostream& os, LexStream* lex_stream)
         if (base_opt && dot_token_opt)
         {
             base_opt -> Unparse(os, lex_stream);
-            os << lex_stream -> NameString(dot_token_opt);
+            os << '.';
         }
         os << lex_stream -> NameString(super_token)
            << lex_stream -> NameString(left_parenthesis_token);
@@ -877,7 +877,10 @@ void AstClassInstanceCreationExpression::Unparse(Ostream& os, LexStream* lex_str
     if (Ast::debug_unparse)
         os << "/*AstClassInstanceCreationExpression:#" << id << "*/";
     if (dot_token_opt /* base_opt - see ast.h for explanation */)
+    {
         base_opt -> Unparse(os, lex_stream);
+        os << '.';
+    }
     os << lex_stream -> NameString(new_token) << ' ';
     class_type -> Unparse(os, lex_stream);
     os << "( ";

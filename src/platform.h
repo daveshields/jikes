@@ -1,4 +1,4 @@
-// $Id: platform.h,v 1.37 2002/08/02 21:29:47 ericb Exp $ -*- c++ -*-
+// $Id: platform.h,v 1.38 2002/10/07 22:06:16 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -87,13 +87,6 @@
 # include <iconv.h>
 # include <errno.h>
 #endif
-
-/*
-Currently, we do not use this one
-#ifdef HAVE_INTTYPES_H
-# include <inttypes.h>
-#endif
-*/
 
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
@@ -191,51 +184,27 @@ typedef unsigned int wint_t;
 
 
 //
-// These limit definitions are correct for all the platforms that
-// we are currently using. When porting this code, they should
-// always be reviewed.
+// In the compiler, we want EXACT control over signed and unsigned values
+// of certain bit widths. Configure should have already found us what we need.
 //
+#if HAVE_INTTYPES_H
+# include <inttypes.h>
+#else
+# if HAVE_STDINT_H
+#  include <stdint.h>
+# endif
+#endif // HAVE_INTTYPES_H
 
-#ifdef HAVE_32BIT_TYPES
-
-// MS VC++ defines __int64
-# ifdef HAVE_UNSIGNED_INT64
-// Range 0..18446744073709551615
-typedef unsigned __int64 u8;
-
-// Range -9223372036854775808..9223372036854775807
-typedef signed __int64 i8;
-# endif // HAVE_UNSIGNED_INT64
-
-// gcc defines long long
-# ifdef HAVE_UNSIGNED_LONG_LONG
-// Range 0..18446744073709551615
-typedef unsigned long long u8;
-
-// Range -9223372036854775808..9223372036854775807
-typedef signed long long i8;
-# endif // HAVE_UNSIGNED_LONG_LONG
-
-// Range 0..4294967295
-typedef unsigned int u4;
-
-// Range -2147483648..+2147483647
-typedef signed int i4;
-
-// Range 0..65535
-typedef unsigned short u2;
-
-// Range -32768..32767
-typedef signed short i2;
-
-// Range 0..255 in this system
-typedef unsigned char u1;
-
-// Range -128..+127 in this system
-typedef signed char i1;
-
-#endif // HAVE_32BIT_TYPES
-
+typedef uint8_t u1;
+typedef int8_t i1;
+typedef uint16_t u2;
+typedef int16_t i2;
+typedef uint32_t u4;
+typedef int32_t i4;
+#ifdef HAVE_64BIT_TYPES
+typedef uint64_t u8;
+typedef int64_t i8;
+#endif // HAVE_64BIT_TYPES
 
 //
 // Some compilers do not correctly predefine the primitive type "bool"
@@ -251,13 +220,6 @@ typedef signed char i1;
 typedef unsigned char bool;
 enum { false = 0, true = 1 };
 #endif
-
-
-// tuple.h needs the above typedefs first, but has it's own namespace block...
-// cabbey would also argue that the wsclen and family don't need to be in our
-// namespace, 'cuz if we need to define them we aren't going to clash. ;)
-#include "tuple.h"
-
 
 
 #ifdef HAVE_JIKES_NAMESPACE
@@ -1143,38 +1105,6 @@ extern Ostream Coutput;
 //
 #define cout Please_Do_Not_Use_cout_Directly_But_use_an_instance_of_Ostream_with_cout_as_argument
 #define cerr Please_Do_Not_Use_cerr_Directly_But_use_an_instance_of_Ostream_with_cerr_as_argument
-
-// This is temporary solution.
-// In future basic_ostringstream<wchar_t> will be used.
-// But now it is not supported by libg++.
-// (lord).
-class ErrorString: public ConvertibleArray<wchar_t>
-{
-public:
-    ErrorString();
-
-    ErrorString &operator<<(const wchar_t *s);
-    ErrorString &operator<<(const wchar_t c);
-    ErrorString &operator<<(const char *s);
-    ErrorString &operator<<(const char c);
-    ErrorString &operator<<(int n);
-    ErrorString &operator<<(ostream &(*f)(ostream&))
-    {
-        assert(f == (ostream &(*)(ostream&)) endl);
-        return *this << '\n';
-    }
-
-    void width(int w);
-    void fill(const char c);
-
-    wchar_t *Array();
-
-private:
-
-    void do_fill(int n);
-    char fill_char;
-    int  field_width;
-};
 
 #ifdef HAVE_JIKES_NAMESPACE
 } // Close namespace Jikes block

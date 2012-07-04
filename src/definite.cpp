@@ -1,4 +1,4 @@
-// $Id: definite.cpp,v 1.47 2002/07/30 16:30:01 ericb Exp $
+// $Id: definite.cpp,v 1.50 2002/11/17 00:29:31 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -9,6 +9,7 @@
 //
 #include "platform.h"
 #include "semantic.h"
+#include "option.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -841,7 +842,7 @@ void Semantic::DefiniteBlock(Ast *stmt)
     }
 #endif // DUMP
     //
-    // Remove all variables that just went out of scope
+    // Remove all variables that just went out of scope.
     //
     for (i = 0; i < block_body -> block_symbol -> NumVariableSymbols(); i++)
     {
@@ -852,6 +853,8 @@ void Semantic::DefiniteBlock(Ast *stmt)
         BlankFinals() -> RemoveElement(index);
         ReachableAssignments() -> RemoveElement(index);
         DefinitelyAssignedVariables() -> ReclaimElement(index);
+        DefiniteBlocks() ->
+            ContinuePair(DefiniteBlocks() -> Size() - 2).ReclaimElement(index);
     }
 
     //
@@ -1459,7 +1462,7 @@ void Semantic::DefiniteMethodBody(AstMethodDeclaration *method_declaration)
     if (control.option.g & JikesOption::VARS)
         Coutput << "(9) Processing method \""
                 << method_declaration -> method_symbol -> Name() << "\" in "
-                << ThisType() -> ContainingPackage() -> PackageName()
+                << ThisType() -> ContainingPackageName()
                 << "/" << ThisType() -> ExternalName() << endl;
 #endif // DUMP
     AstBlock *block_body = (AstBlock *) method_declaration -> method_body;
@@ -1534,7 +1537,7 @@ void Semantic::DefiniteConstructorBody(AstConstructorDeclaration *constructor_de
         Coutput << "(12) Processing constructor \""
                 << constructor_declaration -> constructor_symbol -> Name()
                 << "\" in "
-                << ThisType() -> ContainingPackage() -> PackageName() << "/"
+                << ThisType() -> ContainingPackageName() << "/"
                 << ThisType() -> ExternalName() << endl;
 #endif // DUMP
     AstMethodBody *block_body = constructor_declaration -> constructor_body;
@@ -1619,7 +1622,7 @@ void Semantic::DefiniteBlockInitializer(AstBlock *block_body, int stack_size)
 #ifdef DUMP
     if (control.option.g & JikesOption::VARS)
         Coutput << "(15) Processing Initializer block in "
-                << ThisType() -> ContainingPackage() -> PackageName() << "/"
+                << ThisType() -> ContainingPackageName() << "/"
                 << ThisType() -> ExternalName() << endl;
 #endif // DUMP
     int size = block_body -> block_symbol -> max_variable_index +

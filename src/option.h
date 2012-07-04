@@ -1,4 +1,4 @@
-// $Id: option.h,v 1.39 2002/05/12 03:19:42 ericb Exp $ -*- c++ -*-
+// $Id: option.h,v 1.41 2002/11/06 00:58:23 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,7 +12,6 @@
 #define option_INCLUDED
 
 #include "platform.h"
-#include "code.h"
 #include "tuple.h"
 #include "jikesapi.h"
 
@@ -82,7 +81,7 @@ public:
 
     ~OptionError() { delete [] name; }
 
-    wchar_t* GetErrorMessage();
+    const wchar_t* GetErrorMessage();
 
 private:
     OptionErrorKind kind;
@@ -147,16 +146,8 @@ public:
          full_check,
          unzip,
          dump_errors,
-         errors;
-
-    //
-    // This next section covers pedantic warnings. Named warnings are
-    // specified by flags to the +P command-line option; the last variable
-    // covers all unnamed warnings. This list is designed to grow when new
-    // pedantic warning categories are added (often from user complaints).
-    //
-    bool pedantic_modifier_order, // suggested modifier ordering
-         pedantic; // all other warnings
+         errors,
+         pedantic;
 
     char *dependence_report_name;
 

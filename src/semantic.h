@@ -1,4 +1,4 @@
-// $Id: semantic.h,v 1.70 2002/09/09 22:52:58 ericb Exp $ -*- c++ -*-
+// $Id: semantic.h,v 1.74 2002/11/06 00:58:23 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -13,7 +13,6 @@
 
 #include "platform.h"
 #include "ast.h"
-#include "diagnose.h"
 #include "error.h"
 #include "symbol.h"
 #include "control.h"
@@ -25,7 +24,6 @@ namespace Jikes { // Open namespace Jikes block
 #endif
 
 
-class cp_info;
 class TypeShadowSymbol;
 
 //
@@ -741,23 +739,32 @@ public:
 
     ~Semantic() { delete error; }
 
-    // Report a semantic warning or error
+    // Report a multi-token semantic warning or error.
     void ReportSemError(SemanticError::SemanticErrorKind kind,
-                        LexStream::TokenIndex ltok,
-                        LexStream::TokenIndex rtok,
-                        wchar_t *s1 = NULL,
-                        wchar_t *s2 = NULL,
-                        wchar_t *s3 = NULL,
-                        wchar_t *s4 = NULL,
-                        wchar_t *s5 = NULL,
-                        wchar_t *s6 = NULL,
-                        wchar_t *s7 = NULL,
-                        wchar_t *s8 = NULL,
-                        wchar_t *s9 = NULL)
+                        LexStream::TokenIndex ltok, LexStream::TokenIndex rtok,
+                        const wchar_t* s1 = NULL, const wchar_t* s2 = NULL,
+                        const wchar_t* s3 = NULL, const wchar_t* s4 = NULL,
+                        const wchar_t* s5 = NULL, const wchar_t* s6 = NULL,
+                        const wchar_t* s7 = NULL, const wchar_t* s8 = NULL,
+                        const wchar_t* s9 = NULL)
     {
         if (! error)
             error = new SemanticError(control, source_file_symbol);
         error -> Report(kind, ltok, rtok, s1, s2, s3, s4, s5, s6, s7, s8, s9);
+    }
+
+    // Report a single-token semantic warning or error.
+    void ReportSemError(SemanticError::SemanticErrorKind kind,
+                        LexStream::TokenIndex tok,
+                        const wchar_t* s1 = NULL, const wchar_t* s2 = NULL,
+                        const wchar_t* s3 = NULL, const wchar_t* s4 = NULL,
+                        const wchar_t* s5 = NULL, const wchar_t* s6 = NULL,
+                        const wchar_t* s7 = NULL, const wchar_t* s8 = NULL,
+                        const wchar_t* s9 = NULL)
+    {
+        if (! error)
+            error = new SemanticError(control, source_file_symbol);
+        error -> Report(kind, tok, tok, s1, s2, s3, s4, s5, s6, s7, s8, s9);
     }
 
     int NumErrors() { return (error ? error -> num_errors : 0); }
@@ -765,45 +772,9 @@ public:
     //
     // If we had a bad compilation unit, print the parser messages.
     // If semantic errors were detected print them too.
-    // Set the return code.
+    // Set the return code. Implemented in error.cpp.
     //
-    void PrintMessages()
-    {
-        if (this != control.system_semantic)
-        {
-            if (lex_stream -> NumBadTokens() > 0)
-            {
-                lex_stream -> PrintMessages();
-                return_code = 1;
-            }
-            else if (lex_stream -> NumWarnTokens() > 0)
-                lex_stream -> PrintMessages();
-
-            if (! compilation_unit ||
-                compilation_unit -> BadCompilationUnitCast())
-            {
-                DiagnoseParser *diagnose_parser =
-                    new DiagnoseParser(control, lex_stream);
-                return_code = 1;
-                delete diagnose_parser;
-            }
-
-            if (! control.option.nocleanup && compilation_unit)
-                CleanUp();
-        }
-
-        if (error && error -> error.Length() > 0 &&
-            error -> PrintMessages() > return_code)
-        {
-            return_code = 1;
-        }
-
-        //
-        // Once we have processed the errors, reset the error object
-        //
-        delete error;
-        error = NULL;
-    }
+    void PrintMessages();
 
     PackageSymbol *Package() { return this_package; }
 
@@ -996,6 +967,8 @@ private:
     void ProcessSingleTypeImportDeclaration(AstImportDeclaration *);
 
     // Implemented in modifier.cpp - process declaration modifiers
+    void ProcessAccessFlag(AccessFlags&, LexStream::TokenIndex, Ast::Kind,
+                           const wchar_t*, u2 valid, u2 implicit = 0);
     AccessFlags ProcessClassModifiers(AstClassDeclaration *);
     AccessFlags ProcessLocalClassModifiers(AstClassDeclaration *);
     AccessFlags ProcessNestedClassModifiers(AstClassDeclaration *);
@@ -1141,7 +1114,7 @@ private:
     void ProcessMethodBody(AstMethodDeclaration *);
     void ProcessConstructorBody(AstConstructorDeclaration *);
     bool UncaughtException(TypeSymbol *);
-    wchar_t *UncaughtExceptionContext();
+    const wchar_t* UncaughtExceptionContext();
 
     // Implemented in expr.cpp - expression processing
     void ReportConstructorNotFound(Ast *, TypeSymbol *);

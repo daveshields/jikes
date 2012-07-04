@@ -1,4 +1,4 @@
-// $Id: control.h,v 1.43 2002/05/22 06:56:41 ericb Exp $ -*- c++ -*-
+// $Id: control.h,v 1.44 2002/10/07 22:06:12 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,7 +12,6 @@
 #define control_INCLUDED
 
 #include "platform.h"
-#include "option.h"
 #include "symbol.h"
 #include "tuple.h"
 #include "set.h"
@@ -22,11 +21,13 @@ namespace Jikes { // Open namespace Jikes block
 #endif
 
 class StoragePool;
+class Option;
 class Scanner;
 class Parser;
 class Semantic;
 class LexStream;
 class AstPackageDeclaration;
+class TypeDependenceChecker;
 
 class Control : public StringConstant
 {
@@ -212,7 +213,6 @@ public:
     void InitAssertionErrorInfo();
     inline TypeSymbol *AssertionError()
     {
-        assert(option.source >= JikesOption::SDK1_4);
         if (! AssertionError_type)
         {
             AssertionError_type = GetType(system_package, US_AssertionError);
@@ -224,7 +224,6 @@ public:
 
     MethodSymbol *AssertionError_InitMethod()
     {
-        assert(option.source >= JikesOption::SDK1_4);
         if (! AssertionError_Init_method)
             (void) AssertionError();
         return AssertionError_Init_method;
@@ -232,7 +231,6 @@ public:
 
     MethodSymbol *AssertionError_InitWithCharMethod()
     {
-        assert(option.source >= JikesOption::SDK1_4);
         if (! AssertionError_InitWithChar_method)
             (void) AssertionError();
         return AssertionError_InitWithChar_method;
@@ -240,7 +238,6 @@ public:
 
     MethodSymbol *AssertionError_InitWithBooleanMethod()
     {
-        assert(option.source >= JikesOption::SDK1_4);
         if (! AssertionError_InitWithBoolean_method)
             (void) AssertionError();
         return AssertionError_InitWithBoolean_method;
@@ -248,7 +245,6 @@ public:
 
     MethodSymbol *AssertionError_InitWithIntMethod()
     {
-        assert(option.source >= JikesOption::SDK1_4);
         if (! AssertionError_InitWithInt_method)
             (void) AssertionError();
         return AssertionError_InitWithInt_method;
@@ -256,7 +252,6 @@ public:
 
     MethodSymbol *AssertionError_InitWithLongMethod()
     {
-        assert(option.source >= JikesOption::SDK1_4);
         if (! AssertionError_InitWithLong_method)
             (void) AssertionError();
         return AssertionError_InitWithLong_method;
@@ -264,7 +259,6 @@ public:
 
     MethodSymbol *AssertionError_InitWithFloatMethod()
     {
-        assert(option.source >= JikesOption::SDK1_4);
         if (! AssertionError_InitWithFloat_method)
             (void) AssertionError();
         return AssertionError_InitWithFloat_method;
@@ -272,7 +266,6 @@ public:
 
     MethodSymbol *AssertionError_InitWithDoubleMethod()
     {
-        assert(option.source >= JikesOption::SDK1_4);
         if (! AssertionError_InitWithDouble_method)
             (void) AssertionError();
         return AssertionError_InitWithDouble_method;
@@ -280,7 +273,6 @@ public:
 
     MethodSymbol *AssertionError_InitWithObjectMethod()
     {
-        assert(option.source >= JikesOption::SDK1_4);
         if (! AssertionError_InitWithObject_method)
             (void) AssertionError();
         return AssertionError_InitWithObject_method;
@@ -341,7 +333,6 @@ public:
 
     MethodSymbol *Throwable_initCauseMethod()
     {
-        assert(option.source >= JikesOption::SDK1_4);
         if (! Throwable_initCause_method)
             (void) Throwable();
         return Throwable_initCause_method;

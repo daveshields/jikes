@@ -1,26 +1,25 @@
-// $Id: jikesapi.h,v 1.16 2002/07/31 21:05:24 ericb Exp $ -*- c++ -*-
+// $Id: jikesapi.h,v 1.17 2002/11/06 00:58:23 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
-#ifndef _JIKES_API_H_FLAG_
-#define _JIKES_API_H_FLAG_
+#ifndef JIKES_API_H_FLAG_
+#define JIKES_API_H_FLAG_
 
 class JikesOption
 {
 public:
-
-    char *bootclasspath; // Location of the libraries
-    char *extdirs;       // Location of external drop-in jars
-    char *classpath;     // Location of source and user class files
-    char *sourcepath;    // Location of source files only
-    char *directory;     // Target directory for output
-    char *encoding;      // Character encoding name
+    char* bootclasspath; // Location of the libraries
+    char* extdirs;       // Location of external drop-in jars
+    char* classpath;     // Location of source and user class files
+    char* sourcepath;    // Location of source files only
+    char* directory;     // Target directory for output
+    char* encoding;      // Character encoding name
 
     // Each of these fields is a boolean value
     // 0 if false, non-zero if true
@@ -71,7 +70,6 @@ protected:
 class JikesError
 {
 public:
-
     enum JikesErrorSeverity
     {
         JIKES_ERROR,
@@ -80,7 +78,12 @@ public:
     };
 
     virtual JikesErrorSeverity getSeverity() = 0;
-    virtual const char *getFileName() = 0;
+
+    /**
+     * The filename where the error occurred. The caller should not delete
+     * the return value.
+     */
+    virtual const char* getFileName() = 0;
 
     virtual int getLeftLineNo() = 0;
     virtual int getLeftColumnNo() = 0;
@@ -88,18 +91,19 @@ public:
     virtual int getRightColumnNo() = 0;
 
     /**
-     * Returns message describing error.
+     * Returns message describing error. The caller should not delete the
+     * return value.
      */
-    virtual const wchar_t *getErrorMessage() = 0;
+    virtual const wchar_t* getErrorMessage() = 0;
 
     /**
-     * Returns formatted error report.
+     * Returns formatted error report. The caller should not delete the
+     * return value.
      */
-    virtual const wchar_t *getErrorReport() = 0;
+    virtual const wchar_t* getErrorReport() = 0;
 
 protected:
-
-    const char *getSeverityString();
+    const char* getSeverityString();
 };
 
 /**
@@ -114,10 +118,9 @@ public:
 
     /**
      * Returns instance of current compiler options.
-     * returned pointer can be used to modify current
-     * compiler options.
+     * Returned pointer can be used to modify current compiler options.
      */
-    virtual JikesOption *getOptions();
+    virtual JikesOption* getOptions();
 
     /**
      * Creates instance of compiler options,
@@ -128,23 +131,23 @@ public:
      * by this method as it can be freed during another call
      * to parseOptions() or when this object is destroyed.
      */
-    virtual char** parseOptions(int argc, char **argv);
+    virtual char** parseOptions(int argc, char** argv);
 
     /**
      * Compile given list of files using current compiler options.
      */
-    virtual int compile(char ** filenames);
+    virtual int compile(char** filenames);
 
     /**
      * Jikes API implements singelton pattern.
      * This is a way to get instance of it.
      */
-    static JikesAPI * getInstance();
+    static JikesAPI* getInstance();
 
     /**
      * This method will be called for each error reported.
      */
-    virtual void reportError(JikesError *error);
+    virtual void reportError(JikesError* error);
 
     /**
      * Define the virtual base class for all Readers.
@@ -157,7 +160,7 @@ public:
 
         // If the file is unreadable an object should still be created but
         // GetBuffer() should return NULL.
-        virtual const char *getBuffer() = 0;
+        virtual const char* getBuffer() = 0;
         // If the file is unreadable GetBufferSize() is undefined.
         virtual size_t getBufferSize() = 0;
     };
@@ -170,32 +173,30 @@ public:
     {
     public:
         FileWriter(size_t mS) : maxSize(mS) {}
-        virtual  ~FileWriter() {}
+        virtual ~FileWriter() {}
 
-        size_t write(const unsigned char *data, size_t size);
+        size_t write(const unsigned char* data, size_t size);
         virtual int isValid() = 0;
 
     private:
-
         // Guaranteed not to be called with a combined total of more than
         // maxSize bytes during the lifespan of the object.
-        virtual size_t doWrite(const unsigned char *data, size_t size) = 0;
+        virtual size_t doWrite(const unsigned char* data, size_t size) = 0;
         size_t maxSize;
     };
 
-    virtual int stat(const char *filename, struct stat *status);
+    virtual int stat(const char* filename, struct stat* status);
 
-    virtual FileReader *read(const char *filename);
-    virtual FileWriter *write(const char *filename, size_t bytes);
+    virtual FileReader* read(const char* filename);
+    virtual FileWriter* write(const char* filename, size_t bytes);
 
 private:
-
     void cleanupOptions(); // Helper to delete option and parsedOptions
 
-    JikesOption *option;
-    char **parsedOptions;
+    JikesOption* option;
+    char** parsedOptions;
 
-    static JikesAPI *instance;
+    static JikesAPI* instance;
 };
 
-#endif // _JIKES_API_H_FLAG_
+#endif // JIKES_API_H_FLAG_

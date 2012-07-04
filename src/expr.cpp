@@ -1,4 +1,4 @@
-// $Id: expr.cpp,v 1.152 2002/09/11 17:06:01 ericb Exp $
+// $Id: expr.cpp,v 1.160 2002/11/11 14:51:18 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -16,6 +16,7 @@
 #include "table.h"
 #include "tuple.h"
 #include "spell.h"
+#include "option.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -207,7 +208,7 @@ void Semantic::ReportMethodNotFound(AstMethodInvocation *method_call,
                        name_symbol -> Name(), // FIXME: should be method_call ->
                            // symbol -> Header(), except that method_call has
                            // no symbol yet
-                       best_match -> containing_type -> ContainingPackage() -> PackageName(),
+                       best_match -> containing_type -> ContainingPackageName(),
                        best_match -> containing_type -> ExternalName(),
                        best_match -> Header());
         return;
@@ -233,7 +234,7 @@ void Semantic::ReportMethodNotFound(AstMethodInvocation *method_call,
                                method_call -> LeftToken(),
                                method_call -> RightToken(),
                                variable -> Name(),
-                               enclosing_type -> ContainingPackage() -> PackageName(),
+                               enclosing_type -> ContainingPackageName(),
                                enclosing_type -> ExternalName());
                 return;
             }
@@ -296,9 +297,9 @@ void Semantic::ReportMethodNotFound(AstMethodInvocation *method_call,
                                        method_call -> LeftToken(),
                                        method_call -> RightToken(),
                                        method -> Header(),
-                                       method -> containing_type -> ContainingPackage() -> PackageName(),
+                                       method -> containing_type -> ContainingPackageName(),
                                        method -> containing_type -> ExternalName(),
-                                       ThisType() -> ContainingPackage() -> PackageName(),
+                                       ThisType() -> ContainingPackageName(),
                                        ThisType() -> ExternalName());
                     }
                     else
@@ -307,7 +308,7 @@ void Semantic::ReportMethodNotFound(AstMethodInvocation *method_call,
                                        method_call -> LeftToken(),
                                        method_call -> RightToken(),
                                        method -> Header(),
-                                       method -> containing_type -> ContainingPackage() -> PackageName(),
+                                       method -> containing_type -> ContainingPackageName(),
                                        method -> containing_type -> ExternalName(),
                                        method -> AccessString());
                     }
@@ -326,7 +327,7 @@ void Semantic::ReportMethodNotFound(AstMethodInvocation *method_call,
                        method_call -> LeftToken(),
                        method_call -> RightToken(),
                        name_symbol -> Name(),
-                       type -> ContainingPackage() -> PackageName(),
+                       type -> ContainingPackageName(),
                        type -> ExternalName(),
                        best_match -> Name());
     //
@@ -344,7 +345,7 @@ void Semantic::ReportMethodNotFound(AstMethodInvocation *method_call,
                         method_call -> LeftToken(),
                         method_call -> RightToken(),
                         name_symbol -> Name(),
-                        type -> ContainingPackage() -> PackageName(),
+                        type -> ContainingPackageName(),
                         type -> ExternalName());
 }
 
@@ -421,7 +422,7 @@ void Semantic::ReportConstructorNotFound(Ast *ast, TypeSymbol *type)
         ReportSemError(SemanticError::CONSTRUCTOR_OVERLOAD_NOT_FOUND,
                        ast -> LeftToken(),
                        ast -> RightToken(),
-                       type -> ContainingPackage() -> PackageName(),
+                       type -> ContainingPackageName(),
                        type -> ExternalName(),
                        best_match -> Header());
         return;
@@ -451,7 +452,7 @@ void Semantic::ReportConstructorNotFound(Ast *ast, TypeSymbol *type)
                                ast -> LeftToken(),
                                ast -> RightToken(),
                                ctor -> Header(),
-                               type -> ContainingPackage() -> PackageName(),
+                               type -> ContainingPackageName(),
                                type -> ExternalName(),
                                ctor -> AccessString());
                 return;
@@ -515,7 +516,7 @@ void Semantic::ReportConstructorNotFound(Ast *ast, TypeSymbol *type)
     // Give up. We didn't find it.
     //
     wchar_t *name = type -> Name();
-    int length = wcslen(name);
+    int length = type -> NameLength();
 
     for (int i = 0; i < num_arguments; i++)
     {
@@ -689,7 +690,7 @@ MethodSymbol *Semantic::FindConstructor(TypeSymbol *containing_type, Ast *ast,
                        left_tok,
                        right_tok,
                        constructor_symbol -> Header(),
-                       containing_type -> ContainingPackage() -> PackageName(),
+                       containing_type -> ContainingPackageName(),
                        containing_type -> ExternalName());
     }
 
@@ -706,7 +707,7 @@ MethodSymbol *Semantic::FindConstructor(TypeSymbol *containing_type, Ast *ast,
                        left_tok,
                        right_tok,
                        constructor_symbol -> Header(),
-                       constructor_symbol -> containing_type -> ContainingPackage() -> PackageName(),
+                       constructor_symbol -> containing_type -> ContainingPackageName(),
                        constructor_symbol -> containing_type -> ExternalName());
     }
 
@@ -895,10 +896,10 @@ MethodShadowSymbol *Semantic::FindMethodInType(TypeSymbol *type,
                        method_call -> RightToken(),
                        name_symbol -> Name(),
                        method_set[0] -> method_symbol -> Header(),
-                       method_set[0] -> method_symbol -> containing_type -> ContainingPackage() -> PackageName(),
+                       method_set[0] -> method_symbol -> containing_type -> ContainingPackageName(),
                        method_set[0] -> method_symbol -> containing_type -> ExternalName(),
                        method_set[1] -> method_symbol -> Header(),
-                       method_set[1] -> method_symbol -> containing_type -> ContainingPackage() -> PackageName(),
+                       method_set[1] -> method_symbol -> containing_type -> ContainingPackageName(),
                        method_set[1] -> method_symbol -> containing_type -> ExternalName());
     }
 
@@ -909,7 +910,7 @@ MethodShadowSymbol *Semantic::FindMethodInType(TypeSymbol *type,
                        method_call -> LeftToken(),
                        method_call -> RightToken(),
                        method -> Header(),
-                       method -> containing_type -> ContainingPackage() -> PackageName(),
+                       method -> containing_type -> ContainingPackageName(),
                        method -> containing_type -> ExternalName());
     }
 
@@ -926,7 +927,7 @@ MethodShadowSymbol *Semantic::FindMethodInType(TypeSymbol *type,
                        method_call -> LeftToken(),
                        method_call -> RightToken(),
                        method -> Header(),
-                       method -> containing_type -> ContainingPackage() -> PackageName(),
+                       method -> containing_type -> ContainingPackageName(),
                        method -> containing_type -> ExternalName());
     }
 
@@ -1033,10 +1034,10 @@ MethodShadowSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&wher
                            method_call -> RightToken(),
                            method_symbol -> Name(),
                            methods_found[0] -> method_symbol -> Header(),
-                           method_symbol -> containing_type -> ContainingPackage() -> PackageName(),
+                           method_symbol -> containing_type -> ContainingPackageName(),
                            method_symbol -> containing_type -> ExternalName(),
                            methods_found[i] -> method_symbol -> Header(),
-                           methods_found[i] -> method_symbol -> containing_type -> ContainingPackage() -> PackageName(),
+                           methods_found[i] -> method_symbol -> containing_type -> ContainingPackageName(),
                            methods_found[i] -> method_symbol -> containing_type -> ExternalName());
         }
 
@@ -1051,7 +1052,7 @@ MethodShadowSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&wher
                                method_call -> LeftToken(),
                                method_call -> RightToken(),
                                method_symbol -> Header(),
-                               method_symbol -> containing_type -> ContainingPackage() -> PackageName(),
+                               method_symbol -> containing_type -> ContainingPackageName(),
                                method_symbol -> containing_type -> ExternalName());
             }
             else if (control.option.pedantic)
@@ -1079,9 +1080,9 @@ MethodShadowSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&wher
                                            method_call -> LeftToken(),
                                            method_call -> RightToken(),
                                            method_symbol -> Name(),
-                                           method_symbol -> containing_type -> ContainingPackage() -> PackageName(),
+                                           method_symbol -> containing_type -> ContainingPackageName(),
                                            method_symbol -> containing_type -> ExternalName(),
-                                           found_other -> Type() -> ContainingPackage() -> PackageName(),
+                                           found_other -> Type() -> ContainingPackageName(),
                                            found_other -> Type() -> ExternalName());
                             break; // emit only one error message
                         }
@@ -1115,7 +1116,7 @@ MethodShadowSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&wher
                                method_call -> LeftToken(),
                                method_call -> RightToken(),
                                others[0] -> method_symbol -> Header(),
-                               others[0] -> method_symbol -> containing_type -> ContainingPackage() -> PackageName(),
+                               others[0] -> method_symbol -> containing_type -> ContainingPackageName(),
                                others[0] -> method_symbol -> containing_type -> ExternalName());
 
                 symbol_found = true;
@@ -1150,7 +1151,7 @@ MethodShadowSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&wher
                                method_call -> LeftToken(),
                                method_call -> RightToken(),
                                variable_symbol -> Name(),
-                               enclosing_type -> ContainingPackage() -> PackageName(),
+                               enclosing_type -> ContainingPackageName(),
                                enclosing_type -> ExternalName());
                 symbol_found = true;
                 break;
@@ -1202,7 +1203,7 @@ MethodShadowSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&wher
                                    method_call -> LeftToken(),
                                    method_call -> RightToken(),
                                    name_symbol -> Name(),
-                                   super_type -> ContainingPackage() -> PackageName(),
+                                   super_type -> ContainingPackageName(),
                                    super_type -> ExternalName(),
                                    method_shadow -> method_symbol -> AccessString());
                     assert(! method_shadow -> method_symbol -> ACC_PROTECTED());
@@ -1267,7 +1268,7 @@ MethodShadowSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&wher
                            method_call -> LeftToken(),
                            method_call -> RightToken(),
                            method_symbol -> Header(),
-                           method_symbol -> containing_type -> ContainingPackage() -> PackageName(),
+                           method_symbol -> containing_type -> ContainingPackageName(),
                            method_symbol -> containing_type -> ExternalName());
         }
     }
@@ -1339,9 +1340,9 @@ VariableSymbol *Semantic::FindVariableInType(TypeSymbol *type,
                        field_access -> LeftToken(),
                        field_access -> RightToken(),
                        name_symbol -> Name(),
-                       variable_set[0] -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variable_set[0] -> ContainingType() -> ContainingPackageName(),
                        variable_set[0] -> ContainingType() -> ExternalName(),
-                       variable_set[1] -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variable_set[1] -> ContainingType() -> ContainingPackageName(),
                        variable_set[1] -> ContainingType() -> ExternalName());
     }
 
@@ -1352,7 +1353,7 @@ VariableSymbol *Semantic::FindVariableInType(TypeSymbol *type,
                        field_access -> LeftToken(),
                        field_access -> RightToken(),
                        variable -> Name(),
-                       variable -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variable -> ContainingType() -> ContainingPackageName(),
                        variable -> ContainingType() -> ExternalName());
     }
 
@@ -1363,7 +1364,7 @@ VariableSymbol *Semantic::FindVariableInType(TypeSymbol *type,
                        field_access -> LeftToken(),
                        field_access -> RightToken(),
                        variable -> Name(),
-                       variable -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variable -> ContainingType() -> ContainingPackageName(),
                        variable -> ContainingType() -> ExternalName());
     }
 
@@ -1417,7 +1418,7 @@ void Semantic::ReportVariableNotFound(AstExpression *access, TypeSymbol *type)
                            id_token,
                            id_token,
                            name_symbol -> Name(),
-                           method -> containing_type -> ContainingPackage() -> PackageName(),
+                           method -> containing_type -> ContainingPackageName(),
                            method -> containing_type -> ExternalName());
             return;
         }
@@ -1448,9 +1449,9 @@ void Semantic::ReportVariableNotFound(AstExpression *access, TypeSymbol *type)
                                id_token,
                                id_token,
                                name_symbol -> Name(),
-                               containing_type -> ContainingPackage() -> PackageName(),
+                               containing_type -> ContainingPackageName(),
                                containing_type -> ExternalName(),
-                               ThisType() -> ContainingPackage() -> PackageName(),
+                               ThisType() -> ContainingPackageName(),
                                ThisType() -> ExternalName());
             }
             else
@@ -1459,7 +1460,7 @@ void Semantic::ReportVariableNotFound(AstExpression *access, TypeSymbol *type)
                                id_token,
                                id_token,
                                name_symbol -> Name(),
-                               containing_type -> ContainingPackage() -> PackageName(),
+                               containing_type -> ContainingPackageName(),
                                containing_type -> ExternalName(),
                                variable -> AccessString());
             }
@@ -1476,7 +1477,7 @@ void Semantic::ReportVariableNotFound(AstExpression *access, TypeSymbol *type)
                        id_token,
                        id_token,
                        name_symbol -> Name(),
-                       type -> ContainingPackage() -> PackageName(),
+                       type -> ContainingPackageName(),
                        type -> ExternalName(),
                        variable -> Name());
     //
@@ -1494,7 +1495,7 @@ void Semantic::ReportVariableNotFound(AstExpression *access, TypeSymbol *type)
                         id_token,
                         id_token,
                         name_symbol -> Name(),
-                        type -> ContainingPackage() -> PackageName(),
+                        type -> ContainingPackageName(),
                         type -> ExternalName());
 }
 
@@ -1583,7 +1584,7 @@ VariableSymbol *Semantic::FindVariableInEnvironment(SemanticEnvironment *&where_
                     ReportSemError(SemanticError::INNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE,
                                    identifier_token,
                                    identifier_token,
-                                   type -> ContainingPackage() -> PackageName(),
+                                   type -> ContainingPackageName(),
                                    type -> ExternalName(),
                                    lex_stream -> NameString(identifier_token),
                                    method -> ExternalName());
@@ -1616,7 +1617,7 @@ VariableSymbol *Semantic::FindVariableInEnvironment(SemanticEnvironment *&where_
                                identifier_token,
                                identifier_token,
                                variable_symbol -> Name(),
-                               type -> ContainingPackage() -> PackageName(),
+                               type -> ContainingPackageName(),
                                type -> ExternalName());
             }
             else if (control.option.pedantic)
@@ -1647,7 +1648,7 @@ VariableSymbol *Semantic::FindVariableInEnvironment(SemanticEnvironment *&where_
                                                identifier_token,
                                                identifier_token,
                                                lex_stream -> NameString(identifier_token),
-                                               type -> ContainingPackage() -> PackageName(),
+                                               type -> ContainingPackageName(),
                                                type -> ExternalName(),
                                                method -> Name());
                                 break;
@@ -1658,9 +1659,9 @@ VariableSymbol *Semantic::FindVariableInEnvironment(SemanticEnvironment *&where_
                                                identifier_token,
                                                identifier_token,
                                                lex_stream -> NameString(identifier_token),
-                                               type -> ContainingPackage() -> PackageName(),
+                                               type -> ContainingPackageName(),
                                                type -> ExternalName(),
-                                               found_other -> Type() -> ContainingPackage() -> PackageName(),
+                                               found_other -> Type() -> ContainingPackageName(),
                                                found_other -> Type() -> ExternalName());
                                 break;
                             }
@@ -1677,9 +1678,9 @@ VariableSymbol *Semantic::FindVariableInEnvironment(SemanticEnvironment *&where_
                        identifier_token,
                        identifier_token,
                        variable_symbol -> Name(),
-                       variable_symbol -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variable_symbol -> ContainingType() -> ContainingPackageName(),
                        variable_symbol -> ContainingType() -> ExternalName(),
-                       variables_found[i] -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variables_found[i] -> ContainingType() -> ContainingPackageName(),
                        variables_found[i] -> ContainingType() -> ExternalName());
     }
 
@@ -1692,7 +1693,7 @@ VariableSymbol *Semantic::FindVariableInEnvironment(SemanticEnvironment *&where_
                            identifier_token,
                            identifier_token,
                            variable_symbol -> Name(),
-                           variable_symbol -> ContainingType() -> ContainingPackage() -> PackageName(),
+                           variable_symbol -> ContainingType() -> ContainingPackageName(),
                            variable_symbol -> ContainingType() -> ExternalName());
         }
 
@@ -1828,7 +1829,7 @@ AstExpression *Semantic::CreateAccessToType(Ast *source,
                         ? SemanticError::ENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION
                         : SemanticError::ENCLOSING_INSTANCE_NOT_ACCESSIBLE),
                        left_tok, right_tok,
-                       environment_type -> ContainingPackage() -> PackageName(),
+                       environment_type -> ContainingPackageName(),
                        environment_type -> ExternalName());
         resolution = compilation_unit -> ast_pool -> GenSimpleName(left_tok);
         resolution -> symbol = control.no_type;
@@ -1866,7 +1867,7 @@ AstExpression *Semantic::CreateAccessToType(Ast *source,
             {
                 ReportSemError(SemanticError::ENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION,
                                left_tok, right_tok,
-                               environment_type -> ContainingPackage() -> PackageName(),
+                               environment_type -> ContainingPackageName(),
                                environment_type -> ExternalName());
                 resolution -> symbol = control.no_type;
             }
@@ -2577,8 +2578,7 @@ void Semantic::ProcessAmbiguousName(Ast *name)
             {
                 ReportSemError(SemanticError::DEPRECATED_TYPE,
                                simple_name -> identifier_token,
-                               simple_name -> identifier_token,
-                               type -> ContainingPackage() -> PackageName(),
+                               type -> ContainingPackageName(),
                                type -> ExternalName());
             }
         }
@@ -2649,7 +2649,17 @@ void Semantic::ProcessAmbiguousName(Ast *name)
         //
         if (field_access -> IsClassAccess())
         {
-            if (type -> Primitive())
+            //
+            // In a clone, simply return control.no_type. We are in a clone
+            // only when doing something like evaluating a forward reference
+            // to a final field for its constant value, but a class literal
+            // has no constant value. In such cases, this method will again
+            // be invoked when we finally reach the field, and then it is
+            // finally appropriate to resolve the reference.
+            //
+            if (error && error -> InClone())
+                field_access -> symbol = control.no_type;
+            else if (type -> Primitive())
             {
                 if (type == control.int_type)
                     type = control.Integer();
@@ -2689,8 +2699,7 @@ void Semantic::ProcessAmbiguousName(Ast *name)
                 {
                     ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
                                    0,
-                                   0,
-                                   type -> ContainingPackage() -> PackageName(),
+                                   type -> ContainingPackageName(),
                                    type -> ExternalName());
                     field_access -> symbol = control.no_type;
                 }
@@ -2730,7 +2739,7 @@ void Semantic::ProcessAmbiguousName(Ast *name)
                 ReportSemError(SemanticError::NOT_A_CLASS,
                                base -> LeftToken(),
                                base -> RightToken(),
-                               enclosing_type -> ContainingPackage() -> PackageName(),
+                               enclosing_type -> ContainingPackageName(),
                                enclosing_type -> ExternalName());
                 field_access -> symbol = control.no_type;
             }
@@ -2758,7 +2767,7 @@ void Semantic::ProcessAmbiguousName(Ast *name)
                 ReportSemError(SemanticError::ILLEGAL_THIS_FIELD_ACCESS,
                                field_access -> LeftToken(),
                                field_access -> RightToken(),
-                               enclosing_type -> ContainingPackage() -> PackageName(),
+                               enclosing_type -> ContainingPackageName(),
                                enclosing_type -> ExternalName(),
                                this_package -> PackageName(),
                                this_type -> ExternalName());
@@ -3057,7 +3066,7 @@ void Semantic::ProcessArrayAccess(Ast *expr)
             ReportSemError(SemanticError::TYPE_NOT_INTEGER,
                            array_access -> expression -> LeftToken(),
                            array_access -> expression -> RightToken(),
-                           type -> ContainingPackage() -> PackageName(),
+                           type -> ContainingPackageName(),
                            type -> ExternalName());
         array_access -> symbol = control.no_type;
     }
@@ -3074,7 +3083,7 @@ void Semantic::ProcessArrayAccess(Ast *expr)
             ReportSemError(SemanticError::TYPE_NOT_ARRAY,
                            array_access -> base -> LeftToken(),
                            array_access -> base -> RightToken(),
-                           array_type -> ContainingPackage() -> PackageName(),
+                           array_type -> ContainingPackageName(),
                            array_type -> ExternalName());
         array_access -> symbol = control.no_type;
     }
@@ -3437,7 +3446,7 @@ void Semantic::ProcessMethodName(AstMethodInvocation *method_call)
                                method_call -> LeftToken(),
                                method_call -> RightToken(),
                                method -> Header(),
-                               ex -> ContainingPackage() -> PackageName(),
+                               ex -> ContainingPackageName(),
                                ex -> ExternalName(),
                                UncaughtExceptionContext());
             ex = temp;
@@ -3967,7 +3976,6 @@ TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class
     // instance if it is not in a static context.
     //
     anon_type -> SetACC_FINAL();
-    anon_type -> SetACC_SUPER();
     if (! StaticRegion())
         anon_type -> InsertThis0();
 
@@ -3986,7 +3994,7 @@ TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class
          ReportSemError(SemanticError::SUPER_IS_FINAL,
                         class_creation -> class_type -> LeftToken(),
                         class_creation -> class_type -> RightToken(),
-                        super_type -> ContainingPackage() -> PackageName(),
+                        super_type -> ContainingPackageName(),
                         super_type -> ExternalName());
          anon_type -> MarkBad();
     }
@@ -4054,7 +4062,7 @@ TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class
         super_type -> LocalClassProcessingCompleted() ||
         anon_type -> EnclosingType())
     {
-        if (anon_type -> NumConstructorParameters())
+        if (anon_type -> NumConstructorParameters() && ! anon_type -> Bad())
         {
             class_body -> default_constructor -> constructor_symbol ->
                 SetSignature(control);
@@ -4103,7 +4111,7 @@ void Semantic::ProcessClassInstanceCreationExpression(Ast *expr)
             ReportSemError(SemanticError::INTERFACE_NOT_INNER_CLASS,
                            actual_type -> LeftToken(),
                            actual_type -> RightToken(),
-                           type -> ContainingPackage() -> PackageName(),
+                           type -> ContainingPackageName(),
                            type -> ExternalName());
             type = control.no_type;
         }
@@ -4112,14 +4120,15 @@ void Semantic::ProcessClassInstanceCreationExpression(Ast *expr)
             ReportSemError(SemanticError::STATIC_NOT_INNER_CLASS,
                            actual_type -> LeftToken(),
                            actual_type -> RightToken(),
-                           type -> ContainingPackage() -> PackageName(),
+                           type -> ContainingPackageName(),
                            type -> ExternalName());
             type = control.no_type;
         }
     }
     else
     {
-        type = MustFindType(actual_type);
+        ProcessTypeExpression(class_creation -> class_type);
+        type = class_creation -> class_type -> Type();
         if (type -> EnclosingType())
             class_creation -> base_opt =
                 CreateAccessToType(class_creation, type -> EnclosingType());
@@ -4164,7 +4173,7 @@ void Semantic::ProcessClassInstanceCreationExpression(Ast *expr)
         ReportSemError(SemanticError::NOT_A_CLASS,
                        actual_type -> LeftToken(),
                        actual_type -> RightToken(),
-                       type -> ContainingPackage() -> PackageName(),
+                       type -> ContainingPackageName(),
                        type -> ExternalName());
         type = control.no_type;
     }
@@ -4221,7 +4230,7 @@ void Semantic::ProcessClassInstanceCreationExpression(Ast *expr)
                                actual_type -> LeftToken(),
                                actual_type -> RightToken(),
                                type -> ExternalName(),
-                               exception -> ContainingPackage() -> PackageName(),
+                               exception -> ContainingPackageName(),
                                exception -> ExternalName(),
                                UncaughtExceptionContext());
         }
@@ -4335,7 +4344,7 @@ void Semantic::ProcessArrayCreationExpression(Ast *expr)
             ReportSemError(SemanticError::TYPE_NOT_INTEGER,
                            dim_expr -> expression -> LeftToken(),
                            dim_expr -> expression -> RightToken(),
-                           expr -> Type() -> ContainingPackage() -> PackageName(),
+                           expr -> Type() -> ContainingPackageName(),
                            expr -> Type() -> ExternalName());
             array_creation -> symbol = control.no_type;
         }
@@ -4391,7 +4400,7 @@ void Semantic::ProcessPostUnaryExpression(Ast *expr)
             ReportSemError(SemanticError::TYPE_NOT_NUMERIC,
                            postfix_expression -> expression -> LeftToken(),
                            postfix_expression -> expression -> RightToken(),
-                           expression -> Type() -> ContainingPackage() -> PackageName(),
+                           expression -> Type() -> ContainingPackageName(),
                            expression -> Type() -> ExternalName());
             postfix_expression -> symbol = control.no_type;
         }
@@ -4524,7 +4533,7 @@ void Semantic::ProcessTWIDDLE(AstPreUnaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                            expr -> expression -> LeftToken(),
                            expr -> expression -> RightToken(),
-                           type -> ContainingPackage() -> PackageName(),
+                           type -> ContainingPackageName(),
                            type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -4557,7 +4566,7 @@ void Semantic::ProcessNOT(AstPreUnaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                            expr -> expression -> LeftToken(),
                            expr -> expression -> RightToken(),
-                           type -> ContainingPackage() -> PackageName(),
+                           type -> ContainingPackageName(),
                            type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -4606,7 +4615,7 @@ void Semantic::ProcessPLUSPLUSOrMINUSMINUS(AstPreUnaryExpression *prefix_express
             ReportSemError(SemanticError::TYPE_NOT_NUMERIC,
                            prefix_expression -> expression -> LeftToken(),
                            prefix_expression -> expression -> RightToken(),
-                           expression -> Type() -> ContainingPackage() -> PackageName(),
+                           expression -> Type() -> ContainingPackageName(),
                            expression -> Type() -> ExternalName());
             prefix_expression -> symbol = control.no_type;
         }
@@ -4822,18 +4831,19 @@ bool Semantic::CanCastConvert(TypeSymbol *target_type,
         target_type = target_type -> base_type;
         if (source_type -> Primitive() || target_type -> Primitive())
             return false;
-        assert(source_type -> ACC_INTERFACE() ||
-               target_type -> ACC_INTERFACE());
     }
 
     //
-    // Here, we are left with a class and an interface, or two interfaces. If
-    // the class is final, it does not implement the interface. Otherwise, a
-    // class is considered ok (even if it has conflicting signatures). With
-    // two interfaces, check for conflicting signatures.
+    // Here, we are left with two reference types. Two classes are not
+    // compatible at this point, and final classes do not implement
+    // interfaces. Otherwise, a class can implement an interface (even with
+    // conflicting signatures), but two interfaces must be compatible.
     //
-    if (source_type -> ACC_FINAL() || target_type -> ACC_FINAL())
-        return false;
+    if (source_type -> ACC_FINAL() || target_type -> ACC_FINAL() ||
+        (! source_type -> ACC_INTERFACE() && ! target_type -> ACC_INTERFACE()))
+    {
+         return false;
+    }
     if (! source_type -> ACC_INTERFACE() || ! target_type -> ACC_INTERFACE())
         return true;
     if (! source_type -> expanded_method_table)
@@ -5241,7 +5251,7 @@ AstExpression *Semantic::PromoteUnaryNumericExpression(AstExpression *unary_expr
         ReportSemError(SemanticError::TYPE_NOT_NUMERIC,
                        unary_expression -> LeftToken(),
                        unary_expression -> RightToken(),
-                       type -> ContainingPackage() -> PackageName(),
+                       type -> ContainingPackageName(),
                        type -> ExternalName());
         unary_expression -> symbol = control.no_type;
         return unary_expression;
@@ -5296,13 +5306,13 @@ TypeSymbol *Semantic::BinaryNumericPromotion(AstExpression *&left_expr,
             ReportSemError(SemanticError::TYPE_NOT_NUMERIC,
                            left_expr -> LeftToken(),
                            left_expr -> RightToken(),
-                           left_type -> ContainingPackage() -> PackageName(),
+                           left_type -> ContainingPackageName(),
                            left_type -> ExternalName());
         if (right_type != control.no_type && ! control.IsNumeric(right_type))
             ReportSemError(SemanticError::TYPE_NOT_NUMERIC,
                            right_expr -> LeftToken(),
                            right_expr -> RightToken(),
-                           right_type -> ContainingPackage() -> PackageName(),
+                           right_type -> ContainingPackageName(),
                            right_type -> ExternalName());
         return control.no_type;
     }
@@ -5488,7 +5498,7 @@ void Semantic::ProcessLEFT_SHIFT(AstBinaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                            expr -> left_expression -> LeftToken(),
                            expr -> left_expression -> RightToken(),
-                           left_type -> ContainingPackage() -> PackageName(),
+                           left_type -> ContainingPackageName(),
                            left_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -5508,7 +5518,7 @@ void Semantic::ProcessLEFT_SHIFT(AstBinaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                            expr -> right_expression -> LeftToken(),
                            expr -> right_expression -> RightToken(),
-                           right_type -> ContainingPackage() -> PackageName(),
+                           right_type -> ContainingPackageName(),
                            right_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -5563,7 +5573,7 @@ void Semantic::ProcessRIGHT_SHIFT(AstBinaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                            expr -> left_expression -> LeftToken(),
                            expr -> left_expression -> RightToken(),
-                           left_type -> ContainingPackage() -> PackageName(),
+                           left_type -> ContainingPackageName(),
                            left_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -5583,7 +5593,7 @@ void Semantic::ProcessRIGHT_SHIFT(AstBinaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                            expr -> right_expression -> LeftToken(),
                            expr -> right_expression -> RightToken(),
-                           right_type -> ContainingPackage() -> PackageName(),
+                           right_type -> ContainingPackageName(),
                            right_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -5638,7 +5648,7 @@ void Semantic::ProcessUNSIGNED_RIGHT_SHIFT(AstBinaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                            expr -> left_expression -> LeftToken(),
                            expr -> left_expression -> RightToken(),
-                           left_type -> ContainingPackage() -> PackageName(),
+                           left_type -> ContainingPackageName(),
                            left_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -5658,7 +5668,7 @@ void Semantic::ProcessUNSIGNED_RIGHT_SHIFT(AstBinaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                            expr -> right_expression -> LeftToken(),
                            expr -> right_expression -> RightToken(),
-                           right_type -> ContainingPackage() -> PackageName(),
+                           right_type -> ContainingPackageName(),
                            right_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -5970,7 +5980,7 @@ void Semantic::ProcessAND(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                                expr -> left_expression -> LeftToken(),
                                expr -> left_expression -> RightToken(),
-                               left_type -> ContainingPackage() -> PackageName(),
+                               left_type -> ContainingPackageName(),
                                left_type -> ExternalName());
             expr -> symbol = control.no_type;
         }
@@ -5980,7 +5990,7 @@ void Semantic::ProcessAND(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                                expr -> right_expression -> LeftToken(),
                                expr -> right_expression -> RightToken(),
-                               right_type -> ContainingPackage() -> PackageName(),
+                               right_type -> ContainingPackageName(),
                                right_type -> ExternalName());
             expr -> symbol = control.no_type;
         }
@@ -6007,7 +6017,7 @@ void Semantic::ProcessAND(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                                expr -> left_expression -> LeftToken(),
                                expr -> left_expression -> RightToken(),
-                               left_type -> ContainingPackage() -> PackageName(),
+                               left_type -> ContainingPackageName(),
                                left_type -> ExternalName());
             }
             if (! control.IsIntegral(right_type) &&
@@ -6016,7 +6026,7 @@ void Semantic::ProcessAND(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                                expr -> right_expression -> LeftToken(),
                                expr -> right_expression -> RightToken(),
-                               right_type -> ContainingPackage() -> PackageName(),
+                               right_type -> ContainingPackageName(),
                                right_type -> ExternalName());
             }
             expr -> symbol = control.no_type;
@@ -6066,7 +6076,7 @@ void Semantic::ProcessXOR(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                                expr -> left_expression -> LeftToken(),
                                expr -> left_expression -> RightToken(),
-                               left_type -> ContainingPackage() -> PackageName(),
+                               left_type -> ContainingPackageName(),
                                left_type -> ExternalName());
             expr -> symbol = control.no_type;
         }
@@ -6076,7 +6086,7 @@ void Semantic::ProcessXOR(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                                expr -> right_expression -> LeftToken(),
                                expr -> right_expression -> RightToken(),
-                               right_type -> ContainingPackage() -> PackageName(),
+                               right_type -> ContainingPackageName(),
                                right_type -> ExternalName());
             expr -> symbol = control.no_type;
         }
@@ -6103,7 +6113,7 @@ void Semantic::ProcessXOR(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                                expr -> left_expression -> LeftToken(),
                                expr -> left_expression -> RightToken(),
-                               left_type -> ContainingPackage() -> PackageName(),
+                               left_type -> ContainingPackageName(),
                                left_type -> ExternalName());
             }
             if (! control.IsIntegral(right_type) &&
@@ -6112,7 +6122,7 @@ void Semantic::ProcessXOR(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                                expr -> right_expression -> LeftToken(),
                                expr -> right_expression -> RightToken(),
-                               right_type -> ContainingPackage() -> PackageName(),
+                               right_type -> ContainingPackageName(),
                                right_type -> ExternalName());
             }
             expr -> symbol = control.no_type;
@@ -6162,7 +6172,7 @@ void Semantic::ProcessIOR(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                                expr -> left_expression -> LeftToken(),
                                expr -> left_expression -> RightToken(),
-                               left_type -> ContainingPackage() -> PackageName(),
+                               left_type -> ContainingPackageName(),
                                left_type -> ExternalName());
             expr -> symbol = control.no_type;
         }
@@ -6172,7 +6182,7 @@ void Semantic::ProcessIOR(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                                expr -> right_expression -> LeftToken(),
                                expr -> right_expression -> RightToken(),
-                               right_type -> ContainingPackage() -> PackageName(),
+                               right_type -> ContainingPackageName(),
                                right_type -> ExternalName());
             expr -> symbol = control.no_type;
         }
@@ -6199,7 +6209,7 @@ void Semantic::ProcessIOR(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                                expr -> left_expression -> LeftToken(),
                                expr -> left_expression -> RightToken(),
-                               left_type -> ContainingPackage() -> PackageName(),
+                               left_type -> ContainingPackageName(),
                                left_type -> ExternalName());
             }
             if (! control.IsIntegral(right_type) &&
@@ -6208,7 +6218,7 @@ void Semantic::ProcessIOR(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                                expr -> right_expression -> LeftToken(),
                                expr -> right_expression -> RightToken(),
-                               right_type -> ContainingPackage() -> PackageName(),
+                               right_type -> ContainingPackageName(),
                                right_type -> ExternalName());
             }
             expr -> symbol = control.no_type;
@@ -6255,7 +6265,7 @@ void Semantic::ProcessAND_AND(AstBinaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                            expr -> left_expression -> LeftToken(),
                            expr -> left_expression -> RightToken(),
-                           left_type -> ContainingPackage() -> PackageName(),
+                           left_type -> ContainingPackageName(),
                            left_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -6265,7 +6275,7 @@ void Semantic::ProcessAND_AND(AstBinaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                            expr -> right_expression -> LeftToken(),
                            expr -> right_expression -> RightToken(),
-                           right_type -> ContainingPackage() -> PackageName(),
+                           right_type -> ContainingPackageName(),
                            right_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -6300,7 +6310,7 @@ void Semantic::ProcessOR_OR(AstBinaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                            expr -> left_expression -> LeftToken(),
                            expr -> left_expression -> RightToken(),
-                           left_type -> ContainingPackage() -> PackageName(),
+                           left_type -> ContainingPackageName(),
                            left_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -6310,7 +6320,7 @@ void Semantic::ProcessOR_OR(AstBinaryExpression *expr)
             ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                            expr -> right_expression -> LeftToken(),
                            expr -> right_expression -> RightToken(),
-                           right_type -> ContainingPackage() -> PackageName(),
+                           right_type -> ContainingPackageName(),
                            right_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -6363,9 +6373,9 @@ void Semantic::ProcessEQUAL_EQUAL(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION,
                                expr -> LeftToken(),
                                expr -> RightToken(),
-                               left_type -> ContainingPackage() -> PackageName(),
+                               left_type -> ContainingPackageName(),
                                left_type -> ExternalName(),
-                               right_type -> ContainingPackage() -> PackageName(),
+                               right_type -> ContainingPackageName(),
                                right_type -> ExternalName());
                 expr -> symbol = control.no_type;
             }
@@ -6387,9 +6397,9 @@ void Semantic::ProcessEQUAL_EQUAL(AstBinaryExpression *expr)
         ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION,
                        expr -> LeftToken(),
                        expr -> RightToken(),
-                       left_type -> ContainingPackage() -> PackageName(),
+                       left_type -> ContainingPackageName(),
                        left_type -> ExternalName(),
-                       right_type -> ContainingPackage() -> PackageName(),
+                       right_type -> ContainingPackageName(),
                        right_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -6462,9 +6472,9 @@ void Semantic::ProcessNOT_EQUAL(AstBinaryExpression *expr)
                 ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION,
                                expr -> LeftToken(),
                                expr -> RightToken(),
-                               left_type -> ContainingPackage() -> PackageName(),
+                               left_type -> ContainingPackageName(),
                                left_type -> ExternalName(),
-                               right_type -> ContainingPackage() -> PackageName(),
+                               right_type -> ContainingPackageName(),
                                right_type -> ExternalName());
                 expr -> symbol = control.no_type;
             }
@@ -6486,9 +6496,9 @@ void Semantic::ProcessNOT_EQUAL(AstBinaryExpression *expr)
         ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION,
                        expr -> LeftToken(),
                        expr -> RightToken(),
-                       left_type -> ContainingPackage() -> PackageName(),
+                       left_type -> ContainingPackageName(),
                        left_type -> ExternalName(),
-                       right_type -> ContainingPackage() -> PackageName(),
+                       right_type -> ContainingPackageName(),
                        right_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -6846,9 +6856,9 @@ void Semantic::ProcessINSTANCEOF(AstBinaryExpression *expr)
         ReportSemError(SemanticError::INVALID_INSTANCEOF_CONVERSION,
                        expr -> LeftToken(),
                        expr -> RightToken(),
-                       left_type -> ContainingPackage() -> PackageName(),
+                       left_type -> ContainingPackageName(),
                        left_type -> ExternalName(),
-                       right_type -> ContainingPackage() -> PackageName(),
+                       right_type -> ContainingPackageName(),
                        right_type -> ExternalName());
         expr -> symbol = control.no_type;
     }
@@ -6873,8 +6883,18 @@ void Semantic::ProcessTypeExpression(Ast *expr)
                         : type_expression -> type);
 
     AstPrimitiveType *primitive_type = actual_type -> PrimitiveTypeCast();
+    //
+    // Occaisionally, MustFindType finds a bad type (for example, if we
+    // reference Other.java which has syntax errors), but does not know to
+    // report the error.
+    //
+    int error_count = NumErrors();
     TypeSymbol *type = (primitive_type ? FindPrimitiveType(primitive_type)
                         : MustFindType(actual_type));
+    if (type -> Bad() && NumErrors() == error_count)
+        ReportSemError(SemanticError::INVALID_TYPE_FOUND,
+                       actual_type -> LeftToken(), actual_type -> RightToken(),
+                       lex_stream -> NameString(actual_type -> RightToken()));
 
     if (array_type)
         type = type -> GetArrayType(this, array_type -> NumBrackets());
@@ -6912,7 +6932,7 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
             ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                            conditional_expression -> test_expression -> LeftToken(),
                            conditional_expression -> test_expression -> RightToken(),
-                           test_type -> ContainingPackage() -> PackageName(),
+                           test_type -> ContainingPackageName(),
                            test_type -> ExternalName());
         conditional_expression -> symbol = control.no_type;
     }
@@ -6944,9 +6964,9 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
             ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION,
                            conditional_expression -> true_expression -> LeftToken(),
                            conditional_expression -> false_expression -> RightToken(),
-                           true_type -> ContainingPackage() -> PackageName(),
+                           true_type -> ContainingPackageName(),
                            true_type -> ExternalName(),
-                           false_type -> ContainingPackage() -> PackageName(),
+                           false_type -> ContainingPackageName(),
                            false_type -> ExternalName());
             conditional_expression -> symbol = control.no_type;
         }
@@ -7037,9 +7057,9 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
             ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION,
                            conditional_expression -> true_expression -> LeftToken(),
                            conditional_expression -> false_expression -> RightToken(),
-                           true_type -> ContainingPackage() -> PackageName(),
+                           true_type -> ContainingPackageName(),
                            true_type -> ExternalName(),
-                           false_type -> ContainingPackage() -> PackageName(),
+                           false_type -> ContainingPackageName(),
                            false_type -> ExternalName());
             conditional_expression -> symbol = control.no_type;
         }
@@ -7192,9 +7212,9 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
                 ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_ASSIGNMENT,
                                assignment_expression -> LeftToken(),
                                assignment_expression -> RightToken(),
-                               left_type -> ContainingPackage() -> PackageName(),
+                               left_type -> ContainingPackageName(),
                                left_type -> ExternalName(),
-                               right_type -> ContainingPackage() -> PackageName(),
+                               right_type -> ContainingPackageName(),
                                right_type -> ExternalName());
                 assignment_expression -> symbol = control.no_type;
             }
@@ -7291,7 +7311,7 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
                     ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                                    assignment_expression -> left_hand_side -> LeftToken(),
                                    assignment_expression -> left_hand_side -> RightToken(),
-                                   left_type -> ContainingPackage() -> PackageName(),
+                                   left_type -> ContainingPackageName(),
                                    left_type -> ExternalName());
                 }
                 assignment_expression -> symbol = control.no_type;
@@ -7306,7 +7326,7 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
                 ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                                assignment_expression -> expression -> LeftToken(),
                                assignment_expression -> expression -> RightToken(),
-                               right_type -> ContainingPackage() -> PackageName(),
+                               right_type -> ContainingPackageName(),
                                right_type -> ExternalName());
                 assignment_expression -> symbol = control.no_type;
             }
@@ -7324,7 +7344,7 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
                     ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
                                    assignment_expression -> expression -> LeftToken(),
                                    assignment_expression -> expression -> RightToken(),
-                                   right_type -> ContainingPackage() -> PackageName(),
+                                   right_type -> ContainingPackageName(),
                                    right_type -> ExternalName());
                     assignment_expression -> symbol = control.no_type;
                 }
@@ -7336,7 +7356,7 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
                     ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                                    left_hand_side -> LeftToken(),
                                    left_hand_side -> RightToken(),
-                                   left_type -> ContainingPackage() -> PackageName(),
+                                   left_type -> ContainingPackageName(),
                                    left_type -> ExternalName());
                     assignment_expression -> symbol = control.no_type;
                 }
@@ -7345,7 +7365,7 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
                     ReportSemError(SemanticError::TYPE_NOT_INTEGRAL,
                                    assignment_expression -> expression -> LeftToken(),
                                    assignment_expression -> expression -> RightToken(),
-                                   right_type -> ContainingPackage() -> PackageName(),
+                                   right_type -> ContainingPackageName(),
                                    right_type -> ExternalName());
                     assignment_expression -> symbol = control.no_type;
                 }

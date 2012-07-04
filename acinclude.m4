@@ -27,6 +27,7 @@ builtin(include,src/m4/ac_cxx_static_cast.m4)
 builtin(include,src/m4/ac_cxx_check_ostream_const_unsigned_char_ptr.m4)
 builtin(include,src/m4/ac_try_encoding.m4)
 builtin(include,src/m4/ac_find_encoding.m4)
+builtin(include,src/m4/ac_define_integer_bits.m4)
 
 dnl builtin(include,src/m4/)
 

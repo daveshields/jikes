@@ -1,4 +1,4 @@
-// $Id: scanner.h,v 1.13 2002/03/06 17:12:27 ericb Exp $ -*- c++ -*-
+// $Id: scanner.h,v 1.14 2002/10/07 22:06:16 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,9 +12,6 @@
 #define scanner_INCLUDED
 
 #include "platform.h"
-#include "code.h"
-#include "javadef.h"
-#include "javasym.h"
 #include "stream.h"
 
 #ifdef HAVE_JIKES_NAMESPACE

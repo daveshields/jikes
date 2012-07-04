@@ -1,4 +1,4 @@
-// $Id: set.h,v 1.24 2002/08/28 16:39:29 ericb Exp $ -*- c++ -*-
+// $Id: set.h,v 1.25 2002/10/07 22:06:16 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,7 +12,7 @@
 #define set_INCLUDED
 
 #include "platform.h"
-#include "symbol.h"
+#include "lookup.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block

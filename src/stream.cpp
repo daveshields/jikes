@@ -1,4 +1,4 @@
-// $Id: stream.cpp,v 1.70 2002/09/28 04:21:11 cabbey Exp $
+// $Id: stream.cpp,v 1.72 2002/11/06 00:58:23 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -14,6 +14,9 @@
 #include "symbol.h"
 #include "control.h"
 #include "semantic.h"
+#include "javasym.h"
+#include "option.h"
+#include "tab.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -79,7 +82,7 @@ const wchar_t *StreamError::getErrorMessage()
 
 bool StreamError::emacs_style_report = false;
 
-const wchar_t *StreamError::getErrorReport()
+const wchar_t* StreamError::getErrorReport()
 {
     //
     // We need to use this lazy initialization, because we can't to it in
@@ -99,7 +102,7 @@ const wchar_t *StreamError::getErrorReport()
     return emacs_style_report ? emacsErrorString() : regularErrorString();
 }
 
-wchar_t *StreamError::emacsErrorString()
+const wchar_t* StreamError::emacsErrorString()
 {
     ErrorString s;
 
@@ -112,7 +115,7 @@ wchar_t *StreamError::emacsErrorString()
 }
 
 
-wchar_t *StreamError::regularErrorString()
+const wchar_t* StreamError::regularErrorString()
 {
     ErrorString s;
 
@@ -461,6 +464,44 @@ LexStream::~LexStream()
 }
 
 
+unsigned LexStream::RightColumn(TokenIndex i)
+{
+    if (! input_buffer)
+        return 0;
+    unsigned location = tokens[i].Location() - 1 +
+        (NameSymbol(i) || LiteralSymbol(i)
+         ? tokens[i].additional_info.symbol -> NameLength()
+         : wcslen(KeywordName(tokens[i].Kind())));
+    return FindColumn(location);
+}
+
+wchar_t* LexStream::NameString(TokenIndex i)
+{
+    return (NameSymbol(i) || LiteralSymbol(i)
+            ? tokens[i].additional_info.symbol -> Name()
+            : KeywordName(tokens[i].Kind()));
+}
+
+int LexStream::NameStringLength(TokenIndex i)
+{
+    return (NameSymbol(i) || LiteralSymbol(i)
+            ? tokens[i].additional_info.symbol -> NameLength()
+            : wcslen(KeywordName(tokens[i].Kind())));
+}
+
+int LexStream::LineLength(unsigned line_no)
+{
+    assert(input_buffer && locations);
+    return Tab::Wcslen(input_buffer, locations[line_no],
+                       locations[line_no + 1] - 2); // ignore the \n
+}
+
+int LexStream::LineSegmentLength(TokenIndex i)
+{
+    return Tab::Wcslen(input_buffer, tokens[i].Location(),
+                       LineEnd(Line(i)));
+}
+
 //
 // If the token represents a literal, this returns the literal symbol
 // associated with it.
@@ -658,6 +699,12 @@ unsigned LexStream::FindLine(unsigned location)
     return (locations[lo] > location ? lo - 1 : lo);
 }
 
+unsigned LexStream::FindColumn(unsigned loc)
+{
+    assert(locations);
+    return input_buffer[loc] == U_LINE_FEED ? 0
+        : Tab::Wcslen(input_buffer, locations[FindLine(loc)], loc);
+}
 
 void LexStream::ReadInput()
 {

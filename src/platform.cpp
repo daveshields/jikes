@@ -1,4 +1,4 @@
-// $Id: platform.cpp,v 1.34 2002/07/30 16:30:02 ericb Exp $
+// $Id: platform.cpp,v 1.35 2002/10/07 22:06:16 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1705,97 +1705,6 @@ int StringConstant::U8S_this_length = strlen(U8S_this);
 
 
 Ostream Coutput;
-
-ErrorString::ErrorString() : ConvertibleArray<wchar_t>(1024),
-                             fill_char(' '),
-                             field_width(0)
-{
-}
-
-void ErrorString::do_fill(int n)
-{
-    while (n < field_width)
-    {
-        Next() = (wchar_t) fill_char;
-        n++;
-    }
-    field_width = 0;
-}
-
-ErrorString &ErrorString::operator<<(const wchar_t c)
-{
-    do_fill(1);
-    Next() = c;
-    return *this;
-}
-
-ErrorString &ErrorString::operator<<(const char c)
-{
-    do_fill(1);
-    Next() = (wchar_t) c;
-    return *this;
-}
-
-ErrorString &ErrorString::operator<<(const wchar_t *s)
-{
-    if (s)
-    {
-        do_fill(
-                wcslen(
-#ifdef HAVE_ERROR_CALL_WCSLEN_CONST
-                       (wchar_t *)
-#endif
-                       s)
-                );
-        while (*s)
-            Next() = *(s++);
-    }
-
-    return *this;
-}
-
-ErrorString &ErrorString::operator<<(const char *s)
-{
-    if (s)
-    {
-        do_fill(strlen(s));
-        while (*s)
-            Next() = (wchar_t) *(s++);
-    }
-
-    return *this;
-}
-
-ErrorString &ErrorString::operator<<(int n)
-{
-    char buf[64];
-    sprintf(buf, "%d", n);
-
-    return (*this << buf);
-}
-
-wchar_t *ErrorString::Array()
-{
-    Next() = U_NULL; // zero terminate string
-    wchar_t *s = ConvertibleArray<wchar_t>::Array();
-    if (!s)
-        return NULL;
-
-    //TODO: optimize!
-    wchar_t *res = new wchar_t[top];
-    memcpy(res, s, top * sizeof(wchar_t));
-    return res;
-}
-
-void ErrorString::width(int w)
-{
-    field_width = w;
-}
-
-void ErrorString::fill(const char c)
-{
-    fill_char = c;
-}
 
 #ifdef HAVE_JIKES_NAMESPACE
 } // Close namespace Jikes block

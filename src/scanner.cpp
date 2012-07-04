@@ -1,4 +1,4 @@
-// $Id: scanner.cpp,v 1.33 2002/08/26 19:21:24 ericb Exp $
+// $Id: scanner.cpp,v 1.35 2002/10/10 19:40:39 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,6 +11,10 @@
 #include "scanner.h"
 #include "control.h"
 #include "error.h"
+#include "javadef.h"
+#include "javasym.h"
+#include "option.h"
+#include "code.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -692,6 +696,7 @@ int Scanner::ScanKeyword7(wchar_t *p1)
             if (p1[1] == U_o && p1[2] == U_o && p1[3] == U_l &&
                 p1[4] == U_e && p1[5] == U_a && p1[6] == U_n)
                 return TK_boolean;
+            break;
         case U_d:
             if (p1[1] == U_e && p1[2] == U_f && p1[3] == U_a &&
                 p1[4] == U_u && p1[5] == U_l && p1[6] == U_t)

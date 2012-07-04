@@ -1,4 +1,4 @@
-// $Id: symbol.h,v 1.65 2002/09/11 17:06:02 ericb Exp $ -*- c++ -*-
+// $Id: symbol.h,v 1.67 2002/11/11 14:51:19 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,14 +12,10 @@
 #define symbol_INCLUDED
 
 #include "platform.h"
-#include "code.h"
 #include "stream.h"
-#include "option.h"
 #include "lookup.h"
-#include "depend.h"
 #include "access.h"
 #include "tuple.h"
-#include "case.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -288,8 +284,8 @@ public:
     static int java_suffix_length;
     static char *class_suffix;
     static int class_suffix_length;
-    static inline bool IsJavaSuffix(char *ptr);
-    static inline bool IsClassSuffix(char *ptr);
+    static bool IsJavaSuffix(char *ptr);
+    static bool IsClassSuffix(char *ptr);
 
     inline char *FileName()
     {
@@ -1069,9 +1065,14 @@ public:
         class_literal_name = class_literal_name_;
     }
 
-    PackageSymbol *ContainingPackage()
+    PackageSymbol* ContainingPackage()
     {
         return outermost_type -> owner -> PackageCast();
+    }
+    // Returns the fully-qualified '/' separated package name.
+    const wchar_t* ContainingPackageName()
+    {
+        return outermost_type -> owner -> PackageCast() -> PackageName();
     }
 
     bool IsNestedIn(TypeSymbol *);
@@ -2571,30 +2572,6 @@ inline SymbolTable *BlockSymbol::Table()
 {
     return (table ? table : table = new SymbolTable());
 }
-
-#ifdef UNIX_FILE_SYSTEM
-    inline bool FileSymbol::IsClassSuffix(char *suffix)
-    {
-        return (strncmp(suffix, class_suffix, class_suffix_length) == 0);
-    }
-
-    inline bool  FileSymbol::IsJavaSuffix(char *suffix)
-    {
-        return (strncmp(suffix, java_suffix, java_suffix_length) == 0);
-    }
-#elif defined(WIN32_FILE_SYSTEM)
-    inline bool FileSymbol::IsClassSuffix(char *suffix)
-    {
-        return Case::StringSegmentEqual(suffix, class_suffix,
-                                        class_suffix_length);
-    }
-
-    inline bool  FileSymbol::IsJavaSuffix(char *suffix)
-    {
-        return Case::StringSegmentEqual(suffix, java_suffix,
-                                        java_suffix_length);
-    }
-#endif // WIN32_FILE_SYSTEM
 
 #ifdef HAVE_JIKES_NAMESPACE
 } // Close namespace Jikes block

@@ -1,4 +1,4 @@
-// $Id: system.cpp,v 1.43 2002/09/11 17:06:02 ericb Exp $
+// $Id: system.cpp,v 1.45 2002/11/11 14:51:19 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,6 +12,8 @@
 #include "control.h"
 #include "semantic.h"
 #include "zip.h"
+#include "option.h"
+#include "case.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -271,8 +273,7 @@ void Control::InitClassInfo()
         {
             system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
                                               0,
-                                              0,
-                                              Class_type -> ContainingPackage() -> PackageName(),
+                                              Class_type -> ContainingPackageName(),
                                               Class_type -> ExternalName());
         }
     }
@@ -298,8 +299,7 @@ void Control::InitClassInfo()
         {
             system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
                                               0,
-                                              0,
-                                              Class_type -> ContainingPackage() -> PackageName(),
+                                              Class_type -> ContainingPackageName(),
                                               Class_type -> ExternalName());
         }
 
@@ -327,8 +327,7 @@ void Control::InitClassInfo()
             {
                 system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
                                                   0,
-                                                  0,
-                                                  Class_type -> ContainingPackage() -> PackageName(),
+                                                  Class_type -> ContainingPackageName(),
                                                   Class_type -> ExternalName());
             }
         }
@@ -337,6 +336,7 @@ void Control::InitClassInfo()
 
 void Control::InitAssertionErrorInfo()
 {
+    assert(option.source >= JikesOption::SDK1_4);
     if (! AssertionError_type -> Bad())
     {
         //
@@ -379,8 +379,7 @@ void Control::InitAssertionErrorInfo()
         {
             system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
                                               0,
-                                              0,
-                                              AssertionError_type -> ContainingPackage() -> PackageName(),
+                                              AssertionError_type -> ContainingPackageName(),
                                               AssertionError_type -> ExternalName());
         }
     }
@@ -435,8 +434,7 @@ void Control::InitThrowableInfo()
         {
             system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
                                               0,
-                                              0,
-                                              Throwable_type -> ContainingPackage() -> PackageName(),
+                                              Throwable_type -> ContainingPackageName(),
                                               Throwable_type -> ExternalName());
         }
     }
@@ -468,8 +466,7 @@ void Control::InitNoClassDefFoundErrorInfo()
         {
             system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
                                               0,
-                                              0,
-                                              NoClassDefFoundError_type -> ContainingPackage() -> PackageName(),
+                                              NoClassDefFoundError_type -> ContainingPackageName(),
                                               NoClassDefFoundError_type -> ExternalName());
         }
     }
@@ -563,8 +560,7 @@ void Control::InitStringBufferInfo()
         {
             system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
                                               0,
-                                              0,
-                                              StringBuffer_type -> ContainingPackage() -> PackageName(),
+                                              StringBuffer_type -> ContainingPackageName(),
                                               StringBuffer_type -> ExternalName());
         }
     }

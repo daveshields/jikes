@@ -1,3 +1,14 @@
-Jikes 1.17 was released 27 September 2002.
+*** Jikes 1.18 was released 21 November 2002.
+
+Compilation that encounters syntax errors is more robust.
+An assertion failure involving placeholder_type was solved.
+Other minor bugs have been fixed.
+
+*** Jikes 1.17 was released 27 September 2002.
+
+The regression with empty if-clauses was fixed.
+Inheritance issues and name shadowing were improved.
+Package handling was improved somewhat.
+Many other bugs were fixed. FIXME: This list is not complete.
 
 FIXME: This file sould be updated appropriately.

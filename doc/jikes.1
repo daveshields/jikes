@@ -242,12 +242,15 @@ Pedantic compilation - issues lots of warnings. This option may be
 listed multiple times, with cumulative effect. With no flags, this
 turns on the default set of pedantic warnings. Specifying a flag will
 then turn on or off a particular warning, depending on the presence of
-the \fIno-\fP prefix. At present, the only recognized flag is
+the \fIno-\fP prefix. At present, the recognized flags are
 \fBmodifier-order\fP, which warns about the recommended ordering of
-multiple modifiers, and is turned on by default in pedantic
-compilation mode. Multiple \fB\+P\fP options are cumulative in
-effect. Thus, to get all pedantic warnings except modifier ordering,
-use \fB\+P \+Pno-modifier-order\fP.
+multiple modifiers; and \fBredundant-modifiers\fP, which warns about
+explicitly mentioning an implied modifier.  Both are turned on by
+default in pedantic compilation mode. Multiple \fB\+P\fP options are
+cumulative in effect. For example, to get all pedantic warnings except
+modifier ordering, use \fB\+P \+Pno-modifier-order\fP. To get just
+warnings about redundant modifiers, without other pedantic warnings,
+use \fB\+Predundant-modifiers\fP.
 
 .TP
 \fB\+T\f\=In\fP

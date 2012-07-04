@@ -1,4 +1,4 @@
-// $Id: symbol.cpp,v 1.78 2002/09/13 20:47:11 ericb Exp $
+// $Id: symbol.cpp,v 1.82 2002/11/11 14:51:19 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
@@ -17,6 +17,7 @@
 #include "zip.h"
 #include "set.h"
 #include "case.h"
+#include "option.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -345,7 +346,7 @@ void TypeSymbol::RemoveCompilationReferences()
 
 TypeSymbol *TypeSymbol::GetArrayType(Semantic *sem, int num_dimensions_)
 {
-    if (num_dimensions_ == 0)
+    if (num_dimensions_ == 0 || Bad())
         return this;
     if (num_dimensions_ < NumArrays())
         return Array(num_dimensions_);
@@ -488,7 +489,7 @@ void TypeSymbol::SetSignature(Control &control)
     }
     else
     {
-        wchar_t *package_name = ContainingPackage() -> PackageName();
+        const wchar_t* package_name = ContainingPackageName();
         wchar_t *type_name = ExternalName();
 
         // +1 for 'L' +1 for '/' +1 for ';' +1 for '\0'
@@ -1026,6 +1027,27 @@ void FileSymbol::SetFileName()
     assert(strlen(file_name) == file_name_length);
 }
 
+#ifdef UNIX_FILE_SYSTEM
+bool FileSymbol::IsClassSuffix(char *suffix)
+{
+    return (strncmp(suffix, class_suffix, class_suffix_length) == 0);
+}
+
+bool FileSymbol::IsJavaSuffix(char *suffix)
+{
+    return (strncmp(suffix, java_suffix, java_suffix_length) == 0);
+}
+#elif defined(WIN32_FILE_SYSTEM)
+bool FileSymbol::IsClassSuffix(char *suffix)
+{
+    return Case::StringSegmentEqual(suffix, class_suffix, class_suffix_length);
+}
+
+bool FileSymbol::IsJavaSuffix(char *suffix)
+{
+    return Case::StringSegmentEqual(suffix, java_suffix, java_suffix_length);
+}
+#endif // WIN32_FILE_SYSTEM
 
 void FileSymbol::SetFileNameLiteral(Control *control)
 {
@@ -2166,6 +2188,14 @@ MethodSymbol *TypeSymbol::GetReadAccessConstructor(MethodSymbol *ctor)
         //
         Semantic *sem = semantic_environment -> sem;
         assert(sem);
+        //
+        // A clone situation exists only when trying to determine a final
+        // value for a field. As obtaining a final value does not need an
+        // access method, we delay creating the accessor until out of the
+        // clone (otherwise, the placeholder type might be incorrect).
+        //
+        if (sem -> error && sem -> error -> InClone())
+            return ctor;
 
         Control &control = sem -> control;
         StoragePool *ast_pool = sem -> compilation_unit -> ast_pool;

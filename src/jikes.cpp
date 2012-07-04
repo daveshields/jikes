@@ -1,4 +1,4 @@
-// $Id: jikes.cpp,v 1.92 2002/07/31 21:05:24 ericb Exp $
+// $Id: jikes.cpp,v 1.93 2002/11/06 00:58:23 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,6 +10,7 @@
 
 #include "platform.h"
 #include "jikesapi.h"
+#include "error.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 using namespace Jikes;
@@ -66,8 +67,11 @@ int main(int argc, char *argv[])
                "+M                  generate makefile dependencies\n"
                "+OLDCSO             perform original Jikes classpath order for compatibility\n"
                "+P                  pedantic compilation - issues lots of warnings\n"
-               "+Pno-modifier-order disable pedantic warnings about modifier order\n"
-               "+T=n                set value of tab to n spaces, defaults to 8\n"
+               "                      some warnings can be turned on or off independently:\n");
+
+        SemanticError::PrintNamedWarnings();
+
+        printf("+T=n                set value of tab to n spaces, defaults to 8\n"
                "+U                  do full dependence check including Zip and Jar files\n"
                "+Z                  treat cautions as errors\n"
 #ifdef JIKES_DEBUG

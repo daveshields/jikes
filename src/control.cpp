@@ -1,4 +1,4 @@
-// $Id: control.cpp,v 1.61 2002/08/02 21:29:44 ericb Exp $
+// $Id: control.cpp,v 1.62 2002/11/11 14:51:18 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1541,8 +1541,7 @@ MethodSymbol *Control::Object_getClassMethod()
             {
                 system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
                                                   0,
-                                                  0,
-                                                  Object_type -> ContainingPackage() -> PackageName(),
+                                                  Object_type -> ContainingPackageName(),
                                                   Object_type -> ExternalName());
                 Object_type -> MarkBad();
             }

@@ -1,4 +1,4 @@
-// $Id: ast.h,v 1.50 2002/08/06 17:55:23 ericb Exp $ -*- c++ -*-
+// $Id: ast.h,v 1.52 2002/10/07 22:06:11 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -13,8 +13,7 @@
 
 #include "platform.h"
 #include "stream.h"
-#include "symbol.h"
-#include "set.h"
+#include "depend.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -23,6 +22,12 @@ namespace Jikes { // Open namespace Jikes block
 
 class Parser;
 class SemanticEnvironment;
+class LiteralValue;
+class Symbol;
+class BlockSymbol;
+class VariableSymbol;
+class MethodSymbol;
+class TypeSymbol;
 class StoragePool;
 
 class VariableSymbolArray
@@ -735,18 +740,7 @@ public:
 
     bool IsConstant() { return (value != NULL); }
 
-    TypeSymbol *Type()
-    {
-        return (TypeSymbol *)
-               (symbol ? (symbol -> Kind() == Symbol::TYPE
-                          ? (TypeSymbol *) symbol
-                          : (symbol -> Kind() == Symbol::VARIABLE
-                             ? ((VariableSymbol *) symbol) -> Type()
-                             : (symbol -> Kind() == Symbol::METHOD
-                                ? ((MethodSymbol *) symbol) -> Type()
-                                : NULL)))
-                : NULL);
-    }
+    TypeSymbol *Type();
 
     virtual Ast *Clone(StoragePool *) { return (Ast *) NULL; }
 
@@ -2660,7 +2654,7 @@ public:
     AstExpression *expression;
     int index;
 
-    int Value() { return ((IntLiteralValue *) (expression -> value)) -> value; }
+    int Value();
 };
 
 //
@@ -2883,6 +2877,7 @@ public:
     int nesting_level;
 
     AstBreakStatement(StoragePool *pool_)
+        : nesting_level(0)
     {
         Ast::kind = Ast::BREAK;
         Ast::class_tag = Ast::STATEMENT;
@@ -2921,6 +2916,7 @@ public:
     int nesting_level;
 
     AstContinueStatement(StoragePool *pool_)
+        : nesting_level(0)
     {
         Ast::kind = Ast::CONTINUE;
         Ast::class_tag = Ast::STATEMENT;

@@ -1,4 +1,4 @@
-// $Id: bytecode.cpp,v 1.147 2002/09/11 17:05:59 ericb Exp $
+// $Id: bytecode.cpp,v 1.151 2002/11/11 14:51:17 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -233,7 +233,7 @@ void ByteCode::CompileClass()
         semantic.ReportSemError(SemanticError::CONSTANT_POOL_OVERFLOW,
                                 unit_type -> declaration -> LeftToken(),
                                 unit_type -> declaration -> RightToken(),
-                                unit_type -> ContainingPackage() -> PackageName(),
+                                unit_type -> ContainingPackageName(),
                                 unit_type -> ExternalName());
     }
 
@@ -255,7 +255,7 @@ void ByteCode::CompileClass()
         semantic.ReportSemError(SemanticError::INTERFACES_OVERFLOW,
                                 left -> LeftToken(),
                                 right -> RightToken(),
-                                unit_type -> ContainingPackage() -> PackageName(),
+                                unit_type -> ContainingPackageName(),
                                 unit_type -> ExternalName());
     }
 
@@ -264,7 +264,7 @@ void ByteCode::CompileClass()
         semantic.ReportSemError(SemanticError::FIELDS_OVERFLOW,
                                 unit_type -> declaration -> LeftToken(),
                                 unit_type -> declaration -> RightToken(),
-                                unit_type -> ContainingPackage() -> PackageName(),
+                                unit_type -> ContainingPackageName(),
                                 unit_type -> ExternalName());
     }
 
@@ -273,7 +273,7 @@ void ByteCode::CompileClass()
         semantic.ReportSemError(SemanticError::METHODS_OVERFLOW,
                                 unit_type -> declaration -> LeftToken(),
                                 unit_type -> declaration -> RightToken(),
-                                unit_type -> ContainingPackage() -> PackageName(),
+                                unit_type -> ContainingPackageName(),
                                 unit_type -> ExternalName());
     }
 
@@ -282,7 +282,7 @@ void ByteCode::CompileClass()
         semantic.ReportSemError(SemanticError::STRING_OVERFLOW,
                                 unit_type -> declaration -> LeftToken(),
                                 unit_type -> declaration -> RightToken(),
-                                unit_type -> ContainingPackage() -> PackageName(),
+                                unit_type -> ContainingPackageName(),
                                 unit_type -> ExternalName());
     }
 
@@ -291,7 +291,7 @@ void ByteCode::CompileClass()
         semantic.ReportSemError(SemanticError::LIBRARY_METHOD_NOT_FOUND,
                                 unit_type -> declaration -> LeftToken(),
                                 unit_type -> declaration -> RightToken(),
-                                unit_type -> ContainingPackage() -> PackageName(),
+                                unit_type -> ContainingPackageName(),
                                 unit_type -> ExternalName());
     }
 
@@ -379,7 +379,7 @@ void ByteCode::CompileInterface()
          semantic.ReportSemError(SemanticError::CONSTANT_POOL_OVERFLOW,
                                  unit_type -> declaration -> LeftToken(),
                                  unit_type -> declaration -> RightToken(),
-                                 unit_type -> ContainingPackage() -> PackageName(),
+                                 unit_type -> ContainingPackageName(),
                                  unit_type -> ExternalName());
     }
 
@@ -554,13 +554,13 @@ void ByteCode::BeginMethod(int method_index, MethodSymbol *msym)
     if (control.option.g)
         Coutput << "(51) Generating code for method \"" << msym -> Name()
                 << "\" in "
-                << unit_type -> ContainingPackage() -> PackageName() << "/"
+                << unit_type -> ContainingPackageName() << "/"
                 << unit_type -> ExternalName() << endl;
 #endif // DUMP
 #ifdef JIKES_DEBUG
     if (control.option.debug_trace_stack_change)
         Coutput << endl << "Generating method "
-                << unit_type -> ContainingPackage() -> PackageName() << '.'
+                << unit_type -> ContainingPackageName() << '.'
                 << unit_type -> ExternalName() << '.' << msym -> Name()
                 << msym -> signature -> value << endl;
 #endif // JIKES_DEBUG
@@ -655,7 +655,7 @@ void ByteCode::BeginMethod(int method_index, MethodSymbol *msym)
                                     declarator -> left_parenthesis_token,
                                     declarator -> right_parenthesis_token,
                                     msym -> Header(),
-                                    unit_type -> ContainingPackage() -> PackageName(),
+                                    unit_type -> ContainingPackageName(),
                                     unit_type -> ExternalName());
         }
     }
@@ -678,7 +678,7 @@ void ByteCode::EndMethod(int method_index, MethodSymbol *msym)
                                     msym -> declaration -> LeftToken(),
                                     msym -> declaration -> RightToken(),
                                     msym -> Header(),
-                                    unit_type -> ContainingPackage() -> PackageName(),
+                                    unit_type -> ContainingPackageName(),
                                     unit_type -> ExternalName());
         }
 
@@ -688,7 +688,7 @@ void ByteCode::EndMethod(int method_index, MethodSymbol *msym)
                                     msym -> declaration -> LeftToken(),
                                     msym -> declaration -> RightToken(),
                                     msym -> Header(),
-                                    unit_type -> ContainingPackage() -> PackageName(),
+                                    unit_type -> ContainingPackageName(),
                                     unit_type -> ExternalName());
         }
 
@@ -698,7 +698,7 @@ void ByteCode::EndMethod(int method_index, MethodSymbol *msym)
                                     msym -> declaration -> LeftToken(),
                                     msym -> declaration -> RightToken(),
                                     msym -> Header(),
-                                    unit_type -> ContainingPackage() -> PackageName(),
+                                    unit_type -> ContainingPackageName(),
                                     unit_type -> ExternalName());
         }
 
@@ -3031,7 +3031,7 @@ void ByteCode::EmitAssertStatement(AstAssertStatement *assertion)
                     semantic.ReportSemError(SemanticError::LIBRARY_METHOD_NOT_FOUND,
                                             assertion -> LeftToken(),
                                             assertion -> RightToken(),
-                                            unit_type -> ContainingPackage() -> PackageName(),
+                                            unit_type -> ContainingPackageName(),
                                             unit_type -> ExternalName());
 
             }
@@ -4720,8 +4720,7 @@ int ByteCode::EmitConditionalExpression(AstConditionalExpression *expression,
             if (need_value)
                 PutOp(IsZero(expression -> true_expression)
                       ? OP_ICONST_0 : OP_ICONST_1);
-            EmitExpression(expression -> test_expression);
-            EmitBranch(OP_IFNE, label);
+            EmitBranchIfExpression(expression -> test_expression, true, label);
             if (need_value)
                 PutOp(OP_POP);
             EmitExpression(expression -> false_expression, need_value);
@@ -4743,8 +4742,7 @@ int ByteCode::EmitConditionalExpression(AstConditionalExpression *expression,
         if (need_value)
             PutOp(IsZero(expression -> false_expression)
                   ? OP_ICONST_0 : OP_ICONST_1);
-        EmitExpression(expression -> test_expression);
-        EmitBranch(OP_IFEQ, label);
+        EmitBranchIfExpression(expression -> test_expression, false, label);
         if (need_value)
             PutOp(OP_POP);
         EmitExpression(expression -> true_expression, need_value);
@@ -5730,8 +5728,11 @@ void ByteCode::ConcatenateString(AstBinaryExpression *expression)
 
 void ByteCode::AppendString(AstExpression *expression)
 {
+    //
+    // Grab the type before reducing no-ops, in the case of ""+(int)char.
+    //
+    TypeSymbol* type = expression -> Type();
     expression = StripNops(expression);
-    TypeSymbol *type = expression -> Type();
 
     if (expression -> IsConstant())
     {
@@ -5865,11 +5866,46 @@ ByteCode::ByteCode(TypeSymbol *unit_type)
                 << unit_type -> fully_qualified_name -> value << "]" << endl;
 #endif // JIKES_DEBUG
 
+    //
+    // For compatibility reasons, protected classes are marked public, and
+    // private classes are marked default; and no class may be static or
+    // strictfp. Also, a non-access flag, the super bit, must be set for
+    // classes but not interfaces. For top-level types, this changes nothing
+    // except adding the super bit. For nested types, the correct access bits
+    // are emitted later as part of the InnerClasses attribute.
+    //
     SetFlags(unit_type -> Flags());
+    if (ACC_PROTECTED())
+    {
+        ResetACC_PROTECTED();
+        SetACC_PUBLIC();
+    }
+    else if (ACC_PRIVATE())
+        ResetACC_PRIVATE();
+    ResetACC_STATIC();
+    ResetACC_STRICTFP();
+    if (! unit_type -> ACC_INTERFACE())
+        SetACC_SUPER();
 
     magic = 0xcafebabe;
-    major_version = 45;             // use Sun JDK 1.0 version numbers
-    minor_version = 3;
+    switch (control.option.target)
+    {
+    default: // use Sun JDK 1.1 version numbers
+        major_version = 45;
+        minor_version = 3;
+        break;
+    case JikesOption::SDK1_2:
+        major_version = 46;
+        minor_version = 0;
+        break;
+    case JikesOption::SDK1_3:
+        major_version = 47;
+        minor_version = 0;
+        break;
+    case JikesOption::SDK1_4:
+        major_version = 48;
+        minor_version = 0;
+    }
     constant_pool.Next() = NULL;
     this_class = RegisterClass(unit_type);
 

@@ -1,4 +1,4 @@
-// $Id: stream.h,v 1.43 2002/08/26 19:21:24 ericb Exp $ -*- c++ -*-
+// $Id: stream.h,v 1.45 2002/11/06 00:58:23 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,11 +12,7 @@
 #define stream_INCLUDED
 
 #include "platform.h"
-#include "javadef.h"
-#include "javasym.h"
 #include "tuple.h"
-#include "tab.h"
-#include "lookup.h"
 #include "jikesapi.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
@@ -30,6 +26,7 @@ class Symbol;
 class FileSymbol;
 class ZipFile;
 class LexStream;
+class ErrorString;
 
 class StreamError : public JikesError
 {
@@ -81,8 +78,8 @@ private:
     int right_line_no;
     int right_column_no;
 
-    wchar_t *regularErrorString();
-    wchar_t *emacsErrorString();
+    const wchar_t* regularErrorString();
+    const wchar_t* emacsErrorString();
 
     bool initialized;
 
@@ -231,16 +228,7 @@ public:
         // FindColumn grabs the right edge of an expanded character.
         return input_buffer ? FindColumn(tokens[i].Location() - 1) + 1 : 0;
     }
-    inline unsigned RightColumn(TokenIndex i)
-    {
-        if (! input_buffer)
-            return 0;
-        unsigned location = tokens[i].Location() - 1 +
-            (NameSymbol(i) || LiteralSymbol(i)
-             ? tokens[i].additional_info.symbol -> NameLength()
-             : wcslen(KeywordName(tokens[i].Kind())));
-        return FindColumn(location);
-    }
+    unsigned RightColumn(TokenIndex i);
 
     inline bool AfterEol(TokenIndex i)
     {
@@ -254,19 +242,8 @@ public:
         return tokens[i].additional_info.right_brace;
     }
 
-    wchar_t *NameString(TokenIndex i)
-    {
-        return (NameSymbol(i) || LiteralSymbol(i)
-                ? tokens[i].additional_info.symbol -> Name()
-                : KeywordName(tokens[i].Kind()));
-    }
-
-    int NameStringLength(TokenIndex i)
-    {
-        return (NameSymbol(i) || LiteralSymbol(i)
-                ? tokens[i].additional_info.symbol -> NameLength()
-                : wcslen(KeywordName(tokens[i].Kind())));
-    }
+    wchar_t *NameString(TokenIndex i);
+    int NameStringLength(TokenIndex i);
 
     // TODO: Rename these methods to differ from the class name?
     class LiteralSymbol *LiteralSymbol(TokenIndex);
@@ -275,12 +252,7 @@ public:
     char *FileName();
     size_t FileNameLength();
 
-    inline int LineLength(unsigned line_no)
-    {
-        assert(input_buffer && locations);
-        return Tab::Wcslen(input_buffer, locations[line_no],
-                           locations[line_no + 1] - 2); // ignore the \n
-    }
+    int LineLength(unsigned line_no);
     inline int LineStart(unsigned line_no)
     {
         return locations[line_no];
@@ -290,11 +262,7 @@ public:
         return locations[line_no + 1] - 1;
     }
 
-    inline int LineSegmentLength(TokenIndex i)
-    {
-        return Tab::Wcslen(input_buffer, tokens[i].Location(),
-                           LineEnd(Line(i)));
-    }
+    int LineSegmentLength(TokenIndex i);
 
     //
     // For a sequence of tokens in a given range find out how many large
@@ -576,13 +544,7 @@ private:
     //
     // Finds the column of the right edge of a character.
     //
-    unsigned FindColumn(unsigned loc)
-    {
-        assert(locations);
-
-        return input_buffer[loc] == U_LINE_FEED ? 0
-            : Tab::Wcslen(input_buffer, locations[FindLine(loc)], loc);
-    }
+    unsigned FindColumn(unsigned loc);
 };
 
 #ifdef HAVE_JIKES_NAMESPACE

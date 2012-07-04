@@ -1,4 +1,4 @@
-// $Id: bytecode.h,v 1.52 2002/09/11 17:06:00 ericb Exp $ -*- c++ -*-
+// $Id: bytecode.h,v 1.53 2002/10/07 22:06:11 ericb Exp $ -*- c++ -*-
 //
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
@@ -14,8 +14,6 @@
 #include "tuple.h"
 #include "ast.h"
 #include "class.h"
-#include "option.h"
-#include "long.h"
 #include "op.h"
 #include "segment.h"
 

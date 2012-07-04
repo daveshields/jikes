@@ -7,9 +7,6 @@ Copyright (C) 1996, 2002 International Business Machines Corporation
 and others.  All Rights Reserved.
 You must accept the terms of that agreement to use this software. */
 
-/* Defined when bit sizes are int = 32, short = 16, char = 8 */
-#undef HAVE_32BIT_TYPES
-
 /* Defined when the compiler supports 64 bit integer math */
 #undef HAVE_64BIT_TYPES
 
@@ -78,9 +75,6 @@ You must accept the terms of that agreement to use this software. */
 
 /* Define Jikes classes in a C++ namespace */
 #undef HAVE_JIKES_NAMESPACE
-
-/* Define to 1 if you have the <langinfo.h> header file. */
-#undef HAVE_LANGINFO_H
 
 /* use unix style mkdir(str, S_IRWXU) */
 #undef HAVE_LIBC5_MKDIR
@@ -166,12 +160,6 @@ You must accept the terms of that agreement to use this software. */
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
-/* Defined when the compiler supports the unsigned __int64 type */
-#undef HAVE_UNSIGNED_INT64
-
-/* Defined when the compiler supports the unsigned long long type */
-#undef HAVE_UNSIGNED_LONG_LONG
-
 /* Use visual C++ version of set_new_handler */
 #undef HAVE_VCPP_SET_NEW_HANDLER
 
@@ -219,7 +207,7 @@ You must accept the terms of that agreement to use this software. */
 /* Used to test results of stat call to see if it is a directory */
 #undef JIKES_STAT_S_IFDIR
 
-/* A string to indicate the release of jikes: Version 1.15 - 26 Sept 2001 */
+/* A string to indicate the release of jikes: Version 1.17 - 27 Sept 2002 */
 #undef JIKES_VERSION_STRING
 
 /* Name of package */
@@ -243,8 +231,92 @@ You must accept the terms of that agreement to use this software. */
 /* used to seperate elements on the PATH */
 #undef PATH_SEPARATOR
 
+/* The size of a `char', as computed by sizeof. */
+#undef SIZEOF_CHAR
+
+/* The size of a `int', as computed by sizeof. */
+#undef SIZEOF_INT
+
+/* The size of a `long', as computed by sizeof. */
+#undef SIZEOF_LONG
+
+/* The size of a `long long', as computed by sizeof. */
+#undef SIZEOF_LONG_LONG
+
+/* The size of a `short', as computed by sizeof. */
+#undef SIZEOF_SHORT
+
+/* The size of a `signed', as computed by sizeof. */
+#undef SIZEOF_SIGNED
+
+/* The size of a `signed char', as computed by sizeof. */
+#undef SIZEOF_SIGNED_CHAR
+
+/* The size of a `signed int', as computed by sizeof. */
+#undef SIZEOF_SIGNED_INT
+
+/* The size of a `signed long', as computed by sizeof. */
+#undef SIZEOF_SIGNED_LONG
+
+/* The size of a `signed long long', as computed by sizeof. */
+#undef SIZEOF_SIGNED_LONG_LONG
+
+/* The size of a `signed short', as computed by sizeof. */
+#undef SIZEOF_SIGNED_SHORT
+
+/* The size of a `unsigned', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED
+
+/* The size of a `unsigned char', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED_CHAR
+
+/* The size of a `unsigned int16_t', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED_INT16_T
+
+/* The size of a `unsigned int32_t', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED_INT32_T
+
+/* The size of a `unsigned int64_t', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED_INT64_T
+
+/* The size of a `unsigned int8_t', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED_INT8_T
+
+/* The size of a `unsigned long', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED_LONG
+
+/* The size of a `unsigned long long', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED_LONG_LONG
+
+/* The size of a `unsigned short', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED_SHORT
+
+/* The size of a `unsigned __int16', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED___INT16
+
+/* The size of a `unsigned __int32', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED___INT32
+
+/* The size of a `unsigned __int64', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED___INT64
+
+/* The size of a `unsigned __int8', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED___INT8
+
 /* The size of a `wchar_t', as computed by sizeof. */
 #undef SIZEOF_WCHAR_T
+
+/* The size of a `__int16', as computed by sizeof. */
+#undef SIZEOF___INT16
+
+/* The size of a `__int32', as computed by sizeof. */
+#undef SIZEOF___INT32
+
+/* The size of a `__int64', as computed by sizeof. */
+#undef SIZEOF___INT64
+
+/* The size of a `__int8', as computed by sizeof. */
+#undef SIZEOF___INT8
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
@@ -261,3 +333,27 @@ You must accept the terms of that agreement to use this software. */
 /* Define to 1 if your processor stores words with the most significant byte
    first (like Motorola and SPARC, unlike Intel and VAX). */
 #undef WORDS_BIGENDIAN
+
+/* If not already defined, then define as a datatype of *exactly* 16 bits. */
+#undef int16_t
+
+/* If not already defined, then define as a datatype of *exactly* 32 bits. */
+#undef int32_t
+
+/* If not already defined, then define as a datatype of *exactly* 64 bits. */
+#undef int64_t
+
+/* If not already defined, then define as a datatype of *exactly* 8 bits. */
+#undef int8_t
+
+/* If not already defined, then define as a datatype of *exactly* 16 bits. */
+#undef uint16_t
+
+/* If not already defined, then define as a datatype of *exactly* 32 bits. */
+#undef uint32_t
+
+/* If not already defined, then define as a datatype of *exactly* 64 bits. */
+#undef uint64_t
+
+/* If not already defined, then define as a datatype of *exactly* 8 bits. */
+#undef uint8_t

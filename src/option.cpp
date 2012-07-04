@@ -1,4 +1,4 @@
-// $Id: option.cpp,v 1.75 2002/08/26 20:45:43 ericb Exp $
+// $Id: option.cpp,v 1.77 2002/11/06 00:58:23 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,6 +12,8 @@
 #include "javasym.h"
 #include "error.h"
 #include "case.h"
+#include "tab.h"
+#include "code.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -158,7 +160,7 @@ ArgumentExpander::ArgumentExpander(int argc_, char *argv_[],
 }
 
 
-wchar_t* OptionError::GetErrorMessage()
+const wchar_t* OptionError::GetErrorMessage()
 {
     ErrorString s;
     s << "Error: ";
@@ -321,7 +323,6 @@ Option::Option(ArgumentExpander& arguments,
       unzip(false),
       dump_errors(false),
       errors(true),
-      pedantic_modifier_order(false),
       pedantic(false),
       dependence_report_name(NULL)
 {
@@ -779,26 +780,18 @@ Option::Option(ArgumentExpander& arguments,
             {
                 // Turn on ALL default pedantic warnings. Can be called
                 // multiple times.
-                pedantic_modifier_order = true;
                 pedantic = true;
+                SemanticError::EnableDefaultWarnings();
             }
             else if (arguments.argv[i][1] == 'P')
             {
-                // Turn on or off particular pedantic warning. Can be called
-                // multiple times.
-                bool state = true;
-                char *image = arguments.argv[i] + 2;
-                if (! strncmp(image, "no-", 3))
+                const char *image = arguments.argv[i] + 2;
+                if (! SemanticError::ProcessWarningSwitch(image))
                 {
-                    image += 3;
-                    state = false;
-                }
-                if (! strncmp(image, "modifier-order", 14))
-                    pedantic_modifier_order = state;
-                // Add detection for future pedantic flags here.
-                else
                     bad_options.Next() =
-                        new OptionError(OptionError::INVALID_P_ARGUMENT, image);
+                        new OptionError(OptionError::INVALID_P_ARGUMENT,
+                                        image);
+                }
             }
             else if (arguments.argv[i][1] == 'T')
             {

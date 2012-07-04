@@ -1,4 +1,4 @@
-// $Id: class.h,v 1.30 2002/07/11 00:32:48 cabbey Exp $ -*- c++ -*-
+// $Id: class.h,v 1.32 2002/11/02 15:54:28 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -15,6 +15,7 @@
 #include "access.h"
 #include "tuple.h"
 #include "op.h"
+#include "option.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
@@ -1563,25 +1564,7 @@ public:
                     i++; // skip the next entry for eight-byte constants
             }
 
-            //
-            // For compatibility reasons, protected classes are marked public,
-            // and private classes are marked default; and no class may be
-            // static or strictfp. These properties are displayed correctly
-            // later on in the InnerClasses attribute.
-            //
-            {
-                AccessFlags compat(access_flags);
-                if (compat.ACC_PROTECTED())
-                {
-                    compat.ResetACC_PROTECTED();
-                    compat.SetACC_PUBLIC();
-                }
-                else if (compat.ACC_PRIVATE())
-                    compat.ResetACC_PRIVATE();
-                compat.ResetACC_STATIC();
-                compat.ResetACC_STRICTFP();
-                output_buffer.PutB2(compat.Flags());
-            }
+            output_buffer.PutB2(access_flags);
             output_buffer.PutB2(this_class);
             output_buffer.PutB2(super_class);
 

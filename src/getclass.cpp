@@ -1,4 +1,4 @@
-// $Id: getclass.cpp,v 1.36 2002/09/05 22:29:02 ericb Exp $
+// $Id: getclass.cpp,v 1.37 2002/10/07 22:06:16 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -14,6 +14,8 @@
 #include "access.h"
 #include "zip.h"
 #include "jikesapi.h"
+#include "option.h"
+#include "code.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
