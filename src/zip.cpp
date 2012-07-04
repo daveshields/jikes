@@ -1,4 +1,4 @@
-// $Id: zip.cpp,v 1.10 2000/07/25 11:32:34 mdejong Exp $
+// $Id: zip.cpp,v 1.13 2001/01/10 16:49:45 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,8 +12,8 @@
 #include "control.h"
 #include "symbol.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 //************************************************************************************************
@@ -321,7 +321,7 @@ Zip::Zip(Control &control_, char *zipfile_name) : control(control_),
                                                   zipbuffer(NULL)
 {
 #ifdef UNIX_FILE_SYSTEM
-    zipfile = ::SystemFopen(zipfile_name, "rb");
+    zipfile = SystemFopen(zipfile_name, "rb");
     if (zipfile)
     {
         int rc = fseek(zipfile, -22, SEEK_END);
@@ -412,4 +412,7 @@ void Zip::ReadDirectory()
     return;
 }
 
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
 

@@ -1,4 +1,4 @@
-// $Id: control.h,v 1.30 2000/07/25 11:32:32 mdejong Exp $
+// $Id: control.h,v 1.31 2001/01/05 09:13:20 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -22,7 +22,7 @@
 #include <stdio.h>
 */
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -608,7 +608,7 @@ private:
     FileSymbol *FindOrInsertJavaInputFile(wchar_t *, int);
 };
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

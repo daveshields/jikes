@@ -1,37 +1,232 @@
-Get IRIX build support working again.
+*** TBD for Jikes 1.13 release:
 
-g++ -DHAVE_CONFIG_H -I. -I../../jikes/src -I.     -g -c -o stream.o `test -f ../../jikes/src/stream.cpp || echo '../../jikes/src/'`../../jikes/src/stream.cpp
-../../jikes/src/stream.cpp: In method `void LexStream::ProcessInputUnicode(const char *, long int)':
-../../jikes/src/stream.cpp:895: passing `const char **' as argument 2 of `iconv(_t_iconv *, char **, size_t *, char **, size_t *)' discards qualifiers
-make[1]: *** [stream.o] Error 1
+Fix build under IRIX, it failed in
+1.12 because of iconv prototype mismatch.
+Same goes for Red Hat 7.0.
+(FIXED)
 
-/usr/include/iconv.h
-extern size_t   iconv(iconv_t, char **, size_t *, char **, size_t *);
+Include java.g file in tar ball.
+This was omitted in the 1.12 release.
+(FIXED)
 
-(on my linux box)
-extern size_t iconv __P ((iconv_t __cd,
-                          __const char **__restrict __inbuf,
-                          size_t *__restrict __inbytesleft,
-                          char **__restrict __outbuf,
-                          size_t *__restrict __outbytesleft));
-
-Irix Sig:  iconv(iconv_t, char **, size_t *, char **, size_t *)
-Linux Sig: iconv(iconv_t, __const char **, char **, size_t *)
+Add RPM spec file to the tar ball.
+This was omitted in the 1.12 release.
+(FIXED)
 
 
-We need a solution like those for wcslen but for iconv.
+Fix namespaces. People need
+to be able to compile on
+systems that require namespace
+support. Many versions of gcc
+have bugs that keep namespaces
+from working.
 
+./configure HAVE_JIKES_NAMESPACE=1
+
+(FIXED)
+
+
+Use new casting operations instead of C style
+casts, need to add autoconf check too.
+
+Casting up from A to B will be checked if
+compiler support RTTI. This could catch
+nasty cast errors in Jikes.
+
+http://www.sns.ias.edu/Main/computing/compilers_html/c-plusplus/c++_ug/Cast.new.doc.html
+
+const_cast<int> 'c'
+
+same as
+
+(int) 'c'
+
+dynamic_cast<type>(ARG)
+
+A -> B
+
+B*  bp = new B():
+A*  ap = bp;
+
+assert( ap != NULL );
+B*  bp2 = dynamic_cast<B*>(ap);
+assert( bp2 != NULL );
+
+
+(FIXED : still need to actually use them in #ifdefs)
+
+
+
+
+Manually generate a list of #include deps for
+each of the .c files in the src dir and include
+then in Makefile.am. We do not want to use
+the automatic depcomp feature of automake.
+
+(FIXED)
+
+
+The website needs to be made available as a CVS module.
+That will make changing and tracking changes far easier.
+
+(FIXED)
+
+
+Fix the problems with @files demonstrated by
+non-jls-argument-expansion tests in Jacks. This
+would be significantly easier if during input
+conversion, \r \r\n and \n where always converted
+into a single \n in the source code. This is
+currently implemented in LexStream but it needs
+to be done in a more general stream class not
+one that does lexing. That way, it could also
+be used in the Option class to process @ files.
+
+(FIXED, reverted since it caused other problems )
+
+
+Add new floating point emulation support code.
+
+(FIXED)
+
+
+
+Fix problems with double class use of
+static const, gcc 3.0 pukes unless
+there is an external def too.
+
+(FIXED)
+
+
+
+
+*** Things that will not be done in 1.13
+
+
+
+It is not clear if iconv is only a little
+broken or totally busted.
+
+More testing is needed to figure out
+if this is an endian issue. It works
+on an Intel box but fails on a Solaris
+Sparc so I think it is a byte order issue.
+
+http://bugzilla.redhat.com/bugzilla/show_bug.cgi?id=19647
+
+While some iconv tests fail under Red Hat 6.2, they
+all fail on Red Hat 7.0, which is what this bug
+report is talking about.
+
+Also, would it be better to convert a bunch
+of chars in a buffer instead of doing them
+one at a time?
+
+Check into the problems discussed with the
+onceagain boolean. Could this blow up if
+we don't set ch? Also what if the
+ErrorDecode..() method return true but
+the earlier assign to ch returned 0,
+that would set ch to zero right? I
+don't think that is really what we
+would have wanted.
+
+(Will not fix in this release)
+
+
+
+Add a configure check to make sure
+folks do not attempt to build under
+Cygwin with the -mno-cygwin flag.
+(Will not fix in this release)
+
+
+
+Fix problem with debug line number tables. Newer
+versions of java don't like our line numbers.
+This is commonly known as "Jikes and JPDA".
+
+
+
+Add the src/m4 subdir contents to
+the .tar file.
+
+(Don't fix, people will not be
+able to regenerate a working
+./configure with autoconf 2.13
+anyway, so this can be delayed)
+
+
+
+If a zip file can not be found,
+the error message printed should
+say that instead of saying it
+is "invalid" (implies it was corrupted).
+
+"D:\File\with\wrong\classpath\entry\rt.jar is not a valid zip file" (BAD)
+
+"D:\File\with\wrong\classpath\entry\rt.jar not found" (GOOD)
+
+
+
+*** TBD at some point:
 
 Add test cases for the typos in error.cpp that were fixed
-just before the release. In fact, it would be nice if we
+just before the 1.12 release. In fact, it would be nice if we
 could generate a test case for every error condition and
+
 test the compiler output.
-
-
-See if the -fhonor-std flag helps with the namespace
-problems with g++.
 
 Check into the fix for bug 102, we reverted it because of
 crashes, but it would be nice to look into the fix again.
 
+Drop OLDCSO support from the compiler.
+
+
+Why does jikes treat the catching of exceptions
+that were not thrown in the try block as a
+warning condition. Should these not be errors?
+
+
+
+A misleading error from Jikes:
+
+% cat unicode_1.java
+public class unicode_1 {
+    void check(int num, char val) {
+        if (num != (int) val) {
+            System.err.println("error: mismatch for " + num);
+        }
+    }
+
+    public static void main(String[] argv) {
+        check(0, '\u0000');
+        check(0, '\u0001');
+    }
+}
+
+Error from Javac:
+
+unicode_1.java:9: Can't make static reference to method void check(int, char) in class unicode_1.
+        check(0, '\u0000');
+             ^
+unicode_1.java:10: Can't make static reference to method void check(int, char) in class unicode_1.
+        check(0, '\u0001');
+             ^
+2 errors
+
+
+Error from Jikes:
+
+Found 2 semantic errors compiling "unicode_1.java":
+
+     9.         check(0, '
+
+    10.         check(0, '`');
+                <----------->
+*** Error: The method "check" does not denote a class method.
+
+
+Is it just me, or is this error message really misleading?
+The Sun error message seems a whole lot better.
 

@@ -1,4 +1,4 @@
-// $Id: op.cpp,v 1.9 2000/07/25 11:32:33 mdejong Exp $
+// $Id: op.cpp,v 1.11 2001/01/10 16:49:45 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -18,8 +18,8 @@
 #include <string.h>
 */
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 
@@ -790,3 +790,8 @@ int Operators::stack_effect[] =
     0,  // OP_SOFTWARE
     0   // OP_HARDWARE
 };
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

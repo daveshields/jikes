@@ -1,4 +1,4 @@
-// $Id: set.h,v 1.11 2000/07/25 11:32:33 mdejong Exp $
+// $Id: set.h,v 1.13 2001/02/01 10:24:07 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,10 +11,9 @@
 #define set_INCLUDED
 
 #include "platform.h"
-#include "assert.h"
 #include "symbol.h"
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -673,7 +672,7 @@ public:
     {}
 };
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

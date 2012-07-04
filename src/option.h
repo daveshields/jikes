@@ -1,4 +1,4 @@
-// $Id: option.h,v 1.25 2000/07/25 11:32:33 mdejong Exp $
+// $Id: option.h,v 1.29 2001/02/24 22:19:24 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -19,13 +19,7 @@
 //FIXME: include stuff
 //#include <ctype.h>
 
-#if defined(HAVE_LIB_ICU_UC)
-# include <unicode/ucnv.h>
-#elif defined(HAVE_ICONV_H)
-# include <iconv.h>
-#endif
-
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -116,12 +110,6 @@ public:
 #endif
 
 public:
-
-#if defined(HAVE_LIB_ICU_UC)
-         UConverter *converter;
-#elif defined(HAVE_ICONV_H)
-         iconv_t converter;
-#endif
          
     Tuple<KeywordMap> keyword_map;
     Tuple<OptionError *> bad_options;
@@ -154,7 +142,7 @@ public:
     ~Option();
 };
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

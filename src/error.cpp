@@ -1,4 +1,4 @@
-// $Id: error.cpp,v 1.53 2000/07/25 11:32:33 mdejong Exp $
+// $Id: error.cpp,v 1.60 2001/02/15 10:36:05 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -13,8 +13,8 @@
 #include "semantic.h"
 #include "ast.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 unsigned char SemanticError::warning[SemanticError::_num_kinds] = { 0 };
@@ -46,13 +46,15 @@ void ErrorInfo::Initialize(LexStream *l, wchar_t  *m, JikesErrorSeverity s)
     severity = s;
 }
 
-ErrorInfo::ErrorInfo():msg(NULL),severity(JikesError::JIKES_ERROR)
+ErrorInfo::ErrorInfo()
+:msg(NULL),
+severity(JikesError::JIKES_ERROR)
 {
 }
 
 ErrorInfo::~ErrorInfo()
 {
-    delete []msg;
+    delete [] msg;
 }
 
 
@@ -754,6 +756,7 @@ void SemanticError::StaticInitializer()
     print_message[INVALID_CLASS_FILE] = PrintINVALID_CLASS_FILE;
     print_message[CANNOT_OPEN_CLASS_FILE] = PrintCANNOT_OPEN_CLASS_FILE;
 
+    print_message[INTERFACE_NOT_INNER_CLASS] = PrintINTERFACE_NOT_INNER_CLASS;
     print_message[STATIC_NOT_INNER_CLASS] = PrintSTATIC_NOT_INNER_CLASS;
     print_message[TYPE_NOT_INNER_CLASS] = PrintTYPE_NOT_INNER_CLASS;
     print_message[SUPER_TYPE_NOT_INNER_CLASS] = PrintSUPER_TYPE_NOT_INNER_CLASS;
@@ -1192,30 +1195,17 @@ wchar_t *SemanticError::PrintPACKAGE_NOT_FOUND(ErrorInfo &err, LexStream *lex_st
 {
     ErrorString s;
 
-    s << "Could not find package named: \n";
+    s << "Could not find package \""
+      << err.insert1
+      << "\" in:\n" ;
+
     for (int i = 1; i < control.classpath.Length(); i++)
     {
         PathSymbol *path_symbol = control.classpath[i];
         wchar_t *path = path_symbol -> Name();
-
         s << "                "
-                << path;
-        if (path_symbol -> IsZip())
-        {
-            s << "("
-                    << err.insert1
-                    << ")";
-        }
-        else
-        {
-            s << "/"
-                    << err.insert1;
-        }
-
-        if (i + 2 < control.classpath.Length())
-             s << ", \n";
-        else if (i + 2 == control.classpath.Length())
-             s << " or \n";
+          << path
+          << "\n";
     }
 
     return s.Array();
@@ -4647,16 +4637,7 @@ wchar_t *SemanticError::PrintUNREACHABLE_DEFAULT_CATCH_CLAUSE(ErrorInfo &err, Le
 {
     ErrorString s;
 
-    s << "This catch block may be unreachable because there is no exception "
-               "whose type is assignable to \"";
-    if (NotDot(err.insert1))
-    {
-        s << err.insert1
-                << "/";
-    }
-    s << err.insert2
-            << "\" that can be thrown during execution of the body of the try block."
-               " However, this being a base exception class, compilation will proceed.";
+    s << "This try block cannot throw a \"checked exception\" (JLS section 14.7) that can be caught here. You may have intended to catch a RuntimeException instead of an Exception.";
 
     return s.Array();
 }
@@ -4960,6 +4941,23 @@ wchar_t *SemanticError::PrintCANNOT_OPEN_CLASS_FILE(ErrorInfo &err, LexStream *l
     }
     s << err.insert2
             << "\".";
+
+    return s.Array();
+}
+
+
+wchar_t *SemanticError::PrintINTERFACE_NOT_INNER_CLASS(ErrorInfo &err, LexStream *lex_stream, Control &control)
+{
+    ErrorString s;
+
+    s << "The interface \"";
+    if (NotDot(err.insert1))
+    {
+        s << err.insert1
+                << "/";
+    }
+    s << err.insert2
+            << "\" is not an inner class.";
 
     return s.Array();
 }
@@ -5357,3 +5355,8 @@ wchar_t *SemanticError::PrintCONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS(ErrorInfo &err
 
     return s.Array();
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

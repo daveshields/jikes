@@ -1,6 +1,7 @@
 # Makefile.in generated automatically by automake 1.4a from Makefile.am
 
-# Copyright (C) 1994, 1995-9, 2000 Free Software Foundation, Inc.
+# Copyright 1994, 1995, 1996, 1997, 1998, 1999, 2000
+# Free Software Foundation, Inc.
 # This Makefile.in is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
 # with or without modifications, as long as this notice is preserved.
@@ -163,6 +164,100 @@ tuple.h \
 unzip.h \
 zip.h
 
+
+# Include the java.g file in the .tar ball
+
+EXTRA_DIST = java.g
+
+# The rest of the entries in this file are dependencies
+# manually extracted from the .h and .cpp files. We
+# can not use the automatic dependency tracking in
+# automake because it has some serious portability
+# problems with non-gcc compilers. If dependencies
+# are changed in the source code, these deps will
+# need to be manually updated.
+
+access_h = access.h platform.h
+
+ast_h = ast.h platform.h stream.h symbol.h set.h
+
+bytecode_h = bytecode.h platform.h tuple.h ast.h class.h \
+option.h long.h op.h segment.h
+
+
+case_h = case.h platform.h
+
+class_h = class.h platform.h semantic.h access.h tuple.h op.h
+
+code_h = code.h platform.h
+
+control_h = control.h platform.h option.h symbol.h tuple.h set.h
+
+depend_h = depend.h platform.h
+
+diagnose_h = diagnose.h platform.h parser.h jikesapi.h
+
+double_h = double.h platform.h
+
+error_h = error.h platform.h stream.h tuple.h jikesapi.h
+
+getclass_h = getclass.h platform.h semantic.h long.h double.h
+
+javaact_h = javaact.h
+
+javadcl_h = javadcl.h
+
+javadef_h = javadef.h
+
+javaprs_h = javaprs.h
+
+javasym_h = javasym.h
+
+jikesapi_h = jikesapi.h
+
+long_h = long.h platform.h
+
+lookup_h = lookup.h platform.h tuple.h long.h double.h
+
+lpginput_h = lpginput.h platform.h stream.h
+
+op_h = op.h platform.h tuple.h
+
+option_h = option.h platform.h code.h tuple.h jikesapi.h
+
+parser_h = parser.h platform.h lpginput.h
+
+platform_h = platform.h config.h tuple.h
+
+scanner_h = scanner.h platform.h code.h javadef.h javasym.h stream.h
+
+segment_h = segment.h platform.h tuple.h
+
+semantic_h = semantic.h platform.h ast.h diagnose.h error.h  \
+symbol.h control.h tuple.h set.h
+
+
+set_h = set.h platform.h symbol.h
+
+spell_h = spell.h platform.h case.h
+
+stream_h = stream.h platform.h javadef.h javasym.h tuple.h \
+tab.h lookup.h jikesapi.h
+
+
+symbol_h = symbol.h platform.h code.h stream.h option.h lookup.h \
+depend.h access.h tuple.h case.h
+
+
+tab_h = tab.h platform.h
+
+table_h = table.h platform.h symbol.h
+
+tuple_h = tuple.h jikesapi.h
+
+unzip_h = unzip.h platform.h
+
+zip_h = zip.h platform.h tuple.h unzip.h
 subdir = src
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
 CONFIG_HEADER = config.h
@@ -200,22 +295,9 @@ LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 DIST_SOURCES =  $(jikes_SOURCES)
 HEADERS =  $(noinst_HEADERS)
 
-depcomp = $(SHELL) $(top_srcdir)/depcomp
-DEP_FILES =  @AMDEP@ $(DEPDIR)/ast.Po $(DEPDIR)/body.Po \
-$(DEPDIR)/bytecode.Po $(DEPDIR)/case.Po $(DEPDIR)/code.Po \
-$(DEPDIR)/control.Po $(DEPDIR)/decl.Po $(DEPDIR)/definite.Po \
-$(DEPDIR)/depend.Po $(DEPDIR)/diagnose.Po $(DEPDIR)/double.Po \
-$(DEPDIR)/dump.Po $(DEPDIR)/error.Po $(DEPDIR)/expr.Po \
-$(DEPDIR)/getclass.Po $(DEPDIR)/incrmnt.Po $(DEPDIR)/init.Po \
-$(DEPDIR)/javaact.Po $(DEPDIR)/jikes.Po $(DEPDIR)/jikesapi.Po \
-$(DEPDIR)/long.Po $(DEPDIR)/lookup.Po $(DEPDIR)/lpginput.Po \
-$(DEPDIR)/modifier.Po $(DEPDIR)/op.Po $(DEPDIR)/option.Po \
-$(DEPDIR)/parser.Po $(DEPDIR)/platform.Po $(DEPDIR)/scanner.Po \
-$(DEPDIR)/segment.Po $(DEPDIR)/set.Po $(DEPDIR)/stream.Po \
-$(DEPDIR)/symbol.Po $(DEPDIR)/system.Po $(DEPDIR)/tab.Po \
-$(DEPDIR)/unparse.Po $(DEPDIR)/unzip.Po $(DEPDIR)/zip.Po
+depcomp = 
 DIST_COMMON =  $(noinst_HEADERS) ./stamp-h.in Makefile.am Makefile.in \
-config.h.in depcomp
+config.h.in
 
 
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -228,7 +310,7 @@ all: all-redirect
 .SUFFIXES:
 .SUFFIXES: .c .cpp .h .o .obj
 $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ Makefile.am $(top_srcdir)/configure.in $(ACLOCAL_M4) 
-	cd $(top_srcdir) && $(AUTOMAKE) --gnu src/Makefile
+	cd $(top_srcdir) && $(AUTOMAKE) --gnu --ignore-deps src/Makefile
 
 Makefile: $(srcdir)/Makefile.in  $(top_builddir)/config.status
 	cd $(top_builddir) \
@@ -309,6 +391,10 @@ maintainer-clean-compile:
 jikes$(EXEEXT): $(jikes_OBJECTS) $(jikes_DEPENDENCIES)
 	@rm -f jikes$(EXEEXT)
 	$(CXXLINK) $(jikes_LDFLAGS) $(jikes_OBJECTS) $(jikes_LDADD) $(LIBS)
+.cpp.o:
+	$(CXXCOMPILE) -c -o $@ $<
+.cpp.obj:
+	$(CXXCOMPILE) -c -o $@ `cygpath -w $<`
 
 tags: TAGS
 
@@ -342,69 +428,6 @@ distclean-tags:
 	-rm -f TAGS ID
 
 maintainer-clean-tags:
-
-@AMDEP@include $(DEPDIR)/ast.Po
-@AMDEP@include $(DEPDIR)/body.Po
-@AMDEP@include $(DEPDIR)/bytecode.Po
-@AMDEP@include $(DEPDIR)/case.Po
-@AMDEP@include $(DEPDIR)/code.Po
-@AMDEP@include $(DEPDIR)/control.Po
-@AMDEP@include $(DEPDIR)/decl.Po
-@AMDEP@include $(DEPDIR)/definite.Po
-@AMDEP@include $(DEPDIR)/depend.Po
-@AMDEP@include $(DEPDIR)/diagnose.Po
-@AMDEP@include $(DEPDIR)/double.Po
-@AMDEP@include $(DEPDIR)/dump.Po
-@AMDEP@include $(DEPDIR)/error.Po
-@AMDEP@include $(DEPDIR)/expr.Po
-@AMDEP@include $(DEPDIR)/getclass.Po
-@AMDEP@include $(DEPDIR)/incrmnt.Po
-@AMDEP@include $(DEPDIR)/init.Po
-@AMDEP@include $(DEPDIR)/javaact.Po
-@AMDEP@include $(DEPDIR)/jikes.Po
-@AMDEP@include $(DEPDIR)/jikesapi.Po
-@AMDEP@include $(DEPDIR)/long.Po
-@AMDEP@include $(DEPDIR)/lookup.Po
-@AMDEP@include $(DEPDIR)/lpginput.Po
-@AMDEP@include $(DEPDIR)/modifier.Po
-@AMDEP@include $(DEPDIR)/op.Po
-@AMDEP@include $(DEPDIR)/option.Po
-@AMDEP@include $(DEPDIR)/parser.Po
-@AMDEP@include $(DEPDIR)/platform.Po
-@AMDEP@include $(DEPDIR)/scanner.Po
-@AMDEP@include $(DEPDIR)/segment.Po
-@AMDEP@include $(DEPDIR)/set.Po
-@AMDEP@include $(DEPDIR)/stream.Po
-@AMDEP@include $(DEPDIR)/symbol.Po
-@AMDEP@include $(DEPDIR)/system.Po
-@AMDEP@include $(DEPDIR)/tab.Po
-@AMDEP@include $(DEPDIR)/unparse.Po
-@AMDEP@include $(DEPDIR)/unzip.Po
-@AMDEP@include $(DEPDIR)/zip.Po
-
-mostlyclean-depend:
-
-clean-depend:
-
-distclean-depend:
-	-rm -rf $(DEPDIR)
-
-maintainer-clean-depend:
-
-@AMDEP@CXXDEPMODE = @CXXDEPMODE@
-
-.cpp.o:
-@AMDEP@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
-@AMDEP@	depfile='$(DEPDIR)/$*.Po' tmpdepfile='$(DEPDIR)/$*.TPo' @AMDEPBACKSLASH@
-@AMDEP@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-	$(CXXCOMPILE) -c -o $@ `test -f $< || echo '$(srcdir)/'`$<
-
-.cpp.obj:
-@AMDEP@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
-@AMDEP@	depfile='$(DEPDIR)/$*.Po' tmpdepfile='$(DEPDIR)/$*.TPo' @AMDEPBACKSLASH@
-@AMDEP@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-	$(CXXCOMPILE) -c -o $@ `cygpath -w $<`
-
 
 distdir = $(top_builddir)/$(PACKAGE)-$(VERSION)/$(subdir)
 
@@ -461,26 +484,24 @@ distclean-generic:
 maintainer-clean-generic:
 	-rm -f Makefile.in
 mostlyclean-am:  mostlyclean-hdr mostlyclean-binPROGRAMS \
-		mostlyclean-compile mostlyclean-tags mostlyclean-depend \
+		mostlyclean-compile mostlyclean-tags \
 		mostlyclean-generic
 
 mostlyclean: mostlyclean-am
 
 clean-am:  clean-hdr clean-binPROGRAMS clean-compile clean-tags \
-		clean-depend clean-generic mostlyclean-am
+		clean-generic mostlyclean-am
 
 clean: clean-am
 
 distclean-am:  distclean-hdr distclean-binPROGRAMS distclean-compile \
-		distclean-tags distclean-depend distclean-generic \
-		clean-am
+		distclean-tags distclean-generic clean-am
 
 distclean: distclean-am
 
 maintainer-clean-am:  maintainer-clean-hdr maintainer-clean-binPROGRAMS \
 		maintainer-clean-compile maintainer-clean-tags \
-		maintainer-clean-depend maintainer-clean-generic \
-		distclean-am
+		maintainer-clean-generic distclean-am
 	@echo "This command is intended for maintainers to use;"
 	@echo "it deletes files that may require special tools to rebuild."
 
@@ -491,17 +512,13 @@ mostlyclean-binPROGRAMS distclean-binPROGRAMS clean-binPROGRAMS \
 maintainer-clean-binPROGRAMS uninstall-binPROGRAMS install-binPROGRAMS \
 mostlyclean-compile distclean-compile clean-compile \
 maintainer-clean-compile tags mostlyclean-tags distclean-tags \
-clean-tags maintainer-clean-tags mostlyclean-depend distclean-depend \
-clean-depend maintainer-clean-depend distdir info-am info dvi-am dvi \
-check check-am installcheck-am installcheck all-recursive-am \
-install-exec-am install-exec install-data-am install-data install-am \
-install uninstall-am uninstall all-redirect all-am all install-strip \
+clean-tags maintainer-clean-tags distdir info-am info dvi-am dvi check \
+check-am installcheck-am installcheck all-recursive-am install-exec-am \
+install-exec install-data-am install-data install-am install \
+uninstall-am uninstall all-redirect all-am all install-strip \
 installdirs mostlyclean-generic distclean-generic clean-generic \
 maintainer-clean-generic clean mostlyclean distclean maintainer-clean
 
-
-# FIXME : This is currently broken, need to ask Tom why is does not work.
-#INCLUDES = -I$(srcdir) -I.
 
 # Special rule to remake autogenerated Java files
 
@@ -509,6 +526,105 @@ jikespg:
 	cd $(srcdir)
 	jikespg java.g
 	rm -f java.l
+
+# This rule will build an efence malloc debugging enabled version of jikes.
+# This should be used for testing purposes only! It is really slow!
+
+efence:
+	@rm -f jikes$(EXEEXT)
+	$(CXXLINK) -o jikes$(EXEEXT) $(jikes_OBJECTS) -lstdc++ -lefence
+
+ast.$(OBJEXT) : ast.cpp $(ast_h)
+
+body.$(OBJEXT) : body.cpp $(platform_h) $(semantic_h) $(control_h)
+
+bytecode.$(OBJEXT) : bytecode.cpp $(bytecode_h) $(ast_h) $(class_h) \
+$(control_h) $(semantic_h) $(stream_h) $(symbol_h) $(table_h)
+
+case.$(OBJEXT) : case.cpp $(case_h)
+
+code.$(OBJEXT) : code.cpp $(code_h)
+
+control.$(OBJEXT) : control.cpp $(control_h) $(scanner_h) $(parser_h) \
+$(semantic_h) $(error_h) $(bytecode_h) $(case_h)
+
+decl.$(OBJEXT) : decl.cpp $(platform_h) $(semantic_h) $(control_h) \
+$(depend_h) $(table_h) $(tuple_h)
+
+definite.$(OBJEXT) : definite.cpp $(platform_h) $(semantic_h)
+
+depend.$(OBJEXT) : depend.cpp $(depend_h) $(control_h) $(ast_h) \
+$(semantic_h)
+
+diagnose.$(OBJEXT) : diagnose.cpp $(diagnose_h) $(control_h) \
+$(semantic_h) $(case_h) $(spell_h)
+
+double.$(OBJEXT) : double.cpp $(double_h) $(long_h)
+
+dump.$(OBJEXT) : dump.cpp $(platform_h) $(javasym_h) $(control_h) \
+$(stream_h)
+
+error.$(OBJEXT) : error.cpp $(error_h) $(control_h) $(semantic_h) \
+$(ast_h)
+
+expr.$(OBJEXT) : expr.cpp $(platform_h) $(double_h) $(parser_h) \
+$(semantic_h) $(control_h) $(table_h) $(tuple_h) $(spell_h)
+
+getclass.$(OBJEXT) : getclass.cpp $(getclass_h) $(control_h) \
+$(semantic_h) $(access_h) $(zip_h) $(jikesapi_h)
+
+incrmnt.$(OBJEXT) : incrmnt.cpp $(platform_h) $(control_h) \
+$(scanner_h) $(parser_h) $(semantic_h) $(case_h) $(set_h)
+
+init.$(OBJEXT) : init.cpp $(platform_h) $(semantic_h) $(control_h)
+
+javaact.$(OBJEXT) : javaact.cpp $(platform_h) $(parser_h) $(ast_h) $(javaact_h)
+
+jikes.$(OBJEXT) : jikes.cpp $(platform_h) $(jikesapi_h)
+
+jikesapi.$(OBJEXT) : jikesapi.cpp $(platform_h) $(control_h) $(jikesapi_h)
+
+long.$(OBJEXT) : long.cpp $(long_h) $(double_h)
+
+lookup.$(OBJEXT) : $(lookup_cpp) $(lookup_h) $(control_h) \
+$(symbol_h) $(code_h) $(ast_h) $(case_h)
+
+lpginput.$(OBJEXT) : lpginput.cpp $(lpginput_h) $(javadcl_h)
+
+modifier.$(OBJEXT) : modifier.cpp $(platform_h) $(semantic_h)
+
+op.$(OBJEXT) : op.cpp $(op_h)
+
+option.$(OBJEXT) : option.cpp $(option_h) $(javasym_h) \
+$(error_h) $(case_h)
+
+parser.$(OBJEXT) : parser.cpp $(parser_h) $(ast_h)
+
+platform.$(OBJEXT) : platform.cpp $(platform_h) $(long_h) $(double_h)
+
+scanner.$(OBJEXT) : scanner.cpp $(scanner_h) $(control_h) $(error_h)
+
+segment.$(OBJEXT) : segment.cpp $(segment_h)
+
+set.$(OBJEXT) : set.cpp $(set_h)
+
+stream.$(OBJEXT) : stream.cpp $(stream_h) $(code_h) $(zip_h) \
+$(symbol_h) $(control_h) $(semantic_h)
+
+system.$(OBJEXT) : system.cpp $(platform_h) $(control_h) \
+$(semantic_h) $(zip_h)
+
+symbol.$(OBJEXT) : symbol.cpp $(symbol_h) $(stream_h) \
+$(control_h) $(ast_h) $(semantic_h) $(table_h) $(zip_h) \
+$(set_h) $(case_h)
+
+tab.$(OBJEXT) : tab.cpp $(tab_h)
+
+unparse.$(OBJEXT) : unparse.cpp $(ast_h)
+
+unzip.$(OBJEXT) : unzip.cpp $(unzip_h)
+
+zip.$(OBJEXT) : zip.cpp $(zip_h) $(control_h) $(symbol_h)
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

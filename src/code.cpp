@@ -1,7 +1,7 @@
 #include "code.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 char Code::code[39424] =
@@ -12051,3 +12051,8 @@ char *Code::base[512] =
     &code[38272] - 64512,  &code[38400] - 64640,  &code[38528] - 64768,  &code[38656] - 64896,
     &code[38784] - 65024,  &code[38912] - 65152,  &code[39040] - 65280,  &code[39168] - 65408,
 };
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

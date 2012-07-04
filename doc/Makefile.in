@@ -1,6 +1,7 @@
 # Makefile.in generated automatically by automake 1.4a from Makefile.am
 
-# Copyright (C) 1994, 1995-9, 2000 Free Software Foundation, Inc.
+# Copyright 1994, 1995, 1996, 1997, 1998, 1999, 2000
+# Free Software Foundation, Inc.
 # This Makefile.in is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
 # with or without modifications, as long as this notice is preserved.
@@ -83,11 +84,7 @@ man_MANS = jikes.1
 docdir = $(prefix)/doc/${PACKAGE}-${VERSION}
 
 doc_DATA = \
-contrib.html \
-jikes.gif \
-jikes.html \
-license.htm \
-news.html
+license.htm
 
 
 EXTRA_DIST = $(man_MANS) $(doc_DATA)
@@ -102,6 +99,7 @@ MANS = $(man_MANS)
 NROFF = nroff
 DATA =  $(doc_DATA)
 
+depcomp = 
 DIST_COMMON =  Makefile.am Makefile.in
 
 
@@ -111,7 +109,7 @@ GZIP_ENV = --best
 all: all-redirect
 .SUFFIXES:
 $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ Makefile.am $(top_srcdir)/configure.in $(ACLOCAL_M4) 
-	cd $(top_srcdir) && $(AUTOMAKE) --gnu doc/Makefile
+	cd $(top_srcdir) && $(AUTOMAKE) --gnu --ignore-deps doc/Makefile
 
 Makefile: $(srcdir)/Makefile.in  $(top_builddir)/config.status
 	cd $(top_builddir) \

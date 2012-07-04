@@ -1,4 +1,4 @@
-// $Id: ast.cpp,v 1.25 2000/07/25 11:32:31 mdejong Exp $
+// $Id: ast.cpp,v 1.27 2001/01/10 16:49:43 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,8 +10,8 @@
 
 #include "ast.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 #ifdef JIKES_DEBUG
@@ -2347,3 +2347,8 @@ AstAssignmentExpression::~AstAssignmentExpression()
     //    delete left_hand_side;
     //    delete expression;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

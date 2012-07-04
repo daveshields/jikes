@@ -1,4 +1,4 @@
-// $Id: semantic.h,v 1.34 2000/07/25 11:32:33 mdejong Exp $
+// $Id: semantic.h,v 1.35 2001/01/05 09:13:21 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -26,7 +26,7 @@
 #endif
 */
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -1316,7 +1316,7 @@ inline void Semantic::AddStringConversionDependence(TypeSymbol *type, LexStream:
          AddDependence(ThisType(), control.Double(), tok);
 }
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

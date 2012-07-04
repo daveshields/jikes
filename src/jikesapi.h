@@ -1,5 +1,5 @@
 /*
- * $Id: jikesapi.h,v 1.7 2000/05/05 02:24:43 lord Exp $
+ * $Id: jikesapi.h,v 1.11 2001/01/16 22:52:40 mdejong Exp $
  */
 
 #ifndef _JIKES_API_H_FLAG_
@@ -9,19 +9,21 @@ class JikesOption
 {    
  public:
     
-    char *classpath    ;
-    char *directory    ;
-    char *encoding     ;
-    
-    bool nowrite;
-    bool deprecation;
-    bool O;
-    bool g;
-    bool verbose;
-    bool depend;
-    bool nowarn;
-    bool old_classpath_search_order;
-    bool zero_defect;
+    char *classpath;
+    char *directory;
+    char *encoding;
+
+    // Each of these fields is a boolean value
+    // 0 if false, non-zero if true
+    int nowrite;
+    int deprecation;
+    int O;
+    int g;
+    int verbose;
+    int depend;
+    int nowarn;
+    int old_classpath_search_order;
+    int zero_defect;
 
     virtual ~JikesOption();
 
@@ -87,8 +89,11 @@ class JikesAPI
      * corresponding to given command line parameters.
      *
      * @return list of java file names found on command line
+     * Caller should not attempt to manage the memory returned
+     * by this method as it can be freed during another call
+     * to parseOptions() or when this object is destroyed.
      */
-    virtual char ** parseOptions(int argc, char **argv) ;
+    virtual char** parseOptions(int argc, char **argv) ;
 
     /**
      * Compile given list ofiles using current compiler options.
@@ -131,7 +136,7 @@ class JikesAPI
             virtual  ~FileWriter() {}
             
             size_t    write(const unsigned char *data, size_t size);
-            virtual  bool      isValid()                         = 0;
+            virtual  int      isValid()                         = 0;
             
     private:
             
@@ -146,7 +151,11 @@ class JikesAPI
     
  private:
 
+    void cleanupOptions(); // Helper to delete option and parsedOptions
+
     JikesOption *option;
+    char **parsedOptions;
+
     static JikesAPI *instance;
 };
 

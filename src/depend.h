@@ -1,4 +1,4 @@
-// $Id: depend.h,v 1.10 2000/07/25 11:32:32 mdejong Exp $
+// $Id: depend.h,v 1.11 2001/01/05 09:13:20 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -14,7 +14,7 @@
 // Also included in platform.h but that might change
 //#include "tuple.h"
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -144,7 +144,7 @@ private:
     Tuple<TypeSymbol *> &type_list;
 };
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

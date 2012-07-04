@@ -1,4 +1,4 @@
-// $Id: bytecode.cpp,v 1.50 2000/07/25 11:32:31 mdejong Exp $
+// $Id: bytecode.cpp,v 1.54 2001/02/18 23:21:18 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -32,8 +32,8 @@
 #endif
 */
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 void ByteCode::CompileClass()
@@ -415,9 +415,9 @@ void ByteCode::CompileClass()
          AstInterfaceDeclaration *interface_declaration = unit_type -> declaration -> InterfaceDeclarationCast();
          int n = (class_declaration ? class_declaration -> NumInterfaces()
                                     : interface_declaration -> NumInterfaceMemberDeclarations());
-         Ast *left = (class_declaration ? class_declaration -> Interface(0)
+         Ast *left = (class_declaration ? (Ast *) class_declaration -> Interface(0)
                                         : interface_declaration -> InterfaceMemberDeclaration(0)),
-             *right = (class_declaration ? class_declaration -> Interface(n - 1)
+             *right = (class_declaration ? (Ast *) class_declaration -> Interface(n - 1)
                                          : interface_declaration -> InterfaceMemberDeclaration(n - 1));
 
          this_semantic.ReportSemError(SemanticError::INTERFACES_OVERFLOW,
@@ -3448,6 +3448,9 @@ void ByteCode::EmitCast(TypeSymbol *dest_type, TypeSymbol *source_type)
                                                                                               : dest_type == this_control.byte_type
                                                                                                            ? OP_I2B
                                                                                                            : OP_I2S); // short_type
+            // If the type we wanted to cast to could not be matched then
+            // the cast is invalid. For example, one might be trying
+            // to cast an int to a Object.
             assert(op_kind != OP_I2S || dest_type == this_control.short_type);
 
             PutOp(op_kind);
@@ -5482,3 +5485,8 @@ void ByteCode::PrintCode()
     return;
 }
 #endif
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

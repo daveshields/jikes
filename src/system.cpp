@@ -1,4 +1,4 @@
-// $Id: system.cpp,v 1.30 2000/07/27 20:27:07 mdejong Exp $
+// $Id: system.cpp,v 1.33 2001/01/10 16:49:45 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,8 +12,8 @@
 #include "semantic.h"
 #include "zip.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 //
@@ -125,7 +125,7 @@ void Control::FindPathsToDirectory(PackageSymbol *package)
                             strcat(directory_name, StringConstant::U8S__SL);
                         strcat(directory_name, package -> Utf8Name());
 
-                        if (::SystemIsDirectory(directory_name))
+                        if (SystemIsDirectory(directory_name))
                             subdirectory_symbol = owner_directory_symbol -> InsertDirectorySymbol(package -> Identity());
 
                         delete [] directory_name;
@@ -161,7 +161,7 @@ void Control::FindPathsToDirectory(PackageSymbol *package)
                             strcat(directory_name, StringConstant::U8S__SL);
                         strcat(directory_name, package -> Utf8Name());
 
-                        if (::SystemIsDirectory(directory_name))
+                        if (SystemIsDirectory(directory_name))
                             directory_symbol = path_symbol -> RootDirectory() -> InsertDirectorySymbol(package -> Identity());
                         delete [] directory_name;
                     }
@@ -447,7 +447,7 @@ void Control::ProcessPath()
     system_table = new SystemTable();
     struct stat status;
     //FIXME: need to check for stat errors
-    if ((::SystemStat(dot_name_symbol -> Utf8Name(), &status) == 0) && (status.st_mode & JIKES_STAT_S_IFDIR))
+    if ((SystemStat(dot_name_symbol -> Utf8Name(), &status) == 0) && (status.st_mode & JIKES_STAT_S_IFDIR))
         system_table -> InsertDirectorySymbol(status.st_dev, status.st_ino, default_directory);
 
 #elif defined(WIN32_FILE_SYSTEM)
@@ -492,7 +492,7 @@ void Control::ProcessPath()
             delete [] input_name;
 #endif
             char *head;
-            for (head = path; path < path_tail && *path != ::PathSeparator(); path++)
+            for (head = path; path < path_tail && *path != PathSeparator(); path++)
                 ;
             *path = U_NULL; // If a seperator was encountered, replace it by \0 to terminate the string.
             int input_name_length = path - head;
@@ -576,7 +576,7 @@ void Control::ProcessPath()
                 //
                 // Check whether or not the path points to a system directory. If not, assume it's a zip file
                 //
-                if (::SystemIsDirectory(head))
+                if (SystemIsDirectory(head))
                 {
                     DirectorySymbol *dot_directory = ProcessSubdirectories(input_name, input_name_length);
                     unnamed_package -> directory.Next() = dot_directory;
@@ -695,19 +695,19 @@ DirectorySymbol *Control::GetOutputDirectory(FileSymbol *file_symbol)
             strcat(directory_name, utf8_name);
             delete [] utf8_name;
 
-            if (! ::SystemIsDirectory(directory_name)) // The directory does not yet exist.
+            if (! SystemIsDirectory(directory_name)) // The directory does not yet exist.
             {
                 for (char *ptr = &directory_name[directory_prefix_length + 1]; *ptr; ptr++)
                 {
                     if (*ptr == U_SLASH) // all the slashes in a package_name are forward slashes
                     {
                         *ptr = U_NULL;
-                        if (! ::SystemIsDirectory(directory_name))
-                            ::SystemMkdir(directory_name);
+                        if (! SystemIsDirectory(directory_name))
+                            SystemMkdir(directory_name);
                         *ptr = U_SLASH; // restore slash
                     }
                 }
-                ::SystemMkdir(directory_name);
+                SystemMkdir(directory_name);
             }
         }
 
@@ -943,4 +943,8 @@ TypeSymbol *Control::GetType(PackageSymbol *package, wchar_t *name)
 
     return type;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
 

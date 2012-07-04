@@ -1,4 +1,4 @@
-// $Id: option.cpp,v 1.43 2000/07/30 22:56:31 mdejong Exp $
+// $Id: option.cpp,v 1.52 2001/02/24 22:19:24 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -22,8 +22,8 @@
 #include <sys/cygwin.h>
 #endif
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 //
@@ -33,7 +33,7 @@ bool ArgumentExpander::ArgumentExpanded(Tuple<char *> &arguments, char *file_nam
 {
     struct stat status;
     FILE *afile = fopen(file_name, "r");
-    if (afile && (::SystemStat(file_name, &status) == 0))
+    if (afile && (SystemStat(file_name, &status) == 0))
     {
         char *buffer = new char[status.st_size + 2];
         int file_size = fread(buffer, 1, status.st_size, afile);
@@ -164,9 +164,6 @@ void Option::SaveCurrentDirectoryOnDisk(char c)
 
 
 Option::Option(ArgumentExpander &arguments) :
-#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
-                                              converter(NULL),
-#endif
                                               first_file_index(arguments.argc),
                                               debug_trap_op(0),
                                               debug_dump_lex(false),
@@ -223,8 +220,8 @@ Option::Option(ArgumentExpander &arguments) :
             {
                 classpath = arguments.argv[++i];
 		
-                /* Create a copy of the -classpath argument so we can modify
-                   this copy and delete it later in ~JikesOption */
+                // Create a copy of the -classpath argument so we can modify
+                //   this copy and delete it later in ~JikesOption
                 classpath_buffer = new char[strlen(classpath)+1];
                 strcpy(classpath_buffer, classpath);
                 classpath = classpath_buffer;
@@ -239,30 +236,22 @@ Option::Option(ArgumentExpander &arguments) :
             }
             else if (strcmp(arguments.argv[i], "-depend") == 0 || strcmp(arguments.argv[i], "-Xdepend") == 0)
                  depend = true;
+#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
             else if (strcmp(arguments.argv[i], "-encoding") == 0 && ((i + 1) < arguments.argc))
             {
-#if defined(HAVE_LIB_ICU_UC)
-                encoding = new char[strlen(arguments.argv[++i]) + 1];
-                strcpy(encoding, arguments.argv[i]);
-                UErrorCode err=U_ZERO_ERROR;
-                converter=ucnv_open(encoding, &err);
-                if(!converter)
-                    bad_options.Next() = new OptionError(SemanticError::UNSUPPORTED_ENCODING, encoding); 
-#elif defined(HAVE_ICONV_H)
-                encoding = new char[strlen(arguments.argv[++i]) + 1];
-                strcpy(encoding, arguments.argv[i]);
-                converter=iconv_open("utf-16", encoding);
-                if(converter==(iconv_t)-1)
-                {
-                    converter = NULL;
-                    bad_options.Next() = new OptionError(SemanticError::UNSUPPORTED_ENCODING, encoding); 
-                }
-#else
-                bad_options.Next() = new OptionError(SemanticError::UNSUPPORTED_OPTION, "-encoding"); 
                 i++;
-#endif
+                encoding = new char[strlen(arguments.argv[i]) + 1];
+                strcpy(encoding, arguments.argv[i]);
+                if (! Stream::IsSupportedEncoding(encoding))
+                {
+                    bad_options.Next() =
+                        new OptionError(SemanticError::UNSUPPORTED_ENCODING, encoding);
+                    encoding = NULL;
+                }
+
                 continue;
             }
+#endif // defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
             else if (strcmp(arguments.argv[i],"-verbose") == 0)
                  verbose = true;
             else if (strcmp(arguments.argv[i],"-g") == 0)
@@ -412,7 +401,9 @@ Option::Option(ArgumentExpander &arguments) :
                  makefile = true;
                  dependence_report=true;
                  full_check = true;
-                 dependence_report_name = &arguments.argv[i][4];
+		 dependence_report_name =
+		     new char[strlen(&arguments.argv[i][4]) + 1];
+		 strcpy(dependence_report_name, &arguments.argv[i][4]);
             }
             else if (strcmp(arguments.argv[i], "+O") == 0)
             {
@@ -538,15 +529,17 @@ Option::~Option()
     for (int i = 0; i < bad_options.Length(); i++)
         delete bad_options[i];
 
+    delete [] dependence_report_name;
+
 #ifdef WIN32_FILE_SYSTEM
     for (char c = 'a'; c <= 'z'; c++)
         delete [] current_directory[c];
 #endif
 
-// Currently we use ICU even if iconv is present.
-#if defined(HAVE_ICONV_H) && !defined(HAVE_LIB_ICU_UC)
-    if(converter)
-        iconv_close(converter);
-#endif
     return;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

@@ -1,4 +1,4 @@
-// $Id: op.h,v 1.7 2000/07/25 11:32:33 mdejong Exp $
+// $Id: op.h,v 1.8 2001/01/05 09:13:20 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -13,7 +13,7 @@
 #include "platform.h"
 #include "tuple.h"
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -282,7 +282,7 @@ private:
     static void opline(Tuple<cp_info *> &, char *, int, int, char *, char *, char *, int, int);
 };
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

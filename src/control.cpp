@@ -1,4 +1,4 @@
-// $Id: control.cpp,v 1.36 2000/07/25 11:32:32 mdejong Exp $
+// $Id: control.cpp,v 1.39 2001/01/10 16:49:44 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -15,8 +15,8 @@
 #include "bytecode.h"
 #include "case.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 Control::Control(char **arguments, Option &option_) : return_code(0),
@@ -210,7 +210,7 @@ Control::Control(char **arguments, Option &option_) : return_code(0),
     //
     if (option.directory)
     {
-        if (! ::SystemIsDirectory(option.directory))
+        if (! SystemIsDirectory(option.directory))
         {
             for (char *ptr = option.directory; *ptr; ptr++)
             {
@@ -219,16 +219,16 @@ Control::Control(char **arguments, Option &option_) : return_code(0),
                 {
                     *ptr = U_NULL;
 
-                    if (! ::SystemIsDirectory(option.directory))
-                        ::SystemMkdir(option.directory);
+                    if (! SystemIsDirectory(option.directory))
+                        SystemMkdir(option.directory);
 
                     *ptr = delimiter;
                 }
             }
 
-            ::SystemMkdir(option.directory);
+            SystemMkdir(option.directory);
 
-            if (! ::SystemIsDirectory(option.directory))
+            if (! SystemIsDirectory(option.directory))
             {
                 int length = strlen(option.directory);
                 wchar_t *name = new wchar_t[length + 1];
@@ -417,7 +417,7 @@ Control::Control(char **arguments, Option &option_) : return_code(0),
         {
             if (option.dependence_report)
             {
-                FILE *outfile = ::SystemFopen(option.dependence_report_name, "w");
+                FILE *outfile = SystemFopen(option.dependence_report_name, "w");
                 if (outfile == NULL)
                     Coutput << "*** Cannot open file " << option.dependence_report_name << "\n";
                 else
@@ -651,7 +651,7 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
 
         DirectorySymbol *directory_symbol = NULL;
         struct stat status;
-        if ((::SystemStat(input_name, &status) == 0) && (status.st_mode & JIKES_STAT_S_IFDIR))
+        if ((SystemStat(input_name, &status) == 0) && (status.st_mode & JIKES_STAT_S_IFDIR))
             directory_symbol = system_table -> FindDirectorySymbol(status.st_dev, status.st_ino);
 
         if (! directory_symbol)
@@ -1387,3 +1387,8 @@ void Control::CleanUp(FileSymbol *file_symbol)
 
     return;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

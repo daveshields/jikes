@@ -1,4 +1,4 @@
-// $Id: modifier.cpp,v 1.12 2000/07/25 11:32:33 mdejong Exp $
+// $Id: modifier.cpp,v 1.14 2001/01/10 16:49:45 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,8 +11,8 @@
 #include "platform.h"
 #include "semantic.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 AccessFlags Semantic::ProcessClassModifiers(AstClassDeclaration *class_declaration)
@@ -1092,3 +1092,8 @@ AccessFlags Semantic::ProcessConstantModifiers(AstFieldDeclaration *field_declar
 
     return access_flags;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

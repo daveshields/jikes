@@ -1,4 +1,4 @@
-// $Id: long.cpp,v 1.16 2000/07/25 11:32:33 mdejong Exp $
+// $Id: long.cpp,v 1.20 2001/02/14 21:25:11 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,17 +11,10 @@
 #include "long.h"
 #include "double.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
-//
-// Note that the minimum long value, (0x80000000, 0x00000000), can be represented
-// exactly in a double field. However, the maximum long value, (0x7FFFFFFF, 0xFFFFFFFF)
-// cannot. To test if the double quantity "a" fits in a long range we will test whether
-// or not:
-//         (a >= min_long) && (-a > min_long)
-//
 BaseLong::operator LongInt()
 {
     return LongInt(HighWord(), LowWord());
@@ -34,57 +27,82 @@ BaseLong::operator ULongInt()
 
 bool BaseLong::operator== (BaseLong op)
 {
-    // FIXME : these tests could be sped up by comparing the value directly
-    return ((HighWord() == op.HighWord()) && (LowWord() == op.LowWord()));
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return value.words == op.value.words;
+#else
+    return value.word[0] == op.value.word[0]
+        && value.word[1] == op.value.word[1];
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 bool BaseLong::operator!= (BaseLong op)
 {
-    // FIXME : these tests could be sped up by comparing the value directly
-    return ((HighWord() != op.HighWord()) || (LowWord() != op.LowWord()));
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return value.words != op.value.words;
+#else
+    return value.word[0] != op.value.word[0]
+        || value.word[1] != op.value.word[1];
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 bool BaseLong::operator!()
 {
-    return (*this == 0);
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return !value.words;
+#else
+    return (HighWord() != 0) || (LowWord() != 0);
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 BaseLong BaseLong::operator~()
 {
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return BaseLong(~value.words);
+#else
     return BaseLong(~HighWord(), ~LowWord());
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 BaseLong BaseLong::operator^ (BaseLong op)
 {
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return BaseLong(value.words ^ op.value.words);
+#else
     return BaseLong(HighWord() ^ op.HighWord(), LowWord() ^ op.LowWord());
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong& BaseLong::operator^= (BaseLong op)
+BaseLong &BaseLong::operator^= (BaseLong op)
 {
-    *this = *this ^ op;
-    return *this;
+    return *this = *this ^ op;
 }
 
 BaseLong BaseLong::operator| (BaseLong op)
 {
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return BaseLong(value.words | op.value.words);
+#else
     return BaseLong(HighWord() | op.HighWord(), LowWord() | op.LowWord());
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong& BaseLong::operator|= (BaseLong op)
+BaseLong &BaseLong::operator|= (BaseLong op)
 {
-    *this = *this | op;
-    return *this;
+    return *this = *this | op;
 }
 
 BaseLong BaseLong::operator& (BaseLong op)
 {
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return BaseLong(value.words & op.value.words);
+#else
     return BaseLong(HighWord() & op.HighWord(), LowWord() & op.LowWord());
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong& BaseLong::operator&= (BaseLong op)
+BaseLong &BaseLong::operator&= (BaseLong op)
 {
-    *this = *this & op;
-    return *this;
+    return *this = *this & op;
 }
 
 bool BaseLong::operator&& (BaseLong op)
@@ -97,55 +115,56 @@ bool BaseLong::operator|| (BaseLong op)
     return (*this != 0) || (op != 0);
 }
 
-BaseLong BaseLong::operator<< (BaseLong op)
+BaseLong BaseLong::operator<< (int op)
 {
-    u4 n = op.LowWord(); // Always treat this value as positive, since negative values are not allowed
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    // TODO: Does this work correctly?
+    return BaseLong(value.words << op);
+#else
+    u4 n = op; // Always treat this value as positive
 
     //
-    // Note that this function assumes that for two 32-bit integers
-    // x << y, where y = 0, is well-defined and that the result is
-    // the value x. This is true in Ansi-C and C++ but not true in
-    // old versions of C (See Kernighan and Ritchie).
-    // Note also that in shifting a 32-bit word, if y >= 32 then the
-    // result is unpredictable. On Aix, xlC will produce the result 0(good!)
-    // whereas on windows the Microsoft compiler produces the value of x(very bad !).
-    // That is the reason why we have the initial special check for (n == 0).
-    //
-
-    //
-    // gcc-2.95.1 compiler bug prevents use of this implementation.
-    // return (n == 0 ? *this
-    //                : n < 32
-    //                    ? BaseLong((HighWord() << n) | (LowWord() >> (32 - n)), LowWord() << n)
-    //                    : BaseLong(LowWord() << (n - 32), 0));
+    // Correct compilers treat x << 0 as x, and x << 32+ as 0.
+    // But, since not all compilers follow these rules, we special-case on
+    // the shift amount.
     //
     if (n == 0)
-         return *this;
-    else if (n < 32)
-         return BaseLong((HighWord() << n) | (LowWord() >> (32 - n)), LowWord() << n);
-    else return BaseLong(LowWord() << (n - 32), 0);
+        return *this;
+    if (n < 32)
+    {
+        u4 lo = LowWord();
+        return BaseLong((HighWord() << n) | (lo >> (32 - n)), lo << n);
+    }
+    if (n == 32)
+        return BaseLong(LowWord(), 0);
+    if (n >= 64)
+        return BaseLong(0);
+    return BaseLong(LowWord() << (n - 32), 0);
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong& BaseLong::operator<<= (BaseLong op)
+BaseLong &BaseLong::operator<<= (int op)
 {
-    *this = *this << op;
-    return *this;
+    return *this = *this << op;
 }
 
 BaseLong BaseLong::operator+ (BaseLong op)
 {
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return BaseLong(value.words + op.value.words);
+#else
     u4 ushort1 = (LowWord() & 0xFFFF) + (op.LowWord() & 0xFFFF),
        ushort2 = (ushort1 >> 16) + (LowWord() >> 16) + (op.LowWord() >> 16),
        ushort3 = (ushort2 >> 16) + (HighWord() & 0xFFFF) + (op.HighWord() & 0xFFFF),
        ushort4 = (ushort3 >> 16) + (HighWord() >> 16) + (op.HighWord() >> 16);
 
     return BaseLong((ushort3 & 0xFFFF) | (ushort4 << 16), (ushort1 & 0xFFFF) | (ushort2 << 16));
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong& BaseLong::operator+= (BaseLong op)
+BaseLong &BaseLong::operator+= (BaseLong op)
 {
-    *this = *this + op;
-    return *this;
+    return *this = *this + op;
 }
 
 BaseLong BaseLong::operator++ (int dummy)
@@ -157,13 +176,12 @@ BaseLong BaseLong::operator++ (int dummy)
 
 BaseLong BaseLong::operator++ ()
 {
-    *this += 1;
-    return *this;
+    return *this += 1;
 }
 
 BaseLong BaseLong::operator+ ()
 {
-    return(*this);
+    return *this;
 }
 
 BaseLong BaseLong::operator- ()
@@ -176,10 +194,9 @@ BaseLong BaseLong::operator- (BaseLong op)
     return *this + (-op);
 }
 
-BaseLong& BaseLong::operator-= (BaseLong op)
+BaseLong &BaseLong::operator-= (BaseLong op)
 {
-    *this = *this - op;
-    return *this;
+    return *this = *this - op;
 }
 
 BaseLong BaseLong::operator-- (int dummy)
@@ -191,79 +208,54 @@ BaseLong BaseLong::operator-- (int dummy)
 
 BaseLong BaseLong::operator-- ()
 {
-    *this -= 1;
-    return *this;
+    return *this -= 1;
 }
 
 BaseLong BaseLong::operator* (BaseLong op)
 {
-    u4 x0 = this -> LowWord()   & 0xFFFF,
-       x1 = this -> LowWord()  >> 16,
-       x2 = this -> HighWord()  & 0xFFFF,
-       x3 = this -> HighWord() >> 16,
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return BaseLong(value.words * op.value.words);
+#else
+    u4 x0 = LowWord()   & 0xFFFF,
+       x1 = LowWord()  >> 16,
+       x2 = HighWord()  & 0xFFFF,
+       x3 = HighWord() >> 16,
 
        y0 = op.LowWord()   & 0xFFFF,
        y1 = op.LowWord()  >> 16,
        y2 = op.HighWord()  & 0xFFFF,
        y3 = op.HighWord() >> 16;
 
-    BaseLong result = BaseLong(0, x0 * y0),
-             part1  = BaseLong(0, x0 * y1);
-    part1  <<= (1 << 4);
-    result += part1;
-    BaseLong part2  = BaseLong(0, x0 * y2);
-    part2  <<= (2 << 4);
-    result += part2;
-    BaseLong part3  = BaseLong(0, x0 * y3);
-    part3  <<= (3 << 4);
-    result += part3;
+    BaseLong result  = BaseLong(0, x0 * y0),
+             partial = BaseLong(0, x0 * y1);
+    result += partial << 16;
+    partial = BaseLong(0, x0 * y2);
+    result += partial << 32;
+    partial = BaseLong(0, x0 * y3);
+    result += partial << 48;
 
-    BaseLong part4  = BaseLong(0, x1 * y0);
-    part4  <<= (1 << 4);
-    result += part4;
-    BaseLong part5  = BaseLong(0, x1 * y1);
-    part5  <<= (2 << 4);
-    result += part5;
-    BaseLong part6  = BaseLong(0, x1 * y2);
-    part6  <<= (3 << 4);
-    result += part6;
-    BaseLong part7  = BaseLong(0, x1 * y3);
-    part7  <<= (4 << 4);
-    result += part7;
+    partial = BaseLong(0, x1 * y0);
+    result += partial << 16;
+    partial = BaseLong(0, x1 * y1);
+    result += partial << 32;
+    partial = BaseLong(0, x1 * y2);
+    result += partial << 48;
 
-    BaseLong part8  = BaseLong(0, x2 * y0);
-    part8  <<= (2 << 4);
-    result += part8;
-    BaseLong part9  = BaseLong(0, x2 * y1);
-    part9  <<= (3 << 4);
-    result += part9;
-    BaseLong part10 = BaseLong(0, x2 * y2);
-    part10 <<= (4 << 4);
-    result += part10;
-    BaseLong part11 = BaseLong(0, x2 * y3);
-    part11 <<= (5 << 4);
-    result += part11;
+    partial = BaseLong(0, x2 * y0);
+    result += partial << 32;
+    partial = BaseLong(0, x2 * y1);
+    result += partial << 48;
 
-    BaseLong part12 = BaseLong(0, x3 * y0);
-    part12 <<= (3 << 4);
-    result += part12;
-    BaseLong part13 = BaseLong(0, x3 * y1);
-    part13 <<= (4 << 4);
-    result += part13;
-    BaseLong part14 = BaseLong(0, x3 * y2);
-    part14 <<= (5 << 4);
-    result += part14;
-    BaseLong part15 = BaseLong(0, x3 * y3);
-    part15 <<= (6 << 4);
-    result += part15;
+    partial = BaseLong(0, x3 * y0);
+    result += partial << 48;
 
     return result;
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong& BaseLong::operator*= (BaseLong op)
+BaseLong &BaseLong::operator*= (BaseLong op)
 {
-    *this = *this * op;
-    return *this;
+    return *this = *this * op;
 }
 
 
@@ -282,14 +274,18 @@ BaseLong::BaseLong(i4 a)
     //
     // Since the carry bit is not guaranteed to ripple, we cannot use this code.
     //
-    //        a << 31;
+    //        a >> 31;
     //
     setHighAndLowWords(a < 0 ? 0xFFFFFFFF : 0x00000000, a);
 }
 
 
-void BaseLong::Divide(BaseLong dividend, BaseLong divisor, BaseLong &quotient, BaseLong &remainder)
+void BaseLong::Divide(BaseLong &dividend, BaseLong &divisor, BaseLong &quotient, BaseLong &remainder)
 {
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    quotient = BaseLong(dividend.value.words / divisor.value.words);
+    remainder = BaseLong(dividend.value.words % divisor.value.words);
+#else
     u4 high = dividend.HighWord(),
        low  = dividend.LowWord(),
        remainder_high = 0;
@@ -322,284 +318,269 @@ void BaseLong::Divide(BaseLong dividend, BaseLong divisor, BaseLong &quotient, B
     quotient = BaseLong(high, low);
 
     return;
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 
-ULongInt& ULongInt::operator/= (ULongInt op)
+ULongInt &ULongInt::operator/= (ULongInt op)
 {
-    *this = *this / op;
-    return *this;
+    return *this = *this / op;
 }
 
 
 ULongInt ULongInt::operator/ (ULongInt op)
 {
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return ULongInt(value.words / op.value.words);
+#else
     BaseLong quotient,
              remainder;
 
     Divide(*this, op, quotient, remainder);
 
     return quotient;
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 ULongInt ULongInt::operator% (ULongInt op)
 {
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return ULongInt(value.words % op.value.words);
+#else
     BaseLong quotient,
              remainder;
 
     Divide(*this, op, quotient, remainder);
 
     return remainder;
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-ULongInt& ULongInt::operator%= (ULongInt op)
+ULongInt &ULongInt::operator%= (ULongInt op)
 {
-    *this = *this % op;
-    return *this;
+    return *this = *this % op;
 }
 
 
-ULongInt ULongInt::operator>> (ULongInt op)
+ULongInt ULongInt::operator>> (int op)
 {
-    u4 n = op.LowWord(); // Always treat this value as positive, since negative values are not allowed
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    // TODO: Does this work correctly?
+    return ULongInt(value.words >> op);
+#else
+    u4 n = op; // Always treat this value as positive
 
     //
-    // Note that this function assumes that for two 32-bit integers
-    // x >> y, where y = 0, is well-defined and that the result is
-    // the value x. This is true in Ansi-C and C++ but not true in
-    // old versions of C (See Kernighan and Ritchie).
-    // Note also that in shifting a 32-bit word, if y >= 32 then the
-    // result is unpredictable. On Aix, xlC will produce the result 0(good!)
-    // whereas on windows the Microsoft compiler produces the value of x(very bad !).
-    // That is the reason why we have the initial special check for (n == 0).
+    // Correct compilers treat x >> as x, and x >> 32+ as 0.
+    // But, since not all compilers follow these rules, we special-case on
+    // the shift amount.
     //
 
-    //
-    // gcc-2.95.1 compiler bug prevents this implementation
-    // return (n == 0 ? *this
-    //                : n < 32
-    //                    ? ULongInt(HighWord() >> n, (HighWord() << (32 - n)) | (LowWord() >> n))
-    //                    : ULongInt(0, HighWord() >> (n - 32)));
-    //
     if (n == 0)
-         return *this;
-    else if (n < 32)
-         return ULongInt(HighWord() >> n, (HighWord() << (32 - n)) | (LowWord() >> n));
-    else return ULongInt(0, HighWord() >> (n - 32));
+        return *this;
+    if (n < 32)
+    {
+        u4 hi = HighWord();
+        return ULongInt(hi >> n, (hi << (32 - n)) | (LowWord() >> n));
+    }
+    if (n == 32)
+        return ULongInt(0, HighWord());
+    if (n >= 64)
+        return ULongInt(0);
+    return ULongInt(0, HighWord() >> (n - 32));
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-ULongInt& ULongInt::operator>>= (ULongInt op)
+ULongInt &ULongInt::operator>>= (int op)
 {
-    *this = *this >> op;
-    return *this;
+    return *this = *this >> op;
 }
 
 bool ULongInt::operator< (ULongInt op)
 {
-    return (HighWord() == op.HighWord() ? LowWord() < op.LowWord() : HighWord() < op.HighWord());
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return value.words < op.value.words;
+#else
+    u4 a = HighWord(), b = op.HighWord();
+    return (a == b ? LowWord() < op.LowWord() : a < b);
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 bool ULongInt::operator<= (ULongInt op)
 {
-    return (HighWord() == op.HighWord() ? LowWord() <= op.LowWord() : HighWord() <= op.HighWord());
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return value.words <= op.value.words;
+#else
+    return (*this < op) || (*this == op);
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 bool ULongInt::operator> (ULongInt op)
 {
-    return (HighWord() == op.HighWord() ? LowWord() > op.LowWord() : HighWord() > op.HighWord());
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return value.words > op.value.words;
+#else
+    u4 a = HighWord(), b = op.HighWord();
+    return (a == b ? LowWord() > op.LowWord() : a > b);
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 bool ULongInt::operator>= (ULongInt op)
 {
-    return (HighWord() == op.HighWord() ? LowWord() >= op.LowWord() : HighWord() >= op.HighWord());
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return value.words >= op.value.words;
+#else
+    return (*this > op) || (*this == op);
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-// This conversion from double to LongInt is performed according to the rules
-// specified in the Java Language Specification.
-//
-LongInt::LongInt(IEEEfloat a) : BaseLong(0,0)
+LongInt *LongInt::max_long_const = NULL;
+LongInt *LongInt::min_long_const = NULL;
+
+LongInt::LongInt(IEEEfloat f)
 {
-    IEEEdouble value = IEEEdouble(a);
-    LongInt lvalue = LongInt(value);
-    setHighAndLowWords(lvalue.HighWord(), lvalue.LowWord());
-    return;
+    *this = f.LongValue();
 }
 
-LongInt::LongInt(IEEEdouble a) : BaseLong (0,0)
+LongInt::LongInt(IEEEdouble d)
 {
-    if (a.HighWord() == 0x7fffffff && a.LowWord() == 0xffffffff) // if NaN
-        ; // *this is already initialized to 0
-    else if (a.HighWord() == 0xfff00000 && a.LowWord() == 0x00000000) // if NEGATIVE_INFINITY())
-        setHighWord(0x80000000);
-    else if (a.HighWord() == 0x7ff00000 && a.LowWord() == 0x00000000) // if POSITIVE_INFINITY())
-    {
-        setHighAndLowWords(0x7FFFFFFF, 0xFFFFFFFF);
-    }
-    else
-    {
-        double b = floor(a.DoubleValue() < 0.0 ? -a.DoubleValue() : a.DoubleValue()); // DSDouble
-
-        if (b < IEEEdouble::min_long.DoubleValue())
-            setHighWord(0x80000000);
-        else if (-b <= IEEEdouble::min_long.DoubleValue())
-        {
-            setHighAndLowWords(0x7FFFFFFF, 0xFFFFFFFF);
-        }
-        else
-        {
-            LongInt multiplier = 1;
-
-            while (b > 0.0)
-            {
-                *this += (multiplier * (int) fmod(b, 10));
-                b /=  10.0;
-                multiplier *= 10;
-            }
-
-            if (a < 0.0)
-                *this = -(*this);
-        }
-    }
-
-    return;
+    *this = d.LongValue();
 }
 
 LongInt LongInt::operator/ (LongInt op)
 {
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    bool negative_dividend = (i8) value.words < 0,
+         negative_divisor  = (i8) op.value.words < 0;
+
+    u8 a = negative_dividend ? -(i8) value.words : value.words,
+       b = negative_divisor  ? -(i8) op.value.words : op.value.words;
+
+    return LongInt((negative_dividend ^ negative_divisor) ? -(a / b) : a / b);
+#else
     bool negative_dividend = ((HighWord() & 0x80000000) != 0),
          negative_divisor  = ((op.HighWord() & 0x80000000) != 0);
 
-    BaseLong a = (negative_dividend ? -(*this) : +(*this)),
-             b = (negative_divisor  ? -(op)    : +(op)),
+    BaseLong a = (negative_dividend ? -(*this) : *this),
+             b = (negative_divisor  ? -(op)    : op),
              quotient,
              remainder;
 
     Divide(a, b, quotient, remainder);
 
     return (negative_dividend ^ negative_divisor ? -quotient : quotient);
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-LongInt& LongInt::operator/= (LongInt op)
+LongInt &LongInt::operator/= (LongInt op)
 {
-    *this = *this / op;
-    return *this;
+    return *this = *this / op;
 }
 
 LongInt LongInt::operator% (LongInt op)
 {
-    bool negative_dividend = ((HighWord() & 0x80000000) != 0),
-    negative_divisor  = ((op.HighWord() & 0x80000000) != 0);
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    bool negative_dividend = (i8) value.words < 0,
+         negative_divisor  = (i8) op.value.words < 0;
 
-    BaseLong a = (negative_dividend ? -(*this) : +(*this)),
-             b = (negative_divisor  ? -(op)    : +(op)),
+    u8 a = negative_dividend ? -(i8) value.words : value.words,
+       b = negative_divisor  ? -(i8) op.value.words : op.value.words;
+
+    return LongInt(negative_dividend ? -(a % b) : a % b);
+#else
+    bool negative_dividend = ((HighWord() & 0x80000000) != 0),
+         negative_divisor  = ((op.HighWord() & 0x80000000) != 0);
+
+    BaseLong a = (negative_dividend ? -(*this) : *this),
+             b = (negative_divisor  ? -(op)    : op),
              quotient,
              remainder;
 
     Divide(a, b, quotient, remainder);
 
     return (negative_dividend ? -remainder : remainder);
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-LongInt& LongInt::operator%= (LongInt op)
+LongInt &LongInt::operator%= (LongInt op)
 {
-    *this = *this % op;
-    return *this;
+    return *this = *this % op;
 }
 
-LongInt LongInt::operator>> (LongInt op)
+LongInt LongInt::operator>> (int op)
 {
-    u4 n = op.LowWord(); // Always treat this value as positive, since negative values are not allowed
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    // TODO: Does this work correctly?
+    return LongInt((u8) ((i8) value.words >> op));
+#else
+    u4 n = op; // Always treat this value as positive
 
     //
-    // Note that this function assumes that for two 32-bit integers
-    // x >> y, where y = 0, is well-defined and that the result is
-    // the value x. This is true in Ansi-C and C++ but not true in
-    // old versions of C (See Kernighan and Ritchie).
-    //
-    // Note also that in shifting a 32-bit word, if y >= 32 then the
-    // result is unpredictable. On Aix, xlC will produce the result 0(good!)
-    // whereas on windows the Microsoft compiler produces the value of x(very bad !).
-    // That is the reason why we have the initial special check for (n == 0).
-    //
-    // Finally, note that the right-shitfting of the HighWord is not guaranteed
-    // to ripple the carry bit. Whether or not the carry-bit is rippled is
-    // implementation-dependent. Therefore, this implementation is designed to
-    // shift the "long" quantity in a similar manner as the system (compiler + environement)
-    // used to compile it would shift a 32-bit signed integer.
+    // Correct compilers treat x >> 0 as x, and x >> 32+ as x<0 ? -1 : 0.
+    // But, since not all compilers follow these rules, we special-case on
+    // the shift amount.
     //
 
-    //
-    // gcc-2.95.1 compiler bug prevents use of this implementation
-    // return (n == 0 ? *this
-    //                : n < 32
-    //                    ? LongInt(((i4) HighWord()) >> n, (HighWord() << (32 - n)) | (LowWord() >> n))
-    //                    : LongInt(((i4) HighWord()) >> 31, ((i4) HighWord()) >> (n - 32)));
-    //
     if (n == 0)
-         return *this;
-    else if (n < 32)
-         return LongInt(((i4) HighWord()) >> n, (HighWord() << (32 - n)) | (LowWord() >> n));
-    else return LongInt(((i4) HighWord()) >> 31, ((i4) HighWord()) >> (n - 32));
+        return *this;
+    
+    i4 hi = HighWord();
+    u4 shift = (hi & 0x80000000) ? 0xffffffff : 0;
+
+    if (n < 32)
+         return LongInt(hi >> n, (hi << (32 - n)) | (LowWord() >> n));
+    if (n == 32)
+        return LongInt(shift, hi);
+    if (n >= 64)
+        return LongInt(shift, shift);
+    return LongInt(shift, hi >> (n - 32));
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-LongInt& LongInt::operator>>= (LongInt op)
+LongInt &LongInt::operator>>= (int op)
 {
-    *this = *this >> op;
-    return *this;
+    return *this = *this >> op;
 }
 
 bool LongInt::operator< (LongInt op)
 {
-    return (HighWord() == op.HighWord() ? LowWord() < op.LowWord() : (i4) HighWord() < (i4) op.HighWord());
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return (i8) value.words < (i8) op.value.words;
+#else
+    i4 a = HighWord(), b = op.HighWord();
+    return (a == b) ? LowWord() < op.LowWord() : a < b;
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 bool LongInt::operator<= (LongInt op)
 {
-    return (HighWord() == op.HighWord() ? LowWord() <= op.LowWord() : (i4) HighWord() <= (i4) op.HighWord());
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return (i8) value.words <= (i8) op.value.words;
+#else
+    return (*this < op) || (*this == op);
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 bool LongInt::operator> (LongInt op)
 {
-    return (HighWord() == op.HighWord() ? LowWord() > op.LowWord() : (i4) HighWord() > (i4) op.HighWord());
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return (i8) value.words > (i8) op.value.words;
+#else
+    i4 a = HighWord(), b = op.HighWord();
+    return (a == b) ? LowWord() > op.LowWord() : a > b;
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
 bool LongInt::operator>= (LongInt op)
 {
-    return (HighWord() == op.HighWord() ? LowWord() >= op.LowWord() : (i4) HighWord() >= (i4) op.HighWord());
+#ifdef HAVE_UNSIGNED_LONG_LONG
+    return (i8) value.words >= (i8) op.value.words;
+#else
+    return (*this > op) || (*this == op);
+#endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-double ULongInt::Double()
-{
-    double val = 0.0,
-           multiplier = 1.0;
-    ULongInt num = *this;
-
-    while (num > 0)
-    {
-        val += (multiplier * (num % 10).LowWord());
-        num /= 10;
-        multiplier *= 10.0;
-    }
-
-    return val;
-}
-
-double LongInt::Double()
-{
-    double val;
-    ULongInt num;
-
-    if (*this < 0)
-    {
-        num = -(*this);
-        val = -num.Double();
-    }
-    else
-    {
-        num = *this;
-        val = num.Double();
-    }
-
-    return val;
-}
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
 

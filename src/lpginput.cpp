@@ -1,4 +1,4 @@
-// $Id: lpginput.cpp,v 1.6 2000/07/25 11:32:33 mdejong Exp $
+// $Id: lpginput.cpp,v 1.8 2001/01/10 16:49:45 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,6 +11,3 @@
 #include "lpginput.h"
 #include "javadcl.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
-#endif

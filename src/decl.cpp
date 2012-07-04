@@ -1,4 +1,4 @@
-// $Id: decl.cpp,v 1.48 2000/07/30 23:29:13 mdejong Exp $
+// $Id: decl.cpp,v 1.50 2001/01/10 16:49:44 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -14,8 +14,8 @@
 #include "table.h"
 #include "tuple.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 //
@@ -4600,3 +4600,8 @@ void Semantic::ProcessBlockInitializers(AstClassBody *class_body)
 
     return;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

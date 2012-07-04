@@ -1,4 +1,4 @@
-// $Id: scanner.cpp,v 1.15 2000/07/25 11:32:33 mdejong Exp $
+// $Id: scanner.cpp,v 1.17 2001/01/10 16:49:45 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -11,8 +11,8 @@
 #include "control.h"
 #include "error.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 int (*Scanner::scan_keyword[13]) (wchar_t *p1) =
@@ -1575,4 +1575,7 @@ void Scanner::ClassifyNonAsciiUnicode()
     return;
 }
 
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
 

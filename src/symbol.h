@@ -1,4 +1,4 @@
-// $Id: symbol.h,v 1.37 2000/07/25 11:32:33 mdejong Exp $
+// $Id: symbol.h,v 1.39 2001/01/05 09:13:21 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -20,7 +20,7 @@
 #include "tuple.h"
 #include "case.h"
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -184,6 +184,9 @@ public:
     //
     // These fields are used for buffer "files".
     //
+
+    // FIXME: This field does not seem to be set anywhere,
+    // but it is read in symbol.cpp and stream.cpp
     char *buffer;
 
     LexStream *lex_stream;
@@ -211,7 +214,7 @@ public:
     virtual ~FileSymbol()
     {
         delete [] file_name;
-        if (buffer) delete buffer;
+        delete [] buffer;
         delete lex_stream;
     }
 
@@ -2307,7 +2310,7 @@ inline SymbolTable *BlockSymbol::Table()
     }
 #endif
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

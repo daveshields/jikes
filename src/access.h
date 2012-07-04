@@ -1,4 +1,4 @@
-// $Id: access.h,v 1.11 2000/07/25 11:32:31 mdejong Exp $
+// $Id: access.h,v 1.12 2001/01/05 09:13:19 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -13,7 +13,7 @@
 
 #include "platform.h"
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -97,7 +97,7 @@ public:
 #endif
 };
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

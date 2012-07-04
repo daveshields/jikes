@@ -1,3 +1,696 @@
+2000-03-01  Mo DeJong  <mdejong@redhat.com>
+
+	Released Jikes 1.13.
+
+2001-02-27  Mo DeJong  <mdejong@redhat.com>
+
+	* TODO: Add note about reverted patch.
+	* doc/jikes.1: Fixup man page.
+	* src/jikes.cpp: Fixup copyright year.
+
+2001-02-27  Mo DeJong  <mdejong@redhat.com>
+
+	* HACKING:
+	* INSTALL:
+	* README:
+	* jikes.spec: Update URLs and
+	instructions for 1.13 release.
+	* doc/Makefile.am: Removed
+	file in doc dir.
+	* doc/contrib.html:
+	* doc/jikes.gif:
+	* doc/jikes.html:
+	* doc/news.html: Removed.
+
+2001-02-26  Mo DeJong  <mdejong@redhat.com>
+
+	* src/jikesapi.cpp (DefaultFileReader):
+	Use const_cast operator only when
+	HAVE_CONST_CAST is defined. Comment
+	out an assert that depends on the
+	binary mode of SystemFread.
+
+2001-02-24  Mo DeJong  <mdejong@redhat.com>
+
+	* src/option.cpp:
+	* src/option.h:
+	Revert @file patch applied on 2001-02-17.
+
+2001-02-21  Christopher Abbey  <cabbey@bresnanlink.net>
+
+	* src/option.cpp (Option):
+	Reset the encoding field to NULL
+	in the case where the -encoding
+	option is not valid.
+
+2001-02-20  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/stream.cpp (Stream, ~Stream):
+	Fix typos that break the build on
+	systems without iconv or icu.
+
+2001-02-19  Mo DeJong  <mdejong@redhat.com>
+
+	* src/jikes.cpp (main): Only print the
+	-encoding option when compiled with
+	iconv or icu support.
+	* src/option.cpp (Option):
+	Move iconv and icu code to Stream class.
+	Use encoding field to store the name
+	of the encoding in use. Remove converter
+	field, use encoding instead. Call
+	Stream::IsSupportedEncoding method to
+	determine if a given encoding is valid.
+	* src/option.h (Option): Remove
+	iconv and icu headers and the
+	converter field.
+	* src/platform.cpp (U8S_command_format):
+	Only print the -encoding option when
+	compiled with iconv or icu support.
+	* src/stream.cpp (Stream, ~Stream,
+	IsSupportedEncoding, SetEncoding,
+	DestroyEncoding, LexStream,
+	ProcessInputAscii, ProcessInputUnicode):
+	Extract new Stream class from LexStream.
+	Stream will handle encoding issues.
+	* src/stream.h (Stream): Add iconv
+	and icu includes. Add Stream class,
+	LexStream inherits from Stream.
+
+2001-02-18  Andrew M. Inggs  <aminggs@yahoo.co.uk>
+
+	* src/jikes.cpp (main): Update
+	Jikes home page URL in help output.
+
+2001-02-18  Mo DeJong  <mdejong@redhat.com>
+
+	* src/platform.cpp (LongToDecString):
+	Add cast to ?: operator to make
+	the gcc shipped with Red Hat 7 happy.
+
+2001-02-18  Mo DeJong  <mdejong@redhat.com>
+
+	* src/body.cpp (ProcessSuperCall): Fix
+	assert caused by cast expression that
+	was attempting to cast a primitive
+	type argument in a super invocation
+ 	to the synthetic argument type.
+	Jikes passes a synthetic class
+	type as the first argument to a
+	synthetic constructor. It was
+	failing to take that into account
+	when checking the argument types.
+	* src/bytecode.cpp (EmitCast):
+	Add comment explaining why an
+	assert might be generated on an
+	invalid cast of a primitive type.
+
+2001-02-17  Mo DeJong  <mdejong@redhat.com>
+
+	* src/option.cpp (ArgumentExpanded,
+	ArgumentExpander): Rename the
+	ArgumentExpanded method to
+	ExpandAtFileArgument. Implement
+	proper string trimming for
+	file names in ExpandAtFileArgument.
+	Reformat some lines so they fit
+	in one screen width.
+	* src/option.h (ArgumentExpander):
+	Update class declaration to reflect
+	ExpandAtFileArgument name change.
+
+2001-02-16  Mo DeJong  <mdejong@redhat.com>
+
+	* src/lookup.cpp (EvaluateConstant,
+	IsConstant, CheckStringConstant):
+	Use type safe utf8_literals
+	tuple instead of using a nasty bug
+	causing down cast in EvaluateConstant.
+	Check that a given final is of
+	type string before adding it to
+	the utf8_literals tuple in
+	IsConstant. If dynamic_cast
+	and RTTI are supported, use
+	them to better diagnose invalid
+	input conditions. Modify the
+  	IsConstant method to pass a
+	pointer to the String type so
+	that the expression type can
+	be checked. This change fixes
+	a bunch of core dumps related
+	to string concatenation.
+	* src/lookup.h (Utf8LiteralTable):
+	Change Tuple<AstExpression *> *expr
+	to Tuple<Utf8LiteralValue *> *utf8_literals.
+	The new name is more descriptive and a
+	type safe container avoid some nasty
+	down casting problems later on.
+
+2001-02-16  Mo DeJong  <mdejong@redhat.com>
+
+	* TODO: Update items in the TODO list.
+	* acinclude.m4: Add new macro files.
+	* configure.in: Add macros to check
+	for C++ style casts, the explicit
+	keyword, and RTTI (disabled by default).
+	Reorder a couple of macro calls so
+	that header check appear together.
+	* src/double.h:
+	* src/long.h: Add explicit keyword
+	to some constructor declarations.
+	* src/m4/ac_cxx_const_cast.m4:
+	* src/m4/ac_cxx_dynamic_cast.m4:
+	* src/m4/ac_cxx_explicit.m4:
+	* src/m4/ac_cxx_reinterpret_cast.m4:
+	* src/m4/ac_cxx_rtti.m4:
+	* src/m4/ac_cxx_static_cast.m4:
+	Add new macro files.
+
+2001-02-16  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/platform.cpp (LongToDecString,
+	FloatToString, DoubleToString):
+	Fix typo in abs calculation.
+	Avoid core dump during float
+	and double conversion.
+
+2001-02-15  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/expr.cpp (ProcessPLUS): Prevent
+	core dump when the + operator is
+	applied to the null literal.
+
+2001-02-15  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/error.cpp (StaticInitializer,
+	PrintINTERFACE_NOT_INNER_CLASS):
+	* src/error.h (SemanticError):
+	Add INTERFACE_NOT_INNER_CLASS error message.
+	* src/expr.cpp (
+	ProcessClassInstanceCreationExpression):
+	Generate error and return from function
+	when a qualified class instance creation
+	expression makes use of an interface.
+	See JLS 15.9.1 for more information.
+
+2001-02-14  Mo DeJong  <mdejong@redhat.com>
+
+	* acinclude.m4: Add the M4 macro file
+	ac_cxx_member_constants.m4.
+	* configure.in: Add parens to all
+	macro invocations. Add call to
+	AC_CXX_MEMBER_CONSTANTS.
+	* src/double.cpp:
+	* src/double.h: Check for
+	HAVE_MEMBER_CONSTANTS, use
+	static const members if it
+	is defined. Remove uses of
+	the explicit keyword.
+	* src/long.cpp: Change some
+	bit pattern comparisons to
+	avoid VC++ warning.
+	* src/long.h: Remove uses of
+	the explicit keyword.
+	* src/m4/ac_cxx_member_constants.m4:
+	Add new AC_CXX_MEMBER_CONSTANTS macro.
+
+2001-02-12  Eric Blake  <ebb9@email.byu.edu>
+
+	* configure.in: Add --enable-fp-emulation
+	flag to configure.
+	* src/double.cpp (IEEEFloat, IEEEDouble):
+	* src/double.h (IEEEFloat, IEEEDouble):
+	Add emulation code for IEEE 754 compliance.
+	Rename FloatValue() and DoubleValue() to
+	FloatView(), DoubleView().
+	Remove unused FloatRoundedValue() and
+	DoubleRoundedValue().
+	IEEEDouble now extends BaseLong, for easier
+	manipulation of 64 bit data.
+	Replace Fmodulus() and Divide() with operator%
+	and operator/.
+	Add equals(), hashCode(), and compareTo(), which
+	follow the semantics of java.lang.Float, Double.
+	Add ctor(char *, boolean) to allow detection of
+	underflow or overflow.
+	* src/expr.cpp (ProcessLEFT_SHIFT, ProcessRIGHT_SHIFT,
+	ProcessUNSIGNED_RIGHT_SHIFT, ProcessMOD):
+	Simplify calls to shift operations using
+	unsigned right shift. Simplify calls to double
+	and float modulus to using modulus operator
+	instead of Fmodulus.
+	* src/long.cpp (BaseLong, LongInt, ULongInt):
+	* src/long.h (BaseLong, LongInt, ULongInt):
+	Add use of native 64 bit operations when
+	HAVE_UNSIGNED_LONG_LONG is defined.
+	Fix bugs in shift operators and in multiply.
+	Add hashCode(), which mirrors java.lang.Long.
+	* src/lookup.cpp (LongLiteralTable::Rehash,
+	LongLiteralTable::FindOrInsert,
+	FloatLiteralTable::FindOrInsertFloat,
+	FloatLiteralTable::FindOrInsert,
+	DoubleLiteralTable::FindOrInsertDouble,
+	DoubleLiteralTable::FindOrInsert):
+	Make use of new Hash method to simplify
+	finding of a hash index.
+	Check for NaN when inserting into the float
+	or double table.
+	Use new IEEEfloat and IEEEdouble equals
+	method instead of operator equals.
+	Use new flag in IEEEFloat, IEEEDouble
+	ctors to detect overflow, underflow.
+	* src/lookup.h (Hash::Function,
+	LongLiteralTable::Hash): Use hashCode
+	method for IEEEfloat and IEEEdouble classes.
+	Add new Hash method to LongLiteralTable.
+	* src/platform.cpp (FloatToString,
+	DoubleToString): Replace use of FloatValue
+	with FloatView and DoubleValue with
+	DoubleView.
+	* src/platform.h: Add i8 datatype via
+	signed long long typedef. Fix up some
+	comments that got the ranges wrong.
+
+2001-02-01  Mo DeJong  <mdejong@redhat.com>
+
+	* TODO: Note that deps have been added
+	to Makefile.am.
+	* src/Makefile.am: Add deps for .h files.
+	* src/set.h:
+	* src/tuple.h: Removed unused #includes.
+
+2001-01-31  Mo DeJong  <mdejong@redhat.com>
+
+	* config.guess:
+	* config.sub: Update from GNU sources.
+	* configure.in: Minor comment fixup.
+
+2001-01-31  Mo DeJong  <mdejong@redhat.com>
+
+	* TODO: Update TODO list.
+
+2001-01-28  Mo DeJong  <mdejong@redhat.com>
+
+	* src/jikesapi.cpp (~DefaultFileWriter): Don't
+	call fclose() unless the earlier fopen() worked.
+
+2001-01-26  C. Scott Ananian  <cananian@lesser-magoo.lcs.mit.edu>
+
+	* src/option.cpp (Option, ~Option): Create a copy
+	of the argument string for the dependence_report_name
+	field. Deallocate it when finished.
+
+2001-01-16  Mo DeJong  <mdejong@redhat.com>
+
+	* src/bytecode.cpp: Add additional
+	cast so that both branches of the ?:
+	operator have the same result type.
+	The AT&T compiler generated an error
+	for this case.
+	* src/jikesapi.cpp:
+	* src/jikesapi.h: Use int instead of
+	the bool type in jikesapi.h because
+	bool is not supported by all compilers.
+	* src/platform.h: Move the bool compat
+	typedef before the include of tuple.h
+	because tuple.h uses the bool type.
+	* src/m4/ac_check_wcs_funcs.m4: Check
+	for the wint_t type using out own
+	#include files.
+
+2001-01-14  Christopher Abbey  <cabbey@bresnanlink.net>
+
+	* src/dump.cpp:
+	* src/unparse.cpp: Fix for build problems
+	when JIKES_DEBUG is defined.
+
+2001-01-10  Mo DeJong  <mdejong@redhat.com>
+
+	* src/jikesapi.cpp:
+	* src/platform.h: Move include of
+ 	<fstream> or <fstream.h> to platform.h.
+	* src/unparse.cpp: Comment out headers
+	that are already included in platform.h.
+
+2001-01-10  Mo DeJong  <mdejong@redhat.com>
+
+	* src/stream.cpp (LexStream::LiteralSymbol,
+	LexStream::NameSymbol): Added class qualifier
+	to fix compiler error when LexStream was
+	defined in the Jikes namespace.
+
+2001-01-10  Christopher Abbey  <cabbey@bresnanlink.net>
+
+	* src/jikesapi.cpp: Move DefaultFileReader and
+	DefaultFileWriter classes into the Jikes namespace.
+
+2001-01-10  Mo DeJong  <mdejong@redhat.com>
+
+	* src/ast.cpp:
+	* src/body.cpp:
+	* src/bytecode.cpp:
+	* src/case.cpp:
+	* src/code.cpp:
+	* src/control.cpp:
+	* src/decl.cpp:
+	* src/definite.cpp:
+	* src/depend.cpp:
+	* src/diagnose.cpp:
+	* src/double.cpp:
+	* src/dump.cpp:
+	* src/error.cpp:
+	* src/expr.cpp:
+	* src/getclass.cpp:
+	* src/incrmnt.cpp:
+	* src/init.cpp:
+	* src/javaact.cpp:
+	* src/jikesapi.cpp:
+	* src/long.cpp:
+	* src/lookup.cpp:
+	* src/lpginput.cpp:
+	* src/modifier.cpp:
+	* src/op.cpp:
+	* src/option.cpp:
+	* src/parser.cpp:
+	* src/platform.cpp:
+	* src/scanner.cpp:
+	* src/segment.cpp:
+	* src/set.cpp:
+	* src/stream.cpp:
+	* src/symbol.cpp:
+	* src/system.cpp:
+	* src/tab.cpp:
+	* src/unparse.cpp:
+	* src/unzip.cpp:
+	* src/zip.cpp: Replace "using namespace Jikes"
+	statements with "namespace Jikes { ... }" blocks.
+	This moves most of the classes and methods defined
+	by Jikes into the Jikes namespace.
+
+2001-01-04  Mo DeJong  <mdejong@redhat.com>
+
+	* configure.in: Replace check for
+	namespace support with check for
+	HAVE_JIKES_NAMESPACE env var. If
+	defined, classes and functions will
+	be defined in the Jikes namespace.
+	* src/access.h:
+	* src/ast.cpp:
+	* src/ast.h:
+	* src/body.cpp:
+	* src/bytecode.cpp:
+	* src/bytecode.h:
+	* src/case.cpp:
+	* src/case.h:
+	* src/class.h:
+	* src/code.cpp:
+	* src/code.h:
+	* src/control.cpp:
+	* src/control.h:
+	* src/decl.cpp:
+	* src/definite.cpp:
+	* src/depend.cpp:
+	* src/depend.h:
+	* src/diagnose.cpp:
+	* src/diagnose.h:
+	* src/double.cpp:
+	* src/double.h:
+	* src/dump.cpp:
+	* src/error.cpp:
+	* src/error.h:
+	* src/expr.cpp:
+	* src/getclass.cpp:
+	* src/getclass.h:
+	* src/incrmnt.cpp:
+	* src/init.cpp:
+	* src/javaact.cpp:
+	* src/javaact.h:
+	* src/javadcl.h:
+	* src/javadef.h:
+	* src/javaprs.h:
+	* src/javasym.h:
+	* src/jikes.cpp:
+	* src/jikesapi.cpp:
+	* src/long.cpp:
+	* src/long.h:
+	* src/lookup.cpp:
+	* src/lookup.h:
+	* src/lpginput.cpp:
+	* src/lpginput.h:
+	* src/modifier.cpp:
+	* src/op.cpp:
+	* src/op.h:
+	* src/option.cpp:
+	* src/option.h:
+	* src/parser.cpp:
+	* src/parser.h:
+	* src/platform.cpp:
+	* src/platform.h:
+	* src/scanner.cpp:
+	* src/scanner.h:
+	* src/segment.cpp:
+	* src/segment.h:
+	* src/semantic.h:
+	* src/set.cpp:
+	* src/set.h:
+	* src/spell.h:
+	* src/stream.cpp:
+	* src/stream.h:
+	* src/symbol.cpp:
+	* src/symbol.h:
+	* src/system.cpp:
+	* src/tab.cpp:
+	* src/tab.h:
+	* src/table.h:
+	* src/tuple.h:
+	* src/unparse.cpp:
+	* src/unzip.cpp:
+	* src/unzip.h:
+	* src/zip.cpp:
+	* src/zip.h: Replace check for
+	HAVE_NAMESPACES with HAVE_JIKES_NAMESPACE.
+
+2001-01-03  Mo DeJong  <mdejong@redhat.com>
+
+	* configure.in: Don't check for iostream.h.
+	* src/platform.h: Remove HAVE_IOSTREAM_H
+	test since this file is required. Remove
+	HAVE_NEW and HAVE_NEW_H checks since both
+	of these files are required.
+	* src/m4/ac_cxx_check_set_new_handler.m4:
+	Remove checks for new and new.h headers.
+	Use HAVE_STD instead of HAVE_NEW and
+	HAVE_NEW_H.
+
+2001-01-01  Pascal Davoust  <davoustp@yahoo.com>
+
+	* src/platform.h:
+	* src/m4/ac_cxx_check_set_new_handler.m4: Rework
+	detection and use of VC++ style _set_new_handler().
+	The <new.h> include will always be used when
+	compiling with VC++.
+
+2000-12-29  Andrew G. Tereschenko  <tag@ibis.odessa.ua>
+
+	* src/ast.h:
+	* src/control.cpp:
+	* src/depend.cpp:
+	* src/dump.cpp:
+	* src/jikesapi.cpp:
+	* src/option.cpp:
+	* src/platform.cpp:
+	* src/symbol.cpp:
+	* src/system.cpp:
+	* src/unparse.cpp:
+	* src/zip.cpp: Removed extra :: qualifiers from
+	in front of method and type names.
+
+2000-12-29  Mo DeJong  <mdejong@redhat.com>
+
+	* src/platform.cpp: Fix minor typo in comment. No
+	functional changes made.
+
+2000-12-29  Diane Holt  <holtdl@yahoo.com>
+
+	* src/error.cpp (SemanticError::PrintPACKAGE_NOT_FOUND):
+	Change format of error message printed when a package
+	can not be found. Print the name of the package once
+	and then print each of the paths in the classpath.
+
+2000-12-26  Mo DeJong  <mdejong@redhat.com>
+
+	* src/incrmnt.cpp (Control::IncrementalRecompilation):
+	Use char instead of u1 as the argument passed to
+	the cin.get() method.
+
+2000-12-20  Mo DeJong  <mdejong@redhat.com>
+
+	* src/m4/ac_cxx_check_set_new_handler.m4:
+	* src/m4/ac_cxx_namespaces.m4: Use
+	HAVE_NAMESPACES not HAVE_NAMESPACE.
+
+2000-12-20  Mo DeJong  <mdejong@redhat.com>
+
+	* Makefile.am: Add RPM spec file to
+	`make dist` target.
+	* TODO: Mark TODO items fixed.
+	* src/Makefile.am: Add java.g
+	file to `make dist` target. Fix
+	up efence target.
+
+2000-12-20  Mo DeJong  <mdejong@redhat.com>
+
+	* HACKING: Add new file that gives
+	users a bit more hacking info.
+	* INSTALL: Fix problems with CXXFLAGS
+	and more autotools notes to HACKING.
+	* README: Touch up minor errors,
+	mention the HACKING file.
+	* TODO: Update the TODO list with
+	a number of issues TDB in 1.13.
+
+2000-12-19  Mo DeJong  <mdejong@redhat.com>
+
+	* autogen.sh: Pass the --ignore-deps
+	flag to automake. We don't want to
+	use depcomp, it breaks in too many
+	places.
+	* config.guess:
+	* config.sub: Update guess and sub
+	platform detection files.
+	* configure.in:
+	* jikes.spec: Set version to 1.13.
+	* src/depcomp: Remove depcomp, now
+	that we pass --ignore-deps to automake,
+	it is no longer needed.
+
+2000-12-03  Mo DeJong  <mdejong@redhat.com>
+
+	* src/stream.cpp (ProcessInputUnicode): Use
+	correct form of delete for an array variable.
+
+2000-12-03  Mo DeJong  <mdejong@redhat.com>
+
+	* src/jikesapi.cpp (compile): Revert
+	change that allocated a Control object
+	on the stack.
+
+2000-12-03  Mo DeJong  <mdejong@redhat.com>
+
+	* src/jikesapi.cpp (parseOptions): Revert
+	the change that allocated an ArgumentExpander
+	on the stack. Moving the object onto the
+	stack masked test suite failures, causing
+	them to pass even though memory was getting
+	corrupted. From now on, we should never
+	allocate an object on the stack.
+
+2000-11-29  Mo DeJong  <mdejong@redhat.com>
+
+	* src/jikesapi.h: Re-order instance declaration
+	to avoid compiler warning.
+
+2000-11-29  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/jikesapi.cpp (JikesAPI, parseOptions,
+	cleanupOptions):  Initialize the parsedOptions
+	member to avoid deleting uninitialized memory.
+	Set the parsedOptions member to NULL in
+	cleanupOptions to avoid a double delete of memory.
+	Set the parsedOptions member inside parseOptions()
+	so that it can be deleted later.
+
+2000-11-27  Mo DeJong  <mdejong@redhat.com>
+
+	* src/jikes.cpp (main): Don't attempt to
+	manage memory returned by JikesAPI::parseOptions().
+	* src/jikesapi.cpp (cleanupOptions, parseOptions):
+	Add new method to delete memory allocated to options.
+	Construct an ArgumentExpander on the stack to avoid
+	a memory leak.
+	* src/jikesapi.h (parseOptions, cleanupOptions):
+	Add note to documentation for parseOptions() method.
+	Add declaration of private cleanupOptions() method.
+	* src/symbol.h (~FileSymbol): Call array delete.
+
+2000-11-26  Mo DeJong  <mdejong@redhat.com>
+
+	* src/Makefile.am: Add efence rule. This rule will
+	build an efence malloc debugging version of jikes.
+	* src/error.cpp: Minor code reformat to improve
+	readability. No functional changes made.
+	* src/option.cpp: Minor comment reformat.
+	
+2000-10-28  Mo DeJong  <mdejong@redhat.com>
+
+	* src/Makefile.am: Remove commented out bits.
+
+2000-10-18  Mo DeJong  <mdejong@redhat.com>
+
+	* src/incrmnt.cpp (Control::IncrementalRecompilation):
+	Rewrite incremental compile loop so that only a single
+	character at a time is read.
+
+2000-10-14  Mo DeJong  <mdejong@redhat.com>
+
+	* src/lookup.cpp: Remove #ifdef JIKES_DEBUG
+	blocks from around blocks of code to free memory.
+
+2000-10-14  Mo DeJong  <mdejong@redhat.com>
+
+	* src/jikesapi.cpp (compile): Minor code
+	reformat. Allocate a control instance on
+	the stack instead of the heap.
+	* src/jikesapi.h: Minor code reformat.
+
+2000-10-09  Mo DeJong  <mdejong@redhat.com>
+
+	* acinclude.m4: Include iconv macro file.
+	* configure.in: Move iconv related tests to AC_CHECK_ICONV.
+	* src/stream.cpp (ProcessInputUnicode): Cast the 2nd argument
+	to iconv to a non const if the compiler would generate an error.
+	* src/m4/ac_check_iconv.m4: Add AC_CHECK_ICONV macro.
+
+2000-09-11  Mo DeJong  <mdejong@redhat.com>
+
+	* src/error.cpp (PrintUNREACHABLE_DEFAULT_CATCH_CLAUSE):
+	Reword the error message, hopefully for the last time.
+
+2000-08-23  Andrew G. Tereschenko  <tag@ibis.odessa.ua>
+
+	* src/incrmnt.cpp (IncrementalRecompilation): Both
+	'q' and 'Q' are now acceptable to quit incremental mode.
+
+2000-08-21  Mo DeJong  <mdejong@redhat.com>
+
+	* src/incrmnt.cpp (IncrementalRecompilation): Rewrite
+	the user interaction loop for incremental re-compilation.
+	We now look for the letter 'q', if that is what the user
+	typed, we quit.
+
+2000-08-21  Mo DeJong  <mdejong@redhat.com>
+
+	* src/platform.h (Ostream::setf): Remove
+	the setf method, it is not used anywhere
+	and it causes the build to fail on the Mac.
+
+2000-08-21  Mo DeJong  <mdejong@redhat.com>
+
+	* src/error.cpp (PrintUNREACHABLE_DEFAULT_CATCH_CLAUSE):
+	Reword warning for try block that catches Exception
+	but does not contain a method that can raise a
+	checked exception.
+
+2000-08-13  Chris Abbey <cabbey@bresnanlink.net>
+
+	* src/stream.cpp (~LexStream): Set columns to NULL
+	after deleting it. Don't delete comment_buffer again,
+	it is already done in DestroyInput().
+
+2000-08-01  Mo DeJong  <mdejong@redhat.com>
+
+	Released Jikes 1.12.
+
 2000-07-30  Mo DeJong  <mdejong@redhat.com>
 
 	* jikes.spec: Add default -O3 flag when building

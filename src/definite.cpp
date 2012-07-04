@@ -1,4 +1,4 @@
-// $Id: definite.cpp,v 1.17 2000/07/25 11:32:32 mdejong Exp $
+// $Id: definite.cpp,v 1.19 2001/01/10 16:49:44 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,8 +10,8 @@
 #include "platform.h"
 #include "semantic.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 DefiniteAssignmentSet *Semantic::DefiniteExpression(AstExpression *expr, BitSet &set)
@@ -2341,3 +2341,8 @@ void Semantic::DefiniteVariableInitializer(AstVariableDeclarator *variable_decla
 
     return;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

@@ -1,4 +1,4 @@
-// $Id: segment.cpp,v 1.6 2000/07/25 11:32:33 mdejong Exp $
+// $Id: segment.cpp,v 1.8 2001/01/10 16:49:45 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,8 +10,8 @@
 
 #include "segment.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 u2 &PairSegment::Image(u2 target)
@@ -150,3 +150,8 @@ SegmentPool::~SegmentPool()
     for (int k = 0; k < pair_pool.Length(); k++)
         delete pair_pool[k];
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

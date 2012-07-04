@@ -1,4 +1,4 @@
-// $Id: lookup.h,v 1.20 2000/07/25 11:32:33 mdejong Exp $
+// $Id: lookup.h,v 1.23 2001/02/17 08:08:54 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -23,7 +23,7 @@
 # include <wchar.h>
 #endif
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -100,15 +100,19 @@ public:
         return hash_value;
     }
 
+    inline static unsigned Function(LongInt value)
+    {
+        return value.hashCode();
+    }
+
     inline static unsigned Function(IEEEfloat value)
     {
-        return value.Word();
+        return value.hashCode();
     }
 
     inline static unsigned Function(IEEEdouble value)
     {
-        unsigned result = value.HighWord() + value.LowWord();
-        return result;
+        return value.hashCode();
     }
 };
 
@@ -690,6 +694,8 @@ private:
 
     LiteralValue *bad_value;
 
+    inline static unsigned Hash(LongInt value) { return Hash::Function(value); }
+
     void Rehash();
 };
 
@@ -797,9 +803,9 @@ public:
 
 private:
 
-    Tuple<AstExpression *> *expr;
+    Tuple<Utf8LiteralValue *> *utf8_literals;
     void EvaluateConstant(AstExpression *, int, int);
-    bool IsConstant(AstExpression *);
+    bool IsConstant(AstExpression *, Symbol *);
 
     enum
     {
@@ -820,7 +826,7 @@ private:
     void Rehash();
 };
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

@@ -1,14 +1,15 @@
-dnl aclocal.m4 generated automatically by aclocal 1.4a
+# aclocal.m4 generated automatically by aclocal 1.4a
 
-dnl Copyright (C) 1994, 1995-9, 2000 Free Software Foundation, Inc.
-dnl This file is free software; the Free Software Foundation
-dnl gives unlimited permission to copy and/or distribute it,
-dnl with or without modifications, as long as this notice is preserved.
+# Copyright 1994, 1995, 1996, 1997, 1998, 1999, 2000
+# Free Software Foundation, Inc.
+# This file is free software; the Free Software Foundation
+# gives unlimited permission to copy and/or distribute it,
+# with or without modifications, as long as this notice is preserved.
 
-dnl This program is distributed in the hope that it will be useful,
-dnl but WITHOUT ANY WARRANTY, to the extent permitted by law; without
-dnl even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-dnl PARTICULAR PURPOSE.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY, to the extent permitted by law; without
+# even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE.
 
 dnl If you want to make a new macro available for use
 dnl in configure.in, add the macro file to the src/m4 subdirectory
@@ -28,6 +29,14 @@ builtin(include,src/m4/ac_check_mathlib.m4)
 builtin(include,src/m4/ac_cxx_check_set_new_handler.m4)
 builtin(include,src/m4/ac_check_error_discard_const.m4)
 builtin(include,src/m4/ac_check_wcs_funcs.m4)
+builtin(include,src/m4/ac_check_iconv.m4)
+builtin(include,src/m4/ac_cxx_member_constants.m4)
+builtin(include,src/m4/ac_cxx_explicit.m4)
+builtin(include,src/m4/ac_cxx_rtti.m4)
+builtin(include,src/m4/ac_cxx_const_cast.m4)
+builtin(include,src/m4/ac_cxx_dynamic_cast.m4)
+builtin(include,src/m4/ac_cxx_reinterpret_cast.m4)
+builtin(include,src/m4/ac_cxx_static_cast.m4)
 
 dnl builtin(include,src/m4/)
 
@@ -36,7 +45,9 @@ dnl builtin(include,src/m4/)
 # some checks are only needed if your package does certain things.
 # But this isn't really a big deal.
 
-# serial 2
+# serial 3
+
+AC_PREREQ([2.13])
 
 # AC_PROVIDE_IFELSE(MACRO-NAME, IF-PROVIDED, IF-NOT-PROVIDED)
 # -----------------------------------------------------------
@@ -54,12 +65,11 @@ ifdef([AC_PROVIDE_IFELSE],
 
 # AM_INIT_AUTOMAKE(PACKAGE,VERSION, [NO-DEFINE])
 # ----------------------------------------------
-AC_DEFUN(AM_INIT_AUTOMAKE,
+AC_DEFUN([AM_INIT_AUTOMAKE],
 [dnl We require 2.13 because we rely on SHELL being computed by configure.
-AC_PREREQ([2.13])dnl
 AC_REQUIRE([AC_PROG_INSTALL])dnl
 # test to see if srcdir already configured
-if test "`CDPATH=: && cd $srcdir && pwd`" != "`pwd`" &&
+if test "`CDPATH=:; cd $srcdir && pwd`" != "`pwd`" &&
    test -f $srcdir/config.status; then
   AC_MSG_ERROR([source directory already configured; run "make distclean" there first])
 fi
@@ -83,8 +93,8 @@ AM_MISSING_PROG(AUTOHEADER, autoheader)
 AM_MISSING_PROG(MAKEINFO, makeinfo)
 AM_MISSING_PROG(AMTAR, tar)
 AM_MISSING_INSTALL_SH
-dnl We need awk for the "check" target.  The system "awk" is bad on
-dnl some platforms.
+# We need awk for the "check" target.  The system "awk" is bad on
+# some platforms.
 AC_REQUIRE([AC_PROG_AWK])dnl
 AC_REQUIRE([AC_PROG_MAKE_SET])dnl
 AC_REQUIRE([AM_DEP_TRACK])dnl
@@ -105,7 +115,7 @@ AC_PROVIDE_IFELSE([AC_PROG_CXX],
 # Check to make sure that the build environment is sane.
 #
 
-AC_DEFUN(AM_SANITY_CHECK,
+AC_DEFUN([AM_SANITY_CHECK],
 [AC_MSG_CHECKING([whether build environment is sane])
 # Just in case
 sleep 1
@@ -144,15 +154,15 @@ fi
 rm -f conftest*
 AC_MSG_RESULT(yes)])
 
-dnl AM_MISSING_PROG(NAME, PROGRAM)
-AC_DEFUN(AM_MISSING_PROG, [
+# AM_MISSING_PROG(NAME, PROGRAM)
+AC_DEFUN([AM_MISSING_PROG], [
 AC_REQUIRE([AM_MISSING_HAS_RUN])
 $1=${$1-"${am_missing_run}$2"}
 AC_SUBST($1)])
 
-dnl Like AM_MISSING_PROG, but only looks for install-sh.
-dnl AM_MISSING_INSTALL_SH()
-AC_DEFUN(AM_MISSING_INSTALL_SH, [
+# Like AM_MISSING_PROG, but only looks for install-sh.
+# AM_MISSING_INSTALL_SH()
+AC_DEFUN([AM_MISSING_INSTALL_SH], [
 AC_REQUIRE([AM_MISSING_HAS_RUN])
 if test -z "$install_sh"; then
    install_sh="$ac_aux_dir/install-sh"
@@ -164,13 +174,13 @@ if test -z "$install_sh"; then
 fi
 AC_SUBST(install_sh)])
 
-dnl AM_MISSING_HAS_RUN.
-dnl Define MISSING if not defined so far and test if it supports --run.
-dnl If it does, set am_missing_run to use it, otherwise, to nothing.
+# AM_MISSING_HAS_RUN.
+# Define MISSING if not defined so far and test if it supports --run.
+# If it does, set am_missing_run to use it, otherwise, to nothing.
 AC_DEFUN([AM_MISSING_HAS_RUN], [
 test x"${MISSING+set}" = xset || \
-  MISSING="\${SHELL} `CDPATH=: && cd $ac_aux_dir && pwd`/missing"
-dnl Use eval to expand $SHELL
+  MISSING="\${SHELL} `CDPATH=:; cd $ac_aux_dir && pwd`/missing"
+# Use eval to expand $SHELL
 if eval "$MISSING --run :"; then
   am_missing_run="$MISSING --run "
 else
@@ -180,14 +190,14 @@ else
 fi
 ])
 
-dnl See how the compiler implements dependency checking.
-dnl Usage:
-dnl AM_DEPENDENCIES(NAME)
-dnl NAME is "CC", "CXX" or "OBJC".
+# See how the compiler implements dependency checking.
+# Usage:
+# AM_DEPENDENCIES(NAME)
+# NAME is "CC", "CXX" or "OBJC".
 
-dnl We try a few techniques and use that to set a single cache variable.
+# We try a few techniques and use that to set a single cache variable.
 
-AC_DEFUN(AM_DEPENDENCIES,[
+AC_DEFUN([AM_DEPENDENCIES],[
 AC_REQUIRE([AM_SET_DEPDIR])
 AC_REQUIRE([AM_OUTPUT_DEPENDENCY_COMMANDS])
 ifelse([$1],CC,[
@@ -223,10 +233,13 @@ if test -z "$AMDEP"; then
       ;;
     none) break ;;
     esac
+    # We check with `-c' and `-o' for the sake of the "dashmstdout"
+    # mode.  It turns out that the SunPro C++ compiler does not properly
+    # handle `-M -o', and we need to detect this.
     if depmode="$depmode" \
        source=conftest.c object=conftest.o \
        depfile=conftest.Po tmpdepfile=conftest.TPo \
-       $SHELL $am_depcomp $depcc -c conftest.c 2>/dev/null &&
+       $SHELL $am_depcomp $depcc -c conftest.c -o conftest.o >/dev/null 2>&1 &&
        grep conftest.h conftest.Po > /dev/null 2>&1; then
       am_cv_[$1]_dependencies_compiler_type="$depmode"
       break
@@ -243,10 +256,10 @@ AC_MSG_RESULT($am_cv_[$1]_dependencies_compiler_type)
 AC_SUBST([$1]DEPMODE)
 ])
 
-dnl Choose a directory name for dependency files.
-dnl This macro is AC_REQUIREd in AM_DEPENDENCIES
+# Choose a directory name for dependency files.
+# This macro is AC_REQUIREd in AM_DEPENDENCIES
 
-AC_DEFUN(AM_SET_DEPDIR,[
+AC_DEFUN([AM_SET_DEPDIR],[
 if test -d .deps || mkdir .deps 2> /dev/null || test -d .deps; then
   DEPDIR=.deps
 else
@@ -255,7 +268,7 @@ fi
 AC_SUBST(DEPDIR)
 ])
 
-AC_DEFUN(AM_DEP_TRACK,[
+AC_DEFUN([AM_DEP_TRACK],[
 AC_ARG_ENABLE(dependency-tracking,
 [  --disable-dependency-tracking Speeds up one-time builds
   --enable-dependency-tracking  Do not reject slow dependency extractors])
@@ -280,16 +293,16 @@ subst(AMDEPBACKSLASH)
 popdef([subst])
 ])
 
-dnl Generate code to set up dependency tracking.
-dnl This macro should only be invoked once -- use via AC_REQUIRE.
-dnl Usage:
-dnl AM_OUTPUT_DEPENDENCY_COMMANDS
+# Generate code to set up dependency tracking.
+# This macro should only be invoked once -- use via AC_REQUIRE.
+# Usage:
+# AM_OUTPUT_DEPENDENCY_COMMANDS
 
-dnl
-dnl This code is only required when automatic dependency tracking
-dnl is enabled.  FIXME.  This creates each `.P' file that we will
-dnl need in order to bootstrap the dependency handling code.
-AC_DEFUN(AM_OUTPUT_DEPENDENCY_COMMANDS,[
+#
+# This code is only required when automatic dependency tracking
+# is enabled.  FIXME.  This creates each `.P' file that we will
+# need in order to bootstrap the dependency handling code.
+AC_DEFUN([AM_OUTPUT_DEPENDENCY_COMMANDS],[
 AC_OUTPUT_COMMANDS([
 test x"$AMDEP" != x"" ||
 for mf in $CONFIG_FILES; do
@@ -333,33 +346,39 @@ ac_aux_dir="$ac_aux_dir"])])
 
 # Like AC_CONFIG_HEADER, but automatically create stamp file.
 
-AC_DEFUN(AM_CONFIG_HEADER,
-[AC_PREREQ([2.12])
-AC_CONFIG_HEADER([$1])
-dnl When config.status generates a header, we must update the stamp-h file.
-dnl This file resides in the same directory as the config header
-dnl that is generated.  We must strip everything past the first ":",
-dnl and everything past the last "/".
-AC_OUTPUT_COMMANDS(changequote(<<,>>)dnl
-ifelse(patsubst(<<$1>>, <<[^ ]>>, <<>>), <<>>,
-<<test -z "<<$>>CONFIG_HEADERS" || echo timestamp > patsubst(<<$1>>, <<^\([^:]*/\)?.*>>, <<\1>>)stamp-h<<>>dnl>>,
-<<am_indx=1
-for am_file in <<$1>>; do
-  case " <<$>>CONFIG_HEADERS " in
-  *" <<$>>am_file "*<<)>>
-    echo timestamp > `echo <<$>>am_file | sed -e 's%:.*%%' -e 's%[^/]*$%%'`stamp-h$am_indx
-    ;;
-  esac
-  am_indx=`expr "<<$>>am_indx" + 1`
-done<<>>dnl>>)
-changequote([,]))])
+# serial 3
+
+# When config.status generates a header, we must update the stamp-h file.
+# This file resides in the same directory as the config header
+# that is generated.  We must strip everything past the first ":",
+# and everything past the last "/".
+
+AC_PREREQ([2.12])
+
+AC_DEFUN([AM_CONFIG_HEADER],
+[AC_CONFIG_HEADER([$1])
+  AC_OUTPUT_COMMANDS(
+   ifelse(patsubst([$1], [[^ ]], []),
+	  [],
+	  [test -z "$CONFIG_HEADERS" || echo timestamp >dnl
+	   patsubst([$1], [^\([^:]*/\)?.*], [\1])stamp-h]),
+  [am_indx=1
+  for am_file in $1; do
+    case " $CONFIG_HEADERS " in
+    *" $am_file "*)
+      echo timestamp > `echo $am_file | sed 's%:.*%%;s%[^/]*$%%'`stamp-h$am_indx
+      ;;
+    esac
+    am_indx=\`expr \$am_indx + 1\`
+  done])
+])
 
 # Add --enable-maintainer-mode option to configure.
 # From Jim Meyering
 
 # serial 1
 
-AC_DEFUN(AM_MAINTAINER_MODE,
+AC_DEFUN([AM_MAINTAINER_MODE],
 [AC_MSG_CHECKING([whether to enable maintainer-specific portions of Makefiles])
   dnl maintainer-mode is disabled by default
   AC_ARG_ENABLE(maintainer-mode,
@@ -367,8 +386,8 @@ AC_DEFUN(AM_MAINTAINER_MODE,
                           (and sometimes confusing) to the casual installer],
       USE_MAINTAINER_MODE=$enableval,
       USE_MAINTAINER_MODE=no)
-  AC_MSG_RESULT($USE_MAINTAINER_MODE)
-  AM_CONDITIONAL(MAINTAINER_MODE, test $USE_MAINTAINER_MODE = yes)
+  AC_MSG_RESULT([$USE_MAINTAINER_MODE])
+  AM_CONDITIONAL(MAINTAINER_MODE, [test $USE_MAINTAINER_MODE = yes])
   MAINT=$MAINTAINER_MODE_TRUE
   AC_SUBST(MAINT)dnl
 ]
@@ -376,7 +395,7 @@ AC_DEFUN(AM_MAINTAINER_MODE,
 
 # Define a conditional.
 
-AC_DEFUN(AM_CONDITIONAL,
+AC_DEFUN([AM_CONDITIONAL],
 [AC_SUBST($1_TRUE)
 AC_SUBST($1_FALSE)
 if $2; then

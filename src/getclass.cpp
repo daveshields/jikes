@@ -1,4 +1,4 @@
-// $Id: getclass.cpp,v 1.22 2000/07/25 11:32:33 mdejong Exp $
+// $Id: getclass.cpp,v 1.24 2001/01/10 16:49:45 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -15,8 +15,8 @@
 #include "zip.h"
 #include "jikesapi.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 inline u1 Semantic::GetU1(const char *buffer)
@@ -1101,4 +1101,7 @@ fflush(stderr);
     return true;
 }
 
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
 

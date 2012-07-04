@@ -15,8 +15,8 @@
 #undef HEADERS
 #include "javaact.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 //****************************************************************************//
@@ -4578,3 +4578,8 @@ void Parser::Act355(void)
 
     Sym(1) = NULL;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

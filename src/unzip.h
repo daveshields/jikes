@@ -1,10 +1,10 @@
-// $Id: unzip.h,v 1.6 2000/07/25 11:32:34 mdejong Exp $
+// $Id: unzip.h,v 1.7 2001/01/05 09:13:21 mdejong Exp $
 #ifndef unzip_INCLUDED
 #define unzip_INCLUDED
 
 #include "platform.h"
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -375,7 +375,7 @@ public:
 #endif
 }; // end class unzip
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

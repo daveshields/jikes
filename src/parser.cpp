@@ -1,4 +1,4 @@
-// $Id: parser.cpp,v 1.10 2000/07/25 11:32:33 mdejong Exp $
+// $Id: parser.cpp,v 1.12 2001/01/10 16:49:45 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,8 +10,8 @@
 #include "parser.h"
 #include "ast.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 void Parser::ReallocateStacks()
@@ -784,3 +784,8 @@ int Parser::ParseCheck(int stck[], int stack_top, int first_token, int buffer_po
 
     return 0;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

@@ -1,5 +1,5 @@
 /*
- * $Id: jikesapi.cpp,v 1.12 2000/07/25 11:32:33 mdejong Exp $
+ * $Id: jikesapi.cpp,v 1.25 2001/02/27 06:27:40 mdejong Exp $
  */
 
 
@@ -7,6 +7,8 @@
 #include "control.h"
 #include "jikesapi.h"
 
+/*
+FIXME: Need to readdress include issue.
 #ifdef HAVE_STDLIB_H
 # include <stdlib.h>
 #endif
@@ -18,9 +20,20 @@
 #ifdef HAVE_WINDOWS_H
 # include <windows.h>
 #endif
+*/
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 using namespace Jikes;
+#endif
+
+// Note: JikesAPI classes only use the Jikes namespace, they
+// are never defined in the Jikes namespace. The use of the Jikes
+// namespace is a compile time option and jikesapi.h can not
+// include build files like platform.h or config.h. Only
+// the Default* classes in this file can live in the Jikes namespace.
+
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {
 #endif
 
 /**
@@ -56,13 +69,17 @@ class DefaultFileWriter: public JikesAPI::FileWriter
     DefaultFileWriter(const char *fileName,size_t maxSize);
     virtual  ~DefaultFileWriter();
     
-    virtual  bool      isValid();
+    virtual  int      isValid();
     
     private:
     
     virtual  size_t    doWrite(const unsigned char *data,size_t size);
-    
-    bool      valid;
+
+    // Note that we don't use the bool type anywhere in jikesapi.h
+    // since it is not supported by some compilers and we can't
+    // depend on the typedef in platform.h because jikesapi.h
+    // would never include build time files
+    int      valid;
 // FIXME: need to clean this up, why is this not wrapped in a platform.h function?
 #ifdef UNIX_FILE_SYSTEM
     FILE     *file;
@@ -73,6 +90,10 @@ class DefaultFileWriter: public JikesAPI::FileWriter
     size_t    dataWritten;
 #endif
 };
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
 
 JikesOption::~JikesOption()
 {
@@ -99,7 +120,9 @@ JikesOption::JikesOption():
 
 JikesAPI * JikesAPI::instance = NULL;
 
-JikesAPI::JikesAPI():option(NULL)
+JikesAPI::JikesAPI()
+:option(NULL),
+parsedOptions(NULL)
 {
     SetNewHandler();
     FloatingPointCheck();
@@ -114,45 +137,58 @@ JikesAPI * JikesAPI::getInstance()
 
 JikesAPI::~JikesAPI()
 {
+    cleanupOptions();
+}
+
+void JikesAPI::cleanupOptions() {
     delete option;
+
+    if (parsedOptions) {
+        for(char ** parsed = parsedOptions; *parsed != NULL ; parsed++) {
+            delete [] *parsed;
+        }
+        delete [] parsedOptions;
+        parsedOptions = NULL;
+    }
 }
 
 char ** JikesAPI::parseOptions(int argc, char **argv)
 {
+    cleanupOptions();
 
-    delete option;
-
-    ArgumentExpander *args=new ArgumentExpander(argc, argv);
-    Option *opt = new Option(*args);
+    ArgumentExpander *args = new ArgumentExpander(argc, argv);
+    Option* opt = new Option(*args);
     option = opt;
-    int n=args->argc - opt->first_file_index;
+    int n = args->argc - opt->first_file_index;
 
-    if(n <= 0)
+    if (n <= 0)
     {
+        delete args;
         return NULL;
     }
     else
     {
-        char **res=new char*[n+1];
-        for(int i=0;i<n;i++)
+        parsedOptions = new char*[n+1];
+        for (int i=0; i<n; i++)
         {
-            const char *o=args->argv[opt->first_file_index+i];
-            if(o)
+            const char *o = args->argv[opt->first_file_index+i];
+            if (o)
             {
-                res[i] = new char[strlen(o)+1];
-                strcpy(res[i],o);
+                parsedOptions[i] = new char[strlen(o)+1];
+                strcpy(parsedOptions[i],o);
             } else
             {
-                res[i] = NULL;
+                parsedOptions[i] = NULL;
                 break;
             }
         }
-        res[n] = NULL;
-        return res;
+        parsedOptions[n] = NULL;
+        delete args;
+        return parsedOptions;
     }
 }
 
-JikesOption *JikesAPI::getOptions()
+JikesOption* JikesAPI::getOptions()
 {
     return option;
 }
@@ -162,12 +198,15 @@ JikesOption *JikesAPI::getOptions()
  */
 int JikesAPI::compile(char **filenames)
 {
-    // FIXME: why dont we just create a Control on the stack here?
+    // Cast the JikesOption to an Option instance.
+    // Note that the reason we don't use an Option
+    // member type in the declaration of JikesAPI
+    // is so that the jikespai.h header does not
+    // need to include option.h.
+
     Control *control = new Control(filenames , *((Option*)option));
     int return_code = control -> return_code;
-
     delete control;
-
     return return_code;
 }
 
@@ -204,7 +243,7 @@ const char *JikesError::getSeverityString()
  */
 int JikesAPI::stat(const char *fileName,struct stat *status)
 {
-    return ::SystemStat(fileName,status);
+    return SystemStat(fileName,status);
 }
 
 /**
@@ -258,6 +297,11 @@ size_t JikesAPI::FileWriter::write(const unsigned char *data,size_t size)
 }
 
 
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {
+#endif
+
+
 #ifdef UNIX_FILE_SYSTEM
 // The following methods define UNIX specific methods for
 // reading files from the file system. WINDOWS method follow in
@@ -277,12 +321,18 @@ DefaultFileReader::DefaultFileReader(const char *fileName)
     JikesAPI::getInstance()->stat(fileName, &status);
     size   = status.st_size;
 
-    FILE *srcfile = ::SystemFopen(fileName, "rb");
+    FILE *srcfile = SystemFopen(fileName, "rb");
     if (srcfile != NULL)
     {
         buffer = new char[size];
-        size_t numread = ::SystemFread(const_cast<char*>(buffer), sizeof(char), size, srcfile);
-        assert(numread == size);
+        size_t numread = SystemFread(
+#ifdef HAVE_CONST_CAST
+            const_cast<char*>(buffer)
+#else
+            (char *) buffer
+#endif
+            , sizeof(char), size, srcfile);
+        //assert(numread == size); // FIXME: uncomment when SystemFread uses "b"
         fclose(srcfile);
     }
 }
@@ -304,7 +354,7 @@ DefaultFileWriter::DefaultFileWriter(const char *fileName,size_t maxSize):
     FileWriter(maxSize)
 {
     valid  = false;
-    file = ::SystemFopen(fileName, "wb");
+    file = SystemFopen(fileName, "wb");
     if (file  ==  (FILE *) NULL)
         return;
     valid  = true;
@@ -315,10 +365,11 @@ DefaultFileWriter::DefaultFileWriter(const char *fileName,size_t maxSize):
  */
 DefaultFileWriter::~DefaultFileWriter()
 {
-    fclose(file);
+    if (valid)
+        fclose(file);
 }
 
-bool DefaultFileWriter::isValid()  {return(valid);}
+int DefaultFileWriter::isValid()  {return(valid);}
 
 /**
  * Copy the data buffer to the file.
@@ -405,7 +456,7 @@ DefaultFileWriter::~DefaultFileWriter()
     }
 }
 
-bool DefaultFileWriter::isValid()  
+int DefaultFileWriter::isValid()  
 {
     return(valid);
 }
@@ -418,7 +469,10 @@ size_t DefaultFileWriter::doWrite(const unsigned char *data,size_t size)
     return(size);
 }
 
+#endif // UNIX_FILE_SYSTEM
+
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
 #endif
-
-
 

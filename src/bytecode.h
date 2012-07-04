@@ -1,4 +1,4 @@
-// $Id: bytecode.h,v 1.21 2000/07/25 11:32:31 mdejong Exp $
+// $Id: bytecode.h,v 1.22 2001/01/05 09:13:19 mdejong Exp $
 //
 // License Agreement available at the following URL:
 // http://www.ibm.com/research/jikes.
@@ -19,7 +19,7 @@
 #include "op.h"
 #include "segment.h"
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -891,7 +891,7 @@ public:
     }
 };
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

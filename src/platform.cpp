@@ -1,4 +1,4 @@
-// $Id: platform.cpp,v 1.6 2000/07/25 11:32:33 mdejong Exp $
+// $Id: platform.cpp,v 1.14 2001/02/20 06:47:51 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,8 +12,8 @@
 #include "long.h"
 #include "double.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 // Define the PathSeparator() function with the proper
@@ -199,12 +199,12 @@ size_t SystemFread(char *ptr, size_t element_size, size_t count, FILE *stream)
 int SystemIsDirectory(char *name)
 {
   struct stat status;
-  return (((::SystemStat(name, &status) == 0) && (status.st_mode & JIKES_STAT_S_IFDIR)) ? 1 : 0);
+  return (((SystemStat(name, &status) == 0) && (status.st_mode & JIKES_STAT_S_IFDIR)) ? 1 : 0);
 }
 
 int SystemMkdirhier(char *dirname)
 {
-  if (::SystemIsDirectory(dirname))
+  if (SystemIsDirectory(dirname))
     return 0;
 
   for (char *ptr = dirname; *ptr; ptr++)
@@ -214,16 +214,16 @@ int SystemMkdirhier(char *dirname)
 	{
 	  *ptr = U_NULL;
 
-	  if (! ::SystemIsDirectory(dirname))
-	    ::SystemMkdir(dirname);
+	  if (! SystemIsDirectory(dirname))
+	    SystemMkdir(dirname);
 
 	  *ptr = delimiter;
 	}
     }
 
-  ::SystemMkdir(dirname);
+  SystemMkdir(dirname);
 
-  return (! ::SystemIsDirectory(dirname));
+  return (! SystemIsDirectory(dirname));
 }
 
 
@@ -385,7 +385,9 @@ LongToDecString::LongToDecString(LongInt &num)
         str = &info[TAIL_INDEX];
         *str = U_NULL;
 
-        ULongInt n = (num.HighWord() == 0x80000000 ? (LongInt) (-num) : num); // compute the absolute value
+        // compute absolute value
+        ULongInt n = (num.HighWord() & 0x80000000 ?
+            (ULongInt) -num : (ULongInt) num);
 
         do
         {
@@ -448,7 +450,7 @@ FloatToString::FloatToString(IEEEfloat &num)
         // Otherwise, we write it out in standard form.
         //
         int decimal_exponent = 0;
-        float f = (num.IsNegative() ? -num.FloatValue() : num.FloatValue());
+        float f = (num.IsNegative() ? -num.FloatView() : num.FloatView());
         if (f < 1E-3 || f >= 1E+7)
         {
             //
@@ -462,7 +464,7 @@ FloatToString::FloatToString(IEEEfloat &num)
             //
             decimal_exponent = (int) ceil(num.Exponent() * log10(2.0));
             f *= pow(10.0, -decimal_exponent); // shift f until it has precisely one decimal digit before the dot
-            if (floor(f) == 0.0)
+            while (floor(f) == 0.0)
             {
                 decimal_exponent--;
                 f *= 10.0;
@@ -611,7 +613,7 @@ DoubleToString::DoubleToString(IEEEdouble &num)
         // Otherwise, we write it out in standard form.
         //
         int decimal_exponent = 0;
-        double d = (num.IsNegative() ? -num.DoubleValue() : num.DoubleValue());
+        double d = (num.IsNegative() ? -num.DoubleView() : num.DoubleView());
         if (d < 1E-3 || d >= 1E+7)
         {
             //
@@ -625,7 +627,7 @@ DoubleToString::DoubleToString(IEEEdouble &num)
             //
             decimal_exponent = (int) ceil(num.Exponent() * log10(2.0));
             d *= pow(10.0, -decimal_exponent); // shift f until it has precisely one decimal digit before the dot
-            if (floor(d) == 0.0)
+            while (floor(d) == 0.0)
             {
                 decimal_exponent--;
                 d *= 10.0;
@@ -906,7 +908,7 @@ wchar_t StringConstant::US_AND[]                        = {U_AM, U_NU}, // "&"
         StringConstant::US_interface[] = {U_i, U_n, U_t, U_e, U_r, U_f, U_a, U_c, U_e, U_NU}, // "interface"
         StringConstant::US_java_SL_io[] =  {U_j, U_a, U_v, U_a, U_SL, U_i, U_o, U_NU}, // "java/io"
         StringConstant::US_java_SL_lang[] = {U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_NU}, // "java/lang"
-        StringConstant::US_java_SL_util[] = {U_j, U_a, U_v, U_a, U_SL, U_u, U_t, U_i, U_l, U_NU}, // "java/lang"
+        StringConstant::US_java_SL_util[] = {U_j, U_a, U_v, U_a, U_SL, U_u, U_t, U_i, U_l, U_NU}, // "java/util"
         StringConstant::US_length[] = {U_l, U_e, U_n, U_g, U_t, U_h, U_NU}, // "length"
         StringConstant::US_long[] = {U_l, U_o, U_n, U_g, U_NU}, // "long"
         StringConstant::US_native[] = {U_n, U_a, U_t, U_i, U_v, U_e, U_NU}, // "native"
@@ -939,8 +941,12 @@ wchar_t StringConstant::US_AND[]                        = {U_AM, U_NU}, // "&"
 
 wchar_t StringConstant::US_smallest_int[] = {U_MINUS, U_2, U_1, U_4, U_7, U_4, U_8, U_3, U_6, U_4, U_8, U_NU}; // "-2147483648"
 
+
 char StringConstant::U8S_command_format[] = "use: jikes [-classpath path][-d dir][-debug][-depend|-Xdepend][-deprecation]"
-                                            "[-encoding encoding][-g][-nowarn][-nowrite][-O][-verbose][-Xstdout]"
+#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
+                                            "[-encoding encoding]"
+#endif
+					    "[-g][-nowarn][-nowrite][-O][-verbose][-Xstdout]"
                                             "[++][+B][+c][+OLDCSO][+D][+DR=filename][+E][+F][+Kname=TypeKeyWord][+M][+P][+Td...d][+U][+Z]"
                                             " file.java...";
 
@@ -1103,4 +1109,8 @@ void ErrorString::fill(const char c)
 {
     fill_char = c;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
 

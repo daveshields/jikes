@@ -1,4 +1,4 @@
-// $Id: lookup.cpp,v 1.27 2000/07/25 11:32:33 mdejong Exp $
+// $Id: lookup.cpp,v 1.32 2001/02/17 08:08:54 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -14,8 +14,12 @@
 #include "ast.h"
 #include "case.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef HAVE_RTTI
+#include <typeinfo>
+#endif
+
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 int SystemTable::primes[] = {DEFAULT_HASH_SIZE, 101, 401, MAX_HASH_SIZE};
@@ -139,11 +143,9 @@ Coutput << "    slot " << n << " contains " << num << " element(s)\n";
 if (hash_size < total)
     total = total;
 */
-#ifdef JIKES_DEBUG
     for (int i = 0; i < entry_pool.Length(); i++)
         delete entry_pool[i];
     delete [] base;
-#endif
 }
 
 
@@ -333,11 +335,9 @@ Coutput << "    slot " << n << " contains " << num << " element(s)\n";
 if (hash_size < total)
     total = total;
 */
-#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
-#endif
 }
 
 
@@ -437,9 +437,7 @@ if (hash_size < total)
     total = total;
 */
 
-#ifdef JIKES_DEBUG
     delete [] base;
-#endif
 }
 
 
@@ -568,11 +566,9 @@ if (hash_size < total)
     total = total;
 */
 
-#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
-#endif
 }
 
 
@@ -882,11 +878,9 @@ if (hash_size < total)
     total = total;
 */
 
-#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
-#endif
 }
 
 
@@ -1046,7 +1040,7 @@ void LongLiteralTable::Rehash()
     for (int i = 1; i < symbol_pool.Length(); i++)
     {
         LongLiteralValue *llv = symbol_pool[i];
-        int k = (((ULongInt) llv -> value) % ULongInt(0, hash_size)).LowWord(); // The ULongInt turns negative values positive
+        int k = Hash(llv -> value) % hash_size; // the hash function for LongInt values is cheap so we don't need to save it.
         llv -> next = base[k];
         base[k] = llv;
     }
@@ -1057,7 +1051,7 @@ void LongLiteralTable::Rehash()
 
 LongLiteralValue *LongLiteralTable::FindOrInsert(LongInt value)
 {
-    int k = (((ULongInt) value) % ULongInt(0, hash_size)).LowWord();  // The ULongInt cast turns negative values into positive values
+    int k = Hash(value) % hash_size;
 
     LongLiteralValue *lit;
     for (lit = base[k]; lit; lit = (LongLiteralValue *) lit -> next)
@@ -1132,11 +1126,9 @@ if (hash_size < total)
     total = total;
 */
 
-#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
-#endif
 }
 
 
@@ -1147,9 +1139,14 @@ LiteralValue *FloatLiteralTable::FindOrInsertFloat(LiteralSymbol *literal)
         name[i] = (char) literal -> Name()[i];
     name[literal -> NameLength()] = U_NULL;
 
-    IEEEfloat value = IEEEfloat(name);
+    //
+    // JLS 3.10.2 states it is an error for a literal to round to infinity or 0
+    // Passing the second parameter tells the constructor to set value to NaN
+    // if the literal is invalid.
+    //
+    IEEEfloat value = IEEEfloat(name, true);
 
-    literal -> value = FindOrInsert(value);
+    literal -> value = (value.IsNaN() ? bad_value : FindOrInsert(value));
 
     delete [] name;
 
@@ -1186,7 +1183,7 @@ FloatLiteralValue *FloatLiteralTable::FindOrInsert(IEEEfloat value)
     FloatLiteralValue *lit;
     for (lit = base[k]; lit; lit = (FloatLiteralValue *) lit -> next)
     {
-        if (lit -> value == value)
+        if (lit -> value.equals(value))
             return lit;
     }
 
@@ -1255,11 +1252,9 @@ Coutput << "    slot " << n << " contains " << num << " element(s)\n";
 if (hash_size < total)
     total = total;
 */
-#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
-#endif
 }
 
 
@@ -1270,9 +1265,14 @@ LiteralValue *DoubleLiteralTable::FindOrInsertDouble(LiteralSymbol *literal)
         name[i] = (char) literal -> Name()[i];
     name[literal -> NameLength()] = U_NULL;
 
-    IEEEdouble value = IEEEdouble(name);
+    //
+    // JLS 3.10.2 states it is an error for a literal to round to infinity or 0
+    // Passing the second parameter tells the constructor to set value to NaN
+    // if the literal is invalid.
+    //
+    IEEEdouble value = IEEEdouble(name, true);
 
-    literal -> value = FindOrInsert(value);
+    literal -> value = (value.IsNaN() ? bad_value : FindOrInsert(value));
 
     delete [] name;
 
@@ -1309,7 +1309,7 @@ DoubleLiteralValue *DoubleLiteralTable::FindOrInsert(IEEEdouble value)
     DoubleLiteralValue *lit;
     for (lit = base[k]; lit; lit = (DoubleLiteralValue *) lit -> next)
     {
-        if (lit -> value == value)
+        if (lit -> value.equals(value))
             return lit;
     }
 
@@ -1548,11 +1548,9 @@ Coutput << "    slot " << n << " contains " << num << " element(s)\n";
 if (hash_size < total)
     total = total;
 */
-#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
-#endif
 }
 
 
@@ -1598,7 +1596,7 @@ void Utf8LiteralTable::EvaluateConstant(AstExpression *expression, int start, in
         int length = 0;
         for (int i = start; i < end; i++)
         {
-            Utf8LiteralValue *literal = (Utf8LiteralValue *) (*expr)[i] -> value;
+            Utf8LiteralValue *literal = (*utf8_literals)[i];
             length += literal -> length;
         }
         char *str = new char[length + 1]; // +1 for '\0'
@@ -1606,8 +1604,7 @@ void Utf8LiteralTable::EvaluateConstant(AstExpression *expression, int start, in
         int index = 0;
         for (int k = start; k < end; k++)
         {
-            Utf8LiteralValue *literal = (Utf8LiteralValue *) (*expr)[k] -> value;
-
+            Utf8LiteralValue *literal = (*utf8_literals)[k];
             assert(literal -> value);
 
             memmove(&str[index], literal -> value, literal -> length * sizeof(char));
@@ -1623,11 +1620,37 @@ void Utf8LiteralTable::EvaluateConstant(AstExpression *expression, int start, in
 }
 
 
-bool Utf8LiteralTable::IsConstant(AstExpression *expression)
+bool Utf8LiteralTable::IsConstant(AstExpression *expression,
+    Symbol *string_symbol)
 {
-    if (expression -> IsConstant())
+    if (expression -> symbol == string_symbol && expression -> IsConstant())
     {
-        expr -> Next() = expression;
+        // The EvaluateConstant method only works with
+        // Utf8LiteralValue* types. Checking that
+        // the expression is of type String is
+        // enough to determine the type, but we do
+        // an extra RTTI/cast check to make sure.
+
+        assert(expression -> value);
+
+        Utf8LiteralValue *literal =
+#ifndef HAVE_DYNAMIC_CAST
+	    (Utf8LiteralValue *) expression -> value;
+#else
+            dynamic_cast<Utf8LiteralValue *>(expression -> value);
+            if (! literal) {
+#ifdef HAVE_RTTI
+                const type_info& t = typeid(*(expression -> value));
+                const char *name = t.name();
+                fprintf(stderr, "expr value not a Utf8LiteralValue %s%s\n",
+                    "it's type was ", name);
+#endif
+                assert(literal && "expr value not a Utf8LiteralValue");
+            }
+#endif
+        assert(literal -> value);
+
+        utf8_literals -> Next() = literal;
         return true;
     }
 
@@ -1636,30 +1659,32 @@ bool Utf8LiteralTable::IsConstant(AstExpression *expression)
     AstParenthesizedExpression *parenthesized_expression;
     if ((binary_expression = expression -> BinaryExpressionCast()))
     {
-        int left_start_marker = expr -> Length();
+        int left_start_marker = utf8_literals -> Length();
 
         AstExpression *left  = binary_expression -> left_expression,
                       *right = binary_expression -> right_expression;
 
-        bool left_is_constant = IsConstant(left);
+        bool left_is_constant = IsConstant(left, string_symbol);
 
-        int left_end_marker = expr -> Length();
+        int left_end_marker = utf8_literals -> Length();
 
-        bool right_is_constant = IsConstant(right);
+        bool right_is_constant = IsConstant(right, string_symbol);
         if (left_is_constant && right_is_constant)
              return true;
 
         if (left_is_constant)
              EvaluateConstant(left, left_start_marker, left_end_marker);
         else if (right_is_constant)
-             EvaluateConstant(right, left_end_marker, expr -> Length());
+             EvaluateConstant(right, left_end_marker,
+                 utf8_literals -> Length());
 
-        expr -> Reset(left_start_marker);
+        utf8_literals -> Reset(left_start_marker);
     }
     else if ((cast_expression = expression -> CastExpressionCast()))
-         return IsConstant(cast_expression -> expression);
+         return IsConstant(cast_expression -> expression, string_symbol);
     else if ((parenthesized_expression = expression -> ParenthesizedExpressionCast()))
-         return IsConstant(parenthesized_expression -> expression);
+         return IsConstant(parenthesized_expression -> expression,
+             string_symbol);
 
     return false; // Not a constant String expression
 }
@@ -1668,12 +1693,18 @@ bool Utf8LiteralTable::IsConstant(AstExpression *expression)
 
 void Utf8LiteralTable::CheckStringConstant(AstExpression *expression)
 {
-    expr = new Tuple<AstExpression *>(256);
+    // This tuple object is used in the IsConstant() method,
+    // it flattens the expresion tree into a set of utf8 literals.
+    utf8_literals = new Tuple<Utf8LiteralValue *>(256);
 
-    if (IsConstant(expression))
-        EvaluateConstant(expression, 0, expr -> Length());
+    // CheckStringConstant must be called with an expression
+    // argument that has the symbol for the String type.
+    Symbol *string_symbol = expression -> symbol;
 
-    delete expr;
+    if (IsConstant(expression, string_symbol))
+        EvaluateConstant(expression, 0, utf8_literals -> Length());
+
+    delete utf8_literals;
 
     return;
 }
@@ -1722,11 +1753,9 @@ Coutput << "    slot " << n << " contains " << num << " element(s)\n";
 if (hash_size < total)
     total = total;
 */
-#ifdef JIKES_DEBUG
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
-#endif
 }
 
 
@@ -1778,3 +1807,8 @@ LiteralSymbol *LiteralLookupTable::FindOrInsertLiteral(wchar_t *str, size_t len)
 
     return symbol;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

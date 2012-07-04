@@ -1,4 +1,4 @@
-// $Id: tuple.h,v 1.12 2000/07/25 11:32:34 mdejong Exp $
+// $Id: tuple.h,v 1.14 2001/02/01 10:24:07 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -10,10 +10,9 @@
 #ifndef TUPLE_INCLUDED
 #define TUPLE_INCLUDED
 
-#include "platform.h"
 #include "jikesapi.h"
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -441,7 +440,7 @@ private:
     Tuple<u1> buffer;
 };
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

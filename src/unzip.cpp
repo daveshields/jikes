@@ -1,4 +1,4 @@
-// $Id: unzip.cpp,v 1.6 2000/07/25 11:32:34 mdejong Exp $
+// $Id: unzip.cpp,v 1.8 2001/01/10 16:49:45 mdejong Exp $
 
 //
 // NOTE: Jikes incorporates compression code from the Info-ZIP
@@ -34,8 +34,8 @@
 
 #include "unzip.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 unsigned long Unzip::global_bb;                         /* bit buffer */
@@ -914,5 +914,10 @@ int Unzip::inflate_free()
     {
         return 0;
     }
+#endif
+
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
 #endif
 

@@ -8,6 +8,7 @@ jikes \- java source to bytecode compiler
 [\fB\-debug\fP]
 [\fB\-depend\fP]
 [\fB\-deprecation\fP]
+[\fB\-encoding\fP encoding]
 [\fB\-g\fP]
 [\fB\-nowarn\fP]
 [\fB\-nowrite\fP]
@@ -19,7 +20,7 @@ jikes \- java source to bytecode compiler
 [\fB\+B\fP]
 [\fB\+OLDCSO\fP]
 [\fB\+D\fP]
-[\fB\+DR=\fP filename]
+[\fB\+DR=\fPfilename]
 [\fB\+E\fP]
 [\fB\+F\fP]
 [\fB\+K\fP]
@@ -28,6 +29,7 @@ jikes \- java source to bytecode compiler
 [\fB\+T\fPnn]
 [\fB\+U\fP]
 [\fB\+Z\fP]
+[\fB\+c\fP]
 file.java
 \&.\|.\|.
 .SH DESCRIPTION
@@ -53,6 +55,9 @@ recompile all used classes
 .TP
 \fB\-deprecation
 report uses of deprecated features
+.TP
+\fB\-encoding
+use specified encoding to read source files
 .TP
 \fB\-g
 debug (generate LocalVariableTable attribute)
@@ -113,6 +118,9 @@ do full dependence check including Zip and Jar files
 .TP
 \fB\+Z
 treat cautions as errors
+.TP
+\fB\+c
+do not discard comments from lexer output
 .PP
 An argument may have the form \fI@file\fP; each line of \fIfile\fP is
 then interpreted as an argument, except that lines beginning with
@@ -121,25 +129,21 @@ then interpreted as an argument, except that lines beginning with
 .SH FILES
 \fBJikes\fP requires a colon-separated list of directories or files
 that tell it where to look for any needed class or source files, for
-example ".:$HOME/java/lib/classes.zip".  A definition given with the
+example ".:$HOME/java/jre/lib/rt.jar".  A definition given with the
 environment variable \fIJIKESPATH\fP takes precedence over one given
 with \fICLASSPATH\fP; a definition using the \fI-classpath\fP option
 takes precedence over any value specified via the environment. 
 .SH "SEE ALSO"
 .TP
-See the Jikes Project homepage
+Jikes Project homepage 
+\fIhttp://oss.software.ibm.com/developerworks/opensource/jikes/\fP
 for news of recent developments,
 to download new versions, 
 to report bugs, or 
 to learn how to participate in the development process.
-.TP
-\fIjikes.htm\fP
-for a more complete description in FAQ format. This file is
-distributed with the program as part of its documentation, and is
-also available from the Jikes Project URL.
 
 .SH COPYRIGHT
-Copyright \(co 1996, 2000,
+Copyright \(co 1996, 1997, 1998, 1999, 2000, 2001,
 International Business Machines Corporation and others. All Rights Reserved.
 .PP
 \fBJikes\fP is licensed under the \fIIBM Public License\fP, included

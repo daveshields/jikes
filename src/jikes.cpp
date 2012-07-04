@@ -1,4 +1,4 @@
-// $Id: jikes.cpp,v 1.74 2000/07/25 11:32:33 mdejong Exp $
+// $Id: jikes.cpp,v 1.79 2001/02/27 20:22:52 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -17,7 +17,7 @@
 #include "platform.h"
 #include "jikesapi.h"
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 using namespace Jikes;
 #endif
 
@@ -25,20 +25,19 @@ int main(int argc, char *argv[])
 {
     // Here we are creating instance of default API
     JikesAPI *compiler = new JikesAPI();
-    
+
+    int    return_code;    
     char **files = compiler->parseOptions(argc, argv);
-    int    return_code;
     
-    if(files)
+    if (files)
     {
         return_code = compiler->compile(files);
-        delete []files;
     }
     else
     {
         fprintf(stderr,
                 "\nJikes Compiler"
-                "\n(C) Copyright IBM Corp. 1997, 2000.\n"
+                "\n(C) Copyright IBM Corp. 1997, 2001.\n"
                 "- Licensed Materials - Program Property of IBM - All Rights Reserved.\n\n");
         fprintf(stderr, "%s", StringConstant::U8S_command_format);
         fprintf(stderr,
@@ -48,7 +47,12 @@ int main(int argc, char *argv[])
                 "-debug             no effect (recognized for compatibility)\n"
                 "-depend | -Xdepend recompile all used classes\n"
                 "-deprecation       report uses of deprecated features\n"
+#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
                 "-encoding encoding use specified encoding to read source files\n"
+# if defined(HAVE_LIB_ICU_UC)
+                "                   this binary requires the ICU library\n"
+# endif
+#endif
                 "-g                 debug (generate LocalVariableTable)\n"
                 "-nowarn            do not issue warning messages\n"
                 "-nowrite           do not write any class files\n"
@@ -83,7 +87,8 @@ int main(int argc, char *argv[])
 		"\n"
                 "Originally written by Philippe Charles and David Shields \n"
                 "of IBM Research, Jikes is now maintained and refined by the\n"
-                "Jikes Project at http://oss.software.ibm.com/developerworks/opensource/jikes/project.\n"
+                "Jikes Project at:\n"
+                "http://oss.software.ibm.com/developerworks/opensource/jikes\n"
                 "Please consult this URL for more information and to learn \n"
                 "how to report problems.\n");
 

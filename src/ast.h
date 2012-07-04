@@ -1,4 +1,4 @@
-// $Id: ast.h,v 1.23 2000/07/25 11:32:31 mdejong Exp $
+// $Id: ast.h,v 1.25 2001/01/05 09:13:19 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -16,7 +16,7 @@
 #include "symbol.h"
 #include "set.h"
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -4145,7 +4145,7 @@ private:
             Cell **old_base = base;
 
             base_size += base_increment;
-            base = ::new Cell*[base_size];
+            base = new Cell*[base_size];
 
             if (old_base != NULL)
             {
@@ -4164,7 +4164,7 @@ private:
         //
         if (base[k] == NULL)
         {
-            base[k] = ::new Cell[Blksize()];
+            base[k] = new Cell[Blksize()];
             base[k] -= size;
         }
 
@@ -6098,7 +6098,7 @@ template <class T>
         base = NULL;
     }
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

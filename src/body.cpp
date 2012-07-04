@@ -1,4 +1,4 @@
-// $Id: body.cpp,v 1.31 2000/07/25 11:32:31 mdejong Exp $
+// $Id: body.cpp,v 1.34 2001/02/18 23:21:18 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,8 +12,8 @@
 #include "semantic.h"
 #include "control.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 void Semantic::ProcessBlockStatements(AstBlock *block_body)
@@ -1724,8 +1724,16 @@ void Semantic::ProcessSuperCall(AstSuperCall *super_call)
             for (int i = 0; i < super_call -> NumArguments(); i++)
             {
                 AstExpression *expr = super_call -> Argument(i);
-                if (expr -> Type() != constructor -> FormalParameter(i) -> Type())
-                    super_call -> Argument(i) = ConvertToType(expr, constructor -> FormalParameter(i) -> Type());
+                TypeSymbol * ctor_param_type;
+                if (super_call -> NeedsExtraNullArgument()) {
+                    // Synthetic constructor signature includes a synthetic
+                    // class pointer as the first parameter.
+                    ctor_param_type = constructor -> FormalParameter(i + 1) -> Type();
+                } else {
+                    ctor_param_type = constructor -> FormalParameter(i) -> Type();
+                }
+                if (expr -> Type() != ctor_param_type)
+                    super_call -> Argument(i) = ConvertToType(expr, ctor_param_type);
             }
 
             //
@@ -2346,3 +2354,8 @@ void Semantic::ProcessExecutableBodies(AstInterfaceDeclaration *interface_declar
 
     return;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

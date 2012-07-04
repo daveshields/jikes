@@ -4,7 +4,7 @@
 %options nogoto-default
 %options single-productions
 %options la=2,names=max
--- $Id: java.g,v 1.14 1999/10/19 23:13:37 shields Exp $
+-- $Id: java.g,v 1.18 2000/07/22 21:02:51 mdejong Exp $
 -- This software is subject to the terms of the IBM Jikes Compiler
 -- License Agreement available at the following URL:
 -- http://www.ibm.com/research/jikes.
@@ -395,6 +395,11 @@ $Rules
 //
 
 #ifndef HEADERS
+
+#ifdef	HAVE_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
+#endif
+
 void Parser::InitRuleAction()
 {
     rule_action[0] = &Parser::BadAction;
@@ -433,12 +438,20 @@ void Parser::InitRuleAction()
 // You must accept the terms of that agreement to use this software.
 //
 
-#include "config.h"
+#include "platform.h"
 #include "parser.h"
 #include "ast.h"
 
 #undef HEADERS
 #include "javaact.h"
+
+#ifdef	HAVE_NAMESPACE
+using namespace Jikes;
+#endif
+
+#ifdef	HAVE_NAMESPACE
+using namespace Jikes;
+#endif
 
 //****************************************************************************//
 //****************************************************************************//
@@ -2918,7 +2931,7 @@ void Parser::Act$rule_number(void)
     AstSwitchStatement *p = ast_pool -> NewSwitchStatement();
 
     AstSwitchBlockStatement *q = ast_pool -> NewSwitchBlockStatement();
-    q -> AddStatement(ast_pool -> NewEmptyStatement(Token(Sym(2) -> RightToken())));
+    q -> AddStatement(ast_pool -> NewEmptyStatement(Sym(2) -> RightToken()));
 
     //
     // The list of SwitchBlockStatements is never null
@@ -2972,7 +2985,7 @@ void Parser::Act$rule_number(void)
     }
 
     AstSwitchBlockStatement *q = ast_pool -> NewSwitchBlockStatement();
-    q -> AddStatement(ast_pool -> NewEmptyStatement(Token(Sym(3) -> RightToken())));
+    q -> AddStatement(ast_pool -> NewEmptyStatement(Sym(3) -> RightToken()));
 
     //
     // The list of SwitchLabels is never null
@@ -4933,6 +4946,11 @@ void Parser::Act$rule_number(void)
 #ifndef HEADERS
     return;
 }
+
+#ifdef	HAVE_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+
 #endif
 :\
 

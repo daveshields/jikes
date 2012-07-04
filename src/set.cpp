@@ -1,4 +1,4 @@
-// $Id: set.cpp,v 1.11 2000/07/25 11:32:33 mdejong Exp $
+// $Id: set.cpp,v 1.13 2001/01/10 16:49:45 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -9,8 +9,8 @@
 //
 #include "set.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 int SymbolSet::primes[] = {DEFAULT_HASH_SIZE, 101, 401, MAX_HASH_SIZE};
@@ -276,3 +276,8 @@ SymbolMap::~SymbolMap()
 
     return;
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
+

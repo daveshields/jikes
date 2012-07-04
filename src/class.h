@@ -1,4 +1,4 @@
-// $Id: class.h,v 1.18 2000/07/25 11:32:31 mdejong Exp $
+// $Id: class.h,v 1.19 2001/01/05 09:13:19 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -17,7 +17,7 @@
 #include "op.h"
 
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -1568,7 +1568,7 @@ protected:
     OutputBuffer output_buffer;
 };
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

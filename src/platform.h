@@ -1,4 +1,4 @@
-// $Id: platform.h,v 1.6 2000/07/25 11:32:33 mdejong Exp $
+// $Id: platform.h,v 1.13 2001/02/12 11:09:06 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -104,22 +104,38 @@ Currently, we do not use this one
 # include <float.h>
 #endif
 
-/* C++ standard support */
+// C++ standard support
+
 #ifdef HAVE_STD
-# include <new>
 # include <iostream>
-# ifdef HAVE_NAMESPACES
-   using namespace std;
-# endif
+# include <fstream>
 #else
-# ifdef HAVE_NEW_H
+# include <iostream.h>
+# include <fstream.h>
+#endif
+
+// VC++ pretends to support the
+// C++ standard, but it does not.
+// The set_new_handler method in
+// <new> is not implemented so
+// the _set_new_handler method
+// in <new.h> must be used.
+
+#ifdef HAVE_VCPP_SET_NEW_HANDLER
+# include <new.h>
+#else
+# ifdef HAVE_STD
+#  include <new>
+# else
 #  include <new.h>
-# endif
-# ifdef HAVE_IOSTREAM_H
-#  include <iostream.h>
 # endif
 #endif
 
+#ifdef HAVE_STD
+# ifdef HAVE_NAMESPACES
+   using namespace std;
+# endif
+#endif
 
 
 #ifdef HAVE_BROKEN_USHRT_MAX
@@ -141,10 +157,18 @@ Currently, we do not use this one
 
 #ifdef HAVE_32BIT_TYPES
 
-#ifdef HAVE_UNSIGNED_LONG_LONG
-// Range 0..1.84467440737e+19
+//
+// FIXME: Someone with Microsoft VC++ should add __int64 support
+//
+
+# ifdef HAVE_UNSIGNED_LONG_LONG
+// Range 0..18446744073709551615
 typedef unsigned long long u8;
-#endif // HAVE_UNSIGNED_LONG_LONG
+
+// Range -9223372036854775808..9223372036854775807
+typedef signed long long i8;
+
+# endif // HAVE_UNSIGNED_LONG_LONG
 
 // Range 0..4294967295
 typedef unsigned int u4;
@@ -155,7 +179,7 @@ typedef signed int i4;
 // Range 0..65535
 typedef unsigned short u2;
 
-// Range -32767..+32768
+// Range -32768..32767
 typedef signed short i2;
 
 // Range 0..255 in this system
@@ -164,6 +188,22 @@ typedef unsigned char u1;
 // Range -128..+127 in this system
 typedef signed char i1;
 
+#endif // HAVE_32BIT_TYPES
+
+
+//
+// Some compilers do not correctly predefine the primitive type "bool"
+// and its possible values: "false" and "true"
+//
+#ifndef HAVE_BOOL
+//======================================================================
+// We define the type "bool" and the constants "false" and "true".
+// The type bool as well as the constants false and true are expected
+// to become standard C++. When that happens, these declarations should
+// be removed.
+//======================================================================
+typedef unsigned char bool;
+enum { false = 0, true = 1 };
 #endif
 
 
@@ -174,7 +214,7 @@ typedef signed char i1;
 
 
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
@@ -246,24 +286,6 @@ extern int SystemMkdirhier(char *);
 
 extern char * strcat3(const char *, const char *, const char *);
 extern char * wstring2string(wchar_t * in);
-
-
-
-//
-// Some compilers do not correctly predefine the primitive type "bool"
-// and its possible values: "false" and "true"
-//
-#ifndef HAVE_BOOL
-//======================================================================
-// We define the type "bool" and the constants "false" and "true".
-// The type bool as well as the constants false and true are expected
-// to become standard C++. When that happens, these declarations should
-// be removed.
-//======================================================================
-typedef unsigned char bool;
-enum { false = 0, true = 1 };
-#endif
-
 
 
 
@@ -963,11 +985,6 @@ public:
         return os -> width(w);
     }
 
-    long setf(long setbits)
-    {
-        return os -> setf(setbits);
-    }
-
     Ostream &operator<<(ios &(*f)(ios&))
     {
         (*f)(*os);
@@ -1013,7 +1030,7 @@ class ErrorString: public ConvertibleArray<wchar_t>
     int  field_width ;
 };
 
-#ifdef	HAVE_NAMESPACES
+#ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block
 #endif
 

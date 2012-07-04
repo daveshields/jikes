@@ -1,4 +1,4 @@
-// $Id: symbol.cpp,v 1.36 2000/07/25 11:32:33 mdejong Exp $
+// $Id: symbol.cpp,v 1.39 2001/01/10 16:49:45 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
@@ -17,8 +17,8 @@
 #include "set.h"
 #include "case.h"
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 char *FileSymbol::java_suffix = StringConstant::U8S__DO_java;
@@ -733,7 +733,7 @@ void DirectorySymbol::ResetDirectory()
     // For now, we always reread the directory.
     //
     //    struct stat status;
-    //    if ((::SystemStat(this -> DirectoryName(), &status) == 0) && status.st_mtime > mtime)
+    //    if ((SystemStat(this -> DirectoryName(), &status) == 0) && status.st_mtime > mtime)
     //    {
     //        this -> mtime = status.st_mtime;
     //
@@ -1921,4 +1921,7 @@ MethodSymbol *TypeSymbol::GetWriteAccessMethod(VariableSymbol *member)
     return write_method;
 }
 
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
+#endif
 

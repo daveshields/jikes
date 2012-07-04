@@ -1,4 +1,4 @@
-// $Id: dump.cpp,v 1.11 2000/07/25 11:32:33 mdejong Exp $
+// $Id: dump.cpp,v 1.15 2001/01/14 09:56:31 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,7 +7,6 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#ifdef JIKES_DEBUG
 
 #include "platform.h"
 #include "javasym.h"
@@ -20,10 +19,12 @@
 #include <stdio.h>
 */
 
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
-#endif
 
+#ifdef JIKES_DEBUG
+
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
+#endif
 
 static char*
       TK_notoken_STRING      = "TK_notoken",
@@ -255,7 +256,7 @@ void LexStream::Dump()
     strcpy(tokfile_name, FileName());
     strcat(tokfile_name, StringConstant::U8S__DO_tok);
 
-    if ((tokfile = ::SystemFopen(tokfile_name, "w")) == NULL)
+    if ((tokfile = SystemFopen(tokfile_name, "w")) == NULL)
     {
         Coutput << "*** Cannot open file " << tokfile_name << "\n";
         return;
@@ -329,4 +330,10 @@ void LexStream::Dump()
     return;
 }
 
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
 #endif
+
+#endif // JIKES_DEBUG
+

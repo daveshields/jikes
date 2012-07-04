@@ -1,4 +1,4 @@
-// $Id: unparse.cpp,v 1.10 2000/07/26 08:28:50 mdejong Exp $
+// $Id: unparse.cpp,v 1.15 2001/01/14 09:56:31 mdejong Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,38 +7,37 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
-#include "platform.h"
+
 #include "ast.h"
 
-//FIXME: need to move to platform.h
-#include <iostream.h>
-#include <fstream.h>
-
-#ifdef	HAVE_NAMESPACES
-using namespace Jikes;
-#endif
+//FIXME: include stuff
+//#include <iostream.h>
+//#include <fstream.h>
 
 #ifdef JIKES_DEBUG
-    bool Ast::debug_unparse = false;
+
+#ifdef	HAVE_JIKES_NAMESPACE
+namespace Jikes {	// Open namespace Jikes block
 #endif
 
 
-#ifdef JIKES_DEBUG
+bool Ast::debug_unparse = false;
+
 // Special top-level form
 void AstCompilationUnit::Unparse(LexStream& lex_stream, char *directory)
 {
     char *in_file_name = lex_stream.FileName();
     // char *suffix = ".unparse";
     char *suffix = "";
-    char *out_file_name = ::strcat3(directory, in_file_name, suffix);
+    char *out_file_name = strcat3(directory, in_file_name, suffix);
     // Create the directory if necessary
     for (int i=strlen(out_file_name); i>=0; i--) {
        if (out_file_name[i] == U_SLASH) {
            out_file_name[i] = U_NULL;
-           if (! ::SystemIsDirectory(out_file_name))
+           if (! SystemIsDirectory(out_file_name))
            {
                Ostream() << "making directory " << out_file_name << "\n";
-               ::SystemMkdirhier(out_file_name);
+               SystemMkdirhier(out_file_name);
            }
            out_file_name[i] = U_SLASH;
            break;
@@ -1092,4 +1091,9 @@ void AstAssignmentExpression::Unparse(Ostream& os, LexStream& lex_stream)
     if (Ast::debug_unparse)
         os << "/*:AstAssignmentExpression#" << this-> id << "*/";
 }
+
+#ifdef	HAVE_JIKES_NAMESPACE
+}			// Close namespace Jikes block
 #endif
+
+#endif // JIKES_DEBUG
