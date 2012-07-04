@@ -1,4 +1,4 @@
-// $Id: zip.cpp,v 1.13 2001/01/10 16:49:45 mdejong Exp $
+// $Id: zip.cpp,v 1.14 2001/04/28 19:34:37 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -205,7 +205,7 @@ inline DirectorySymbol *Zip::ProcessSubdirectoryEntries(DirectorySymbol *directo
         NameSymbol *name_symbol = control.FindOrInsertName(directory_name, end - start);
         DirectorySymbol *subdirectory_symbol = directory_symbol -> FindDirectorySymbol(name_symbol);
         if (! subdirectory_symbol)
-            subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(name_symbol);
+            subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(name_symbol, false);
         directory_symbol = subdirectory_symbol;
     }
 
@@ -383,7 +383,8 @@ Zip::~Zip()
 //
 void Zip::ReadDirectory()
 {
-    root_directory = new DirectorySymbol(control.dot_name_symbol, NULL);
+    // Not a sourcepath (since we don't read java files from zip files)
+    root_directory = new DirectorySymbol(control.dot_name_symbol, NULL, false);
 
     if (IsValid())
     {

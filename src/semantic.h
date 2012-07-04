@@ -1,4 +1,4 @@
-// $Id: semantic.h,v 1.35 2001/01/05 09:13:21 mdejong Exp $
+// $Id: semantic.h,v 1.37 2001/04/19 13:52:32 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -876,6 +876,11 @@ public:
     TypeSymbol *ProcessNestedType(TypeSymbol *, NameSymbol *, LexStream::TokenIndex);
 
 private:
+    enum
+    {
+        INT_SHIFT_MASK = 0x1f,
+        LONG_SHIFT_MASK = 0x3f
+    };
 
     SemanticError *error;
 

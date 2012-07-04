@@ -1,4 +1,4 @@
-// $Id: body.cpp,v 1.34 2001/02/18 23:21:18 mdejong Exp $
+// $Id: body.cpp,v 1.35 2001/05/07 06:33:59 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1627,12 +1627,10 @@ void Semantic::ProcessSuperCall(AstSuperCall *super_call)
                 super_call -> base_opt -> symbol = control.no_type;
             }
             //
-            // 1.2 change. In 1.1, we used to allow access to any subclass of type. Now, there must
-            // be a perfect match.
+            // JLS2 8.8.5.1: For an enclosing class O of the superclass,
+            // the qualifying primary must be of type O or a subclass.
             //
-            // else if (! expr_type -> IsSubclass(containing_type))
-            //
-            else if (expr_type != containing_type)
+            else if (! expr_type -> IsSubclass(containing_type))
             {
                 ReportSemError(SemanticError::INVALID_ENCLOSING_INSTANCE,
                                super_call -> base_opt -> LeftToken(),

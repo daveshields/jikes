@@ -1,4 +1,4 @@
-// $Id: expr.cpp,v 1.59 2001/02/15 11:27:11 mdejong Exp $
+// $Id: expr.cpp,v 1.69 2001/05/07 05:56:03 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -33,23 +33,12 @@ bool Semantic::IsIntValueRepresentableInType(AstExpression *expr, TypeSymbol *ty
     IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
 
     return (expr -> IsConstant() &&
-            //
-            // TODO: the test:
-            //
-            //    control.IsSimpleIntegerValueType(expr -> type())) &&
-            //
-            // makes more sense than the test:
-            //
-            //    expr -> Type() == control.int_type) &&
-            //
-            // below which is specified in the JLS.
-            //
-            expr -> Type() == control.int_type) &&
+            control.IsSimpleIntegerValueType(expr -> Type()) &&
             (type == control.int_type ||
              type == control.no_type  ||
-             (type == control.char_type && (literal -> value >= 0)  && (literal -> value <= 65535)) ||
+             (type == control.char_type && (literal -> value >= 0) && (literal -> value <= 65535)) ||
              (type == control.byte_type && (literal -> value >= -128) && (literal -> value <= 127)) ||
-             (type == control.short_type && (literal -> value >= -32768)  && (literal -> value <= 32767)));
+             (type == control.short_type && (literal -> value >= -32768) && (literal -> value <= 32767))));
 }
 
 
@@ -2060,15 +2049,20 @@ void Semantic::FindVariableMember(TypeSymbol *type, TypeSymbol *environment_type
     TypeSymbol *this_type = ThisType();
 
     //
+    // TypeCast() returns true for super, this, and instance creation as
+    // well as true type names, hence the extra check
+    //
+    bool base_is_type = field_access -> base -> symbol -> TypeCast() != NULL &&
+                        field_access -> base -> IsName();
+
+    //
     // TODO: Is this needed ?
     //
     // This operation may throw NullPointerException
     //
     SymbolSet *exception_set = TryExceptionTableStack().Top();
-    if (exception_set)
-    {
+    if (exception_set && ! field_access -> base -> symbol -> TypeCast())
         exception_set -> AddElement(control.RuntimeException());
-    }
 
     if (type -> Bad())
     {
@@ -2099,52 +2093,59 @@ void Semantic::FindVariableMember(TypeSymbol *type, TypeSymbol *environment_type
         {
             assert(variable_symbol -> IsTyped());
 
-            //
-            // If a variable is FINAL and initialized with a constant expression,
-            // we substitute the expression here. JLS section 15.27, pp 381-382.
-            //
-            // TODO: Note that the JLS is a bit ambiguous and that a strict reading
-            // of 15.27 would prohibit substitution of a final constant value here.
-            // However, javac seems to accept it and as the section on qualified name
-            // only mentions "final" but not "static" and as it is not possible to derefence
-            // a non-static final with a TypeName, we decided to relax the rules also.
-            //
-            if (variable_symbol -> ACC_FINAL() && field_access -> base -> IsName())
+            if (base_is_type)
             {
-                //
-                // If the field declaration of the type has been completely processed,
-                // simply retrieve the value. Otherwise, compute the value of the
-                // initialization expression in question on the fly if the variable
-                // in question is not in the same type. Recall that static variables
-                // must be processed in the textual order in which they appear in the
-                // body of a type. Therefore, if the static initialization of a field
-                // refers to another variable in the same type it must have appeared
-                // before the current field declaration otherwise we will emit an error
-                // message later...
-                //
-                if (variable_symbol -> IsDeclarationComplete())
-                    field_access -> value = variable_symbol -> initial_value;
-                else if (variable_symbol -> declarator)
+                if (! variable_symbol -> ACC_STATIC())
                 {
-                    AstVariableDeclarator *declarator = variable_symbol -> declarator -> VariableDeclaratorCast();
+                    ReportSemError(SemanticError::NAME_NOT_CLASS_VARIABLE,
+                                   field_access -> identifier_token,
+                                   field_access -> identifier_token,
+                                   lex_stream -> NameString(field_access -> identifier_token));
+                    field_access -> symbol = control.no_type;
+                    return;
+                }
+                //
+                // If a variable is FINAL, initialized with a constant
+                // expression, and of the form TypeName.Identifier, we
+                // substitute the expression here. - JLS 15.28
+                //
+                if (variable_symbol -> ACC_FINAL())
+                {
                     //
-                    // If the variable declarator in question exists and its computation is not
-                    // pending (to avoid looping) and it has a simple expression initializer.
+                    // If the field declaration of the type has been completely processed,
+                    // simply retrieve the value. Otherwise, compute the value of the
+                    // initialization expression in question on the fly if the variable
+                    // in question is not in the same type. Recall that static variables
+                    // must be processed in the textual order in which they appear in the
+                    // body of a type. Therefore, if the static initialization of a field
+                    // refers to another variable in the same type it must have appeared
+                    // before the current field declaration otherwise we will emit an error
+                    // message later...
                     //
-                    if (declarator && (! declarator -> pending) &&
-                        declarator -> variable_initializer_opt &&
-                        (! declarator -> variable_initializer_opt -> ArrayInitializerCast()))
+                    if (variable_symbol -> IsDeclarationComplete())
+                        field_access -> value = variable_symbol -> initial_value;
+                    else if (variable_symbol -> declarator)
                     {
-                        TypeSymbol *variable_type = (TypeSymbol *) variable_symbol -> owner;
-                        Semantic *sem = variable_type -> semantic_environment -> sem;
-                        field_access -> value = sem -> ComputeFinalValue(declarator);
+                        AstVariableDeclarator *declarator = variable_symbol -> declarator -> VariableDeclaratorCast();
+                        //
+                        // If the variable declarator in question exists and its computation is not
+                        // pending (to avoid looping) and it has a simple expression initializer.
+                        //
+                        if (declarator && (! declarator -> pending) &&
+                            declarator -> variable_initializer_opt &&
+                            (! declarator -> variable_initializer_opt -> ArrayInitializerCast()))
+                        {
+                            TypeSymbol *variable_type = (TypeSymbol *) variable_symbol -> owner;
+                            Semantic *sem = variable_type -> semantic_environment -> sem;
+                            field_access -> value = sem -> ComputeFinalValue(declarator);
+                        }
                     }
                 }
             }
 
             TypeSymbol *containing_type = (TypeSymbol *) variable_symbol -> owner;
             //
-            // Access to an private or protected variable in an enclosing type ?
+            // Access to a private or protected variable in an enclosing type ?
             //
             if (this_type != containing_type &&
                 this_type -> outermost_type == environment_type -> outermost_type &&
@@ -2187,13 +2188,26 @@ void Semantic::FindVariableMember(TypeSymbol *type, TypeSymbol *environment_type
         {
             TypeSymbol *inner_type = FindNestedType(type, field_access -> identifier_token);
             if (inner_type)
-                 ReportSemError(SemanticError::FIELD_IS_TYPE,
-                                field_access -> identifier_token,
-                                field_access -> identifier_token,
-                                lex_stream -> NameString(field_access -> identifier_token));
-            else ReportAccessedFieldNotFound(field_access, type);
-
-            field_access -> symbol = control.no_type;
+            {
+                if (base_is_type)
+                {
+                    field_access -> symbol = inner_type;
+                    TypeAccessCheck(field_access, inner_type);
+                }
+                else
+                {
+                    ReportSemError(SemanticError::TYPE_NOT_FIELD,
+                                   field_access -> identifier_token,
+                                   field_access -> identifier_token,
+                                   lex_stream -> NameString(field_access -> identifier_token));
+                    field_access -> symbol = control.no_type;
+                }
+            }
+            else
+            {
+                ReportAccessedFieldNotFound(field_access, type);
+                field_access -> symbol = control.no_type;
+            }
         }
     }
 
@@ -2452,9 +2466,7 @@ void Semantic::ProcessAmbiguousName(Ast *name)
                 return;
             }
 
-            wchar_t *identifier_name = lex_stream -> NameString(field_access -> identifier_token);
             PackageSymbol *package;
-
             Symbol *symbol = base -> symbol;
 
             if (field_access -> IsThisAccess() || field_access -> IsSuperAccess())
@@ -2467,15 +2479,15 @@ void Semantic::ProcessAmbiguousName(Ast *name)
                     if (! enclosing_type)
                     {
                         ReportSemError(SemanticError::NOT_A_TYPE,
-                                       field_access -> base -> LeftToken(),
-                                       field_access -> base -> RightToken());
+                                       base -> LeftToken(),
+                                       base -> RightToken());
                         field_access -> symbol = control.no_type;
                     }
                     else if (enclosing_type -> ACC_INTERFACE())
                     {
                         ReportSemError(SemanticError::NOT_A_CLASS,
-                                       field_access -> base -> LeftToken(),
-                                       field_access -> base -> RightToken(),
+                                       base -> LeftToken(),
+                                       base -> RightToken(),
                                        enclosing_type -> ContainingPackage() -> PackageName(),
                                        enclosing_type -> ExternalName());
                         field_access -> symbol = control.no_type;
@@ -2579,147 +2591,7 @@ void Semantic::ProcessAmbiguousName(Ast *name)
             //
             else if ((type = symbol -> TypeCast()))
             {
-                if (type -> Bad())
-                {
-                    //
-                    // If no error has been detected so far, report this as an error so that
-                    // we don't try to generate code later. On the other hand, if an error
-                    // had been detected prior to this, don't flood the user with spurious
-                    // messages.
-                    //
-                    if (NumErrors() == 0)
-                        ReportAccessedFieldNotFound(field_access, type);
-                    field_access -> symbol = control.no_type;
-                }
-                else if (type == control.null_type || type -> Primitive())
-                {
-                    ReportSemError(SemanticError::TYPE_NOT_REFERENCE,
-                                   base -> LeftToken(),
-                                   base -> RightToken(),
-                                   type -> Name());
-                    field_access -> symbol = control.no_type;
-                }
-                else
-                {
-                    TypeAccessCheck(base, type);
-
-                    VariableSymbol *variable_symbol = FindVariableInType(type, field_access);
-
-                    if (variable_symbol)
-                    {
-                        assert(variable_symbol -> IsTyped());
-
-                        if (base -> IsName()) // a type name (as opposed to an expression) ?
-                        {
-                            if (variable_symbol -> ACC_STATIC())
-                            {
-                                //
-                                // A variable_symbol that is STATIC and FINAL must have an initial value.
-                                // If it is dereferenced by a type name, then associate the value with the
-                                // subexpression to identify it as a constant subexpression.
-                                //
-                                if (variable_symbol -> ACC_FINAL())
-                                {
-                                    //
-                                    // If the field declaration of the type has been completely processed,
-                                    // simply retrieve the value. Otherwise, compute the value of the
-                                    // initialization expression in question on the fly if the variable
-                                    // in question is not in the same type. Recall that static variables
-                                    // must be processed in the textual order in which they appear in the
-                                    // body of a type. Therefore, if the static initialization of a field
-                                    // refers to another variable in the same type it must have appeared
-                                    // before the current field declaration otherwise we will emit an error
-                                    // message later...
-                                    //
-                                    if (variable_symbol -> IsDeclarationComplete())
-                                        field_access -> value = variable_symbol -> initial_value;
-                                    else if (variable_symbol -> declarator)
-                                    {
-                                        AstVariableDeclarator *declarator = variable_symbol -> declarator -> VariableDeclaratorCast();
-                                        //
-                                        // If the variable declarator in question exists and its computation is not
-                                        // pending (to avoid looping) and it has a simple expression initializer.
-                                        //
-                                        if (declarator &&
-                                            (! declarator -> pending) &&
-                                            declarator -> variable_initializer_opt &&
-                                            (! declarator -> variable_initializer_opt -> ArrayInitializerCast()))
-                                        {
-                                            TypeSymbol *type = (TypeSymbol *) variable_symbol -> owner;
-                                            Semantic *sem = type -> semantic_environment -> sem;
-                                            field_access -> value = sem -> ComputeFinalValue(declarator);
-                                        }
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                ReportSemError(SemanticError::NAME_NOT_CLASS_VARIABLE,
-                                               field_access -> identifier_token,
-                                               field_access -> identifier_token,
-                                               identifier_name);
-                            }
-                        }
-
-                        TypeSymbol *containing_type = (TypeSymbol *) variable_symbol -> owner;
-                        //
-                        // Access to a private or protected variable in an enclosing type ?
-                        //
-                        if (this_type != containing_type &&
-                            this_type -> outermost_type == type -> outermost_type &&
-                            (variable_symbol -> ACC_PRIVATE() ||
-                             (variable_symbol -> ACC_PROTECTED() &&
-                              containing_type -> ContainingPackage() != type -> ContainingPackage())))
-                        {
-                            assert((! variable_symbol -> ACC_PRIVATE()) || containing_type == type);
- 
-                            if (field_access -> IsConstant())
-                                field_access -> symbol = variable_symbol;
-                            else
-                            {
-                                AstFieldAccess *method_name     = compilation_unit -> ast_pool -> GenFieldAccess();
-                                method_name -> base             = field_access -> base;  // TODO: WARNING: sharing of Ast subtree !!!
-                                method_name -> dot_token        = field_access -> identifier_token;
-                                method_name -> identifier_token = field_access -> identifier_token;
-                                method_name -> symbol           = variable_symbol; // the variable in question
-
-                                //
-                                // variable_symbol is static.
-                                //
-                                AstMethodInvocation *p       = compilation_unit -> ast_pool -> GenMethodInvocation();
-                                p -> method                  = method_name;
-                                p -> left_parenthesis_token  = field_access -> identifier_token;
-                                p -> right_parenthesis_token = field_access -> identifier_token;
-                                p -> symbol                  = type -> GetReadAccessMethod(variable_symbol);
-
-                                if (! variable_symbol -> ACC_STATIC())
-                                    p -> AddArgument(field_access -> base); // TODO: WARNING: sharing of Ast subtree !!!
-
-                                field_access -> resolution_opt = p;
-                                field_access -> symbol = p -> symbol;
-                            }
-                        }
-                        else
-                        {
-                            field_access -> symbol = variable_symbol;
-                            MemberAccessCheck(field_access, type, variable_symbol);
-                        }
-                    }
-                    else
-                    {
-                        TypeSymbol *inner_type = FindNestedType(type, field_access -> identifier_token);
-                        if (inner_type)
-                        {
-                            field_access -> symbol = inner_type;
-                            TypeAccessCheck(field_access, inner_type);
-                        }
-                        else
-                        {
-                            ReportAccessedFieldNotFound(field_access, type);
-                            field_access -> symbol = control.no_type;
-                        }
-                    }
-                }
+                FindVariableMember(type, base -> Type(), field_access);
             }
             //
             // ...If the name to the left of the '.' is reclassified as an ExpressionName, then this
@@ -2771,7 +2643,7 @@ void Semantic::ProcessFieldAccess(Ast *expr)
 
     ProcessAmbiguousName(field_access);
 
-        TypeSymbol *type;
+    TypeSymbol *type;
 
     if (field_access -> symbol != control.no_type)
     {
@@ -3455,8 +3327,10 @@ void Semantic::ProcessMethodInvocation(Ast *expr)
 
 void Semantic::ProcessNullLiteral(Ast *expr)
 {
+    //
+    // Null is not a compile-time constant, so don't give it a value
+    //
     AstNullLiteral *null_literal = (AstNullLiteral *) expr;
-    null_literal -> value = control.NullValue();
     null_literal -> symbol = control.null_type;
 
     return;
@@ -3501,7 +3375,7 @@ void Semantic::ProcessSuperExpression(Ast *expr)
     }
     else if (ExplicitConstructorInvocation())
     {
-        ReportSemError(SemanticError::THIS_IN_EXPLICIT_CONSTRUCTOR_INVOCATION,
+        ReportSemError(SemanticError::SUPER_IN_EXPLICIT_CONSTRUCTOR_INVOCATION,
                        super_expression -> LeftToken(),
                        super_expression -> RightToken(),
                        lex_stream -> NameString(super_expression -> super_token));
@@ -3515,6 +3389,10 @@ void Semantic::ProcessParenthesizedExpression(Ast *expr)
 {
     AstParenthesizedExpression *parenthesized = (AstParenthesizedExpression *) expr;
 
+    //
+    // Do not use ProcessExpressionOrStringConstant here, to avoid generating
+    // intermediate Strings - see CheckConstantString in lookup.cpp
+    //
     ProcessExpression(parenthesized -> expression);
     parenthesized -> value = parenthesized -> expression -> value;
     parenthesized -> symbol = parenthesized -> expression -> symbol;
@@ -5142,16 +5020,13 @@ LiteralValue *Semantic::CastPrimitiveValue(TypeSymbol *target_type, AstExpressio
                 IntToString integer(literal -> value);
                 literal_value = control.Utf8_pool.FindOrInsert(integer.String(), integer.Length());
             }
-            else if (expr -> value == control.NullValue())
-                literal_value = expr -> value;
         }
         else if (target_type == control.double_type)
         {
             if (source_type == control.float_type)
             {
                 FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                IEEEdouble value(literal -> value);
-                literal_value = control.double_pool.FindOrInsert(value);
+                literal_value = control.double_pool.FindOrInsert(literal -> value.DoubleValue());
             }
             else if (source_type == control.long_type)
             {
@@ -5171,8 +5046,7 @@ LiteralValue *Semantic::CastPrimitiveValue(TypeSymbol *target_type, AstExpressio
             if (source_type == control.double_type)
             {
                 DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                IEEEfloat value(literal -> value);
-                literal_value = control.float_pool.FindOrInsert(value);
+                literal_value = control.float_pool.FindOrInsert(literal -> value.FloatValue());
             }
             else if (source_type == control.long_type)
             {
@@ -5192,14 +5066,12 @@ LiteralValue *Semantic::CastPrimitiveValue(TypeSymbol *target_type, AstExpressio
             if (source_type == control.double_type)
             {
                 DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                LongInt value(literal -> value);
-                literal_value = control.long_pool.FindOrInsert(value);
+                literal_value = control.long_pool.FindOrInsert(literal -> value.LongValue());
             }
             else if (source_type == control.float_type)
             {
                 FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                LongInt value(literal -> value);
-                literal_value = control.long_pool.FindOrInsert(value);
+                literal_value = control.long_pool.FindOrInsert(literal -> value.LongValue());
             }
             else
             {
@@ -5222,7 +5094,7 @@ LiteralValue *Semantic::CastPrimitiveValue(TypeSymbol *target_type, AstExpressio
             else if (source_type == control.long_type)
             {
                 LongLiteralValue *literal = (LongLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (literal -> value).LowWord());
+                literal_value = control.int_pool.FindOrInsert((i4) (literal -> value).LowWord());
             }
             else literal_value = expr -> value;
         }
@@ -5231,22 +5103,22 @@ LiteralValue *Semantic::CastPrimitiveValue(TypeSymbol *target_type, AstExpressio
             if (source_type == control.double_type)
             {
                 DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (u2) (literal -> value.IntValue()));
+                literal_value = control.int_pool.FindOrInsert((i4) (u2) (literal -> value.IntValue()));
             }
             else if (source_type == control.float_type)
             {
                 FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (u2) (literal -> value.IntValue()));
+                literal_value = control.int_pool.FindOrInsert((i4) (u2) (literal -> value.IntValue()));
             }
             else if (source_type == control.long_type)
             {
                 LongLiteralValue *literal = (LongLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (u2) (literal -> value).LowWord());
+                literal_value = control.int_pool.FindOrInsert((i4) (u2) (literal -> value).LowWord());
             }
             else
             {
                 IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (u2) literal -> value);
+                literal_value = control.int_pool.FindOrInsert((i4) (u2) literal -> value);
             }
         }
         else if (target_type == control.short_type)
@@ -5254,22 +5126,22 @@ LiteralValue *Semantic::CastPrimitiveValue(TypeSymbol *target_type, AstExpressio
             if (source_type == control.double_type)
             {
                 DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (i2) (literal -> value.IntValue()));
+                literal_value = control.int_pool.FindOrInsert((i4) (i2) (literal -> value.IntValue()));
             }
             else if (source_type == control.float_type)
             {
                 FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (i2) (literal -> value.IntValue()));
+                literal_value = control.int_pool.FindOrInsert((i4) (i2) (literal -> value.IntValue()));
             }
             else if (source_type == control.long_type)
             {
                 LongLiteralValue *literal = (LongLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (i2) (literal -> value).LowWord());
+                literal_value = control.int_pool.FindOrInsert((i4) (i2) (literal -> value).LowWord());
             }
             else
             {
                 IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (i2) literal -> value);
+                literal_value = control.int_pool.FindOrInsert((i4) (i2) literal -> value);
             }
         }
         else if (target_type == control.byte_type)
@@ -5277,12 +5149,12 @@ LiteralValue *Semantic::CastPrimitiveValue(TypeSymbol *target_type, AstExpressio
             if (source_type == control.double_type)
             {
                 DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (i1) (literal -> value.IntValue()));
+                literal_value = control.int_pool.FindOrInsert((i4) (i1) (literal -> value.IntValue()));
             }
             else if (source_type == control.float_type)
             {
                 FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (i1) (literal -> value.IntValue()));
+                literal_value = control.int_pool.FindOrInsert((i4) (i1) (literal -> value.IntValue()));
             }
             else if (source_type == control.long_type)
             {
@@ -5292,7 +5164,7 @@ LiteralValue *Semantic::CastPrimitiveValue(TypeSymbol *target_type, AstExpressio
             else
             {
                 IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (i1) literal -> value);
+                literal_value = control.int_pool.FindOrInsert((i4) (i1) literal -> value);
             }
         }
     }
@@ -5327,6 +5199,10 @@ void Semantic::ProcessCastExpression(Ast *expr)
         exception_set -> AddElement(control.RuntimeException());
     }
 
+    //
+    // Do not use ProcessExpressionOrStringConstant here, to avoid generating
+    // intermediate Strings - see CheckConstantString in lookup.cpp
+    //
     ProcessExpression(cast_expression -> expression);
 
     TypeSymbol *source_type = cast_expression -> expression -> Type();
@@ -5664,6 +5540,10 @@ void Semantic::BinaryNumericPromotion(AstConditionalExpression *conditional_expr
 
 void Semantic::ProcessPLUS(AstBinaryExpression *expr)
 {
+    //
+    // Do not use ProcessExpressionOrStringConstant here, to avoid generating
+    // intermediate Strings - see CheckConstantString in lookup.cpp
+    //
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
@@ -5688,12 +5568,7 @@ void Semantic::ProcessPLUS(AstBinaryExpression *expr)
         //
         // Convert the left expression if necessary.
         //
-        if (expr -> left_expression -> value == control.NullValue())
-        {
-             expr -> left_expression -> value = control.null_literal;
-             expr -> left_expression -> symbol = control.String();
-        }
-        else if (left_type != control.String())
+        if (left_type != control.String())
         {
             AddStringConversionDependence(left_type, expr -> binary_operator_token);
             if (left_type == control.void_type)
@@ -5706,12 +5581,7 @@ void Semantic::ProcessPLUS(AstBinaryExpression *expr)
         //
         // Convert the right expression if necessary.
         //
-        if (expr -> right_expression -> value == control.NullValue())
-        {
-             expr -> right_expression -> value = control.null_literal;
-             expr -> right_expression -> symbol = control.String();
-        }
-        else if (right_type != control.String())
+        if (right_type != control.String())
         {
             AddStringConversionDependence(right_type, expr -> binary_operator_token);
             if (right_type == control.void_type)
@@ -5819,14 +5689,14 @@ void Semantic::ProcessLEFT_SHIFT(AstBinaryExpression *expr)
                 LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
 
-                expr -> value = control.long_pool.FindOrInsert(left -> value << (right -> value & 0x3F));
+                expr -> value = control.long_pool.FindOrInsert(left -> value << (right -> value & LONG_SHIFT_MASK));
             }
             else // assert(expr -> Type() == control.int_type)
             {
                 IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value << (0x1F & right -> value));
+                expr -> value = control.int_pool.FindOrInsert(left -> value << (right -> value & INT_SHIFT_MASK));
             }
         }
     }
@@ -5876,14 +5746,14 @@ void Semantic::ProcessRIGHT_SHIFT(AstBinaryExpression *expr)
                 LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
 
-                expr -> value = control.long_pool.FindOrInsert(left -> value >> (right -> value & 0x3F));
+                expr -> value = control.long_pool.FindOrInsert(left -> value >> (right -> value & LONG_SHIFT_MASK));
             }
             else // assert(expr -> Type() == control.int_type)
             {
                 IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value >> (0x1F & right -> value));
+                expr -> value = control.int_pool.FindOrInsert(left -> value >> (right -> value & INT_SHIFT_MASK));
             }
         }
     }
@@ -5934,7 +5804,7 @@ void Semantic::ProcessUNSIGNED_RIGHT_SHIFT(AstBinaryExpression *expr)
                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
 
                 expr -> value = control.long_pool.FindOrInsert((LongInt)
-                    ((ULongInt) left -> value >> (right -> value & 0x3F)));
+                    ((ULongInt) left -> value >> (right -> value & LONG_SHIFT_MASK)));
             }
             else // assert(expr -> Type() == control.int_type)
             {
@@ -5942,7 +5812,7 @@ void Semantic::ProcessUNSIGNED_RIGHT_SHIFT(AstBinaryExpression *expr)
                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
 
                 expr -> value = control.int_pool.FindOrInsert((i4)
-                    ((u4) left -> value >> (right -> value & 0x1F)));
+                    ((u4) left -> value >> (right -> value & INT_SHIFT_MASK)));
             }
         }
     }
@@ -6168,7 +6038,15 @@ void Semantic::ProcessAND(AstBinaryExpression *expr)
     else
     {
         if (left_type == control.boolean_type && right_type == control.boolean_type)
+        {
              expr -> symbol = control.boolean_type;
+             if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+             {
+                 IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
+                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                 expr -> value = control.int_pool.FindOrInsert(left -> value & right -> value);
+             }
+        }
         else
         {
             BinaryNumericPromotion(expr);
@@ -6223,7 +6101,15 @@ void Semantic::ProcessXOR(AstBinaryExpression *expr)
     else
     {
         if (left_type == control.boolean_type && right_type == control.boolean_type)
+        {
              expr -> symbol = control.boolean_type;
+             if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+             {
+                 IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
+                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                 expr -> value = control.int_pool.FindOrInsert(left -> value ^ right -> value);
+             }
+        }
         else
         {
             BinaryNumericPromotion(expr);
@@ -6278,7 +6164,15 @@ void Semantic::ProcessIOR(AstBinaryExpression *expr)
     else
     {
         if (left_type == control.boolean_type && right_type == control.boolean_type)
+        {
              expr -> symbol = control.boolean_type;
+             if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+             {
+                 IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
+                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                 expr -> value = control.int_pool.FindOrInsert(left -> value | right -> value);
+             }
+        }
         else
         {
             BinaryNumericPromotion(expr);
@@ -6344,16 +6238,14 @@ void Semantic::ProcessAND_AND(AstBinaryExpression *expr)
                            expr -> right_expression -> RightToken(),
                            right_type -> Name());
         }
-        else if (expr -> left_expression -> IsConstant())
+        else if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
         {
+            //
+            // Even when evaluating false && x, x must be constant for && to be constant
+            //
             IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-            if (! left -> value)
-                expr -> value = control.int_pool.FindOrInsert(0);
-            else if (expr -> right_expression -> IsConstant())
-            {
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
-                expr -> value = control.int_pool.FindOrInsert(left -> value && right -> value ? 1 : 0);
-            }
+            IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+            expr -> value = control.int_pool.FindOrInsert(left -> value && right -> value ? 1 : 0);
         }
     }
 
@@ -6387,16 +6279,14 @@ void Semantic::ProcessOR_OR(AstBinaryExpression *expr)
                            expr -> right_expression -> RightToken(),
                            right_type -> Name());
         }
-        else if (expr -> left_expression -> IsConstant())
+        else if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
         {
+            //
+            // Even when evaluating true || x, x must be constant for && to be constant
+            //
             IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-            if (left -> value)
-                expr -> value = control.int_pool.FindOrInsert(1);
-            else if (expr -> right_expression -> IsConstant())
-            {
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
-                expr -> value = control.int_pool.FindOrInsert(left -> value || right -> value ? 1 : 0);
-            }
+            IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+            expr -> value = control.int_pool.FindOrInsert(left -> value || right -> value ? 1 : 0);
         }
     }
 
@@ -6685,6 +6575,7 @@ void Semantic::ProcessSLASH(AstBinaryExpression *expr)
                                                                : SemanticError::ZERO_DIVIDE_CAUTION,
                                expr -> LeftToken(),
                                expr -> RightToken());
+                expr -> symbol = control.no_type;
             }
             else if (left_expression -> IsConstant())
             {
@@ -6773,6 +6664,7 @@ void Semantic::ProcessMOD(AstBinaryExpression *expr)
                                                                : SemanticError::ZERO_DIVIDE_CAUTION,
                                expr -> LeftToken(),
                                expr -> RightToken());
+                expr -> symbol = control.no_type;
             }
             else if (left_expression -> IsConstant())
             {
@@ -6824,7 +6716,7 @@ void Semantic::ProcessMOD(AstBinaryExpression *expr)
 
 void Semantic::ProcessINSTANCEOF(AstBinaryExpression *expr)
 {
-    ProcessExpression(expr -> left_expression);
+    ProcessExpressionOrStringConstant(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
     TypeSymbol *left_type  = expr -> left_expression -> Type(),
@@ -6887,6 +6779,11 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
     AstConditionalExpression *conditional_expression = (AstConditionalExpression *) expr;
 
     ProcessExpression(conditional_expression -> test_expression);
+    //
+    // TODO: Should we delay calculating results of true/false expressions
+    // until CheckStringConstant in lookup.cpp to put fewer intermediate
+    // strings in the storage pools?
+    //
     ProcessExpressionOrStringConstant(conditional_expression -> true_expression);
     ProcessExpressionOrStringConstant(conditional_expression -> false_expression);
 
@@ -6968,16 +6865,18 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
             }
 
             //
-            // If all the relevant subexpressions are constants, compute the results and
+            // If all the subexpressions are constants, compute the results and
             // set the value of the expression accordingly.
             //
-            if (conditional_expression -> test_expression -> IsConstant())
+            if (conditional_expression -> test_expression -> IsConstant() &&
+                conditional_expression -> true_expression -> IsConstant() &&
+                conditional_expression -> false_expression -> IsConstant())
             {
                 IntLiteralValue *test = (IntLiteralValue *) conditional_expression -> test_expression -> value;
 
-                if (test -> value && conditional_expression -> true_expression -> IsConstant())
+                if (test -> value)
                      conditional_expression -> value = conditional_expression -> true_expression -> value;
-                else if ((! test -> value) && conditional_expression -> false_expression -> IsConstant())
+                else
                      conditional_expression -> value = conditional_expression -> false_expression -> value;
             }
         }
@@ -7021,6 +6920,28 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
                            conditional_expression -> true_expression -> Type() -> ContainingPackage() -> PackageName(),
                            conditional_expression -> true_expression -> Type() -> ExternalName());
             conditional_expression -> symbol = control.no_type;
+        }
+
+        //
+        // If all the subexpressions are constants, compute the results and
+        // set the value of the expression accordingly.
+        //
+        // Since null should not be a compile-time constant anymore, the assert
+        // should not need to check for null type, so it was removed....
+        //
+        if (conditional_expression -> test_expression -> IsConstant() &&
+            conditional_expression -> true_expression -> IsConstant() &&
+            conditional_expression -> false_expression -> IsConstant())
+        {
+            assert(conditional_expression -> symbol == control.String());
+            //  || conditional_expression -> symbol == control.null_type);
+
+            IntLiteralValue *test = (IntLiteralValue *) conditional_expression -> test_expression -> value;
+            
+            if (test -> value)
+                conditional_expression -> value = conditional_expression -> true_expression -> value;
+            else
+                conditional_expression -> value = conditional_expression -> false_expression -> value;
         }
     }
 
@@ -7133,12 +7054,7 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
     //
     if (left_type == control.String() && assignment_expression -> assignment_tag == AstAssignmentExpression::PLUS_EQUAL)
     {
-        if (assignment_expression -> expression -> value == control.NullValue())
-        {
-            assignment_expression -> expression -> value = control.null_literal;
-            assignment_expression -> expression -> symbol = control.String();
-        }
-        else if (right_type != control.String())
+        if (right_type != control.String())
         {
             if (right_type == control.void_type)
                  ReportSemError(SemanticError::VOID_TO_STRING,
@@ -7183,11 +7099,18 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
                 if (right_expression -> IsConstant())
                 {
                     //
-                    // If the type of the expression is int or long and the right-hand side is 0
-                    // then issue an error message.
+                    // If the type of the expression is integral and the right
+                    // hand side is constant 0 then issue an error message.
                     //
-                    if ((left_type == control.int_type && ((IntLiteralValue *) right_expression -> value) -> value == 0) ||
-                        (left_type == control.long_type && ((LongLiteralValue *) right_expression -> value) -> value == 0))
+                    if (control.IsIntegral(left_type) &&
+#ifdef HAVE_DYNAMIC_CAST
+                        (right_type == control.int_type && dynamic_cast<IntLiteralValue *> (right_expression -> value) -> value == 0) ||
+                        (right_type == control.long_type && dynamic_cast<LongLiteralValue *> (right_expression -> value) -> value == 0)
+#else // ! HAVE_DYNAMIC_CAST
+                        (right_type == control.int_type && ((IntLiteralValue *) right_expression -> value) -> value == 0) ||
+                        (right_type == control.long_type && ((LongLiteralValue *) right_expression -> value) -> value == 0)
+#endif // ! HAVE_DYNAMIC_CAST
+                        )
                     {
                         ReportSemError(SemanticError::ZERO_DIVIDE_CAUTION,
                                        assignment_expression -> LeftToken(),

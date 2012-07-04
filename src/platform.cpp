@@ -1,4 +1,4 @@
-// $Id: platform.cpp,v 1.14 2001/02/20 06:47:51 mdejong Exp $
+// $Id: platform.cpp,v 1.18 2001/04/28 19:34:37 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,6 +7,34 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+//
+// NOTE: The code for accurate conversions between floating point
+// and decimal strings, in double.h, double.cpp, platform.h, and
+// platform.cpp, is adapted from dtoa.c.  The original code can be
+// found at http://netlib2.cs.utk.edu/fp/dtoa.c.
+//
+// The code in dtoa.c is copyrighted as follows:
+//****************************************************************
+//*
+//* The author of this software is David M. Gay.
+//*
+//* Copyright (c) 1991, 2000, 2001 by Lucent Technologies.
+//*
+//* Permission to use, copy, modify, and distribute this software for any
+//* purpose without fee is hereby granted, provided that this entire notice
+//* is included in all copies of any software which is or includes a copy
+//* or modification of this software and in all copies of the supporting
+//* documentation for such software.
+//*
+//* THIS SOFTWARE IS BEING PROVIDED "AS IS", WITHOUT ANY EXPRESS OR IMPLIED
+//* WARRANTY.  IN PARTICULAR, NEITHER THE AUTHOR NOR LUCENT MAKES ANY
+//* REPRESENTATION OR WARRANTY OF ANY KIND CONCERNING THE MERCHANTABILITY
+//* OF THIS SOFTWARE OR ITS FITNESS FOR ANY PARTICULAR PURPOSE.
+//*
+//***************************************************************/
+//
+//
+
 #include "platform.h"
 
 #include "long.h"
@@ -406,326 +434,732 @@ LongToDecString::LongToDecString(LongInt &num)
 //
 // Convert an double to its character string representation.
 //
-FloatToString::FloatToString(IEEEfloat &num)
+FloatToString::FloatToString(const IEEEfloat &f)
 {
-    if (num.IsNaN())
+    int bbits, b2, b5, be, i,
+        j, j1, k, m2, m5, s2, s5;
+    bool neg,      // f is negative
+        k_check,   // need to check if k is near power of ten
+        spec_case, // f is normalized power of two
+        denorm,    // f is denormalized
+        round;     // round trailing 9's up
+    IEEEfloat fs, f1;
+    char *s, dig;
+
+    //
+    // Start with exceptional cases: zero, infinity, NaN
+    //
+    neg = f.IsNegative();
+    if (f.IsNaN())
     {
-         strcpy(str,"NaN");
-         length = strlen("NaN");
+        strcpy(str, StringConstant::U8S_NaN);
+        length = strlen(str);
+        return;
     }
-    else if (num.IsNegativeInfinity())
+    else if (f.IsInfinite())
     {
-         strcpy(str,"-Infinity");
-         length = strlen("-Infinity");
+        if (neg)
+            strcpy(str, StringConstant::U8S_neg_Infinity);
+        else
+            strcpy(str, StringConstant::U8S_pos_Infinity);
+        length = strlen(str);
+        return;
     }
-    else if (num.IsPositiveInfinity())
+    else if (f.IsZero())
     {
-         strcpy(str,"Infinity");
-         length = strlen("Infinity");
+        if (neg)
+            strcpy(str, StringConstant::U8S_neg_Zero);
+        else
+            strcpy(str, StringConstant::U8S_pos_Zero);
+        length = strlen(str);
+        return;
     }
-    else if (num.IsNegativeZero())
+
+    //
+    // Create BigInt holding f.
+    // bbits = # significant bits in f
+    // be = log2(least significant bit)
+    // i = log2(most significant bit)
+    // f1 = mantissa of f
+    // Therefore, f == f1 * 2**i, and i == be + bbits - 1.
+    //
+    s = str;
+    BigInt b(f, be, bbits);
+    u4 x;
+    i = f.SplitInto(x);
+    f1 = IEEEfloat((i4) x) / (1 << IEEEfloat::FractSize());
+    denorm = i <= -IEEEfloat::Bias();
+    //
+    // log(x)	~=~ log(1.5) + (x-1.5)/1.5
+    // log10(x)	 =  log(x) / log(10)
+    //		~=~ log(1.5)/log(10) + (x-1.5)/(1.5*log(10))
+    // log10(f)  =  log10(f1 * 2**i)
+    //           =  i*log10(2) + log10(f1)
+    //
+    // This suggests computing an approximation k to log10(f) by
+    //
+    // k = i*0.30103 + ( 0.17609125 + (f1-1.5)*0.28952965 );
+    //
+    // We want k to be too large rather than too small.
+    // The error in the first-order Taylor series approximation
+    // is in our favor, so we just round up the constant enough
+    // to compensate for any error in the multiplication of
+    // i by 0.30103; since |i| <= 152,
+    // and 152 * 0.30103 * 2^-23 ~=~ 5.5e-6,
+    // adding 1e-5 to the constant term more than suffices.
+    // Hence we adjust the constant term to 0.1761.
+    // (We could get a more accurate k by invoking log10,
+    //  but this is probably not worthwhile.)
+    //
+    fs = IEEEfloat(i) * 0.30103f + 0.1761f + (f1 - 1.5f) * 0.28952965f;
+    k = fs.IntValue();
+    f1 = f.IsNegative() ? -f : f;
+    k_check = true;
+    if (fs < 0 && fs != k)
+        k--;	 
+    else if (k >= 0 && k <= 10)
     {
-         strcpy(str,"-0.0");
-         length = strlen("-0.0");
+        if (f1 < IEEEfloat::tens[k])
+            k--;
+        k_check = false;
     }
-    else if (num.IsPositiveZero())
+
+    //
+    // We have an integer (no fraction) represented in 24 bits.
+    // For this special case, math on floats has no rounding errors.
+    //
+    if (be >= 0 && k <= 6)
     {
-         strcpy(str,"0.0");
-         length = strlen("0.0");
+        fs = IEEEfloat::tens[k];
+        do
+        {
+            dig = (char) (f1 / fs).IntValue();
+            f1 -= fs * (i4) dig;
+            *s++ = U_0 + dig;
+        } while ((f1 *= 10) != 0);
+        Format(s, k, neg);
+        return;
+    }
+
+    //
+    // Begin work. Find S = 2**s2 * 5**s5, and b adjustment 2**b2 * 5**b5,
+    // that will be needed later on.
+    //
+    if (be <= 0)
+    {
+        b2 = 0;
+        s2 = -be;
     }
     else
     {
-        //
-        // TODO: This conversion is a temporary patch. Need volunteer to implement
-        //       better algorithm:
-        //
-        //            Burger/Dybvig, PLDI 1996
-        //            Steele/White,  PLDI 1990
-        //
-        // If the absolute value f of the number in question is outside of the range 
-        //
-        //         1E-3 <= f < 1E+7
-        //
-        // we write the number out in "computerized scientific notation".
-        // Otherwise, we write it out in standard form.
-        //
-        int decimal_exponent = 0;
-        float f = (num.IsNegative() ? -num.FloatView() : num.FloatView());
-        if (f < 1E-3 || f >= 1E+7)
-        {
-            //
-            // The value of the number f can be expressed as
-            //
-            //     mantissa * (2 ** num.Exponent())
-            //
-            // But we really need to express it as:
-            //
-            //     mantissa * (10 ** decimal_exponent)
-            //
-            decimal_exponent = (int) ceil(num.Exponent() * log10(2.0));
-            f *= pow(10.0, -decimal_exponent); // shift f until it has precisely one decimal digit before the dot
-            while (floor(f) == 0.0)
-            {
-                decimal_exponent--;
-                f *= 10.0;
-            }
-
-            assert(floor(f) > 0.0f && floor(f) < 10.0f); // make sure there is only one digit !!!
-        }
-
-        char *s = str;
-        if (num.IsNegative()) // if the number is negative, add the minus sign
-            *s++ = U_MINUS;
-
-        //
-        // convert whole part into its string representation
-        //
-        IntToString whole((int) f);
-
-        char *ptr = whole.String();
-        while(*ptr)
-            *s++ = *ptr++;
-        *s++ = U_DOT;
-
-        //
-        // Convert fractional part to its string representation
-        //
-        int limit = MAXIMUM_PRECISION + (num.IsNegative() ? 2 : 1);
-        float fraction = f - ((int) f);
-        do
-        {
-            fraction *= 10.0;
-            *s++ = U_0 + ((int) fraction);
-            fraction -= ((int) fraction);
-        } while((fraction > 0.0) && (s - str) < limit);
-
-        //
-        // For each leading 0, add a little more precision.
-        // There can be at most 3.
-        // 
-        char *last = s - 1;
-        for (int i = 0; i < 3 && floor(f) == 0.0 && *last != U_0; i++)
-        {
-            f *= 10.0;
-            fraction *= 10.0;
-            last = s;
-            *s++ = U_0 + ((int) fraction);
-            fraction -= ((int) fraction);
-        }
-
-        //
-        // Round if necessary
-        //
-        if (fraction >= 0.5)
-        {
-            while (*last == U_9)
-                *last-- = U_0;
-            char *dot_character = (*last == U_DOT ? last : (char *) NULL);
-            if (dot_character)
-            {
-                last--;
-                while (last >= str && *last == U_9)
-                    *last-- = U_0;
-            }
-
-            if (last < str)
-            {
-                *++dot_character = U_DOT; // move dot over 1 place
-                *str = 1;                 // place a 1 in the first position
-                *s++ = U_0;               // add an extra zero at the end.
-            }
-            else (*last)++; // increment the number in the last position
-        }
-
-        //
-        // Remove all excess trailing zeroes
-        //
-        while (*--s == U_0)
-            ;
-        s += (*s == U_DOT ? 2 : 1); // need at least one digit after the dot.
-
-        //
-        // If the number is to be written out in scientific notation, add the exponent
-        //
-        if (decimal_exponent != 0)
-        {
-            *s++ = U_E;
-            IntToString exponent(decimal_exponent);
-            char *ptr = exponent.String();
-            while (*ptr)
-                *s++ = *ptr++;
-        }
-
-        *s = U_NULL;      // close string
-        length = s - str; // compute length
+        b2 = be;
+        s2 = 0;
+    }
+    if (k >= 0)
+    {
+        b5 = 0;
+        s5 = k;
+        s2 += k;
+    }
+    else
+    {
+        b2 -= k;
+        b5 = -k;
+        s5 = 0;
     }
 
-    assert(length <= MAXIMUM_STR_LENGTH);
+    m2 = b2;
+    m5 = b5;
+    i = denorm ? be + IEEEfloat::Bias() + IEEEfloat::FractSize()
+               : 2 + IEEEfloat::FractSize() - bbits;
+    b2 += i;
+    s2 += i;
+    BigInt mhi(1);
+    if (m2 > 0 && s2 > 0)
+    {
+        i = m2 < s2 ? m2 : s2;
+        b2 -= i;
+        m2 -= i;
+        s2 -= i;
+    }
+    if (b5 > 0)
+    {
+        if (m5 > 0)
+        {
+            mhi.pow5mult(m5);
+            b *= mhi;
+        }
+        if ((j = b5 - m5) != 0)
+            b.pow5mult(j);
+    }
+    BigInt S(1);
+    if (s5 > 0)
+        S.pow5mult(s5);
+    spec_case = false;
+    if (! (f.FractBits()) && f.Exponent())
+    {
+        b2++;
+        s2++;
+        spec_case = true;
+    }
+    
+    // Arrange for convenient computation of quotients:
+    // shift left if necessary so divisor has 4 leading 0 bits.
+    //
+    // Perhaps we should just compute leading 28 bits of S once
+    // and for all and pass them and a shift to quorem, so it
+    // can do shifts and ors to compute the numerator for q.
+    //
+    if ((i = ((s5 ? 32 - S.hi0bits() : 1) + s2) & 0x1f) != 0)
+        i = 32 - i;
+    if (i > 4)
+    {
+        i -= 4;
+        b2 += i;
+        m2 += i;
+        s2 += i;
+    }
+    else if (i < 4)
+    {
+        i += 28;
+        b2 += i;
+        m2 += i;
+        s2 += i;
+    }
+    if (b2 > 0)
+        b <<= b2;
+    if (s2 > 0)
+        S <<= s2;
+    if (k_check && b.compareTo(S) < 0)
+    {
+        k--;
+        b *= 10;
+        mhi *= 10;
+    }
+    if (m2 > 0)
+        mhi <<= m2;
+    BigInt mlo(mhi);
+    if (spec_case)
+        mhi = mlo << 1;
+    round = false;
+    while (true)
+    {
+        dig = (char) b.quorem(S) + U_0;
+        //
+        // Do we have the shortest decimal string that will round to f?
+        //
+        j = b.compareTo(mlo);
+        BigInt delta = S - mhi;
+        j1 = delta.IsNegative() ? 1 : b.compareTo(delta);
+        if (j1 == 0 && ! (f.value.word & 1))
+        {
+            if (dig == U_9)
+                round = true;
+            else if (j > 0)
+                dig++;
+            *s++ = dig;
+            break;
+        }
+        if ((j < 0 || j == 0 && ! (f.value.word & 1)) && s != str)
+        {
+            if (! b.IsZero() && j1 > 0)
+            {
+                b <<= 1;
+                j1 = b.compareTo(S);
+                if ((j1 > 0 || j1 == 0 && dig & 1) && dig++ == U_9)
+                {
+                    *s++ = U_9;
+                    round = true;
+                    break;
+                }
+            }
+            *s++ = dig;
+            break;
+        }
+        if (j1 > 0 && s != str)
+        {
+            if (dig == U_9)
+            {
+                *s++ = U_9;
+                round = true;
+            }
+            else
+                *s++ = dig + 1;
+            break;
+        }
+        *s++ = dig;
+        b *= 10;
+        mlo *= 10;
+        mhi *= 10;
+    }
+    if (round)
+    {
+        while (*--s == U_9)
+            if (s == str)
+            {
+                k++;
+                *s = U_0;
+                break;
+            }
+        ++*s++;
+    }
+    Format(s, k, neg);
+}
 
-    return;
+void FloatToString::Format(char *s, int exp, bool neg)
+{
+    //
+    // at this point, str contains just the precise digits in the answer,
+    // and s points to the slot just after the last digit
+    //
+    length = s - str + 1; // strlen(str) + '.'
+    bool eneg;
+    int i;
+    switch (exp)
+    {
+    case -3: case -2: case -1:
+        // remove final trailing 0, not needed in this format
+        if (*(s - 1) == U_0)
+        {
+            length--;
+            s--;
+        }
+        s--;
+        // add enough of leading "0.00"
+        length += -exp;
+        do
+            *(s + (neg ? 2 : 1) - exp) = *s;
+        while (s-- != str);
+        for (i = (neg ? 1 : 0); i < (neg ? 2 : 1) - exp; i++)
+            str[i] = U_0;
+        if (neg)
+            str[0] = U_MINUS;
+        str[neg ? 2 : 1] = U_DOT;
+        break;
+    case 0: case 1: case 2: case 3:
+    case 4: case 5: case 6:
+        while (length < exp + 3)
+            // add trailing '0's
+            str[length++ - 1] = U_0;
+        s = &str[length - 2];
+        do
+            *(s + (neg ? 2 : 1)) = *s;
+        while (s-- != str + exp + 1);
+        if (neg)
+        {
+            do
+                *(s + 1) = *s;
+            while (s-- != str);
+            str[0] = U_MINUS;
+        }
+        str[exp + (neg ? 2 : 1)] = U_DOT;
+        break;
+    default:
+        if (length == 2)
+            // add trailing '0', so at least one digit follows '.'
+            str[length++ - 1] = U_0;
+        eneg = exp < 0;
+        if (eneg)
+        {
+            length++; // exponent '-'
+            exp = -exp;
+        }
+        if (exp < 10)
+            length += 2; // 'E' + 1 digit exponent
+        else if (exp < 100)
+            length += 3; // 'E' + 2 digit exponent
+        else
+            assert (! "unexpected exponent");
+        s = &str[length + (neg ? 1 : 0)];
+        do
+            *--s = exp % 10 + U_0;
+        while ((exp /= 10) != 0);
+        if (eneg)
+            *--s = U_MINUS;
+        *--s = U_E;
+        --s;
+        do
+            *s = *(s - (neg ? 2 : 1)); // shift digits right, to add '.'
+        while (--s != str + (neg ? 2 : 1));
+        if (neg)
+        {
+            str[1] = str[0];
+            str[0] = U_MINUS;
+        }    
+        str[neg ? 2 : 1] = U_DOT;
+    }      
+    if (neg)
+        length++;
+    str[length] = U_NULL;
+    assert(length <= MAXIMUM_STR_LENGTH);
 }
 
 
 //
 // Convert an double to its character string representation.
 //
-DoubleToString::DoubleToString(IEEEdouble &num)
+DoubleToString::DoubleToString(const IEEEdouble &d)
 {
-    if (num.IsNaN())
+    int bbits, b2, b5, be, i,
+        j, j1, k, m2, m5, s2, s5;
+    bool neg,      // f is negative
+        k_check,   // need to check if k is near power of ten
+        spec_case, // f is normalized power of two
+        denorm,    // f is denormalized
+        round;     // round trailing 9's up
+    IEEEdouble ds, d1;
+    char *s, dig;
+
+    //
+    // Start with exceptional cases: zero, infinity, NaN
+    //
+    neg = d.IsNegative();
+    if (d.IsNaN())
     {
-         strcpy(str,"NaN");
-         length = strlen("NaN");
+        strcpy(str, StringConstant::U8S_NaN);
+        length = strlen(str);
+        return;
     }
-    else if (num.IsNegativeInfinity())
+    else if (d.IsInfinite())
     {
-         strcpy(str,"-Infinity");
-         length = strlen("-Infinity");
+        if (neg)
+            strcpy(str, StringConstant::U8S_neg_Infinity);
+        else
+            strcpy(str, StringConstant::U8S_pos_Infinity);
+        length = strlen(str);
+        return;
     }
-    else if (num.IsPositiveInfinity())
+    else if (d.IsZero())
     {
-         strcpy(str,"Infinity");
-         length = strlen("Infinity");
+        if (neg)
+            strcpy(str, StringConstant::U8S_neg_Zero);
+        else
+            strcpy(str, StringConstant::U8S_pos_Zero);
+        length = strlen(str);
+        return;
     }
-    else if (num.IsNegativeZero())
+
+    //
+    // Create BigInt holding d.
+    // bbits = # significant bits in d
+    // be = log2(least significant bit)
+    // i = log2(most significant bit)
+    // d1 = mantissa of d
+    // Therefore, d == d1 * 2**i, and i == be + bbits - 1.
+    //
+    s = str;
+    BigInt b(d, be, bbits);
+    LongInt x;
+    i = d.SplitInto(x);
+    d1 = IEEEdouble(x) / IEEEdouble(LongInt(1) << IEEEdouble::FractSize());
+    denorm = i <= -IEEEdouble::Bias();
+    //
+    // log(x)	~=~ log(1.5) + (x-1.5)/1.5
+    // log10(x)	 =  log(x) / log(10)
+    //		~=~ log(1.5)/log(10) + (x-1.5)/(1.5*log(10))
+    // log10(d)  =  log10(d2 * 2**i)
+    //           =  i*log10(2) + log10(d2)
+    //
+    // This suggests computing an approximation k to log10(d) by
+    //
+    // k = i*0.301029995663981
+    //	+ ( 0.176091259055681 + (d2-1.5)*0.289529654602168 );
+    //
+    // We want k to be too large rather than too small.
+    // The error in the first-order Taylor series approximation
+    // is in our favor, so we just round up the constant enough
+    // to compensate for any error in the multiplication of
+    // i by 0.301029995663981; since |i| <= 1077,
+    // and 1077 * 0.30103 * 2^-52 ~=~ 7.2e-14,
+    // adding 1e-13 to the constant term more than suffices.
+    // Hence we adjust the constant term to 0.1760912590558.
+    // (We could get a more accurate k by invoking log10,
+    //  but this is probably not worthwhile.)
+    //
+    ds = IEEEdouble(i) * 0.301029995663981 + 0.1760912590558
+        + (d1 - 1.5) * 0.289529654602168;
+    k = ds.IntValue();
+    d1 = d.IsNegative() ? -d : d;
+    k_check = true;
+    if (ds < 0 && ds != k)
+        k--;	 
+    else if (k >= 0 && k <= 22)
     {
-         strcpy(str,"-0.0");
-         length = strlen("-0.0");
+        if (d1 < IEEEdouble::tens[k])
+            k--;
+        k_check = false;
     }
-    else if (num.IsPositiveZero())
+
+    //
+    // We have an integer (no fraction) represented in 53 bits.
+    // For this special case, math on doubles has no rounding errors.
+    //
+    if (be >= 0 && k <= 14)
     {
-         strcpy(str,"0.0");
-         length = strlen("0.0");
+        ds = IEEEdouble::tens[k];
+        do
+        {
+            dig = (char) (d1 / ds).IntValue();
+            d1 -= ds * (i4) dig;
+            *s++ = U_0 + dig;
+        } while ((d1 *= 10) != 0);
+        Format(s, k, neg);
+        return;
+    }
+
+    //
+    // Begin work. Find S = 2**s2 * 5**s5, and b adjustment 2**b2 * 5**b5,
+    // that will be needed later on.
+    //
+    if (be <= 0)
+    {
+        b2 = 0;
+        s2 = -be;
     }
     else
     {
-        //
-        // TODO: This conversion is a temporary patch. Need volunteer to implement
-        //       better algorithm:
-        //
-        //            Burger/Dybvig, PLDI 1996
-        //            Steele/White,  PLDI 1990
-        //
-        // If the absolute value d of the number in question is outside of the range 
-        //
-        //         1E-3 <= d < 1E+7
-        //
-        // we write the number out in "computerized scientific notation".
-        // Otherwise, we write it out in standard form.
-        //
-        int decimal_exponent = 0;
-        double d = (num.IsNegative() ? -num.DoubleView() : num.DoubleView());
-        if (d < 1E-3 || d >= 1E+7)
-        {
-            //
-            // The value of the number f can be expressed as
-            //
-            //     mantissa * (2 ** num.Exponent())
-            //
-            // But we really need to express it as:
-            //
-            //     mantissa * (10 ** decimal_exponent)
-            //
-            decimal_exponent = (int) ceil(num.Exponent() * log10(2.0));
-            d *= pow(10.0, -decimal_exponent); // shift f until it has precisely one decimal digit before the dot
-            while (floor(d) == 0.0)
-            {
-                decimal_exponent--;
-                d *= 10.0;
-            }
-
-            assert(floor(d) > 0.0 && floor(d) < 10.0); // make sure there is only one digit !!!
-        }
-
-        char *s = str;
-        if (num.IsNegative()) // if the number is negative, add the minus sign
-            *s++ = U_MINUS;
-
-        //
-        // convert whole part into its string representation
-        //
-        IntToString whole((int) d);
-
-        char *ptr = whole.String();
-        while(*ptr)
-            *s++ = *ptr++;
-        *s++ = U_DOT;
-
-        //
-        // Convert fractional part to its string representation
-        //
-        int limit = MAXIMUM_PRECISION + (num.IsNegative() ? 2 : 1);
-        double fraction = d - ((int) d);
-        do
-        {
-            fraction *= 10.0;
-            *s++ = U_0 + ((int) fraction);
-            fraction -= ((int) fraction);
-        } while((fraction > 0.0) && (s - str) < limit);
-
-        //
-        // For each leading 0, add a little more precision.
-        // There can be at most 3.
-        // 
-        char *last = s - 1;
-        for (int i = 0; i < 3 && floor(d) == 0.0 && *last != U_0; i++)
-        {
-            d *= 10.0;
-            fraction *= 10.0;
-            last = s;
-            *s++ = U_0 + ((int) fraction);
-            fraction -= ((int) fraction);
-        }
-
-        //
-        // Round if necessary
-        //
-        if (fraction >= 0.5)
-        {
-            while (*last == U_9)
-                *last-- = U_0;
-            char *dot_character = (*last == U_DOT ? last : (char *) NULL);
-            if (dot_character)
-            {
-                last--;
-                while (last >= str && *last == U_9)
-                    *last-- = U_0;
-            }
-
-            if (last < str)
-            {
-                *++dot_character = U_DOT; // move dot over 1 place
-                *str = 1;                 // place a 1 in the first position
-                *s++ = U_0;               // add an extra zero at the end.
-            }
-            else (*last)++; // increment the number in the last position
-        }
-
-        //
-        // Remove all excess trailing zeroes
-        //
-        while (*--s == U_0)
-            ;
-        s += (*s == U_DOT ? 2 : 1); // need at least one digit after the dot.
-
-        //
-        // If the number is to be written out in scientific notation, add the exponent
-        //
-        if (decimal_exponent != 0)
-        {
-            *s++ = U_E;
-            IntToString exponent(decimal_exponent);
-            char *ptr = exponent.String();
-            while (*ptr)
-                *s++ = *ptr++;
-        }
-
-        *s = U_NULL;      // close string
-        length = s - str; // compute length
+        b2 = be;
+        s2 = 0;
+    }
+    if (k >= 0)
+    {
+        b5 = 0;
+        s5 = k;
+        s2 += k;
+    }
+    else
+    {
+        b2 -= k;
+        b5 = -k;
+        s5 = 0;
     }
 
-    assert(length <= MAXIMUM_STR_LENGTH);
+    m2 = b2;
+    m5 = b5;
+    i = denorm ? be + IEEEdouble::Bias() + IEEEdouble::FractSize()
+               : 2 + IEEEdouble::FractSize() - bbits;
+    b2 += i;
+    s2 += i;
+    BigInt mhi(1);
+    if (m2 > 0 && s2 > 0)
+    {
+        i = m2 < s2 ? m2 : s2;
+        b2 -= i;
+        m2 -= i;
+        s2 -= i;
+    }
+    if (b5 > 0)
+    {
+        if (m5 > 0)
+        {
+            mhi.pow5mult(m5);
+            b *= mhi;
+        }
+        if ((j = b5 - m5) != 0)
+            b.pow5mult(j);
+    }
+    BigInt S(1);
+    if (s5 > 0)
+        S.pow5mult(s5);
+    spec_case = false;
+    if (! (d.FractBits()) && d.Exponent())
+    {
+        b2++;
+        s2++;
+        spec_case = true;
+    }
+    
+    // Arrange for convenient computation of quotients:
+    // shift left if necessary so divisor has 4 leading 0 bits.
+    //
+    // Perhaps we should just compute leading 28 bits of S once
+    // and for all and pass them and a shift to quorem, so it
+    // can do shifts and ors to compute the numerator for q.
+    //
+    if ((i = ((s5 ? 32 - S.hi0bits() : 1) + s2) & 0x1f) != 0)
+        i = 32 - i;
+    if (i > 4)
+    {
+        i -= 4;
+        b2 += i;
+        m2 += i;
+        s2 += i;
+    }
+    else if (i < 4)
+    {
+        i += 28;
+        b2 += i;
+        m2 += i;
+        s2 += i;
+    }
+    if (b2 > 0)
+        b <<= b2;
+    if (s2 > 0)
+        S <<= s2;
+    if (k_check && b.compareTo(S) < 0)
+    {
+        k--;
+        b *= 10;
+        mhi *= 10;
+    }
+    if (m2 > 0)
+        mhi <<= m2;
+    BigInt mlo(mhi);
+    if (spec_case)
+        mhi = mlo << 1;
+    round = false;
+    while (true)
+    {
+        dig = (char) b.quorem(S) + U_0;
+        //
+        // Do we have the shortest decimal string that will round to d?
+        //
+        j = b.compareTo(mlo);
+        BigInt delta = S - mhi;
+        j1 = delta.IsNegative() ? 1 : b.compareTo(delta);
+        if (j1 == 0 && ! (d.LowWord() & 1))
+        {
+            if (dig == U_9)
+                round = true;
+            else if (j > 0)
+                dig++;
+            *s++ = dig;
+            break;
+        }
+        if ((j < 0 || j == 0 && ! (d.LowWord() & 1)) && s != str)
+        {
+            if (! b.IsZero() && j1 > 0)
+            {
+                b <<= 1;
+                j1 = b.compareTo(S);
+                if ((j1 > 0 || j1 == 0 && dig & 1) && dig++ == U_9)
+                {
+                    *s++ = U_9;
+                    round = true;
+                    break;
+                }
+            }
+            *s++ = dig;
+            break;
+        }
+        if (j1 > 0 && s != str)
+        {
+            if (dig == U_9)
+            {
+                *s++ = U_9;
+                round = true;
+            }
+            else
+                *s++ = dig + 1;
+            break;
+        }
+        *s++ = dig;
+        b *= 10;
+        mlo *= 10;
+        mhi *= 10;
+    }
+    if (round)
+    {
+        while (*--s == U_9)
+            if (s == str)
+            {
+                k++;
+                *s = U_0;
+                break;
+            }
+        ++*s++;
+    }
+    Format(s, k, neg);
+}
 
-    return;
+void DoubleToString::Format(char *s, int exp, bool neg)
+{
+    //
+    // at this point, str contains just the precise digits in the answer,
+    // and s points to the slot just after the last digit
+    //
+    length = s - str + 1; // strlen(str) + '.'
+    bool eneg;
+    int i;
+    switch (exp)
+    {
+    case -3: case -2: case -1:
+        // remove final trailing 0, not needed in this format
+        if (*(s - 1) == U_0)
+        {
+            length--;
+            s--;
+        }
+        s--;
+        // add enough of leading "0.00"
+        length += -exp;
+        do
+            *(s + (neg ? 2 : 1) - exp) = *s;
+        while (s-- != str);
+        for (i = (neg ? 1 : 0); i < (neg ? 2 : 1) - exp; i++)
+            str[i] = U_0;
+        if (neg)
+            str[0] = U_MINUS;
+        str[neg ? 2 : 1] = U_DOT;
+        break;
+    case 0: case 1: case 2: case 3:
+    case 4: case 5: case 6:
+        while (length < exp + 3)
+            // add trailing '0's
+            str[length++ - 1] = U_0;
+        s = &str[length - 2];
+        do
+            *(s + (neg ? 2 : 1)) = *s;
+        while (s-- != str + exp + 1);
+        if (neg)
+        {
+            do
+                *(s + 1) = *s;
+            while (s-- != str);
+            str[0] = U_MINUS;
+        }
+        str[exp + (neg ? 2 : 1)] = U_DOT;
+        break;
+    default:
+        if (length == 2)
+            // add trailing '0', so at least one digit follows '.'
+            str[length++ - 1] = U_0;
+        eneg = exp < 0;
+        if (eneg)
+        {
+            length++; // exponent '-'
+            exp = -exp;
+        }
+        if (exp < 10)
+            length += 2; // 'E' + 1 digit exponent
+        else if (exp < 100)
+            length += 3; // 'E' + 2 digit exponent
+        else if (exp < 1000)
+            length += 4; // 'E' + 3 digit exponent
+        else
+            assert (! "unexpected exponent");
+        s = &str[length + (neg ? 1 : 0)];
+        do
+            *--s = exp % 10 + U_0;
+        while ((exp /= 10) != 0);
+        if (eneg)
+            *--s = U_MINUS;
+        *--s = U_E;
+        --s;
+        do
+            *s = *(s - (neg ? 2 : 1)); // shift digits right, to add '.'
+        while (--s != str + (neg ? 2 : 1));
+        if (neg)
+        {
+            str[1] = str[0];
+            str[0] = U_MINUS;
+        }    
+        str[neg ? 2 : 1] = U_DOT;
+    }      
+    if (neg)
+        length++;
+    str[length] = U_NULL;
+    assert(length <= MAXIMUM_STR_LENGTH);
 }
 
 
@@ -942,11 +1376,11 @@ wchar_t StringConstant::US_AND[]                        = {U_AM, U_NU}, // "&"
 wchar_t StringConstant::US_smallest_int[] = {U_MINUS, U_2, U_1, U_4, U_7, U_4, U_8, U_3, U_6, U_4, U_8, U_NU}; // "-2147483648"
 
 
-char StringConstant::U8S_command_format[] = "use: jikes [-classpath path][-d dir][-debug][-depend|-Xdepend][-deprecation]"
-#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
+char StringConstant::U8S_command_format[] = "use: jikes [-bootclasspath path][-classpath path][-d dir][-debug][-depend|-Xdepend][-deprecation]"
+#if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
                                             "[-encoding encoding]"
 #endif
-					    "[-g][-nowarn][-nowrite][-O][-verbose][-Xstdout]"
+					    "[-extdirs path][-g][-nowarn][-nowrite][-O][-sourcepath path][-verbose][-Xstdout]"
                                             "[++][+B][+c][+OLDCSO][+D][+DR=filename][+E][+F][+Kname=TypeKeyWord][+M][+P][+Td...d][+U][+Z]"
                                             " file.java...";
 
@@ -1007,7 +1441,12 @@ char StringConstant::U8S_B[] = {U_B,U_NU}, // "B"
 
 char StringConstant::U8S_smallest_int[] = {U_MINUS, U_2, U_1, U_4, U_7, U_4, U_8, U_3, U_6, U_4, U_8, U_NU}, // "-2147483648"
      StringConstant::U8S_smallest_long_int[] = {U_MINUS, U_9, U_2, U_2, U_3, U_3, U_7, U_2, U_0, U_3, U_6,
-                                                         U_8, U_5, U_4, U_7, U_7, U_5, U_8, U_0, U_8, U_NU}; // "-9223372036854775808"
+                                                         U_8, U_5, U_4, U_7, U_7, U_5, U_8, U_0, U_8, U_NU}, // "-9223372036854775808"
+     StringConstant::U8S_NaN[] = {U_N, U_a, U_N, U_NU}, // "NaN"
+     StringConstant::U8S_pos_Infinity[] = {U_I, U_n, U_f, U_i, U_n, U_i, U_t, U_y, U_NU}, // "Infinity"
+     StringConstant::U8S_neg_Infinity[] = {U_MINUS, U_I, U_n, U_f, U_i, U_n, U_i, U_t, U_y, U_NU}, // "-Infinity"
+     StringConstant::U8S_pos_Zero[] = {U_0, U_DOT, U_0, U_NU}, // "0.0"
+     StringConstant::U8S_neg_Zero[] = {U_MINUS, U_0, U_DOT, U_0, U_NU}; // "-0.0"
 
 int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue),
     StringConstant::U8S_Exceptions_length = strlen(U8S_Exceptions),

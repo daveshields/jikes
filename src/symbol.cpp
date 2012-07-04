@@ -1,4 +1,4 @@
-// $Id: symbol.cpp,v 1.39 2001/01/10 16:49:45 mdejong Exp $
+// $Id: symbol.cpp,v 1.40 2001/04/28 19:34:37 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
@@ -653,16 +653,18 @@ PathSymbol::~PathSymbol()
         delete zipfile;
 }
 
-
-DirectorySymbol::DirectorySymbol(NameSymbol *name_symbol_, Symbol *owner_) : owner(owner_),
+DirectorySymbol::DirectorySymbol(NameSymbol *name_symbol_, Symbol *owner_, bool source_dir_only_) : owner(owner_),
                                                                              name_symbol(name_symbol_),
                                                                              mtime(0),
                                                                              table(NULL),
                                                                              entries(NULL),
-                                                                             directory_name(NULL)
+                                                                             directory_name(NULL),
+                                                                             source_dir_only(source_dir_only_)
 {
     Symbol::_kind = _DIRECTORY;
 }
+
+
 
 
 DirectorySymbol::~DirectorySymbol()
@@ -775,9 +777,10 @@ void DirectorySymbol::ReadDirectory()
                 // Since packages cannot start with '.', we skip all files that start with
                 // a dot. That includes this directory "." and its parent ".."
                 //
+                // Don't add the class file if the source_dir_only flag is set.
                 if ((length > FileSymbol::java_suffix_length &&
                      FileSymbol::IsJavaSuffix(&entry -> d_name[length - FileSymbol::java_suffix_length]))  ||
-                    (length > FileSymbol::class_suffix_length &&
+                    ((! source_dir_only) && length > FileSymbol::class_suffix_length &&
                      FileSymbol::IsClassSuffix(&entry -> d_name[length - FileSymbol::class_suffix_length])) ||
                     ((Case::Index(entry -> d_name, U_DOT) < 0) && SystemIsDirectory(entry -> d_name)))
                     entries -> InsertEntry((DirectorySymbol *) this, entry -> d_name, length);
@@ -808,7 +811,7 @@ void DirectorySymbol::ReadDirectory()
                 //
                 bool is_java  = (length > FileSymbol::java_suffix_length &&
                                  FileSymbol::IsJavaSuffix(&entry.cFileName[length - FileSymbol::java_suffix_length])),
-                     is_class = (length > FileSymbol::class_suffix_length &&
+                     is_class = ((! source_dir_only) && length > FileSymbol::class_suffix_length &&
                                  FileSymbol::IsClassSuffix(&entry.cFileName[length - FileSymbol::class_suffix_length]));
 
                 if (is_java ||

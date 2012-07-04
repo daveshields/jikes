@@ -1,5 +1,5 @@
 /*
- * $Id: jikesapi.h,v 1.11 2001/01/16 22:52:40 mdejong Exp $
+ * $Id: jikesapi.h,v 1.12 2001/04/28 19:34:37 cabbey Exp $
  */
 
 #ifndef _JIKES_API_H_FLAG_
@@ -9,7 +9,10 @@ class JikesOption
 {    
  public:
     
+    char *bootclasspath;
+    char *extdirs;
     char *classpath;
+    char *sourcepath;
     char *directory;
     char *encoding;
 

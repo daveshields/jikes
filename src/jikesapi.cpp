@@ -1,5 +1,5 @@
 /*
- * $Id: jikesapi.cpp,v 1.25 2001/02/27 06:27:40 mdejong Exp $
+ * $Id: jikesapi.cpp,v 1.27 2001/04/28 19:34:37 cabbey Exp $
  */
 
 
@@ -97,13 +97,19 @@ class DefaultFileWriter: public JikesAPI::FileWriter
 
 JikesOption::~JikesOption()
 {
-    delete [] classpath ;
-    delete [] directory ;
-    delete [] encoding  ;
+    delete [] bootclasspath;
+    delete [] classpath    ;
+    delete [] directory    ;
+    delete [] encoding     ;
+    delete [] extdirs  ;
+    delete [] sourcepath   ;
 }
 
 JikesOption::JikesOption():
+    bootclasspath(NULL),
+    extdirs(NULL),
     classpath(NULL),
+    sourcepath(NULL),
     directory(NULL),
     encoding(NULL),
     nowrite(false),
@@ -351,7 +357,7 @@ DefaultFileReader::~DefaultFileReader()
  * Open a standard FILE pointer and get ready to write.
  */
 DefaultFileWriter::DefaultFileWriter(const char *fileName,size_t maxSize):
-    FileWriter(maxSize)
+    JikesAPI::FileWriter(maxSize)
 {
     valid  = false;
     file = SystemFopen(fileName, "wb");

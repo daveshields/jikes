@@ -56,8 +56,20 @@
 /* Define if you have the <iconv.h> header file. */
 #undef HAVE_ICONV_H
 
+/* Define this to the name of the unicode encoding that is the same
+   size as your wchar_t. See also the following entry for byte swapping.
+   This define needs to include wrappering double quotes. */
+#undef JIKES_ICONV_ENCODING
+
+/* Define this if the encoding specified above does not match your
+   platform's native endianness. */
+#undef JIKES_ICONV_NEEDS_BYTE_SWAP
+
 /* Defined when Jikes is built with native floating support */
 #undef HAVE_IEEE754
+
+/* Define if you have the <inttypes.h> header file. */
+#undef HAVE_INTTYPES_H
 
 /* Define Jikes functions in a namespace */
 #undef HAVE_JIKES_NAMESPACE
@@ -95,6 +107,9 @@
 /* define if the compiler implements namespaces */
 #undef HAVE_NAMESPACES
 
+/* compiler has ostream << const unsigned char * */
+#undef HAVE_OSTREAM_CONST_UNSIGNED_CHAR_PTR
+
 /* defined if running on a system with dos style paths */
 #undef HAVE_PATHNAME_STYLE_DOS
 
@@ -113,6 +128,9 @@
 /* Define if you have the <stdio.h> header file. */
 #undef HAVE_STDIO_H
 
+/* Define if you have the <stdlib.h> header file. */
+#undef HAVE_STDLIB_H
+
 /* Define if you have the <strings.h> header file. */
 #undef HAVE_STRINGS_H
 
@@ -124,6 +142,9 @@
 
 /* Define if you have the <time.h> header file. */
 #undef HAVE_TIME_H
+
+/* Define if you have the <unistd.h> header file. */
+#undef HAVE_UNISTD_H
 
 /* Defined when the compiler supports the unsigned long long type */
 #undef HAVE_UNSIGNED_LONG_LONG
@@ -172,6 +193,9 @@
 
 /* used to seperate elements on the PATH */
 #undef PATH_SEPARATOR
+
+/* The size of a `wchar_t', as computed by sizeof. */
+#undef SIZEOF_WCHAR_T
 
 /* Define if you have the ANSI C header files. */
 #undef STDC_HEADERS

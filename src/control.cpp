@@ -1,4 +1,4 @@
-// $Id: control.cpp,v 1.39 2001/01/10 16:49:44 mdejong Exp $
+// $Id: control.cpp,v 1.42 2001/05/06 08:03:39 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -180,17 +180,16 @@ Control::Control(char **arguments, Option &option_) : return_code(0),
     //
     //
     //
-    for (int l = 0; l < bad_zip_filenames.Length(); l++)
+    int l;
+    for (l = 0; l < bad_dirnames.Length(); ++l)
     {
-        wchar_t *tail = &bad_zip_filenames[l][wcslen(bad_zip_filenames[l]) - 3];
+        system_semantic -> ReportSemError(SemanticError::CANNOT_OPEN_PATH_DIRECTORY, 0, 0, bad_dirnames[l]);
+    }
 
-        system_semantic -> ReportSemError(Case::StringSegmentEqual(tail, StringConstant::US__zip, 3) ||
-                                          Case::StringSegmentEqual(tail, StringConstant::US__jar, 3)
-                                               ? SemanticError::CANNOT_OPEN_ZIP_FILE
-                                               : SemanticError::CANNOT_OPEN_PATH_DIRECTORY,
-                                          0,
-                                          0,
-                                          bad_zip_filenames[l]);
+    for (l = 0; l < bad_zip_filenames.Length(); l++)
+    {
+        system_semantic -> ReportSemError(SemanticError::CANNOT_OPEN_ZIP_FILE, 0, 0, bad_zip_filenames[l]);
+
     }
 
     //
@@ -641,7 +640,7 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
 // insert it and attempt to read it from the system...
 //
 #ifdef UNIX_FILE_SYSTEM
-    DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name, int source_name_length)
+    DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name, int source_name_length, bool source_dir)
     {
         int name_length = (source_name_length < 0 ? 0 : source_name_length);
         char *input_name = new char[name_length + 1];
@@ -658,7 +657,7 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
         {
             if (input_name[0] == U_SLASH) // file name starts with '/'
             {
-                directory_symbol = new DirectorySymbol(FindOrInsertName(source_name, name_length), classpath[dot_classpath_index]);
+                directory_symbol = new DirectorySymbol(FindOrInsertName(source_name, name_length), classpath[dot_classpath_index], source_dir);
                 directory_symbol -> ReadDirectory();
                 system_directories.Next() = directory_symbol;
                 system_table -> InsertDirectorySymbol(status.st_dev, status.st_ino, directory_symbol);
@@ -692,7 +691,7 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
                             {
                                 DirectorySymbol *subdirectory_symbol = directory_symbol -> FindDirectorySymbol(dot_dot_name_symbol);
                                 if (! subdirectory_symbol)
-                                    subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(dot_dot_name_symbol);
+                                    subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(dot_dot_name_symbol, source_dir);
                                 directory_symbol = subdirectory_symbol;
                             }
                             else directory_symbol = directory_symbol -> owner -> DirectoryCast();
@@ -702,7 +701,7 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
                             NameSymbol *name_symbol = FindOrInsertName(directory_name, length);
                             DirectorySymbol *subdirectory_symbol = directory_symbol -> FindDirectorySymbol(name_symbol);
                             if (! subdirectory_symbol)
-                                subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(name_symbol);
+                                subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(name_symbol, source_dir);
                             directory_symbol = subdirectory_symbol;
                         }
                     }
@@ -731,7 +730,7 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
         return directory_symbol;
     }
 #elif defined(WIN32_FILE_SYSTEM)
-    DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name, int source_name_length)
+    DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name, int source_name_length, bool source_dir)
     {
         DirectorySymbol *directory_symbol = classpath[dot_classpath_index] -> RootDirectory();
 
@@ -808,7 +807,7 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
             NameSymbol *name_symbol = FindOrInsertName(directory_name, length);
             DirectorySymbol *subdirectory_symbol = directory_symbol -> FindDirectorySymbol(name_symbol);
             if (! subdirectory_symbol)
-                subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(name_symbol);
+                subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(name_symbol, source_dir);
             directory_symbol = subdirectory_symbol;
         }
 
@@ -828,7 +827,7 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
                     {
                         DirectorySymbol *subdirectory_symbol = directory_symbol -> FindDirectorySymbol(dot_dot_name_symbol);
                         if (! subdirectory_symbol)
-                            subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(dot_dot_name_symbol);
+                            subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(dot_dot_name_symbol, source_dir);
                         directory_symbol = subdirectory_symbol;
                     }
                     else directory_symbol = directory_symbol -> owner -> DirectoryCast();
@@ -838,7 +837,7 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol, wchar_t *nam
                     NameSymbol *name_symbol = FindOrInsertName(directory_name, length);
                     DirectorySymbol *subdirectory_symbol = directory_symbol -> FindDirectorySymbol(name_symbol);
                     if (! subdirectory_symbol)
-                        subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(name_symbol);
+                        subdirectory_symbol = directory_symbol -> InsertDirectorySymbol(name_symbol, source_dir);
                     directory_symbol = subdirectory_symbol;
                 }
             }
@@ -958,13 +957,13 @@ FileSymbol *Control::FindOrInsertJavaInputFile(wchar_t *name, int name_length)
     int len;
     for (len = name_length - 1; len >= 0 && name[len] != U_SLASH; len--)
         ;
-    directory_symbol = ProcessSubdirectories(name, len);
+    directory_symbol = ProcessSubdirectories(name, len, true);
     file_name_symbol = FindOrInsertName(&name[len + 1], name_length - (len + 1));
 #elif defined(WIN32_FILE_SYSTEM)
     int len;
     for (len = name_length - 1; len >= 0 && name[len] != U_SLASH && name[len] != U_COLON; len--)
         ;
-    directory_symbol = ProcessSubdirectories(name, (name[len] == U_COLON ? len + 1 : len));
+    directory_symbol = ProcessSubdirectories(name, (name[len] == U_COLON ? len + 1 : len), true);
     file_name_symbol = FindOrInsertName(&name[len + 1], name_length - (len + 1));
 #endif
 
@@ -1164,13 +1163,11 @@ void Control::ProcessBodies(TypeSymbol *type)
             DirectoryEntry *entry = directory -> FindCaseInsensitiveEntry(classfile_name, length);
 
             //
-            // If no entry exists for the classfile name, add it as we are about to create
-            // such a file. If an entry is found and it is not identical (in a case-sensitive test)
-            // to the name of the type, issue an appropriate message.
+            // If an entry is found and it is not identical (in a
+            // case-sensitive test) to the name of the type, issue an
+            // appropriate message.
             //
-            if (! entry)
-                directory -> InsertEntry(classfile_name, length);
-            else if (strcmp(classfile_name, entry -> name) != 0)
+            if (entry && strcmp(classfile_name, entry -> name) != 0)
             {
                 wchar_t *entry_name = new wchar_t[entry -> length + 1];
                 for (int i = 0; i < length; i++)

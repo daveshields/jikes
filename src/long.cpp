@@ -1,4 +1,4 @@
-// $Id: long.cpp,v 1.20 2001/02/14 21:25:11 mdejong Exp $
+// $Id: long.cpp,v 1.21 2001/04/16 07:27:59 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -15,17 +15,17 @@
 namespace Jikes {	// Open namespace Jikes block
 #endif
 
-BaseLong::operator LongInt()
+BaseLong::operator LongInt() const
 {
     return LongInt(HighWord(), LowWord());
 }
 
-BaseLong::operator ULongInt()
+BaseLong::operator ULongInt() const
 {
     return ULongInt(HighWord(), LowWord());
 }
 
-bool BaseLong::operator== (BaseLong op)
+bool BaseLong::operator== (const BaseLong op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return value.words == op.value.words;
@@ -35,7 +35,7 @@ bool BaseLong::operator== (BaseLong op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-bool BaseLong::operator!= (BaseLong op)
+bool BaseLong::operator!= (const BaseLong op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return value.words != op.value.words;
@@ -45,7 +45,7 @@ bool BaseLong::operator!= (BaseLong op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-bool BaseLong::operator!()
+bool BaseLong::operator!() const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return !value.words;
@@ -54,7 +54,7 @@ bool BaseLong::operator!()
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong BaseLong::operator~()
+BaseLong BaseLong::operator~() const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return BaseLong(~value.words);
@@ -63,7 +63,7 @@ BaseLong BaseLong::operator~()
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong BaseLong::operator^ (BaseLong op)
+BaseLong BaseLong::operator^ (const BaseLong op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return BaseLong(value.words ^ op.value.words);
@@ -72,12 +72,12 @@ BaseLong BaseLong::operator^ (BaseLong op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong &BaseLong::operator^= (BaseLong op)
+BaseLong &BaseLong::operator^= (const BaseLong op)
 {
     return *this = *this ^ op;
 }
 
-BaseLong BaseLong::operator| (BaseLong op)
+BaseLong BaseLong::operator| (const BaseLong op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return BaseLong(value.words | op.value.words);
@@ -86,12 +86,12 @@ BaseLong BaseLong::operator| (BaseLong op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong &BaseLong::operator|= (BaseLong op)
+BaseLong &BaseLong::operator|= (const BaseLong op)
 {
     return *this = *this | op;
 }
 
-BaseLong BaseLong::operator& (BaseLong op)
+BaseLong BaseLong::operator& (const BaseLong op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return BaseLong(value.words & op.value.words);
@@ -100,22 +100,22 @@ BaseLong BaseLong::operator& (BaseLong op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong &BaseLong::operator&= (BaseLong op)
+BaseLong &BaseLong::operator&= (const BaseLong op)
 {
     return *this = *this & op;
 }
 
-bool BaseLong::operator&& (BaseLong op)
+bool BaseLong::operator&& (const BaseLong op) const
 {
     return (*this != 0) && (op != 0);
 }
 
-bool BaseLong::operator|| (BaseLong op)
+bool BaseLong::operator|| (const BaseLong op) const
 {
     return (*this != 0) || (op != 0);
 }
 
-BaseLong BaseLong::operator<< (int op)
+BaseLong BaseLong::operator<< (int op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     // TODO: Does this work correctly?
@@ -148,21 +148,21 @@ BaseLong &BaseLong::operator<<= (int op)
     return *this = *this << op;
 }
 
-BaseLong BaseLong::operator+ (BaseLong op)
+BaseLong BaseLong::operator+ (const BaseLong op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return BaseLong(value.words + op.value.words);
 #else
-    u4 ushort1 = (LowWord() & 0xFFFF) + (op.LowWord() & 0xFFFF),
+    u4 ushort1 = (LowWord() & SHORT_MASK) + (op.LowWord() & SHORT_MASK),
        ushort2 = (ushort1 >> 16) + (LowWord() >> 16) + (op.LowWord() >> 16),
-       ushort3 = (ushort2 >> 16) + (HighWord() & 0xFFFF) + (op.HighWord() & 0xFFFF),
+       ushort3 = (ushort2 >> 16) + (HighWord() & SHORT_MASK) + (op.HighWord() & SHORT_MASK),
        ushort4 = (ushort3 >> 16) + (HighWord() >> 16) + (op.HighWord() >> 16);
 
-    return BaseLong((ushort3 & 0xFFFF) | (ushort4 << 16), (ushort1 & 0xFFFF) | (ushort2 << 16));
+    return BaseLong((ushort3 & SHORT_MASK) | (ushort4 << 16), (ushort1 & SHORT_MASK) | (ushort2 << 16));
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong &BaseLong::operator+= (BaseLong op)
+BaseLong &BaseLong::operator+= (const BaseLong op)
 {
     return *this = *this + op;
 }
@@ -179,22 +179,22 @@ BaseLong BaseLong::operator++ ()
     return *this += 1;
 }
 
-BaseLong BaseLong::operator+ ()
+BaseLong BaseLong::operator+ () const
 {
     return *this;
 }
 
-BaseLong BaseLong::operator- ()
+BaseLong BaseLong::operator- () const
 {
     return ~(*this) + 1;
 }
 
-BaseLong BaseLong::operator- (BaseLong op)
+BaseLong BaseLong::operator- (const BaseLong op) const
 {
     return *this + (-op);
 }
 
-BaseLong &BaseLong::operator-= (BaseLong op)
+BaseLong &BaseLong::operator-= (const BaseLong op)
 {
     return *this = *this - op;
 }
@@ -211,19 +211,19 @@ BaseLong BaseLong::operator-- ()
     return *this -= 1;
 }
 
-BaseLong BaseLong::operator* (BaseLong op)
+BaseLong BaseLong::operator* (const BaseLong op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return BaseLong(value.words * op.value.words);
 #else
-    u4 x0 = LowWord()   & 0xFFFF,
+    u4 x0 = LowWord()   & SHORT_MASK,
        x1 = LowWord()  >> 16,
-       x2 = HighWord()  & 0xFFFF,
+       x2 = HighWord()  & SHORT_MASK,
        x3 = HighWord() >> 16,
 
-       y0 = op.LowWord()   & 0xFFFF,
+       y0 = op.LowWord()   & SHORT_MASK,
        y1 = op.LowWord()  >> 16,
-       y2 = op.HighWord()  & 0xFFFF,
+       y2 = op.HighWord()  & SHORT_MASK,
        y3 = op.HighWord() >> 16;
 
     BaseLong result  = BaseLong(0, x0 * y0),
@@ -253,7 +253,7 @@ BaseLong BaseLong::operator* (BaseLong op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-BaseLong &BaseLong::operator*= (BaseLong op)
+BaseLong &BaseLong::operator*= (const BaseLong op)
 {
     return *this = *this * op;
 }
@@ -280,7 +280,8 @@ BaseLong::BaseLong(i4 a)
 }
 
 
-void BaseLong::Divide(BaseLong &dividend, BaseLong &divisor, BaseLong &quotient, BaseLong &remainder)
+void BaseLong::Divide(const BaseLong &dividend, const BaseLong &divisor,
+                      BaseLong &quotient, BaseLong &remainder)
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     quotient = BaseLong(dividend.value.words / divisor.value.words);
@@ -322,13 +323,13 @@ void BaseLong::Divide(BaseLong &dividend, BaseLong &divisor, BaseLong &quotient,
 }
 
 
-ULongInt &ULongInt::operator/= (ULongInt op)
+ULongInt &ULongInt::operator/= (const ULongInt op)
 {
     return *this = *this / op;
 }
 
 
-ULongInt ULongInt::operator/ (ULongInt op)
+ULongInt ULongInt::operator/ (const ULongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return ULongInt(value.words / op.value.words);
@@ -342,7 +343,7 @@ ULongInt ULongInt::operator/ (ULongInt op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-ULongInt ULongInt::operator% (ULongInt op)
+ULongInt ULongInt::operator% (const ULongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return ULongInt(value.words % op.value.words);
@@ -356,13 +357,13 @@ ULongInt ULongInt::operator% (ULongInt op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-ULongInt &ULongInt::operator%= (ULongInt op)
+ULongInt &ULongInt::operator%= (const ULongInt op)
 {
     return *this = *this % op;
 }
 
 
-ULongInt ULongInt::operator>> (int op)
+ULongInt ULongInt::operator>> (int op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     // TODO: Does this work correctly?
@@ -396,7 +397,7 @@ ULongInt &ULongInt::operator>>= (int op)
     return *this = *this >> op;
 }
 
-bool ULongInt::operator< (ULongInt op)
+bool ULongInt::operator< (const ULongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return value.words < op.value.words;
@@ -406,7 +407,7 @@ bool ULongInt::operator< (ULongInt op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-bool ULongInt::operator<= (ULongInt op)
+bool ULongInt::operator<= (const ULongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return value.words <= op.value.words;
@@ -415,7 +416,7 @@ bool ULongInt::operator<= (ULongInt op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-bool ULongInt::operator> (ULongInt op)
+bool ULongInt::operator> (const ULongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return value.words > op.value.words;
@@ -425,7 +426,7 @@ bool ULongInt::operator> (ULongInt op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-bool ULongInt::operator>= (ULongInt op)
+bool ULongInt::operator>= (const ULongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return value.words >= op.value.words;
@@ -434,20 +435,20 @@ bool ULongInt::operator>= (ULongInt op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-LongInt *LongInt::max_long_const = NULL;
-LongInt *LongInt::min_long_const = NULL;
+const LongInt *LongInt::max_long_const = NULL;
+const LongInt *LongInt::min_long_const = NULL;
 
-LongInt::LongInt(IEEEfloat f)
+LongInt::LongInt(const IEEEfloat &f)
 {
     *this = f.LongValue();
 }
 
-LongInt::LongInt(IEEEdouble d)
+LongInt::LongInt(const IEEEdouble &d)
 {
     *this = d.LongValue();
 }
 
-LongInt LongInt::operator/ (LongInt op)
+LongInt LongInt::operator/ (const LongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     bool negative_dividend = (i8) value.words < 0,
@@ -472,12 +473,12 @@ LongInt LongInt::operator/ (LongInt op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-LongInt &LongInt::operator/= (LongInt op)
+LongInt &LongInt::operator/= (const LongInt op)
 {
     return *this = *this / op;
 }
 
-LongInt LongInt::operator% (LongInt op)
+LongInt LongInt::operator% (const LongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     bool negative_dividend = (i8) value.words < 0,
@@ -502,12 +503,12 @@ LongInt LongInt::operator% (LongInt op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-LongInt &LongInt::operator%= (LongInt op)
+LongInt &LongInt::operator%= (const LongInt op)
 {
     return *this = *this % op;
 }
 
-LongInt LongInt::operator>> (int op)
+LongInt LongInt::operator>> (int op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     // TODO: Does this work correctly?
@@ -525,7 +526,7 @@ LongInt LongInt::operator>> (int op)
         return *this;
     
     i4 hi = HighWord();
-    u4 shift = (hi & 0x80000000) ? 0xffffffff : 0;
+    u4 shift = (hi & SIGN_BIT) ? 0xffffffff : 0;
 
     if (n < 32)
          return LongInt(hi >> n, (hi << (32 - n)) | (LowWord() >> n));
@@ -542,7 +543,7 @@ LongInt &LongInt::operator>>= (int op)
     return *this = *this >> op;
 }
 
-bool LongInt::operator< (LongInt op)
+bool LongInt::operator< (const LongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return (i8) value.words < (i8) op.value.words;
@@ -552,7 +553,7 @@ bool LongInt::operator< (LongInt op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-bool LongInt::operator<= (LongInt op)
+bool LongInt::operator<= (const LongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return (i8) value.words <= (i8) op.value.words;
@@ -561,7 +562,7 @@ bool LongInt::operator<= (LongInt op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-bool LongInt::operator> (LongInt op)
+bool LongInt::operator> (const LongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return (i8) value.words > (i8) op.value.words;
@@ -571,7 +572,7 @@ bool LongInt::operator> (LongInt op)
 #endif // HAVE_UNSIGNED_LONG_LONG
 }
 
-bool LongInt::operator>= (LongInt op)
+bool LongInt::operator>= (const LongInt op) const
 {
 #ifdef HAVE_UNSIGNED_LONG_LONG
     return (i8) value.words >= (i8) op.value.words;

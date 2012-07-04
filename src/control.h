@@ -1,4 +1,4 @@
-// $Id: control.h,v 1.31 2001/01/05 09:13:20 mdejong Exp $
+// $Id: control.h,v 1.33 2001/04/28 19:34:37 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -46,7 +46,8 @@ public:
                   *unnamed_package;
     int dot_classpath_index;
     Tuple<PathSymbol *> classpath;
-    Tuple<wchar_t *> bad_zip_filenames,
+    Tuple<wchar_t *> bad_dirnames,
+                     bad_zip_filenames,
                      bad_input_filenames,
                      unreadable_input_filenames;
 
@@ -442,11 +443,6 @@ public:
     bool IncrementalRecompilation();
 
     //
-    // The one and only null value constant.
-    //
-    LiteralValue *NullValue() { return &null_value; }
-
-    //
     // The one and only bad value constant.
     //
     LiteralValue *BadValue() { return &bad_value; }
@@ -540,12 +536,11 @@ public:
     PackageSymbol *ProcessPackage(wchar_t *);
 
     DirectorySymbol *FindSubdirectory(PathSymbol *, wchar_t *, int);
-    DirectorySymbol *ProcessSubdirectories(wchar_t *, int);
+    DirectorySymbol *ProcessSubdirectories(wchar_t *, int, bool);
 
 private:
 
-    LiteralValue null_value,
-                 bad_value;
+    LiteralValue bad_value;
 
     TypeSymbol *Serializable_type,
 
@@ -595,6 +590,10 @@ private:
     void ProcessGlobals();
     void ProcessUnnamedPackage();
     void ProcessPath();
+    void ProcessBootClassPath();
+    void ProcessExtDirs();
+    void ProcessClassPath();
+    void ProcessSourcePath();
     TypeSymbol *GetPrimitiveType(wchar_t *, char *);
     void ProcessSystemInformation();
 

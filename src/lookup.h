@@ -1,4 +1,4 @@
-// $Id: lookup.h,v 1.23 2001/02/17 08:08:54 mdejong Exp $
+// $Id: lookup.h,v 1.25 2001/05/04 23:03:58 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -299,18 +299,22 @@ public:
     virtual size_t NameLength() { return 0; }
     virtual NameSymbol *Identity() { return (NameSymbol *) NULL; }
 
-    PackageSymbol        *PackageCast()        { return (PackageSymbol *) (_kind == PACKAGE ? this : NULL); }
-    TypeSymbol           *TypeCast()           { return (TypeSymbol *) (_kind == TYPE ? this : NULL); }
-    MethodSymbol         *MethodCast()         { return (MethodSymbol *) (_kind == METHOD ? this : NULL); }
-    BlockSymbol          *BlockCast()          { return (BlockSymbol *) (_kind == BLOCK ? this : NULL); }
-    VariableSymbol       *VariableCast()       { return (VariableSymbol *) (_kind == VARIABLE ? this : NULL); }
-    LabelSymbol          *LabelCast()          { return (LabelSymbol *) (_kind == LABEL ? this : NULL); }
-    LiteralSymbol        *LiteralCast()        { return (LiteralSymbol *) (_kind == LITERAL ? this : NULL); }
-    NameSymbol           *NameCast()           { return (NameSymbol *) (_kind == NAME ? this : NULL); }
+    //
+    // These cannot be inline without including symbol.h, because they
+    // would cast to incomplete types.
+    //
+    PackageSymbol *PackageCast();
+    TypeSymbol *TypeCast();
+    MethodSymbol *MethodCast();
+    BlockSymbol *BlockCast();
+    VariableSymbol *VariableCast();
+    LabelSymbol *LabelCast();
+    LiteralSymbol *LiteralCast();
+    NameSymbol *NameCast();
 
-    PathSymbol           *PathCast()           { return (PathSymbol *) (_kind == PATH ? this : NULL); }
-    DirectorySymbol      *DirectoryCast()      { return (DirectorySymbol *) (_kind == _DIRECTORY ? this : NULL); }
-    FileSymbol           *FileCast()           { return (FileSymbol *) (_kind == _FILE ? this : NULL); }
+    PathSymbol *PathCast();
+    DirectorySymbol *DirectoryCast();
+    FileSymbol *FileCast();
 
     virtual ~Symbol() {}
 
@@ -805,7 +809,7 @@ private:
 
     Tuple<Utf8LiteralValue *> *utf8_literals;
     void EvaluateConstant(AstExpression *, int, int);
-    bool IsConstant(AstExpression *, Symbol *);
+    bool IsConstant(AstExpression *, TypeSymbol *);
 
     enum
     {

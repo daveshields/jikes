@@ -1,4 +1,4 @@
-// $Id: platform.h,v 1.13 2001/02/12 11:09:06 mdejong Exp $
+// $Id: platform.h,v 1.15 2001/04/16 07:27:59 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -7,6 +7,34 @@
 // and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
+//
+// NOTE: The code for accurate conversions between floating point
+// and decimal strings, in double.h, double.cpp, platform.h, and
+// platform.cpp, is adapted from dtoa.c.  The original code can be
+// found at http://netlib2.cs.utk.edu/fp/dtoa.c.
+//
+// The code in dtoa.c is copyrighted as follows:
+//****************************************************************
+//*
+//* The author of this software is David M. Gay.
+//*
+//* Copyright (c) 1991, 2000, 2001 by Lucent Technologies.
+//*
+//* Permission to use, copy, modify, and distribute this software for any
+//* purpose without fee is hereby granted, provided that this entire notice
+//* is included in all copies of any software which is or includes a copy
+//* or modification of this software and in all copies of the supporting
+//* documentation for such software.
+//*
+//* THIS SOFTWARE IS BEING PROVIDED "AS IS", WITHOUT ANY EXPRESS OR IMPLIED
+//* WARRANTY.  IN PARTICULAR, NEITHER THE AUTHOR NOR LUCENT MAKES ANY
+//* REPRESENTATION OR WARRANTY OF ANY KIND CONCERNING THE MERCHANTABILITY
+//* OF THIS SOFTWARE OR ITS FITNESS FOR ANY PARTICULAR PURPOSE.
+//*
+//***************************************************************/
+//
+//
+
 #ifndef platform_INCLUDED
 #define platform_INCLUDED
 
@@ -653,7 +681,12 @@ public:
                 U8S_LP_Ljava_SL_lang_SL_Object_SC_RP_Ljava_SL_lang_SL_StringBuffer_SC[]; // "(Ljava/lang/Object;)Ljava/lang/StringBuffer;"
 
     static char U8S_smallest_int[],      // "-2147483648"
-                U8S_smallest_long_int[]; // "-9223372036854775808"
+                U8S_smallest_long_int[], // "-9223372036854775808"
+                U8S_NaN[],               // "NaN"
+                U8S_pos_Infinity[],      // "Infinity"
+                U8S_neg_Infinity[],      // "-Infinity"
+                U8S_pos_Zero[],          // "0.0"
+                U8S_neg_Zero[];          // "-0.0"
 };
 
 
@@ -782,16 +815,18 @@ class IEEEdouble;
 class DoubleToString
 {
 public:
-    DoubleToString(IEEEdouble &);
+    DoubleToString(const IEEEdouble &);
 
-    char *String() { return str; }
-    int Length()   { return length; }
+    const char *String() const { return str; }
+    int Length() const { return length; }
 
 private:
+    void Format(char *, int, bool);
+
     enum
     {
-        MAXIMUM_PRECISION = 16,
-        MAXIMUM_STR_LENGTH = 1 + MAXIMUM_PRECISION + 1 + 4 // +1 for sign, +16 significant digits +1 for ".", +4 for exponent
+        MAXIMUM_PRECISION = 17,
+        MAXIMUM_STR_LENGTH = 1 + MAXIMUM_PRECISION + 1 + 5 // +1 for sign, +17 significant digits +1 for ".", +5 for exponent
     };
 
     char str[MAXIMUM_STR_LENGTH + 1]; // +1 for '\0'
@@ -805,16 +840,18 @@ class IEEEfloat;
 class FloatToString
 {
 public:
-    FloatToString(IEEEfloat &);
+    FloatToString(const IEEEfloat &);
 
-    char *String() { return str; }
-    int Length()   { return length; }
+    const char *String() const { return str; }
+    int Length() const   { return length; }
 
 private:
+    void Format(char *, int, bool);
+
     enum
     {
-        MAXIMUM_PRECISION = 8,
-        MAXIMUM_STR_LENGTH = 1 + MAXIMUM_PRECISION + 1 + 4 // +1 for sign, +8 significant digits +1 for ".", +4 for exponent
+        MAXIMUM_PRECISION = 9,
+        MAXIMUM_STR_LENGTH = 1 + MAXIMUM_PRECISION + 1 + 4 // +1 for sign, +9 significant digits +1 for ".", +4 for exponent
     };
 
     char str[MAXIMUM_STR_LENGTH + 1]; // +1 for '\0'
@@ -941,7 +978,15 @@ public:
 
     Ostream &operator<<(const unsigned char *c)
     {
+#ifndef HAVE_OSTREAM_CONST_UNSIGNED_CHAR_PTR
+# ifdef HAVE_CONST_CAST
+        *os << const_cast<unsigned char *> (c);
+# else
+        *os << (unsigned char *) c;
+# endif
+#else
         *os << c;
+#endif
         return *this;
     }
 

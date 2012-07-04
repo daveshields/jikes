@@ -1,4 +1,4 @@
-// $Id: bytecode.h,v 1.22 2001/01/05 09:13:19 mdejong Exp $
+// $Id: bytecode.h,v 1.24 2001/05/07 06:33:59 cabbey Exp $
 //
 // License Agreement available at the following URL:
 // http://www.ibm.com/research/jikes.
@@ -701,6 +701,7 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
     void ResolveAccess(AstExpression *);
     int  GenerateClassAccess(AstFieldAccess *);
     void GenerateClassAccessMethod(MethodSymbol *);
+    void EmitCheckForNull(AstExpression *);
 
     //
     // Methods to process statements
@@ -731,7 +732,7 @@ class ByteCode : public ClassFile, public StringConstant, public Operators
     //
     AstExpression *UnParenthesize(AstExpression *expr)
     {
-        while(expr -> ParenthesizedExpressionCast())
+        while(! (expr -> IsConstant()) && expr -> ParenthesizedExpressionCast())
             expr = expr -> ParenthesizedExpressionCast() -> expression;
 
         return expr;

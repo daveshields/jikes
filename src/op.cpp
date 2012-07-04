@@ -1,4 +1,4 @@
-// $Id: op.cpp,v 1.11 2001/01/10 16:49:45 mdejong Exp $
+// $Id: op.cpp,v 1.12 2001/04/01 04:33:29 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -23,12 +23,12 @@ namespace Jikes {	// Open namespace Jikes block
 #endif
 
 
-void Operators::opdesc(int opc, char **name, char **desc)
+void Operators::opdesc(int opc, const char **name, const char **desc)
 {
     struct op_entry
     {
-        char *op_name,
-             *op_desc;
+        const char *op_name,
+                   *op_desc;
     };
 
     struct op_entry table[] =
@@ -251,8 +251,9 @@ void Operators::opdesc(int opc, char **name, char **desc)
      return;
 }
 
-void Operators::opline(Tuple<cp_info *> &constant_pool, char *hdr, int pc, int opc, char *name,
-                       char *args, char *desc, int info_kind, int info_index)
+void Operators::opline(Tuple<cp_info *> &constant_pool, char *hdr, int pc, int opc,
+                       const char *name, char *args, const char *desc, int info_kind,
+                       int info_index)
 {
     // generate line of opcode dump, info is extra info
 
@@ -305,7 +306,7 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
         int info_index = 0;
         int pc_start = pc;
         unsigned opc = get_u1(code, pc);
-        char *name, *desc; // set to name (mnemonic) and description of opcode.
+        const char *name, *desc; // set to name (mnemonic) and description of opcode.
         opdesc(code[pc_start], &name, &desc);
         pc++;
 

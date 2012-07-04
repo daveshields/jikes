@@ -1,4 +1,4 @@
-// $Id: double.h,v 1.15 2001/02/17 06:26:55 mdejong Exp $
+// $Id: double.h,v 1.17 2001/04/19 13:52:32 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -8,9 +8,11 @@
 // You must accept the terms of that agreement to use this software.
 //
 //
-// NOTE: The IEEE 754 emulation code in double.h and double.cpp within
+// NOTES: The IEEE 754 emulation code in double.h and double.cpp within
 // Jikes are adapted from code written by Alan M. Webb of IBM's Hursley
 // lab in porting the Sun JDK to System/390.
+//
+//
 //
 // In addition, the code for emulating the remainder operator, %, is
 // adapted from e_fmod.c, part of fdlibm, the Freely Distributable Math
@@ -28,6 +30,33 @@
 // ====================================================
 //
 //
+//
+// Likewise, the code for accurate conversions between floating point
+// and decimal strings, in double.h, double.cpp, platform.h, and
+// platform.cpp, is adapted from dtoa.c.  The original code can be
+// found at http://netlib2.cs.utk.edu/fp/dtoa.c.
+//
+// The code in dtoa.c is copyrighted as follows:
+//****************************************************************
+//*
+//* The author of this software is David M. Gay.
+//*
+//* Copyright (c) 1991, 2000, 2001 by Lucent Technologies.
+//*
+//* Permission to use, copy, modify, and distribute this software for any
+//* purpose without fee is hereby granted, provided that this entire notice
+//* is included in all copies of any software which is or includes a copy
+//* or modification of this software and in all copies of the supporting
+//* documentation for such software.
+//*
+//* THIS SOFTWARE IS BEING PROVIDED "AS IS", WITHOUT ANY EXPRESS OR IMPLIED
+//* WARRANTY.  IN PARTICULAR, NEITHER THE AUTHOR NOR LUCENT MAKES ANY
+//* REPRESENTATION OR WARRANTY OF ANY KIND CONCERNING THE MERCHANTABILITY
+//* OF THIS SOFTWARE OR ITS FITNESS FOR ANY PARTICULAR PURPOSE.
+//*
+//***************************************************************/
+//
+//
 
 #ifndef Double_INCLUDED
 #define Double_INCLUDED
@@ -41,6 +70,7 @@ namespace Jikes {	// Open namespace Jikes block
 
 class LongInt;
 class IEEEdouble;
+class BigInt;
 
 class IEEEfloat
 {
@@ -51,6 +81,8 @@ class IEEEfloat
     // using only integer arithmetic.
     //
 private:
+    friend class FloatToString;
+
     union
     {
         float float_value;
@@ -58,66 +90,102 @@ private:
         i4 iword; // signed
     } value;
 
-    enum { FRACT_BITS = 23, BIAS = 127 };
+    //
+    // two enums, so that first is signed, and second may be unsigned
+    //
+    enum
+    {
+        FRACT_SIZE = 23,         // number of bits in mantissa
+        BIAS       = 127,        // exponent bias
+        MAX_DEC_EXP = 38,        // maximum decimal exponent
+        MAX_DIGITS = BIAS + FRACT_SIZE + 1 - MAX_DEC_EXP // maximum digits in precise decimal
+    };
+    enum
+    {
+        SIGN_BIT   = 0x80000000, // sign bit mask
+        EXP_BITS   = 0x7F800000, // exponent bit mask
+        FRACT_BITS = 0x007FFFFF, // mantissa bit mask
+        ABS_BITS   = EXP_BITS | FRACT_BITS, // absolute value
+        MAX_FRACT  = 0x01000000, // upper limit of mantissa
+        MIN_FRACT  = 0x00800000, // lower limit of normalized mantissa
+        NEG_ZERO   = 0x80000000, // -0.0
+        POS_ZERO   = 0x00000000, // 0.0
+        NEG_INF    = 0xFF800000, // -Inf
+        POS_INF    = 0x7F800000, // +Inf
+        NAN        = 0x7FC00000, // canonical NaN
+        BYTE_MASK  = 0x000000FF, // mask off least significant byte
+        MAX_INT    = 0x7FFFFFFF, // maximum integer
+        MIN_INT    = 0x80000000, // minimum integer
+        MIN_LONG_F = 0xDF000000, // bit pattern of (float)MIN_LONG
+        MIN_INT_F  = 0xCF000000 // bit pattern of (float)MIN_INT
+    };
 
-    inline u4 SignBit(void)  { return value.word & 0x80000000; }
-    inline u4 ExpBits(void)  { return value.word & 0x7F800000; }
+    inline u4 SignBit(void) const   { return value.word & SIGN_BIT; }
+    inline u4 ExpBits(void) const   { return value.word & EXP_BITS; }
+    inline u4 FractBits(void) const { return value.word & FRACT_BITS; }
 
     // takes the (possibly) unnormalized fraction with its corresponding
     // exponent and sign, and creates the normalized float
     static IEEEfloat Normalize(int, int, u4);
     // takes the float and splits it into a normalized fraction and exponent;
     // the exponent is returned, the parameter fraction is modified
-    int SplitInto(u4 &fraction);
+    int SplitInto(u4 &fraction) const;
+
+    // returns the value of 1 ulp (unit in last place) for this float
+    IEEEfloat Ulp(void) const;
+    // returns the ratio between two floats represented in BigInts
+    static IEEEfloat Ratio(const BigInt &, const BigInt &);
+    // adjusts the value of this based on the ratio of the BigInts, and
+    // in direction determined by the boolean
+    bool Adjust(const BigInt &, const BigInt &, const bool);
 
 #ifndef HAVE_MEMBER_CONSTANTS
     // VC++ can't cope with constant class members
-    static u4 MAX_FRACT;
-    static u4 MAX_FRACT2;
-    static u4 MIN_INT_F;
-    static i4 MIN_INT;
-    static i4 MAX_INT;
+    static IEEEfloat tens[]; // powers of 10 exactly represented in float
+    static IEEEfloat bigtens[]; // powers of 10 by powers of 2
 #else
-    static const u4 MAX_FRACT   = 0x01000000;
-    static const u4 MAX_FRACT2  = 0x00800000;
-    static const u4 MIN_INT_F   = 0xCF000000;
-    static const i4 MIN_INT     = 0x80000000;
-    static const i4 MAX_INT     = 0x7FFFFFFF;
+    static const IEEEfloat tens[]; // powers of 10 exactly represented in float
+    static const IEEEfloat bigtens[]; // powers of 10 by powers of 2
 #endif
 
 public:
     //
     // Information methods, for evaluating components of the float
     //
-    inline u4 Word(void) { return value.word; }
+    inline u4 Word(void) const { return value.word; }
 
-    inline int  Sign(void)       { return value.word >> 31; }
-    inline int  Exponent(void)   { return ((value.iword >> 23) & 0x000000FF) - BIAS; }
-    inline u4   Fraction(void)   { return (value.word & 0x007FFFFF)
-                                          | (ExpBits() ? 0x00800000 : 0); }
+    inline int  Sign(void) const     { return value.word >> 31; }
+    inline int  Exponent(void) const { return ((value.word & EXP_BITS) >> FRACT_SIZE) - BIAS; }
+    inline u4   Fraction(void) const { return (value.word & FRACT_BITS)
+                                          | (ExpBits() ? MIN_FRACT : 0); }
+    static inline int Bias(void)      { return BIAS; }
+    static inline int FractSize(void) { return FRACT_SIZE; }
 
-    inline bool IsNaN(void)      { return (value.word & 0x7FFFFFFF) > 0x7F800000; }
+    inline bool IsNaN(void) const      { return (value.word & ABS_BITS) > EXP_BITS; }
 
-    inline bool IsNegative(void) { return (value.iword < 0) && !IsNaN(); }
-    inline bool IsPositive(void) { return (value.iword >= 0) && !IsNaN(); }
+    inline bool IsNegative(void) const { return (value.iword < 0) && !IsNaN(); }
+    inline bool IsPositive(void) const { return (value.iword >= 0) && !IsNaN(); }
 
-    inline bool IsNegativeZero(void)     { return value.word == 0x80000000; }
-    inline bool IsPositiveZero(void)     { return value.word == 0x00000000; }
-    inline bool IsZero(void)             { return (value.word & 0x7FFFFFFF) == 0x00000000; }
+    inline bool IsNegativeZero(void) const { return value.word == NEG_ZERO; }
+    inline bool IsPositiveZero(void) const { return value.word == POS_ZERO; }
+    inline bool IsZero(void) const         { return (value.word & ABS_BITS) == POS_ZERO; }
 
-    inline bool IsNegativeInfinity(void) { return value.word == 0xFF800000; }
-    inline bool IsPositiveInfinity(void) { return value.word == 0x7F800000; }
-    inline bool IsInfinite(void)         { return (value.word & 0x7FFFFFFF) == 0x7F800000; }
+    inline bool IsNegativeInfinity(void) const { return value.word == NEG_INF; }
+    inline bool IsPositiveInfinity(void) const { return value.word == POS_INF; }
+    inline bool IsInfinite(void) const         { return (value.word & ABS_BITS) == POS_INF; }
 
 
     //
-    // Generation methods, for creating common constants
+    // Generation methods, for creating common constants.
+    // TODO: These methods should be converted to return static const
+    // fields, rather than generating a non-const every time.  However,
+    // adding const support is a big undertaking.
     //
-    static inline IEEEfloat NaN(void)               { return IEEEfloat(0x7FC00000U); }
-    static inline IEEEfloat POSITIVE_INFINITY(void) { return IEEEfloat(0x7F800000U); }
-    static inline IEEEfloat NEGATIVE_INFINITY(void) { return IEEEfloat(0xFF800000U); }
-    static inline IEEEfloat POSITIVE_ZERO(void)     { return IEEEfloat(0x00000000U); }
-    static inline IEEEfloat NEGATIVE_ZERO(void)     { return IEEEfloat(0x80000000U); }
+    static inline const IEEEfloat NaN(void)               { return IEEEfloat(NAN); }
+    static inline const IEEEfloat POSITIVE_INFINITY(void) { return IEEEfloat(POS_INF); }
+    static inline const IEEEfloat NEGATIVE_INFINITY(void) { return IEEEfloat(NEG_INF); }
+    static inline const IEEEfloat POSITIVE_ZERO(void)     { return IEEEfloat(POS_ZERO); }
+    static inline const IEEEfloat NEGATIVE_ZERO(void)     { return IEEEfloat(NEG_ZERO); }
 
 
     //
@@ -127,16 +195,16 @@ public:
     inline   IEEEfloat(float f) { value.float_value = f; }
 
     // Convert string to float, the float is NaN if check_invalid is true and input is invalid by JLS
-             IEEEfloat(char *, bool check_invalid = false);
+             IEEEfloat(const char *, bool check_invalid = false);
     // Widening conversion of int to float, may lose precision
              IEEEfloat(i4);
     // Widening conversion of long to float, may lose precision
-             IEEEfloat(LongInt);
+             IEEEfloat(const LongInt &);
     // Narrowing conversion of double to float, may lose precision
 #ifdef HAVE_EXPLICIT
     explicit
 #endif
-             IEEEfloat(IEEEdouble);
+             IEEEfloat(const IEEEdouble &);
     // Create a float without initializing it
     inline   IEEEfloat(void) {}
 
@@ -147,19 +215,19 @@ public:
     //
     // Conversion routines
     //
-           i4         IntValue(void);
-           LongInt    LongValue(void);
-    inline float      FloatView(void) { return value.float_value; }
-    inline IEEEdouble DoubleValue(void);
+           i4         IntValue(void) const;
+           LongInt    LongValue(void) const;
+    inline float      FloatView(void) const { return value.float_value; }
+    inline IEEEdouble DoubleValue(void) const;
 
 
     //
     // Floating-point operations
     // TODO: add const reference versions
     //
-           IEEEfloat  operator+  (IEEEfloat);   // binary addition
+           IEEEfloat  operator+  (const IEEEfloat) const;   // binary addition
     inline IEEEfloat  operator+  (void)         { return *this; } // unary plus
-    inline IEEEfloat &operator+= (IEEEfloat op) { return *this = *this + op; } // add and assign
+    inline IEEEfloat &operator+= (const IEEEfloat op) { return *this = *this + op; } // add and assign
     inline IEEEfloat  operator++ (void)         { return *this += 1; } // pre-increment
     inline IEEEfloat  operator++ (int dummy)
     {
@@ -168,9 +236,9 @@ public:
         return result;
     } // post-increment
 
-           IEEEfloat  operator-  (void);        // unary minus
-    inline IEEEfloat  operator-  (IEEEfloat op) { return *this + (-op); } // binary subtraction
-    inline IEEEfloat &operator-= (IEEEfloat op) { return *this = *this - op; } // subtract and assign
+           IEEEfloat  operator-  (void) const;        // unary minus
+    inline IEEEfloat  operator-  (const IEEEfloat op) const { return *this + (-op); } // binary subtraction
+    inline IEEEfloat &operator-= (const IEEEfloat op) { return *this = *this - op; } // subtract and assign
     inline IEEEfloat  operator-- (void)         { return *this -= 1; } // pre-decrement
     inline IEEEfloat  operator-- (int dummy)
     {
@@ -179,24 +247,24 @@ public:
         return result;
     } // post-decrement
 
-           IEEEfloat  operator*  (IEEEfloat);   // multiplication
-    inline IEEEfloat &operator*= (IEEEfloat op) { return *this = *this * op; } // multiply and assign
+           IEEEfloat  operator*  (const IEEEfloat) const;   // multiplication
+    inline IEEEfloat &operator*= (const IEEEfloat op) { return *this = *this * op; } // multiply and assign
 
-           IEEEfloat  operator/  (IEEEfloat);   // divide
-    inline IEEEfloat &operator/= (IEEEfloat op) { return *this = *this / op; } // divide and assign
+           IEEEfloat  operator/  (const IEEEfloat) const;   // divide
+    inline IEEEfloat &operator/= (const IEEEfloat op) { return *this = *this / op; } // divide and assign
 
-           IEEEfloat  operator%  (IEEEfloat);   // modulus
-    inline IEEEfloat &operator%= (IEEEfloat op) { return *this = *this % op; } // modulus and assign
+           IEEEfloat  operator%  (const IEEEfloat) const;   // modulus
+    inline IEEEfloat &operator%= (const IEEEfloat op) { return *this = *this % op; } // modulus and assign
 
     //
     // Comparison operators.  Recall that NaN does not compare, and 0.0 == -0.0
     //
-    bool operator== (IEEEfloat); // equal
-    bool operator!= (IEEEfloat); // not equal
-    bool operator<  (IEEEfloat); // less-than
-    bool operator>  (IEEEfloat); // greater-than
-    bool operator<= (IEEEfloat); // less-than or equal
-    bool operator>= (IEEEfloat); // greater-than or equal
+    bool operator== (const IEEEfloat) const; // equal
+    bool operator!= (const IEEEfloat) const; // not equal
+    bool operator<  (const IEEEfloat) const; // less-than
+    bool operator>  (const IEEEfloat) const; // greater-than
+    bool operator<= (const IEEEfloat) const; // less-than or equal
+    bool operator>= (const IEEEfloat) const; // greater-than or equal
 
     //
     // Methods for hashing floats, behave like java.lang.Float counterparts:
@@ -207,9 +275,9 @@ public:
     //  * all bit patterns of NaN compare as greater than any other float,
     //    including positive infinity, but the same as any other NaN pattern
     //
-    inline bool equals(IEEEfloat op) { return value.word == op.value.word; }
-    inline i4 hashCode(void) { return value.iword; }
-    inline int compareTo(IEEEfloat op)
+    inline bool equals(const IEEEfloat op) const { return value.word == op.value.word; }
+    inline i4 hashCode(void) const { return value.iword; }
+    inline int compareTo(const IEEEfloat op) const
     {
         return IsNaN() ? 1
                        : (IsZero() && op.IsZero()) ? op.Sign() - Sign()
@@ -228,91 +296,123 @@ class IEEEdouble : public BaseLong
     //
 {
 private:
-    enum { FRACT_BITS = 52, BIAS = 1023 };
+    friend class DoubleToString;
 
-    inline u4 SignBit(void) { return HighWord() & 0x80000000; }
-    inline u4 ExpBits(void) { return HighWord() & 0x7FF00000; }
+    //
+    // two enums, so that first is signed, and second may be unsigned
+    //
+    enum
+    {
+        FRACT_SIZE    = 52,         // number of bits in mantissa
+        FRACT_SIZE_HI = FRACT_SIZE - 32, // mantissa bits in high word
+        BIAS          = 1023,       // exponent bias
+        MAX_DEC_EXP   = 308,        // maximum decimal exponent
+        MAX_DIGITS    = BIAS + FRACT_SIZE + 1 - MAX_DEC_EXP // maximum digits in precise decimal
+    };
+    enum
+    {
+        EXP_BITS      = 0x7FF00000, // exponent bit mask
+        FRACT_BITS    = 0x000FFFFF, // mantissa bit mask
+        ABS_BITS      = EXP_BITS | FRACT_BITS, // absolute value
+        MAX_FRACT     = 0x00200000, // upper limit of mantissa
+        MIN_FRACT     = 0x00100000, // lower limit of mantissa
+        NEG_ZERO_HI   = 0x80000000, // -0.0
+        POS_ZERO_HI   = 0x00000000, // 0.0
+        NEG_INF_HI    = 0xFFF00000, // -Inf
+        POS_INF_HI    = 0x7FF00000, // +Inf
+        NAN_HI        = 0x7FF80000, // canonical NaN
+        ZERO_LO       = 0x00000000 // low half of special values above
+    };
+
+    inline u4 SignBit(void) const   { return HighWord() & SIGN_BIT; }
+    inline u4 ExpBits(void) const   { return HighWord() & EXP_BITS; }
+    inline u4 FractBits(void) const { return HighWord() & FRACT_BITS; }
 
     // takes the (possibly) unnormalized fraction with its corresponding
     // exponent and sign, and creates the normalized double
     static IEEEdouble Normalize(int, int, ULongInt);
     // takes the double and splits it into a normalized fraction and exponent;
     // the exponent is returned, the parameter fraction is modified
-    int SplitInto(BaseLong &fraction);
+    int SplitInto(BaseLong &fraction) const;
 
+    // returns the value of 1 ulp (unit in last place) for this double
+    IEEEdouble Ulp(void) const;
+    // returns the ratio between two doubles represented in BigInts
+    static IEEEdouble Ratio(const BigInt &a, const BigInt &b);
 
 
 #ifndef HAVE_MEMBER_CONSTANTS
     // VC++ can't cope with constant class members
-    static u4 MAX_FRACT;
-    static u4 MAX_FRACT2;
-    static i4 MIN_INT;
-    static i4 MAX_INT;
+    static IEEEdouble tens[]; // powers of 10 exactly represented in float
+    static IEEEdouble bigtens[]; // powers of 10 by powers of 2
 #else
-    static const u4 MAX_FRACT  = 0x00200000;
-    static const u4 MAX_FRACT2 = 0x00100000;
-    static const i4 MIN_INT    = 0x80000000;
-    static const i4 MAX_INT    = 0x7FFFFFFF;
+    static const IEEEdouble tens[]; // powers of 10 exactly represented in float
+    static const IEEEdouble bigtens[]; // powers of 10 by powers of 2
 #endif
 
 public:
     //
     // Information methods, for evaluating components of the float
     //
-    inline int     Sign(void)     { return HighWord() >> 31; }
-    inline int     Exponent(void) { return (int) ((HighWord() >> 20) & 0x000007FF) - BIAS; }
-    inline LongInt Fraction(void)
+    inline int     Sign(void) const     { return HighWord() >> 31; }
+    inline int     Exponent(void) const { return ((HighWord() & EXP_BITS) >> (FRACT_SIZE_HI)) - BIAS; }
+    inline LongInt Fraction(void) const
     {
-        return LongInt((HighWord() & 0x000FFFFF) | (ExpBits() ? 0x00100000 : 0),
+        return LongInt((HighWord() & FRACT_BITS) | (ExpBits() ? MIN_FRACT : 0),
                        LowWord()); 
     }
+    static inline int Bias(void)      { return BIAS; }
+    static inline int FractSize(void) { return FRACT_SIZE; }
 
-    inline bool IsNaN(void)
+    inline bool IsNaN(void) const
     {
         // optimized for no branching, idea from fdlibm.c
         u4 high = HighWord(),
             low = LowWord();
-        return ((high & 0x7FFFFFFF) | ((low | -(i4) low) >> 31)) > 0x7FF00000;
+        return ((high & ABS_BITS) | ((low | -(i4) low) >> 31)) > EXP_BITS;
     }
 
-    inline bool IsNegative(void) { return ((i4) HighWord() < 0) && !IsNaN(); }
-    inline bool IsPositive(void) { return ((i4) HighWord() >= 0) && !IsNaN(); }
+    inline bool IsNegative(void) const { return ((i4) HighWord() < 0) && !IsNaN(); }
+    inline bool IsPositive(void) const { return ((i4) HighWord() >= 0) && !IsNaN(); }
 
-    inline bool IsNegativeZero(void)
+    inline bool IsNegativeZero(void) const
     {
-        return (HighWord() == 0x80000000) && (LowWord() == 0x00000000);
+        return (HighWord() == NEG_ZERO_HI) && (LowWord() == ZERO_LO);
     }
-    inline bool IsPositiveZero(void)
+    inline bool IsPositiveZero(void) const
     {
-        return (HighWord() == 0x00000000) && (LowWord() == 0x00000000);
+        return (HighWord() == POS_ZERO_HI) && (LowWord() == ZERO_LO);
     }
-    inline bool IsZero(void)
+    inline bool IsZero(void) const
     {
-        return ((HighWord() & 0x7FFFFFFF) == 0x00000000) && (LowWord() == 0x00000000);
+        return ((HighWord() & ABS_BITS) == POS_ZERO_HI) && (LowWord() == ZERO_LO);
     }
 
-    inline bool IsNegativeInfinity(void)
+    inline bool IsNegativeInfinity(void) const
     {
-        return (HighWord() == 0xFFF00000) && (LowWord() == 0x00000000);
+        return (HighWord() == NEG_INF_HI) && (LowWord() == ZERO_LO);
     }
-    inline bool IsPositiveInfinity(void)
+    inline bool IsPositiveInfinity(void) const
     {
-        return (HighWord() == 0x7FF00000) && (LowWord() == 0x00000000);
+        return (HighWord() == POS_INF_HI) && (LowWord() == ZERO_LO);
     }
-    inline bool IsInfinite(void)
+    inline bool IsInfinite(void) const
     {
-        return ((HighWord() & 0x7FFFFFFF) == 0x7FF00000) && (LowWord() == 0x00000000);
+        return ((HighWord() & ABS_BITS) == POS_INF_HI) && (LowWord() == ZERO_LO);
     }
 
 
     //
     // Generation methods, for creating common constants
+    // TODO: These methods should be converted to return static const
+    // fields, rather than generating a non-const every time, as in
+    // BaseLong (long.h).  However, adding const support is a big undertaking.
     //
-    static inline IEEEdouble NaN(void)               { return IEEEdouble(0x7FF80000U, 0x00000000U); }
-    static inline IEEEdouble POSITIVE_INFINITY(void) { return IEEEdouble(0x7FF00000U, 0x00000000U); }
-    static inline IEEEdouble NEGATIVE_INFINITY(void) { return IEEEdouble(0xFFF00000U, 0x00000000U); }
-    static inline IEEEdouble POSITIVE_ZERO(void)     { return IEEEdouble(0x00000000U, 0x00000000U); }
-    static inline IEEEdouble NEGATIVE_ZERO(void)     { return IEEEdouble(0x80000000U, 0x00000000U); }
+    static inline const IEEEdouble NaN(void)               { return IEEEdouble(NAN_HI, ZERO_LO); }
+    static inline const IEEEdouble POSITIVE_INFINITY(void) { return IEEEdouble(POS_INF_HI, ZERO_LO); }
+    static inline const IEEEdouble NEGATIVE_INFINITY(void) { return IEEEdouble(NEG_INF_HI, ZERO_LO); }
+    static inline const IEEEdouble POSITIVE_ZERO(void)     { return IEEEdouble(POS_ZERO_HI, ZERO_LO); }
+    static inline const IEEEdouble NEGATIVE_ZERO(void)     { return IEEEdouble(NEG_ZERO_HI, ZERO_LO); }
 
 
     //
@@ -321,14 +421,14 @@ public:
     // Create a double from the given value
     inline IEEEdouble(double d) { value.double_value = d; }
     // Convert string to double, the double is NaN if check_invalid is true and input is invalid by JLS
-           IEEEdouble(char *, bool check_invalid = false);
+           IEEEdouble(const char *, bool check_invalid = false);
 
     // widening conversion of int to double, no information lost
            IEEEdouble(i4);
     // Widening conversion of long to double, may lose precision
-           IEEEdouble(LongInt);
+           IEEEdouble(const LongInt &);
     // Widening conversion of float to double, no information lost
-           IEEEdouble(IEEEfloat);
+           IEEEdouble(const IEEEfloat &);
     // Create a double without initializing it
     inline IEEEdouble(void) {}
     // Load a specified bit pattern (contrast to IEEEfloat(LongInt))
@@ -337,18 +437,18 @@ public:
     //
     // Conversion routines
     //
-           i4        IntValue(void);
-           LongInt   LongValue(void);
-    inline IEEEfloat FloatValue(void) { return IEEEfloat(*this); }
+           i4        IntValue(void) const;
+           LongInt   LongValue(void) const;
+    inline IEEEfloat FloatValue(void) const { return IEEEfloat(*this); }
 
 
     //
     // Floating-point operations
     // TODO: add const reference versions
     //
-           IEEEdouble  operator+  (IEEEdouble);   // binary addition
-    inline IEEEdouble  operator+  (void)          { return *this; } // unary plus
-    inline IEEEdouble &operator+= (IEEEdouble op) { return *this = *this + op; } // add and assign
+           IEEEdouble  operator+  (const IEEEdouble) const;   // binary addition
+    inline IEEEdouble  operator+  (void) const          { return *this; } // unary plus
+    inline IEEEdouble &operator+= (const IEEEdouble op) { return *this = *this + op; } // add and assign
     inline IEEEdouble  operator++ (void)          { return *this += 1; } // pre-increment
     inline IEEEdouble  operator++ (int dummy)
     {
@@ -357,9 +457,9 @@ public:
         return result;
     } // post-increment
 
-           IEEEdouble  operator-  (void);         // unary minus
-    inline IEEEdouble  operator-  (IEEEdouble op) { return *this + (-op); } // binary subtraction
-    inline IEEEdouble &operator-= (IEEEdouble op) { return *this = *this - op; } // subtract and assign
+           IEEEdouble  operator-  (void) const;         // unary minus
+    inline IEEEdouble  operator-  (const IEEEdouble op) const { return *this + (-op); } // binary subtraction
+    inline IEEEdouble &operator-= (const IEEEdouble op) { return *this = *this - op; } // subtract and assign
     inline IEEEdouble  operator-- (void)          { return *this -= 1; } // pre-decrement
     inline IEEEdouble  operator-- (int dummy)
     {
@@ -368,24 +468,24 @@ public:
         return result;
     } // post-decrement
 
-           IEEEdouble  operator*  (IEEEdouble);   // multiplication
-    inline IEEEdouble &operator*= (IEEEdouble op) { return *this = *this * op; } // multiply and assign
+           IEEEdouble  operator*  (const IEEEdouble) const;   // multiplication
+    inline IEEEdouble &operator*= (const IEEEdouble op) { return *this = *this * op; } // multiply and assign
 
-           IEEEdouble  operator/  (IEEEdouble);   // divide
-    inline IEEEdouble &operator/= (IEEEdouble op) { return *this = *this / op; } // divide and assign
+           IEEEdouble  operator/  (const IEEEdouble) const;   // divide
+    inline IEEEdouble &operator/= (const IEEEdouble op) { return *this = *this / op; } // divide and assign
 
-           IEEEdouble  operator%  (IEEEdouble);   // modulus
-    inline IEEEdouble &operator%= (IEEEdouble op) { return *this = *this % op; } // modulus and assign
+           IEEEdouble  operator%  (const IEEEdouble) const;   // modulus
+    inline IEEEdouble &operator%= (const IEEEdouble op) { return *this = *this % op; } // modulus and assign
 
     //
     // Comparison operators.  Recall that NaN does not compare, and 0.0 == -0.0
     //
-    bool operator== (IEEEdouble); // equal
-    bool operator!= (IEEEdouble); // not equal
-    bool operator<  (IEEEdouble); // less-than
-    bool operator>  (IEEEdouble); // greater-than
-    bool operator<= (IEEEdouble); // less-than or equal
-    bool operator>= (IEEEdouble); // greater-than or equal
+    bool operator== (const IEEEdouble) const; // equal
+    bool operator!= (const IEEEdouble) const; // not equal
+    bool operator<  (const IEEEdouble) const; // less-than
+    bool operator>  (const IEEEdouble) const; // greater-than
+    bool operator<= (const IEEEdouble) const; // less-than or equal
+    bool operator>= (const IEEEdouble) const; // greater-than or equal
 
     //
     // Methods for hashing doubles, behave like java.lang.Double counterparts:
@@ -396,9 +496,9 @@ public:
     //  * all bit patterns of NaN compare as greater than any other float,
     //    including positive infinity, but the same as any other NaN pattern
     //
-    inline bool equals(IEEEdouble op) { return (BaseLong) *this == (BaseLong) op; }
-    inline i4 hashCode(void) { return ((BaseLong) *this).hashCode(); }
-    inline int compareTo(IEEEdouble op)
+    inline bool equals(const IEEEdouble op) const { return (BaseLong) *this == (BaseLong) op; }
+    inline i4 hashCode(void) const { return ((BaseLong) *this).hashCode(); }
+    inline int compareTo(const IEEEdouble op) const
     {
         return IsNaN() ? 1
                        : (IsZero() && op.IsZero()) ? op.Sign() - Sign()
@@ -408,9 +508,121 @@ public:
 };
 
 
-inline IEEEdouble IEEEfloat::DoubleValue()
+//
+// Helper class for storing precise decimal values of floating point
+// when converting to or from decimal strings.
+//
+class BigInt
+{
+public:
+    // init with value, set exponent and bit count
+    BigInt(const IEEEfloat &, int &exp, int &bitcnt);
+    BigInt(const IEEEdouble &, int &exp, int &bitcnt);
+    // init with int
+    inline BigInt(int);
+    // init with value of string; where before is the number of digits
+    // before the '.', total is the number of digits to parse, start
+    // is the previously parsed value of the first few digits, and
+    // startsize gives the number of digits previously parsed
+    BigInt(const char *, int before, int total, u4 start, int startsize);
+    // copy constructor and assignment operator
+    BigInt &operator =(const BigInt &);
+    BigInt(const BigInt &op) { *this = op; }
+    // destructor
+    ~BigInt()
+    {
+        delete data;
+    }
+
+private:
+    // resize data[] to be 1<<k elements
+    inline void resize(int k);
+
+    // return count of high-order 0's in x
+    static int hi0bits(u4 x);
+    // return count of low-order 0's in y, shift y so that
+    // least significant 1 is at right
+    static int lo0bits(u4 &y);
+
+public:
+    // return number of leading 0's in most significant word of data
+    inline int hi0bits() const { assert(data); return hi0bits(data[wds - 1]); }
+
+    // return true if this is 0
+    inline bool IsZero() const { assert(data); return ! (data[0] || wds > 1); }
+
+    // return true if this is negative
+    inline bool IsNegative() const { return neg; }
+    // set whether this is negative
+    inline void IsNegative(bool value) { neg = value; }
+
+    // operators
+           BigInt &operator +  (const unsigned op) const;
+    inline BigInt &operator += (const unsigned op) { return *this = *this + op; }
+    inline BigInt &operator ++ (void) { return *this += 1; } // pre-increment
+           BigInt &operator -  (const BigInt &op) const;
+           BigInt &operator *  (const BigInt &op) const;
+           BigInt &operator *  (unsigned op) const;
+    inline BigInt &operator *= (const BigInt &op) { return *this = *this * op; }
+    inline BigInt &operator *= (unsigned op) { return *this = *this * op; }
+           BigInt &operator << (unsigned op) const;
+    inline BigInt &operator <<=(unsigned op) { return *this = *this << op; }
+
+    // equivalent to *this = *this * m + a, with less work
+    BigInt &multadd(unsigned m, unsigned a);
+    // return *this *= pow(5, k)
+    BigInt &pow5mult(unsigned k);
+    // return *this == b ? 0 : *this < b ? negative : positive;
+    int compareTo(const BigInt &b) const;
+    // tmp = *this % S; *this /= S; return tmp;
+    int quorem(const BigInt &S);
+
+    // converts to scaled native value, between 1 and 2.
+    IEEEfloat FloatValue() const;
+    IEEEdouble DoubleValue() const;
+
+private:
+    friend IEEEfloat IEEEfloat::Ratio(const BigInt &, const BigInt &);
+    friend IEEEdouble IEEEdouble::Ratio(const BigInt &, const BigInt &);
+
+    int k;      // log2 maxwds
+    int maxwds; // size of data[]
+    bool neg;   // true for negative
+    int wds;    // current memory use of data[]
+    u4 *data;   // bit storage
+
+#ifndef HAVE_MEMBER_CONSTANTS
+    static u4 fives[];          // powers of 5 that fit in int
+    static BigInt *bigfives[];  // bigger powers of 5, by powers of 2
+#else /* HAVE_MEMBER_CONSTANTS */
+    static const u4 fives[];
+    static const BigInt *bigfives[];
+#endif /* HAVE_MEMBER_CONSTANTS */
+
+};
+
+
+inline IEEEdouble IEEEfloat::DoubleValue() const
 {
     return IEEEdouble(*this);
+}
+
+inline BigInt::BigInt(int i) : data(NULL)
+{
+    resize(0);
+    data[0] = i;
+    wds = 1;
+    neg = i < 0;
+}
+
+inline void BigInt::resize(int k)
+{
+    maxwds = 1 << k;
+    delete data;
+    data = new u4[maxwds];
+    this -> k = k;
+    wds = 0;
+    neg = false;
 }
 
 #ifdef	HAVE_JIKES_NAMESPACE

@@ -1,4 +1,4 @@
-// $Id: op.h,v 1.8 2001/01/05 09:13:20 mdejong Exp $
+// $Id: op.h,v 1.9 2001/04/01 04:33:29 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -247,7 +247,7 @@ private:
         INFO_DONE  = 3
     };
 
-    static void opdesc (int opc, char **name, char **desc);
+    static void opdesc (int opc, const char **name, const char **desc);
 
     inline static signed char get_i1(Tuple<u1> &code, int pc)
     {
@@ -279,7 +279,7 @@ private:
         return (unsigned) (code[pc] << 24 | code[pc + 1] << 16 | code[pc + 2] << 8 | code[pc + 3]);
     }
 
-    static void opline(Tuple<cp_info *> &, char *, int, int, char *, char *, char *, int, int);
+    static void opline(Tuple<cp_info *> &, char *, int, int, const char *, char *, const char *, int, int);
 };
 
 #ifdef	HAVE_JIKES_NAMESPACE

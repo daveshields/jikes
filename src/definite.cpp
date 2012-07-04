@@ -1,4 +1,4 @@
-// $Id: definite.cpp,v 1.19 2001/01/10 16:49:44 mdejong Exp $
+// $Id: definite.cpp,v 1.21 2001/05/08 15:08:36 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1052,14 +1052,7 @@ void Semantic::DefiniteBlock(Ast *stmt)
     definite_block_stack -> Push(block_body);
 
     for (int i = 0; i < block_body -> block_symbol -> NumVariableSymbols(); i++)
-    {
-        VariableSymbol *variable = block_body -> block_symbol -> VariableSym(i);
-
-        possibly_assigned_finals -> RemoveElement(variable -> LocalVariableIndex());
-        definitely_assigned_variables -> RemoveElement(variable -> LocalVariableIndex());
-
-        definite_visible_variables -> AddElement(variable);
-    }
+        definite_visible_variables -> AddElement(block_body -> block_symbol -> VariableSym(i));
 
     DefiniteBlockStatements(block_body);
 
@@ -1072,8 +1065,18 @@ for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
 Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\n";
 }
 #endif
+    //
+    // Remove all variables that just went out of scope
+    //
     for (int k = 0; k < block_body -> block_symbol -> NumVariableSymbols(); k++)
-        definite_visible_variables -> RemoveElement(block_body -> block_symbol -> VariableSym(k));
+    {
+        VariableSymbol *variable = block_body -> block_symbol -> VariableSym(k);
+
+        possibly_assigned_finals -> RemoveElement(variable -> LocalVariableIndex());
+        definitely_assigned_variables -> RemoveElement(variable -> LocalVariableIndex());
+
+        definite_visible_variables -> RemoveElement(variable);
+    }
 
     //
     // Note that in constructing the Ast, the parser encloses each
@@ -1495,7 +1498,8 @@ void Semantic::DefiniteSwitchStatement(Ast *stmt)
            after_expr_finals(*possibly_assigned_finals),
            switch_finals_union(*possibly_assigned_finals);
 
-    for (int i = 0; i < block_body -> NumStatements(); i++)
+    int i;
+    for (i = 0; i < block_body -> NumStatements(); i++)
     {
         AstSwitchBlockStatement *switch_block_statement = (AstSwitchBlockStatement *) block_body -> Statement(i);
 
@@ -1583,6 +1587,19 @@ Coutput << "    \"" << block_body -> LocallyDefinedVariable(j) -> Name() << "\"\
     else *definitely_assigned_variables = starting_set;
 
     *possibly_assigned_finals = switch_finals_union;
+
+    //
+    // Remove all variables that just went out of scope
+    //
+    for (i = 0; i < block_body -> block_symbol -> NumVariableSymbols(); i++)
+    {
+        VariableSymbol *variable = block_body -> block_symbol -> VariableSym(i);
+
+        possibly_assigned_finals -> RemoveElement(variable -> LocalVariableIndex());
+        definitely_assigned_variables -> RemoveElement(variable -> LocalVariableIndex());
+
+        definite_visible_variables -> RemoveElement(variable);
+    }
 
     BreakableStatementStack().Pop();
     definite_block_stack -> Pop();
@@ -1826,13 +1843,7 @@ void Semantic::DefiniteTryStatement(Ast *stmt)
     definite_try_stack -> SetTopBlock(try_block_body);
 
     for (int j = 0; j < try_block_body -> block_symbol -> NumVariableSymbols(); j++)
-    {
-        VariableSymbol *variable = try_block_body -> block_symbol -> VariableSym(j);
-
-        possibly_assigned_finals -> RemoveElement(variable -> LocalVariableIndex());
-        definitely_assigned_variables -> RemoveElement(variable -> LocalVariableIndex());
-        definite_visible_variables -> AddElement(variable);
-    }
+        definite_visible_variables -> AddElement(try_block_body -> block_symbol -> VariableSym(j));
 
     BitSet before_try_finals(*possibly_assigned_finals);
 
@@ -1855,7 +1866,16 @@ Coutput << "    \"" << try_block_body -> LocallyDefinedVariable(k) -> Name() << 
     // Once we are done with a block, its enclosed local variables are no longer visible.
     //
     for (int l = 0; l < try_block_body -> block_symbol -> NumVariableSymbols(); l++)
-        definite_visible_variables -> RemoveElement(try_block_body -> block_symbol -> VariableSym(l));
+    {
+        VariableSymbol *variable = try_block_body -> block_symbol -> VariableSym(l);
+        int index = variable -> LocalVariableIndex();
+
+        possibly_assigned_finals -> RemoveElement(index);
+        definitely_assigned_variables -> RemoveElement(index);
+        before_catch_finals.RemoveElement(index);
+        possibly_finals_union.RemoveElement(index);
+        definite_visible_variables -> RemoveElement(variable);
+    }
 
     definite_block_stack -> Pop();
 
@@ -1888,17 +1908,10 @@ Coutput << "    \"" << try_block_body -> LocallyDefinedVariable(k) -> Name() << 
         definite_try_stack -> SetTopBlock(clause_block_body);
 
         for (int j = 0; j < clause_block_body -> block_symbol -> NumVariableSymbols(); j++)
-        {
-            VariableSymbol *variable = clause_block_body -> block_symbol -> VariableSym(j);
-
-            possibly_assigned_finals -> RemoveElement(variable -> LocalVariableIndex());
-            definitely_assigned_variables -> RemoveElement(variable -> LocalVariableIndex());
-            definite_visible_variables -> AddElement(variable);
-        }
+            definite_visible_variables -> AddElement(clause_block_body -> block_symbol -> VariableSym(j));
 
         //
-        // The parameter must be (re) added after removing all variables in the block
-        // from the set !!!
+        // The parameter must be added as well
         //
         definitely_assigned_variables -> AddElement(clause -> parameter_symbol -> LocalVariableIndex());
         if (control.option.g)
@@ -1930,7 +1943,19 @@ Coutput << "    \"" << clause_block_body -> LocallyDefinedVariable(l) -> Name() 
         // Once we are done with a block, its enclosed local variables are no longer visible.
         //
         for (int k = 0; k < clause_block_body -> block_symbol -> NumVariableSymbols(); k++)
-            definite_visible_variables -> RemoveElement(clause_block_body -> block_symbol -> VariableSym(k));
+        {
+            VariableSymbol *variable = clause_block_body -> block_symbol -> VariableSym(k);
+
+            possibly_assigned_finals -> RemoveElement(variable -> LocalVariableIndex());
+            definitely_assigned_variables -> RemoveElement(variable -> LocalVariableIndex());
+            definite_visible_variables -> RemoveElement(variable);
+        }
+        //
+        // The parameter goes out of scope as well
+        //
+        possibly_assigned_finals -> RemoveElement(clause -> parameter_symbol -> LocalVariableIndex());
+        definitely_assigned_variables -> RemoveElement(clause -> parameter_symbol -> LocalVariableIndex());
+        definite_visible_variables -> RemoveElement(clause -> parameter_symbol);
 
         possibly_finals_union += definite_block_stack -> TopFinalExitSet(*possibly_assigned_finals);
 

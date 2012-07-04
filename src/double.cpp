@@ -1,4 +1,4 @@
-// $Id: double.cpp,v 1.17 2001/02/14 21:25:11 mdejong Exp $
+// $Id: double.cpp,v 1.19 2001/04/19 13:52:32 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -8,9 +8,11 @@
 // You must accept the terms of that agreement to use this software.
 //
 //
-// NOTE: The IEEE 754 emulation code in double.h and double.cpp within
+// NOTES: The IEEE 754 emulation code in double.h and double.cpp within
 // Jikes are adapted from code written by Alan M. Webb of IBM's Hursley
 // lab in porting the Sun JDK to System/390.
+//
+//
 //
 // In addition, the code for emulating the remainder operator, %, is
 // adapted from e_fmod.c, part of fdlibm, the Freely Distributable Math
@@ -28,6 +30,33 @@
 // ====================================================
 //
 //
+//
+// Likewise, the code for accurate conversions between floating point
+// and decimal strings, in double.h, double.cpp, platform.h, and
+// platform.cpp, is adapted from dtoa.c.  The original code can be
+// found at http://netlib2.cs.utk.edu/fp/dtoa.c.
+//
+// The code in dtoa.c is copyrighted as follows:
+//****************************************************************
+//*
+//* The author of this software is David M. Gay.
+//*
+//* Copyright (c) 1991, 2000, 2001 by Lucent Technologies.
+//*
+//* Permission to use, copy, modify, and distribute this software for any
+//* purpose without fee is hereby granted, provided that this entire notice
+//* is included in all copies of any software which is or includes a copy
+//* or modification of this software and in all copies of the supporting
+//* documentation for such software.
+//*
+//* THIS SOFTWARE IS BEING PROVIDED "AS IS", WITHOUT ANY EXPRESS OR IMPLIED
+//* WARRANTY.  IN PARTICULAR, NEITHER THE AUTHOR NOR LUCENT MAKES ANY
+//* REPRESENTATION OR WARRANTY OF ANY KIND CONCERNING THE MERCHANTABILITY
+//* OF THIS SOFTWARE OR ITS FITNESS FOR ANY PARTICULAR PURPOSE.
+//*
+//***************************************************************/
+//
+//
 
 #include "double.h"
 #include "long.h"
@@ -38,29 +67,39 @@ namespace Jikes {	// Open namespace Jikes block
 
 #ifndef HAVE_MEMBER_CONSTANTS
 // VC++ can't cope with constant class members
-u4 IEEEfloat::MAX_FRACT   = 0x01000000;
-u4 IEEEfloat::MAX_FRACT2  = 0x00800000;
-u4 IEEEfloat::MIN_INT_F   = 0xCF000000;
-i4 IEEEfloat::MIN_INT     = 0x80000000;
-i4 IEEEfloat::MAX_INT     = 0x7FFFFFFF;
+IEEEfloat IEEEfloat::tens[] = {
+    1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f,
+    1e7f, 1e8f, 1e9f, 1e10f
+};
+IEEEfloat IEEEfloat::bigtens[] = {
+    1e8f, 1e16f, 1e32f
+};
 
-u4 IEEEdouble::MAX_FRACT  = 0x00200000;
-u4 IEEEdouble::MAX_FRACT2 = 0x00100000;
-i4 IEEEdouble::MIN_INT    = 0x80000000;
-i4 IEEEdouble::MAX_INT    = 0x7FFFFFFF;
+IEEEdouble IEEEdouble::tens[] = {
+    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7,
+    1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15,
+    1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22
+};
+IEEEdouble IEEEdouble::bigtens[] = {
+    1e16, 1e32, 1e64, 1e128, 1e256
+};
 #else
-// gcc bug 1877 can cause linker errors if
-// the following external decls are not used.
-const u4 IEEEfloat::MAX_FRACT;
-const u4 IEEEfloat::MAX_FRACT2;
-const u4 IEEEfloat::MIN_INT_F;
-const i4 IEEEfloat::MIN_INT;
-const i4 IEEEfloat::MAX_INT;
+const IEEEfloat IEEEfloat::tens[] = {
+    1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f,
+    1e7f, 1e8f, 1e9f, 1e10f
+};
+const IEEEfloat IEEEfloat::bigtens[] = {
+    1e8f, 1e16f, 1e32f
+};
 
-const u4 IEEEdouble::MAX_FRACT;
-const u4 IEEEdouble::MAX_FRACT2;
-const i4 IEEEdouble::MIN_INT;
-const i4 IEEEdouble::MAX_INT;
+const IEEEdouble IEEEdouble::tens[] = {
+    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7,
+    1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15,
+    1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22
+};
+const IEEEdouble IEEEdouble::bigtens[] = {
+    1e16, 1e32, 1e64, 1e128, 1e256
+};
 #endif
 
 
@@ -79,18 +118,18 @@ IEEEfloat::IEEEfloat(i4 a)
     if (a == 0)
         *this = POSITIVE_ZERO();
     else
-        *this = Normalize(sign, FRACT_BITS, (u4) a);
+        *this = Normalize(sign, FRACT_SIZE, (u4) a);
 #endif // HAVE_IEEE754
 }
 
-IEEEfloat::IEEEfloat(LongInt a)
+IEEEfloat::IEEEfloat(const LongInt &a)
 {
 #ifdef HAVE_IEEE754
 # ifdef HAVE_UNSIGNED_LONG_LONG
-    value.float_value = (float) a.Words();
+    value.float_value = (float)(i8) a.Words();
 # else
-    value.float_value = ((float) a.HighWord() * (float) 0x40000000 * 4.0f) +
-        (float) a.LowWord();
+    value.float_value = ((float)(i4) a.HighWord() * (float) 0x40000000 * 4.0f)
+        + (float) a.LowWord();
 # endif // HAVE_UNSIGNED_LONG_LONG
 #else
     //
@@ -98,36 +137,37 @@ IEEEfloat::IEEEfloat(LongInt a)
     // in rare cases the double rounding puts us off by one bit.
     //
     int	sign = 0;
+    LongInt l = a;
 
     if (a < 0)
     {
-        a  = -a;
+        l = -a;
         sign = 1;
-        if (a < 0) // special case MIN_LONG
+        if (l < 0) // special case MIN_LONG
         {
-            value.word = 0xDF000000;
+            value.word = MIN_LONG_F;
             return;
         }
     }
-    if (a == 0)
+    if (l == 0)
         *this = POSITIVE_ZERO();
-    else if (a.HighWord() == 0)
-        *this = Normalize(sign, FRACT_BITS, a.LowWord());
+    else if (l.HighWord() == 0)
+        *this = Normalize(sign, FRACT_SIZE, l.LowWord());
     else
     {
-        int exponent = FRACT_BITS, round = 0;
-        while (a.HighWord())
+        int exponent = FRACT_SIZE, round = 0;
+        while (l.HighWord())
         {
-            round |= (a.LowWord() & 0x000000ff) ? 1 : 0;
-            a >>= 8;
+            round |= (l.LowWord() & BYTE_MASK) ? 1 : 0;
+            l >>= 8;
             exponent += 8;
         }
-        *this = Normalize(sign, exponent, a.LowWord() | round);
+        *this = Normalize(sign, exponent, l.LowWord() | round);
     }
 #endif // HAVE_IEEE754
 }
 
-IEEEfloat::IEEEfloat(IEEEdouble d)
+IEEEfloat::IEEEfloat(const IEEEdouble &d)
 {
 #ifdef HAVE_IEEE754
     value.float_value = (float) d.DoubleView();
@@ -150,8 +190,8 @@ IEEEfloat::IEEEfloat(IEEEdouble d)
             // Shift to 26th position, add implicit msb, rounding bits
             //
             LongInt fract = d.Fraction() << 5;
-	    u4 fraction = fract.HighWord() | ((fract.LowWord()) ? 0x02000001
-                                                                : 0x02000000);
+	    u4 fraction = fract.HighWord() | (fract.LowWord() ? 0x02000001
+                                                              : 0x02000000);
 
 	    *this = Normalize(d.Sign(), d.Exponent() - 2, fraction);
 	}
@@ -159,45 +199,514 @@ IEEEfloat::IEEEfloat(IEEEdouble d)
 #endif // HAVE_IEEE754
 }
 
-IEEEfloat::IEEEfloat(char *str, bool check_invalid)
+bool IEEEfloat::Adjust(const BigInt &delta, const BigInt &bs, const bool dsign)
 {
+    IEEEfloat aadj, aadj1;
+    i4 y;
+
+    aadj = Ratio(delta, bs);
+    if (aadj <= 2)
+    {
+        if (dsign)
+            aadj = aadj1 = 1;
+        else if (FractBits())
+        {
+            if (value.word == 1)
+            {
+                // underflow
+                *this = POSITIVE_ZERO();
+                return true;
+            }
+            aadj = 1;
+            aadj1 = -1;
+        }
+        else
+        {
+            //
+            // special case - mantissa is power of 2
+            //				 
+            if (aadj < 1.0f)
+                aadj = 0.5f;
+            else
+                aadj *= 0.5f;
+            aadj1 = -aadj;
+        }
+    }
+    else
+    {
+        aadj *= 0.5f;
+        aadj1 = dsign ? aadj : -aadj;
+    }
+    y = Exponent();
     //
-    // This assumes that name already meets the format of JLS 3.10.2 (ie. no
-    // extra whitespace or invalid characters)
+    // Check for overflow
     //
-    // TODO: This conversion is a temporary patch. Need volunteer to implement
-    //       Clinger algorithm from PLDI 1990.
-    //
-    value.float_value = (float) atof(str);
+    if (y == BIAS)
+    {
+        IEEEfloat tmp(*this);
+        value.word -= (FRACT_SIZE + 1) * MIN_FRACT;
+        *this += aadj1 * Ulp();
+        if (Exponent() >= BIAS - FRACT_SIZE)
+        {
+            if (tmp.value.word == POS_INF - 1)
+            {
+                // overflow
+                *this = POSITIVE_INFINITY();
+                return true;
+            }
+            value.word = POS_INF - 1;
+            return false;
+        }
+        else
+            value.word += (FRACT_SIZE + 1) * MIN_FRACT;
+    }
+    else
+    {
+        //
+        // Compute adj so that the IEEE rounding rules will
+        // correctly round *this + adj in some half-way cases.
+        // If *this * Ulp() is denormalized, we must adjust aadj
+        // to avoid trouble from bits lost to denormalization.
+        //
+        if (y <= FRACT_SIZE - BIAS || aadj > 1)
+        {
+            aadj1 = IEEEfloat((aadj + 0.5f).IntValue());
+            if (! dsign)
+                aadj1 = -aadj1;
+        }
+        *this += aadj1 * Ulp();
+    }
+    if (y == Exponent())
+    {
+        //
+        // Can we stop now?
+        // The tolerances below are conservative.
+        //
+        aadj -= aadj.IntValue();
+        if (dsign || FractBits())
+        {
+            if (aadj < .4999999f || aadj > .5000001f)
+                return true;
+        }
+        else if (aadj < .4999999f / 2)
+            return true;
+    }
+    return false;
+}
+
+IEEEfloat::IEEEfloat(const char *str, bool check_invalid)
+{
+    int bb2, bb5, bbe, bd2, bd5, bbbits, bs2,
+        e, e1, i, j, k;
+    int nd, // number of digits in mantissa (except extra '0's)
+        nd0, // number of digits before '.' (except leading '0's)
+        nf, // number of digits after '.' (except trailing '0's)
+        nz; // number of consecutive '0' digits
+    bool nz0, // whether leading zero exists
+         roundup, // whether to round up long string
+         sign, // if the string represents a negative
+         dsign, // the sign of delta
+         esign; // the sign of the exponent
+    char c;
+    const char *s, *s0, *s1;
+    i4 L;
+    i4 y, z;
+
+    sign = nz0 = roundup = false;
+    nz = 0;
 
     //
-    // When parsing a literal in Java, a number that rounds to infinity or
-    // zero is invalid.  A true check_invalid sets any invalid number to NaN,
-    // to make the upstream processing easier.  Leave check_invalid false to
-    // allow parsing infinity or rounded zero from a string.
+    // consume whitespace
     //
-    if (check_invalid)
-    {
-        if (IsInfinite())
-            *this = NaN();
-        if (IsZero())
+    for (s = str; ; s++)
+        switch (*s)
         {
-            for (char *p = str; *p; p++) {
-                switch (*p) {
-                case '-': case '+': case '0': case '.':
-                    break; // keep checking
-                case 'e': case 'E': case 'd': case 'D': case 'f': case 'F':
-                    return; // got this far, str is 0
-                default:
-                    *this = NaN(); // encountered non-zero digit. oops.
-                    return;
-                }
+        case U_MINUS:
+            sign = true;
+            // fallthrough
+        case U_PLUS:
+            if (*++s)
+                goto break2;
+            // fallthrough
+        case U_NU:
+            *this = NaN();
+            return;
+        case U_SP:
+        case U_HT:
+        case U_FF:
+        case U_LF:
+        case U_CR:
+            continue;
+        default:
+            goto break2;
+        }
+ break2:
+    //
+    // consume leading 0's
+    //
+    if (*s == U_0)
+    {
+        nz0 = true;
+        while (*++s == U_0);
+
+        if (! *s)
+        {
+            *this = sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
+            return;
+        }
+    }
+
+    //
+    // parse before '.'
+    //
+    s0 = s;
+    y = z = 0;
+    for (nd = nf = 0; (c = *s) >= U_0 && c <= U_9; nd++, s++)
+        if (nd < 8)
+            y = 10 * y + c - U_0;
+    nd0 = nd;
+    if (c == U_DOT)
+    {
+        //
+        // parse after '.'
+        //
+        c = *++s;
+        if (!nd)
+        {
+            for ( ; c == U_0; c = *++s)
+                nz++;
+            if (c > U_0 && c <= U_9)
+            {
+                s0 = s;
+                nf += nz;
+                nz = 0;
+            }
+        }
+        for ( ; c >= U_0 && c <= U_9; c = *++s)
+        {
+            nz++;
+            if (c -= U_0)
+            {
+                nf += nz;
+                for (i = 1; i < nz; i++)
+                    if (nd++ < 8)
+                        y *= 10;
+                if (nd++ < 8)
+                    y = 10 * y + c;
+                nz = 0;
             }
         }
     }
+    //
+    // consume exponent
+    //
+    e = 0;
+    if (c == U_e || c == U_E) {
+        str = s;
+        esign = false;
+        switch (c = *++s)
+        {
+        case U_MINUS:
+            esign = true;
+            // fallthrough
+        case U_PLUS:
+            c = *++s;
+        }
+        if (c >= U_0 && c <= U_9)
+        {
+            if (!nd && !nz && !nz0)
+            {
+                *this = sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
+                return;
+            }
+            while (c == U_0)
+                c = *++s;
+            if (c > U_0 && c <= U_9)
+            {
+                L = c - U_0;
+                s1 = s;
+                while ((c = *++s) >= U_0 && c <= U_9)
+                    L = 10 * L + c - U_0;
+                //
+                // Avoid confusion from exponents so large that e might
+                // overflow
+                if (s - s1 > 8 || L > 19999)
+                    e = 19999;  
+                else
+                    e = L;
+                if (esign)
+                    e = -e;
+            }
+            else
+                e = 0;
+        }
+        else
+            s = str;
+    }
+    if (!nd) {
+        *this = (!nz && !nz0) ? NaN()
+                              : sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
+        return;
+    }
+    //
+    // for long strings, round away all digits beyond maximum precise string
+    // for fraction, there are n decimal digits after '.' if lsb is 2^n;
+    // but the first m of these digits are '0', for d = x*10^m
+    // so, digits after MAX_DIGITS may be ignored
+    //
+    if (nd > MAX_DIGITS)
+    {
+        k = nd - MAX_DIGITS;
+        i = MAX_DIGITS - nd0;
+        if (i <= 0)
+        {
+            // decimal after last precise digit
+            nd0 = MAX_DIGITS;
+            nf = i;
+            j = 0;
+        }
+        else if (i == MAX_DIGITS)
+        {
+            // decimal before first precise digit
+            nf -= k;
+            j = 0;
+        }
+        else
+        {
+            // decimal inside precise digits
+            nf -= k;
+            j = 1;
+        }
+        roundup = s0[MAX_DIGITS - 1 + j] != U_4;
+        nd = MAX_DIGITS;
+    }
+    e1 = e -= nf;
+	
+    // 
+    // Now we have nd0 digits, starting at s0, followed by a
+    // decimal point, followed by nd-nd0 digits.  The number we're
+    // after is the integer represented by those digits times 10**e
+    //
+    if (! nd0)
+        nd0 = nd;
+    k = nd < 8 ? nd : 8;
+    *this = IEEEfloat(y);
+    if (nd < 8)
+    {
+        if (!e)
+        {
+            if (sign)
+                *this = -*this;
+            return;
+        }
+        if (e > 0)
+        {
+            if (e <= 10)
+            {
+                *this *= tens[e];
+                if (sign)
+                    *this = -*this;
+                return;
+            }
+            i = 7 - nd;
+            if (e <= 10 + i)
+            {
+                e -= i;
+                *this *= tens[i];
+                *this *= tens[e];
+                if (sign)
+                    *this = -*this;
+                return;
+            }
+        }
+        else if (e >= -10 )
+        {
+            *this /= tens[-e];
+            if (sign)
+                *this = -*this;
+            return;
+        }
+    }
+    e1 += nd - k;
+	
+    // 
+    // Get starting approximation: *this * 10**e1
+    //
+    if (e1 > 0)
+    {
+        i = e1 & 7;
+        if (i)
+            *this *= tens[i];
+        if (e1 >>= 3)
+        {
+            if (e1 > MAX_DEC_EXP >> 3)
+            {
+                *this = check_invalid ? NaN()
+                                      : sign ? NEGATIVE_INFINITY()
+                                             : POSITIVE_INFINITY();
+                return;
+            }
+            for (j = 0; e1 > 1; j++, e1 >>= 1)
+                if (e1 & 1)
+                    *this *= bigtens[j];
+            //
+            // The last multiplication could overflow.
+            //
+            value.word -= (FRACT_SIZE + 1) * MIN_FRACT;
+            *this *= bigtens[j];
+            z = Exponent();
+            if (z > BIAS - FRACT_SIZE)
+            {
+                *this = check_invalid ? NaN()
+                                      : sign ? NEGATIVE_INFINITY()
+                                             : POSITIVE_INFINITY();
+                return;
+            }
+            if (z > BIAS - FRACT_SIZE - 1)
+                value.word = POS_INF - 1;
+            else
+                value.word += (FRACT_SIZE + 1) * MIN_FRACT;
+        }
+    }
+    else if (e1 < 0)
+    {
+        e1 = -e1;
+        i = e1 & 7;
+        if (i)
+            *this /= tens[i];
+        if (e1 >>= 3)
+        {
+            if (e1 >= 1 << 3)
+            {
+                *this = check_invalid ? NaN()
+                                      : sign ? NEGATIVE_ZERO()
+                                             : POSITIVE_ZERO();
+                return;
+            }
+            for (j = 0; e1 > 1; j++, e1 >>= 1)
+                if (e1 & 1)
+                    *this /= bigtens[j];
+            //
+            // The last multiplication could underflow.
+            //			 
+            IEEEfloat tmp(*this);
+            *this /= bigtens[j];
+            if (IsZero())
+            {
+                *this = tmp * 2;
+                *this /= bigtens[j];
+                if (IsZero())
+                {
+                    *this = check_invalid ? NaN()
+                                          : sign ? NEGATIVE_ZERO()
+                                                 : POSITIVE_ZERO();
+                    return;
+                }
+                value.word = 1;
+            }
+        }
+    }
+
+    //	 
+    // Now the hard part -- adjusting *this to the correct value.
+    // Put digits into bd: true value = bd * 10^e
+    // 
+    BigInt bd0(s0, nd0, nd, y, 8);
+    if (roundup)
+        ++bd0;
+    while (true) {
+        BigInt bd(bd0);
+        BigInt bb(*this, bbe, bbbits); // *this = bb * 2^bbe
+        BigInt bs(1);
+        if (e >= 0)
+        {
+            bb2 = bb5 = 0;
+            bd2 = bd5 = e;
+        }
+        else
+        {
+            bb2 = bb5 = -e;
+            bd2 = bd5 = 0;
+        }
+        if (bbe >= 0)
+            bb2 += bbe;
+        else
+            bd2 -= bbe;
+        bs2 = bb2;
+        j = bbe;
+        i = j + bbbits - 1; // logb(*this)
+        if (i < 1 - BIAS) // denormal
+            j += BIAS + FRACT_SIZE;
+        else
+            j = FRACT_SIZE + 2 - bbbits;
+        bb2 += j;
+        bd2 += j;
+        i = bb2 < bd2 ? bb2 : bd2;
+        if (i > bs2)
+            i = bs2;
+        if (i > 0)
+        {
+            bb2 -= i;
+            bd2 -= i;
+            bs2 -= i;
+        }
+        if (bb5 > 0) {
+            bs.pow5mult(bb5);
+            bb *= bs;
+        }
+        if (bb2 > 0)
+            bb <<= bb2;
+        if (bd5 > 0)
+            bd.pow5mult(bd5);
+        if (bd2 > 0)
+            bd <<= bd2;
+        if (bs2 > 0)
+            bs <<= bs2;
+        BigInt delta = bb - bd;
+        dsign = delta.IsNegative();
+        if (dsign)
+            delta.IsNegative(false);
+        i = delta.compareTo(bs);
+        //
+        // Error is less than half an ulp -- check for
+        // special case of mantissa a power of two.
+        //
+        if (i < 0)
+        {
+            if (dsign || FractBits() || Exponent() <= 1 - BIAS
+                || delta.IsZero())
+                break;
+            delta <<= 1;
+            if (delta.compareTo(bs) > 0)
+		// boundary case -- decrement exponent
+                value.word--;
+            break;
+        }
+        //
+        // exactly half-way between
+        //
+        else if (i == 0)
+        {
+            if (value.word & 1)
+                value.word += dsign ? 1 : -1;
+            break;
+        }
+        //
+        // more than 1/2 ulp off - try again
+        //
+        // This is broken into a separate method because mingw gcc 2.95.2
+        // has an ICE caused by register over-allocation if it is inline.
+        //
+        if (Adjust(delta, bs, dsign))
+            break;
+    }
+    if (check_invalid && (IsZero() || IsInfinite()))
+        *this = NaN();
+    else if (sign)
+        *this = -*this;
 }
 
-i4 IEEEfloat::IntValue()
+i4 IEEEfloat::IntValue() const
 {
     if (IsNaN())
         return 0;
@@ -214,15 +723,15 @@ i4 IEEEfloat::IntValue()
 
     i4 result = Fraction();
 
-    if (exponent > FRACT_BITS)
-	result <<= (exponent - FRACT_BITS);
-    else if (exponent < FRACT_BITS)
-	result >>= (FRACT_BITS - exponent);
+    if (exponent > FRACT_SIZE)
+	result <<= (exponent - FRACT_SIZE);
+    else if (exponent < FRACT_SIZE)
+	result >>= (FRACT_SIZE - exponent);
 
     return sign ? -result : result;
 }
 
-LongInt IEEEfloat::LongValue()
+LongInt IEEEfloat::LongValue() const
 {
     if (IsNaN())
         return LongInt(0);
@@ -239,10 +748,10 @@ LongInt IEEEfloat::LongValue()
 
     LongInt result(Fraction());
 
-    if (exponent > FRACT_BITS)
-	result <<= (exponent - FRACT_BITS);
-    else if (exponent < FRACT_BITS)
-	result >>= (FRACT_BITS - exponent);
+    if (exponent > FRACT_SIZE)
+	result <<= (exponent - FRACT_SIZE);
+    else if (exponent < FRACT_SIZE)
+	result >>= (FRACT_SIZE - exponent);
 
     return sign ? (LongInt) -result : result;
 }
@@ -254,19 +763,18 @@ IEEEfloat IEEEfloat::Normalize(int sign, int exponent, u4 fraction)
     assert(fraction);
 
     //
-    // Normalize right. MAX_FRACT is (FLT_MAX<<1)-FLT_MAX.
-    // So we need to shift on equal.
+    // Normalize right. Shift until value < MAX_FRACT.
     //
     if (fraction >= MAX_FRACT)
     {
 	while (fraction >= MAX_FRACT)
 	{
 	    sticky |= round;
-	    round = (fraction & 0x00000001) != 0;
+	    round = (fraction & 1) != 0;
 	    fraction >>= 1;
 	    exponent++;
 	}
-	if (round && (sticky || (fraction & 0x00000001)) && exponent > -BIAS)
+	if (round && (sticky || (fraction & 1)) && exponent > -BIAS)
             //
             // Capture any overflow caused by rounding. No other checks are
             // required because if overflow occurred, the the low order bit
@@ -279,9 +787,11 @@ IEEEfloat IEEEfloat::Normalize(int sign, int exponent, u4 fraction)
 	    }
     }
 
-    // Normalize left. MAX_FRACT2 is MAX_FRACT >> 1.
+    //
+    // Normalize left.  Shift until value >= MIN_FRACT.
+    //
     else
-	while (fraction < MAX_FRACT2)
+	while (fraction < MIN_FRACT)
 	{
 	    fraction <<= 1;
 	    exponent--;
@@ -301,12 +811,12 @@ IEEEfloat IEEEfloat::Normalize(int sign, int exponent, u4 fraction)
 	while (exponent <= -BIAS)
 	{
 	    sticky |= round;
-	    round = (fraction & 0x00000001) != 0;
+	    round = (fraction & 1) != 0;
 	    fraction >>= 1;
 	    exponent++;
 	}
 
-	if (round && (sticky || (fraction & 0x00000001)))
+	if (round && (sticky || (fraction & 1)))
 	    fraction++;
 
 	exponent = -BIAS;
@@ -315,14 +825,14 @@ IEEEfloat IEEEfloat::Normalize(int sign, int exponent, u4 fraction)
             return sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
     }
 
-    fraction &= 0x007FFFFF;
-    fraction |= ((exponent + BIAS) << FRACT_BITS);
+    fraction &= FRACT_BITS;
+    fraction |= ((exponent + BIAS) << FRACT_SIZE);
     if (sign)
-        fraction |= 0x80000000;
+        fraction |= SIGN_BIT;
     return IEEEfloat(fraction);
 }
 
-int IEEEfloat::SplitInto(u4 &fraction)
+int IEEEfloat::SplitInto(u4 &fraction) const
 {
     int exponent = Exponent();
     fraction = Fraction();
@@ -330,7 +840,7 @@ int IEEEfloat::SplitInto(u4 &fraction)
     if (exponent == -BIAS)
     {
 	exponent++;
-	while (fraction < MAX_FRACT2)
+	while (fraction < MIN_FRACT)
 	{
 	    fraction <<= 1;
 	    exponent--;
@@ -340,7 +850,38 @@ int IEEEfloat::SplitInto(u4 &fraction)
     return exponent;
 }
 
-bool IEEEfloat::operator== (IEEEfloat op)
+IEEEfloat IEEEfloat::Ulp() const
+{
+    i4 L;
+    IEEEfloat f;
+    f.value.float_value = value.float_value;
+    
+    L = (i4) f.ExpBits() - FRACT_SIZE * MIN_FRACT;
+    if (L > 0)
+        f.value.iword = L;
+    else
+    {
+        L = -L >> FRACT_SIZE;
+        f.value.iword = L >= (i4) FRACT_SIZE ? 1 : 0x400000 >> L;
+    }
+    return f;
+}
+
+IEEEfloat IEEEfloat::Ratio(const BigInt &a, const BigInt &b)
+{
+    IEEEfloat fa, fb;
+    int k;
+    fa = a.FloatValue();
+    fb = b.FloatValue();
+    k = b.hi0bits() - a.hi0bits() + 32 * (a.wds - b.wds);
+    if (k > 0)
+        fa.value.word += k * MIN_FRACT;
+    else
+        fb.value.word -= k * MIN_FRACT;
+    return fa / fb;
+}
+
+bool IEEEfloat::operator== (const IEEEfloat op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -352,7 +893,7 @@ bool IEEEfloat::operator== (IEEEfloat op)
 #endif
 }
 
-bool IEEEfloat::operator!= (IEEEfloat op)
+bool IEEEfloat::operator!= (const IEEEfloat op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -362,7 +903,7 @@ bool IEEEfloat::operator!= (IEEEfloat op)
 #endif
 }
 
-bool IEEEfloat::operator< (IEEEfloat op)
+bool IEEEfloat::operator< (const IEEEfloat op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -379,7 +920,7 @@ bool IEEEfloat::operator< (IEEEfloat op)
 #endif
 }
 
-bool IEEEfloat::operator<= (IEEEfloat op)
+bool IEEEfloat::operator<= (const IEEEfloat op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -389,7 +930,7 @@ bool IEEEfloat::operator<= (IEEEfloat op)
 #endif
 }
 
-bool IEEEfloat::operator> (IEEEfloat op)
+bool IEEEfloat::operator> (const IEEEfloat op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -406,7 +947,7 @@ bool IEEEfloat::operator> (IEEEfloat op)
 #endif
 }
 
-bool IEEEfloat::operator>= (IEEEfloat op)
+bool IEEEfloat::operator>= (const IEEEfloat op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -416,7 +957,7 @@ bool IEEEfloat::operator>= (IEEEfloat op)
 #endif
 }
 
-IEEEfloat IEEEfloat::operator+ (IEEEfloat op)
+IEEEfloat IEEEfloat::operator+ (const IEEEfloat op) const
 {
 #ifdef HAVE_IEEE754
     // FIXME: This could be sped up by inlining
@@ -450,7 +991,7 @@ IEEEfloat IEEEfloat::operator+ (IEEEfloat op)
     //
     i4 x, y, round = 0;
     int expx, expy, signx, signy;
-    
+
     expx = SplitInto((u4 &) x);
     expy = op.SplitInto((u4 &) y);
     
@@ -520,7 +1061,7 @@ IEEEfloat IEEEfloat::operator+ (IEEEfloat op)
 #endif
 }
 
-IEEEfloat IEEEfloat::operator- ()
+IEEEfloat IEEEfloat::operator- () const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -528,11 +1069,11 @@ IEEEfloat IEEEfloat::operator- ()
 #else
     if (IsNaN())
         return *this;
-    return IEEEfloat(value.word ^ 0x80000000);
+    return IEEEfloat(value.word ^ SIGN_BIT);
 #endif
 }
 
-IEEEfloat IEEEfloat::operator* (IEEEfloat op)
+IEEEfloat IEEEfloat::operator* (const IEEEfloat op) const
 {
 #ifdef HAVE_IEEE754
     return IEEEfloat(value.float_value * op.value.float_value);
@@ -574,7 +1115,7 @@ IEEEfloat IEEEfloat::operator* (IEEEfloat op)
     ULongInt a = x,
              b = y;
     a *= b;
-    b = a & 0x000FFFFF;
+    b = a & 0xfffff;
     a >>= 20;
     x = a.LowWord() | ((b > 0) ? 1 : 0);
     
@@ -582,7 +1123,7 @@ IEEEfloat IEEEfloat::operator* (IEEEfloat op)
 #endif // HAVE_IEEE754
 }
 
-IEEEfloat IEEEfloat::operator/ (IEEEfloat op)
+IEEEfloat IEEEfloat::operator/ (const IEEEfloat op) const
 {
 #ifdef HAVE_IEEE754
     return op.IsZero() ? ((IsNaN() || IsZero()) ? NaN()
@@ -655,7 +1196,7 @@ IEEEfloat IEEEfloat::operator/ (IEEEfloat op)
 #endif // HAVE_IEEE754
 }
 
-IEEEfloat IEEEfloat::operator% (IEEEfloat op)
+IEEEfloat IEEEfloat::operator% (const IEEEfloat op) const
 {
 #ifdef HAVE_IEEE754
     return IEEEfloat((op.IsZero() ? NaN().value.float_value
@@ -712,7 +1253,7 @@ IEEEfloat IEEEfloat::operator% (IEEEfloat op)
 
 
 
-IEEEdouble::IEEEdouble(IEEEfloat f)
+IEEEdouble::IEEEdouble(const IEEEfloat &f)
 {
 #ifdef HAVE_IEEE754
     value.double_value = (double) f.FloatView();
@@ -720,17 +1261,17 @@ IEEEdouble::IEEEdouble(IEEEfloat f)
     int sign = f.Sign();
     int exponent = f.Exponent();
 
-    if (exponent == -127)
+    if (exponent == -IEEEfloat::Bias())
     {
 	if (f.IsZero())
             *this = sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
 	else
         {
             //
-            // This is a denormalized number, with exponent -126
-            // (1 - IEEEfloat::BIAS); shift it to fit double format
+            // This is a denormalized number, shift it to fit double format
             //
-	    *this = Normalize(sign, -126, ULongInt(f.Fraction()) << 29);
+	    *this = Normalize(sign, 1 - IEEEfloat::Bias(),
+                              ULongInt(f.Fraction()) << 29);
 	}
     }
     else
@@ -741,7 +1282,7 @@ IEEEdouble::IEEEdouble(IEEEfloat f)
             *this = NaN();
         else
 	{
-            // Regular, noramlized number.  Shift it to fit double format
+            // Regular, normalized number.  Shift it to fit double format
             *this = Normalize(sign, exponent, ULongInt(f.Fraction()) << 29);
 	}
     }
@@ -763,78 +1304,554 @@ IEEEdouble::IEEEdouble(i4 a)
     if (a == 0)
         *this = POSITIVE_ZERO();
     else
-        *this = Normalize(sign, FRACT_BITS, ULongInt((u4) a));
+        *this = Normalize(sign, FRACT_SIZE, ULongInt((u4) a));
 #endif // HAVE_IEEE754
 }
 
-IEEEdouble::IEEEdouble(LongInt a)
+IEEEdouble::IEEEdouble(const LongInt &a)
 {
 #ifdef HAVE_IEEE754
 # ifdef HAVE_UNSIGNED_LONG_LONG
-    value.double_value = (double) a.Words();
+    value.double_value = (double)(i8) a.Words();
 # else
-    value.double_value = ((double) a.HighWord() * (double) 0x40000000 * 4.0) +
+    value.double_value = ((double)(i4) a.HighWord() * (double) 0x40000000 * 4.0) +
         (double) a.LowWord();
 # endif // HAVE_UNSIGNED_LONG_LONG
 #else
     int	sign = 0;
+    LongInt l = a;
 
     if (a < 0)
     {
-        a  = -a; // even works for MIN_LONG!
+        l  = -a; // even works for MIN_LONG!
         sign = 1;
     }
-    if (a == 0)
+    if (l == 0)
         *this = POSITIVE_ZERO();
     else
-        *this = Normalize(sign, FRACT_BITS, ULongInt(a));
+        *this = Normalize(sign, FRACT_SIZE, ULongInt(l));
 #endif // HAVE_IEEE754
 }
 
-IEEEdouble::IEEEdouble(char *str, bool check_invalid)
+IEEEdouble::IEEEdouble(const char *str, bool check_invalid)
 {
-    //
-    // TODO: This conversion is a temporary patch. Need volunteer to implement
-    //       Clinger algorithm from PLDI 1990.
-    //
-    value.double_value = atof(str);
+    int bb2, bb5, bbe, bd2, bd5, bbbits, bs2,
+        e, e1, i, j, k;
+    int nd, // number of digits in mantissa (except extra '0's)
+        nd0, // number of digits before '.' (except leading '0's)
+        nf, // number of digits after '.' (except trailing '0's)
+        nz; // number of consecutive '0' digits
+    bool nz0, // whether leading zero exists
+         roundup, // whether to round up long string
+         sign, // if the string represents a negative
+         dsign, // the sign of delta
+         esign; // the sign of the exponent
+    char c;
+    const char *s, *s0, *s1;
+    IEEEdouble aadj, aadj1;
+    i4 L;
+    i4 y, z;
+
+    sign = nz0 = roundup = false;
+    nz = 0;
 
     //
-    // When parsing a literal in Java, a number that rounds to infinity or
-    // zero is invalid.  A true check_invalid sets any invalid number to NaN,
-    // to make the upstream processing easier.  Leave check_invalid false to
-    // allow parsing infinity or rounded zero from a string.
+    // consume whitespace
     //
-    if (check_invalid)
-    {
-        if (IsInfinite())
-            *this = NaN();
-        if (IsZero())
+    for (s = str; ; s++)
+        switch (*s)
         {
-            for (char *p = str; *p; p++) {
-                switch (*p) {
-                case '-': case '+': case '0': case '.':
-                    break; // keep checking
-                case 'e': case 'E': case 'd': case 'D': case 'f': case 'F':
-                    return; // got this far, str is 0
-                default:
-                    *this = NaN(); // encountered non-zero digit. oops.
-                    return;
-                }
+        case U_MINUS:
+            sign = true;
+            // fallthrough
+        case U_PLUS:
+            if (*++s)
+                goto break2;
+            // fallthrough
+        case U_NU:
+            *this = NaN();
+            return;
+        case U_SPACE:
+        case U_HT:
+        case U_FF:
+        case U_LF:
+        case U_CR:
+            continue;
+        default:
+            goto break2;
+        }
+ break2:
+    //
+    // consume leading 0's
+    //
+    if (*s == U_0)
+    {
+        nz0 = true;
+        while (*++s == U_0);
+
+        if (! *s)
+        {
+            *this = sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
+            return;
+        }
+    }
+
+    //
+    // parse before '.'
+    //
+    s0 = s;
+    y = z = 0;
+    for (nd = nf = 0; (c = *s) >= U_0 && c <= U_9; nd++, s++)
+        if (nd < 9)
+            y = 10 * y + c - U_0;
+        else if (nd < 16)
+            z = 10 * z + c - U_0;
+    nd0 = nd;
+    if (c == U_DOT)
+    {
+        //
+        // parse after '.'
+        //
+        c = *++s;
+        if (!nd)
+        {
+            for ( ; c == U_0; c = *++s)
+                nz++;
+            if (c > U_0 && c <= U_9)
+            {
+                s0 = s;
+                nf += nz;
+                nz = 0;
+            }
+        }
+        for ( ; c >= U_0 && c <= U_9; c = *++s)
+        {
+            nz++;
+            if (c -= U_0)
+            {
+                nf += nz;
+                for (i = 1; i < nz; i++)
+                    if (nd++ < 9)
+                        y *= 10;
+                    else if (nd <= 16)
+                        z *= 10;
+                if (nd++ < 9)
+                    y = 10 * y + c;
+                else if (nd <= 16)
+                    z = 10 * z + c;
+                nz = 0;
             }
         }
     }
+    //
+    // consume exponent
+    //
+    e = 0;
+    if (c == U_e || c == U_E) {
+        str = s;
+        esign = false;
+        switch (c = *++s)
+        {
+        case U_MINUS:
+            esign = true;
+            // fallthrough
+        case U_PLUS:
+            c = *++s;
+        }
+        if (c >= U_0 && c <= U_9)
+        {
+            if (!nd && !nz && !nz0)
+            {
+                *this = sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
+                return;
+            }
+            while (c == U_0)
+                c = *++s;
+            if (c > U_0 && c <= U_9)
+            {
+                L = c - U_0;
+                s1 = s;
+                while ((c = *++s) >= U_0 && c <= U_9)
+                    L = 10 * L + c - U_0;
+                //
+                // Avoid confusion from exponents so large that e might
+                // overflow
+                if (s - s1 > 8 || L > 19999)
+                    e = 19999;  
+                else
+                    e = L;
+                if (esign)
+                    e = -e;
+            }
+            else
+                e = 0;
+        }
+        else
+            s = str;
+    }
+    if (!nd) {
+        *this = (!nz && !nz0) ? NaN()
+                              : sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
+        return;
+    }
+    //
+    // for long strings, round away all digits beyond maximum precise string
+    // for fraction, there are n decimal digits after '.' if lsb is 2^n;
+    // but the first m of these digits are '0', for d = x*10^m
+    // so, digits after MAX_DIGITS may be ignored
+    //
+    if (nd > MAX_DIGITS)
+    {
+        k = nd - MAX_DIGITS;
+        i = MAX_DIGITS - nd0;
+        if (i <= 0)
+        {
+            // decimal after last precise digit
+            nd0 = MAX_DIGITS;
+            nf = i;
+            j = 0;
+        }
+        else if (i == MAX_DIGITS)
+        {
+            // decimal before first precise digit
+            nf -= k;
+            j = 0;
+        }
+        else
+        {
+            // decimal inside precise digits
+            nf -= k;
+            j = 1;
+        }
+        roundup = s0[MAX_DIGITS - 1 + j] != U_4;
+        nd = MAX_DIGITS;
+    }
+    e1 = e -= nf;
+	
+    // 
+    // Now we have nd0 digits, starting at s0, followed by a
+    // decimal point, followed by nd-nd0 digits.  The number we're
+    // after is the integer represented by those digits times 10**e
+    //
+    if (! nd0)
+        nd0 = nd;
+    k = nd < 16 ? nd : 16;
+    *this = IEEEdouble(y);
+    if (k > 9)
+        *this = *this * tens[k - 9] + z;
+    if (nd < 16)
+    {
+        if (!e)
+        {
+            if (sign)
+                *this = -*this;
+            return;
+        }
+        if (e > 0)
+        {
+            if (e <= 22)
+            {
+                *this *= tens[e];
+                if (sign)
+                    *this = -*this;
+                return;
+            }
+            i = 15 - nd;
+            if (e <= 22 + i)
+            {
+                e -= i;
+                *this *= tens[i];
+                *this *= tens[e];
+                if (sign)
+                    *this = -*this;
+                return;
+            }
+        }
+        else if (e >= -22 )
+        {
+            *this /= tens[-e];
+            if (sign)
+                *this = -*this;
+            return;
+        }
+    }
+    e1 += nd - k;
+	
+    // 
+    // Get starting approximation: *this * 10**e1
+    //
+    if (e1 > 0)
+    {
+        i = e1 & 0xf;
+        if (i)
+            *this *= tens[i];
+        if (e1 >>= 4)
+        {
+            if (e1 > MAX_DEC_EXP >> 4)
+            {
+                *this = check_invalid ? NaN()
+                                      : sign ? NEGATIVE_INFINITY()
+                                             : POSITIVE_INFINITY();
+                return;
+            }
+            for (j = 0; e1 > 1; j++, e1 >>= 1)
+                if (e1 & 1)
+                    *this *= bigtens[j];
+            //
+            // The last multiplication could overflow.
+            //
+            setHighWord(HighWord() - (FRACT_SIZE + 1) * MIN_FRACT);
+            *this *= bigtens[j];
+            z = Exponent();
+            if (z > BIAS - FRACT_SIZE)
+            {
+                *this = check_invalid ? NaN()
+                                      : sign ? NEGATIVE_INFINITY()
+                                             : POSITIVE_INFINITY();
+                return;
+            }
+            if (z > BIAS - FRACT_SIZE - 1)
+                setHighAndLowWords(POS_INF_HI - 1, ZERO_LO - 1);
+            else
+                setHighWord(HighWord() + (FRACT_SIZE + 1) * MIN_FRACT);
+        }
+    }
+    else if (e1 < 0)
+    {
+        e1 = -e1;
+        i = e1 & 0xf;
+        if (i)
+            *this /= tens[i];
+        if (e1 >>= 4)
+        {
+            if (e1 >= 1 << 5)
+            {
+                *this = check_invalid ? NaN()
+                                      : sign ? NEGATIVE_ZERO()
+                                             : POSITIVE_ZERO();
+                return;
+            }
+            for (j = 0; e1 > 1; j++, e1 >>= 1)
+                if (e1 & 1)
+                    *this /= bigtens[j];
+            //
+            // The last multiplication could underflow.
+            //			 
+            IEEEdouble tmp(*this);
+            *this /= bigtens[j];
+            if (IsZero())
+            {
+                *this = tmp * 2;
+                *this /= bigtens[j];
+                if (IsZero())
+                {
+                    *this = check_invalid ? NaN()
+                                          : sign ? NEGATIVE_ZERO()
+                                                 : POSITIVE_ZERO();
+                    return;
+                }
+                setHighAndLowWords(0, 1);
+            }
+        }
+    }
+
+    //	 
+    // Now the hard part -- adjusting *this to the correct value.
+    // Put digits into bd: true value = bd * 10^e
+    // 
+    BigInt bd0(s0, nd0, nd, y, 9);
+    if (roundup)
+        ++bd0;
+    while (true) {
+        BigInt bd(bd0);
+        BigInt bb(*this, bbe, bbbits); // *this = bb * 2^bbe
+        BigInt bs(1);
+        if (e >= 0)
+        {
+            bb2 = bb5 = 0;
+            bd2 = bd5 = e;
+        }
+        else
+        {
+            bb2 = bb5 = -e;
+            bd2 = bd5 = 0;
+        }
+        if (bbe >= 0)
+            bb2 += bbe;
+        else
+            bd2 -= bbe;
+        bs2 = bb2;
+        j = bbe;
+        i = j + bbbits - 1; // logb(*this)
+        if (i < 1 - BIAS) // denormal
+            j += BIAS + FRACT_SIZE;
+        else
+            j = FRACT_SIZE + 2 - bbbits;
+        bb2 += j;
+        bd2 += j;
+        i = bb2 < bd2 ? bb2 : bd2;
+        if (i > bs2)
+            i = bs2;
+        if (i > 0)
+        {
+            bb2 -= i;
+            bd2 -= i;
+            bs2 -= i;
+        }
+        if (bb5 > 0) {
+            bs.pow5mult(bb5);
+            bb *= bs;
+        }
+        if (bb2 > 0)
+            bb <<= bb2;
+        if (bd5 > 0)
+            bd.pow5mult(bd5);
+        if (bd2 > 0)
+            bd <<= bd2;
+        if (bs2 > 0)
+            bs <<= bs2;
+        BigInt delta = bb - bd;
+        dsign = delta.IsNegative();
+        if (dsign)
+            delta.IsNegative(false);
+        i = delta.compareTo(bs);
+        //
+        // Error is less than half an ulp -- check for
+        // special case of mantissa a power of two.
+        //
+        if (i < 0)
+        {
+            if (dsign || LowWord() || FractBits()
+                || Exponent() <= 1 - BIAS || delta.IsZero())
+                break;
+            delta <<= 1;
+            if (delta.compareTo(bs) > 0)
+		// boundary case -- decrement exponent
+                BaseLong::operator --();
+            break;
+        }
+        //
+        // exactly half-way between
+        //
+        else if (i == 0)
+        {
+            if (LowWord() & 1)
+                BaseLong::operator +=(dsign ? 1 : -1);
+            break;
+        }
+        //
+        // more than 1/2 ulp off - try again
+        //
+        aadj = Ratio(delta, bs);
+        if (aadj <= 2)
+        {
+            if (dsign)
+                aadj = aadj1 = 1;
+            else if (FractBits() || LowWord())
+            {
+                if (!HighWord() && LowWord() == 1)
+                {
+                    // underflow
+                    *this = POSITIVE_ZERO();
+                    break;
+                }
+                aadj = 1;
+                aadj1 = -1;
+            }
+            else
+            {
+                //
+                // special case - mantissa is power of 2
+                //				 
+                if (aadj < 1.0)
+                    aadj = 0.5;
+                else
+                    aadj *= 0.5;
+                aadj1 = -aadj;
+            }
+        }
+        else
+        {
+            aadj *= 0.5;
+            //
+            // gcc 2.95.2 has an ICE from too many registers with this line:
+            //            aadj1 = dsign ? aadj : -aadj;
+            //
+            if (dsign)
+                aadj1 = aadj;
+            else
+                aadj1 = -aadj;
+        }
+        y = Exponent();
+        //
+        // Check for overflow
+        //
+        if (y == BIAS)
+        {
+            IEEEdouble tmp(*this);
+            setHighWord(HighWord() - (FRACT_SIZE + 1) * MIN_FRACT);
+            *this += aadj1 * Ulp();
+            if (Exponent() >= BIAS - FRACT_SIZE)
+            {
+                if (tmp.HighWord() == POS_INF_HI - 1 && tmp.LowWord() == ZERO_LO - 1)
+                {
+                    // overflow
+                    *this = POSITIVE_INFINITY();
+                    break;
+                }
+                setHighAndLowWords(POS_INF_HI - 1, ZERO_LO - 1);
+                continue;
+            }
+            else
+                setHighWord(HighWord() + (FRACT_SIZE + 1) * MIN_FRACT);
+        }
+        else
+        {
+            //
+            // Compute adj so that the IEEE rounding rules will
+            // correctly round *this + adj in some half-way cases.
+            // If *this * Ulp() is denormalized, we must adjust aadj
+            // to avoid trouble from bits lost to denormalization.
+            //
+            if (y <= FRACT_SIZE - BIAS || aadj > 1)
+            {
+                aadj1 = IEEEdouble((aadj + 0.5).IntValue());
+                if (! dsign)
+                    aadj1 = -aadj1;
+            }
+            *this += aadj1 * Ulp();
+        }
+        if (y == Exponent())
+        {
+            //
+            // Can we stop now?
+            // The tolerances below are conservative.
+            //
+            aadj -= aadj.IntValue();
+            if (dsign || FractBits() || LowWord())
+            {
+                if (aadj < .4999999 || aadj > .5000001)
+                    break;
+            }
+            else if (aadj < .4999999 / 2)
+                break;
+        }
+    }
+    if (check_invalid && (IsZero() || IsInfinite()))
+        *this = NaN();
+    else if (sign)
+        *this = -*this;
 }
 
-i4 IEEEdouble::IntValue()
+i4 IEEEdouble::IntValue() const
 {
     if (IsNaN())
         return 0;                                                             
             
 #ifdef HAVE_IEEE754
-    if (value.double_value < MIN_INT)
+    if (value.double_value < (double)(i4) MIN_INT)
         return MIN_INT;
-    else if (value.double_value > MAX_INT)
+    else if (value.double_value > (double) MAX_INT)
         return MAX_INT;
     return (i4) value.double_value;
 #else
@@ -848,13 +1865,13 @@ i4 IEEEdouble::IntValue()
     if (exponent < 0)
         return 0;
 
-    i4 result = (i4) (Fraction() >> (FRACT_BITS - exponent)).LowWord();
+    i4 result = (i4) (Fraction() >> (FRACT_SIZE - exponent)).LowWord();
 
     return sign ? -result : result;
 #endif // HAVE_IEEE754
 }
 
-LongInt IEEEdouble::LongValue()
+LongInt IEEEdouble::LongValue() const
 {
     if (IsNaN())
         return LongInt(0);
@@ -871,10 +1888,10 @@ LongInt IEEEdouble::LongValue()
 
     LongInt result = Fraction();
 
-    if (exponent > FRACT_BITS)
-	result <<= (exponent - FRACT_BITS);
-    else if (exponent < FRACT_BITS)
-	result >>= (FRACT_BITS - exponent);
+    if (exponent > (int) FRACT_SIZE)
+	result <<= (exponent - FRACT_SIZE);
+    else if (exponent < (int) FRACT_SIZE)
+	result >>= (FRACT_SIZE - exponent);
 
     return sign ? (LongInt) -result : result;
 }
@@ -893,11 +1910,11 @@ IEEEdouble IEEEdouble::Normalize(int sign, int exponent, ULongInt fraction)
 	while (fraction.HighWord() >= MAX_FRACT)
 	{
 	    sticky |= round;
-	    round = (fraction.LowWord() & 0x00000001) != 0;
+	    round = (fraction.LowWord() & 1) != 0;
 	    fraction >>= 1;
 	    exponent++;
 	}
-	if (round && (sticky || (fraction.LowWord() & 0x00000001)) && exponent > -BIAS)
+	if (round && (sticky || (fraction.LowWord() & 1)) && exponent > -(int) BIAS)
             //
             // Capture any overflow caused by rounding. No other checks are
             // required because if overflow occurred, the the low order bit
@@ -910,9 +1927,11 @@ IEEEdouble IEEEdouble::Normalize(int sign, int exponent, ULongInt fraction)
 	    }
     }
 
-    // Normalize left. MAX_FRACT2 is MAX_FRACT >> 1.
+    //
+    // Normalize left. Shift until value >= MIN_FRACT.
+    //
     else
-	while (fraction.HighWord() < MAX_FRACT2)
+	while (fraction.HighWord() < MIN_FRACT)
 	{
 	    fraction <<= 1;
 	    exponent--;
@@ -921,45 +1940,45 @@ IEEEdouble IEEEdouble::Normalize(int sign, int exponent, ULongInt fraction)
     //
     // Check and respond to overflow
     //
-    if (exponent > BIAS)
+    if (exponent > (int) BIAS)
         return sign ? NEGATIVE_INFINITY() : POSITIVE_INFINITY();
 
     //
     // Check and respond to underflow 
     //
-    if (exponent <= -BIAS)
+    if (exponent <= -(int) BIAS)
     {
-	while (exponent <= -BIAS)
+	while (exponent <= -(int) BIAS)
 	{
 	    sticky |= round;
-	    round = (fraction.LowWord() & 0x00000001) != 0;
+	    round = (fraction.LowWord() & 1) != 0;
 	    fraction >>= 1;
 	    exponent++;
 	}
 
-	if (round && (sticky || (fraction.LowWord() & 0x00000001)))
+	if (round && (sticky || (fraction.LowWord() & 1)))
 	    fraction++;
 
-	exponent = -BIAS;
+	exponent = -(int) BIAS;
 
 	if (fraction == 0)
             return sign ? NEGATIVE_ZERO() : POSITIVE_ZERO();
     }
 
-    return IEEEdouble((sign << 31) | ((exponent + BIAS) << 20)
-                                   | (fraction.HighWord() & 0x000FFFFF),
+    return IEEEdouble((sign << 31) | ((exponent + BIAS) << FRACT_SIZE_HI)
+                                   | (fraction.HighWord() & FRACT_BITS),
                       fraction.LowWord());
 }
 
-int IEEEdouble::SplitInto(BaseLong &fraction)
+int IEEEdouble::SplitInto(BaseLong &fraction) const
 {
     int exponent = Exponent();
     fraction = Fraction();
 
-    if (exponent == -BIAS)
+    if (exponent == -(int) BIAS)
     {
 	exponent++;
-	while (fraction.HighWord() < MAX_FRACT2)
+	while (fraction.HighWord() < MIN_FRACT)
 	{
 	    fraction <<= 1;
 	    exponent--;
@@ -969,7 +1988,44 @@ int IEEEdouble::SplitInto(BaseLong &fraction)
     return exponent;
 }
 
-bool IEEEdouble::operator== (IEEEdouble op)
+IEEEdouble IEEEdouble::Ulp() const
+{
+    i4 L;
+    IEEEdouble d;
+    d.value.double_value = value.double_value;
+    
+    L = (i4) d.ExpBits() - FRACT_SIZE * MIN_FRACT;
+    if (L > 0)
+        d.setHighAndLowWords((u4) L, 0);
+    else
+    {
+        L = -L >> FRACT_SIZE_HI;
+        if (L < (i4) FRACT_SIZE_HI)
+            d.setHighAndLowWords(MIN_FRACT >> (L + 1), 0);
+        else
+        {
+            L -= FRACT_SIZE_HI;
+            d.setHighAndLowWords(0, L >= 31 ? 1 : 1 << 31 - L);
+        }
+    }
+    return d;
+}
+
+IEEEdouble IEEEdouble::Ratio(const BigInt &a, const BigInt &b)
+{
+    IEEEdouble da, db;
+    int k;
+    da = a.DoubleValue();
+    db = b.DoubleValue();
+    k = b.hi0bits() - a.hi0bits() + 32 * (a.wds - b.wds);
+    if (k > 0)
+        da.setHighWord(da.HighWord() + k * MIN_FRACT);
+    else
+        db.setHighWord(db.HighWord() - k * MIN_FRACT);
+    return da / db;
+}
+
+bool IEEEdouble::operator== (const IEEEdouble op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -982,7 +2038,7 @@ bool IEEEdouble::operator== (IEEEdouble op)
 #endif
 }
 
-bool IEEEdouble::operator!= (IEEEdouble op)
+bool IEEEdouble::operator!= (const IEEEdouble op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -992,7 +2048,7 @@ bool IEEEdouble::operator!= (IEEEdouble op)
 #endif
 }
 
-IEEEdouble IEEEdouble::operator+ (IEEEdouble op)
+IEEEdouble IEEEdouble::operator+ (const IEEEdouble op) const
 {
 #ifdef HAVE_IEEE754
     // FIXME: This could be sped up by inlining
@@ -1097,7 +2153,7 @@ IEEEdouble IEEEdouble::operator+ (IEEEdouble op)
 #endif
 }
 
-IEEEdouble IEEEdouble::operator- ()
+IEEEdouble IEEEdouble::operator- () const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -1105,11 +2161,11 @@ IEEEdouble IEEEdouble::operator- ()
 #else
     if (IsNaN())
         return *this;
-    return IEEEdouble(HighWord() ^ 0x80000000, LowWord());
+    return IEEEdouble(HighWord() ^ SIGN_BIT, LowWord());
 #endif // HAVE_IEEE754
 }
 
-IEEEdouble IEEEdouble::operator* (IEEEdouble op)
+IEEEdouble IEEEdouble::operator* (const IEEEdouble op) const
 {
 #ifdef HAVE_IEEE754
     return IEEEdouble(value.double_value * op.value.double_value);
@@ -1166,7 +2222,7 @@ IEEEdouble IEEEdouble::operator* (IEEEdouble op)
 #endif // HAVE_IEEE754
 }
 
-IEEEdouble IEEEdouble::operator/ (IEEEdouble op)
+IEEEdouble IEEEdouble::operator/ (const IEEEdouble op) const
 {
 #ifdef HAVE_IEEE754
     return op.IsZero() ? ((IsNaN() || IsZero()) ? NaN()
@@ -1239,7 +2295,7 @@ IEEEdouble IEEEdouble::operator/ (IEEEdouble op)
 #endif // HAVE_IEEE754
 }
 
-IEEEdouble IEEEdouble::operator% (IEEEdouble op)
+IEEEdouble IEEEdouble::operator% (const IEEEdouble op) const
 {
 #ifdef HAVE_IEEE754
     return IEEEdouble((op.IsZero() ? NaN().value.double_value
@@ -1294,7 +2350,7 @@ IEEEdouble IEEEdouble::operator% (IEEEdouble op)
 #endif // HAVE_IEEE754
 }
 
-bool IEEEdouble::operator< (IEEEdouble op)
+bool IEEEdouble::operator< (const IEEEdouble op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -1312,7 +2368,7 @@ bool IEEEdouble::operator< (IEEEdouble op)
 #endif
 }
 
-bool IEEEdouble::operator<= (IEEEdouble op)
+bool IEEEdouble::operator<= (const IEEEdouble op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -1322,7 +2378,7 @@ bool IEEEdouble::operator<= (IEEEdouble op)
 #endif
 }
 
-bool IEEEdouble::operator> (IEEEdouble op)
+bool IEEEdouble::operator> (const IEEEdouble op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -1340,7 +2396,7 @@ bool IEEEdouble::operator> (IEEEdouble op)
 #endif
 }
 
-bool IEEEdouble::operator>= (IEEEdouble op)
+bool IEEEdouble::operator>= (const IEEEdouble op) const
 {
     // FIXME: This could be sped up by inlining
 #ifdef HAVE_IEEE754
@@ -1349,6 +2405,579 @@ bool IEEEdouble::operator>= (IEEEdouble op)
     return *this > op || *this == op;
 #endif
 }
+
+
+#ifndef HAVE_MEMBER_CONSTANTS
+u4 BigInt::fives[] = {
+    1, 5, 25, 125, 625, 3125, 15625, 78125
+};
+BigInt *BigInt::bigfives[] = {
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+};
+#else // HAVE_MEMBER_CONSTANTS
+const u4 BigInt::fives[] = {
+    1, 5, 25, 125, 625, 3125, 15625, 78125
+};
+const BigInt *BigInt::bigfives[] = {
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+};
+#endif // HAVE_MEMBER_CONSTANTS
+
+BigInt::BigInt(const IEEEfloat &f, int &e, int &bits) : data(NULL)
+{
+    int fe, k;
+    u4 z;
+    resize(0);
+    z = f.Fraction();
+    fe = f.Exponent();
+    k = lo0bits(z);
+    data[0] = z;
+    wds = 1;
+    if (fe + IEEEfloat::Bias())
+    {
+        e = k + fe - IEEEfloat::FractSize();
+        bits = IEEEfloat::FractSize() - k + 1;
+    }
+    else
+    {
+        e = k + fe - IEEEfloat::FractSize() + 1;
+        bits = 32 - hi0bits(z);
+    }
+}
+
+BigInt::BigInt(const IEEEdouble &d, int &e, int &bits) : data(NULL)
+{
+    int de, k;
+    LongInt x;
+    u4 y, z;
+
+    resize(1);
+    x = d.Fraction();
+    z = x.HighWord();
+    de = d.Exponent();
+    if ((y = x.LowWord()) != 0)
+    {
+        if ((k = lo0bits(y)) != 0)
+        {
+            data[0] = y | z << 32 - k;
+            z >>= k;
+        }
+        else
+            data[0] = y;
+        wds = (data[1] = z) ? 2 : 1;
+    }
+    else
+    {
+        k = lo0bits(z) + 32;
+        data[0] = z;
+        wds = 1;
+    }
+    if (de + IEEEdouble::Bias())
+    {
+        e = k + de - IEEEdouble::FractSize();
+        bits = IEEEdouble::FractSize() - k + 1;
+    }
+    else
+    {
+        e = k + de - IEEEdouble::FractSize() + 1;
+        bits = 32 * wds - hi0bits(data[wds - 1]);
+    }
+}
+
+BigInt::BigInt(const char *s, int nd0, int nd, u4 start, int startsize) :
+    data(NULL)
+{
+    int i, k;
+    u4 x, y;
+    x = (nd + 8) / 9;
+    for (k = 0, y = 1; x > y; y <<= 1, k++);
+
+    resize(k);
+    data[0] = start;
+    wds = 1;
+    i = startsize;
+    if (startsize < nd0)
+    {
+        s += startsize;
+        do
+            multadd(10, *s++ - U_0);
+        while (++i < nd0);
+        s++;
+    }
+    else
+        s += startsize + 1;
+
+    for ( ; i < nd; i++)
+        multadd(10, *s++ - U_0);
+}
+
+BigInt &BigInt::operator =(const BigInt &b)
+{
+    k = b.k;
+    maxwds = b.maxwds;
+    neg = b.neg;
+    wds = b.wds;
+    data = new u4[maxwds];
+    memcpy(data, b.data, wds * sizeof(u4));
+    return *this;
+}
+
+int BigInt::hi0bits(u4 x)
+{
+    int k = 0;
+    if (! (x & 0xffff0000))
+    {
+        k = 16;
+        x <<= 16;
+    }
+    if (! (x & 0xff000000))
+    {
+        k += 8;
+        x <<= 8;
+    }
+    if (! (x & 0xf0000000))
+    {
+        k += 4;
+        x <<= 4;
+    }
+    if (! (x & 0xc0000000))
+    {
+        k += 2;
+        x <<= 2;
+    }
+    if (! (x & 0x80000000))
+    {
+        k++;
+        if (! (x & 0x40000000))
+            return 32;
+    }
+    return k;
+}
+
+int BigInt::lo0bits(u4 &y)
+{
+    int k;
+    if (y & 7)
+    {
+        if (y & 1)
+            return 0;
+        if (y & 2)
+        {
+            y >>= 1;
+            return 1;
+        }
+        y >>= 2;
+        return 2;
+    }
+    k = 0;
+    if (! (y & 0xffff))
+    {
+        k = 16;
+        y >>= 16;
+    }
+    if (! (y & 0xff))
+    {
+        k += 8;
+        y >>= 8;
+    }
+    if (! (y & 0xf))
+    {
+        k += 4;
+        y >>= 4;
+    }
+    if (! (y & 0x3))
+    {
+        k += 2;
+        y >>= 2;
+    }
+    if (! (y & 1))
+    {
+        k++;
+        y >>= 1;
+        if (! y)
+            return 32;
+    }
+    return k;
+}
+
+BigInt &BigInt::operator +(const unsigned op) const
+{
+    int i = 0; // counter
+    u4 carry = op; // carry between words
+    ULongInt sum; // sum
+    BigInt *result = new BigInt(*this);
+    u4 *x = result -> data; // access to data
+    
+    do
+    {
+        sum = ULongInt(*x) + carry;
+        carry = sum.HighWord();
+        *x++ = sum.LowWord();
+    } while (carry && ++i < wds);
+    if (carry && i == wds)
+    {
+        if (wds == maxwds)
+        {
+            result -> maxwds = 1 << (++result -> k);
+            x = new u4[result -> maxwds];
+            memcpy(x, result -> data, wds * sizeof(u4));
+            delete result -> data;
+            result -> data = x;
+        }
+        result -> data[result -> wds++] = carry;
+    }
+    return *result;
+}
+
+BigInt &BigInt::operator -(const BigInt &op) const
+{
+    const BigInt *a = this, *b = &op;
+    BigInt *c = NULL;
+    int i, wa, wb;
+    u4 *xa, *xae, *xb, *xbe, *xc;
+    u4 borrow;
+    ULongInt y;
+
+    i = a -> compareTo(op);
+    if (! i)
+        return *new BigInt(0);
+    if (i < 0)
+    {
+        const BigInt *tmp = a;
+        a = b;
+        b = tmp;
+        i = 1;
+    }
+    else
+        i = 0;
+    c = new BigInt(0);
+    c -> resize(a -> k);
+    c -> neg = i != 0;
+    wa = a -> wds;
+    xa = a -> data;
+    xae = xa + wa;
+    wb = b -> wds;
+    xb = b -> data;
+    xbe = xb + wb;
+    xc = c -> data;
+    borrow = 0;
+    do
+    {
+        y = ULongInt(*xa++) - *xb++ - borrow;
+        borrow = y.HighWord() & 1;
+        *xc++ = y.LowWord();
+    } while (xb < xbe);
+    while (xa < xae)
+    {
+        y = ULongInt(*xa++) - borrow;
+        borrow = y.HighWord() & 1;
+        *xc++ = y.LowWord();
+    }
+    while (!*--xc)
+        wa--;
+    c -> wds = wa;
+    return *c;
+}
+
+BigInt &BigInt::operator *(unsigned op) const
+{
+    int i = 0; // counter
+    u4 carry = 0; // carry between words
+    ULongInt product; // product
+    BigInt *result = new BigInt(*this);
+    u4 *x = result -> data; // access to data
+    ULongInt factor = op; // avoid creating object multiple times
+
+    do
+    {
+        product = ULongInt(*x) * factor + carry;
+        carry = product.HighWord();
+        *x++ = product.LowWord();
+    } while (++i < wds);
+    if (carry)
+    {
+        if (wds == maxwds)
+        {
+            result -> maxwds = 1 << (++result -> k);
+            x = new u4[result -> maxwds];
+            memcpy(x, result -> data, wds * sizeof(u4));
+            delete result -> data;
+            result -> data = x;
+        }
+        result -> data[result -> wds++] = carry;
+    }
+    return *result;
+}
+
+BigInt &BigInt::operator *(const BigInt &op) const
+{
+    const BigInt *a = this, *b = &op;
+    BigInt *c; // result
+    int k; // c -> k
+    int wa, wb, wc; // wds in each of a, b, c
+    u4 *x, *xa, *xae, *xb, *xbe, *xc, *xc0;
+    u4 y, carry;
+    ULongInt z;
+
+    if (a -> wds < b -> wds)
+    {
+        const BigInt *tmp = a;
+        a = b;
+        b = tmp;
+    }
+    k = a -> k;
+    wa = a -> wds;
+    wb = b -> wds;
+    wc = wa + wb;
+    if (wc > a -> maxwds)
+        k++;
+    c = new BigInt(0);
+    c -> resize(k);
+    c -> neg = a -> neg ^ b -> neg;
+    for (x = c -> data, xa = x + wc; x < xa; x++)
+        *x = 0;
+    xa = a -> data;
+    xae = xa + wa;
+    xb = b -> data;
+    xbe = xb + wb;
+    xc0 = c -> data;
+    for ( ; xb < xbe; xc0++)
+    {
+        if ((y = *xb++) != 0)
+        {
+            x = xa;
+            xc = xc0;
+            carry = 0;
+            do
+            {
+                z = ULongInt(*x++) * y + *xc + carry;
+                carry = z.HighWord();
+                *xc++ = z.LowWord();
+            } while (x < xae);
+            *xc = carry;
+        }
+    }
+    for (xc0 = c -> data, xc = xc0 + wc; wc > 0 && !*--xc; --wc);
+
+    c -> wds = wc;
+    return *c;
+}
+
+BigInt &BigInt::operator <<(unsigned op) const
+{
+    int i, k1, n, n1;
+    u4 *x, *x1, *xe, z;
+    n = op >> 5;
+    k1 = k;
+    n1 = n + wds + 1;
+    for (i = maxwds; n1 > i; i <<= 1)
+        k1++;
+    BigInt *result = new BigInt(*this);
+    result -> maxwds = 1 << k1;
+    result -> k = k1;
+    delete result -> data;
+    result -> data = x1 = new u4[result -> maxwds];
+    for (i = 0; i < n; i++)
+        *x1++ = 0;
+    x = data;
+    xe = x + wds;
+    if (op &= 0x1f)
+    {
+        k1 = 32 - op;
+        z = 0;
+        do
+        {
+            *x1++ = *x << op | z;
+            z = *x++ >> k1;
+        } while (x < xe);
+        if ((*x1 = z) != 0)
+            ++n1;
+    }
+    else
+        do
+            *x1++ = *x++;
+        while (x < xe);
+    result -> wds = n1 - 1;
+    return *result;
+}
+
+BigInt &BigInt::multadd(unsigned m, unsigned a)
+{
+    int i = 0; // counter
+    u4 *x = data; // access to data
+    u4 carry = a; // carry between words
+    ULongInt product; // product
+    ULongInt factor = m; // avoid creating object multiple times
+    
+    do
+    {
+        product = ULongInt(*x) * factor + carry;
+        carry = product.HighWord();
+        *x++ = product.LowWord();
+    } while (++i < wds);
+    if (carry)
+    {
+        if (wds == maxwds)
+        {
+            maxwds = 1 << (++k);
+            x = new u4[maxwds];
+            memcpy(x, data, wds * sizeof(u4));
+            delete data;
+            data = x;
+        }
+        data[wds++] = carry;
+    }
+    return *this;
+}
+
+BigInt &BigInt::pow5mult(unsigned k)
+{
+    const BigInt *p5;
+    int i;
+    assert(k < 0x800);
+    if ((i = k & 0x7) != 0)
+        *this *= fives[i];
+    if (! (k >>= 3))
+        return *this;
+    if (! (p5 = bigfives[i = 0]))
+        p5 = bigfives[i] = new BigInt(390625);
+    while (true)
+    {
+        if (k & 1)
+            *this *= *p5;
+        if (! (k >>= 1))
+            break;
+        if (! (p5 = bigfives[++i]))
+            p5 = bigfives[i] = new BigInt(*bigfives[i-1] * *bigfives[i-1]);
+    }
+    return *this;
+}
+
+int BigInt::compareTo(const BigInt &b) const
+{
+    u4 *xa, *xa0, *xb, *xb0;
+    int i, j;
+    i = wds;
+    j = b.wds;
+    if (i -= j)
+        return i;
+    xa0 = data;
+    xa = xa0 + j;
+    xb0 = b.data;
+    xb = xb0 + j;
+    while (xa > xa0)
+        if (*--xa != *--xb)
+            return *xa < *xb ? -1 : 1;
+    return 0;
+}
+
+int BigInt::quorem(const BigInt &S)
+{
+    int n;
+    u4 *bx, *bxe, q, *sx, *sxe;
+    u4 borrow, carry;
+    ULongInt y, ys;
+    n = S.wds;
+    if (wds < n)
+        return 0;
+    sx = S.data;
+    sxe = sx + --n;
+    bx = data;
+    bxe = bx + n;
+    q = *bxe / (*sxe + 1);	 
+    if (q)
+    {
+        borrow = 0;
+        carry = 0;
+        do
+        {
+            ys = ULongInt(*sx++) * q + carry;
+            carry = ys.HighWord();
+            y = ULongInt(*bx) - ys.LowWord() - borrow;
+            borrow = y.HighWord() & 1;
+            *bx++ = y.LowWord();
+        } while (sx <= sxe);
+        if (!*bxe)
+        {
+            bx = data;
+            while (--bxe > bx && !*bxe)
+                --n;
+            wds = n;
+        }
+    }
+    if (compareTo(S) >= 0)
+    {
+        q++;
+        borrow = 0;
+        carry = 0;
+        bx = data;
+        sx = S.data;
+        do
+        {
+            ys = ULongInt(*sx++) + carry;
+            carry = ys.HighWord();
+            y = ULongInt(*bx) - ys.LowWord() - borrow;
+            borrow = y.HighWord() & 1;
+            *bx++ = y.LowWord();
+        } while (sx <= sxe);
+        bx = data;
+        bxe = bx + n;
+        if (!*bxe)
+        {
+            while (--bxe > bx && !*bxe)
+                --n;
+            wds = n;
+        }
+    }
+    return q;
+}
+
+IEEEfloat BigInt::FloatValue() const
+{
+    u4 *xa, y, z;
+    int k;
+    xa = data + wds;
+    y = *--xa;
+    k = hi0bits(y);
+    if (k < 8)
+        return IEEEfloat(0x3f800000 | y >> 8 - k);
+    z = xa > data ? *--xa : 0;
+    if (k -= 8)
+        return IEEEfloat(0x3f800000 | y << k | z >> 32 - k);
+    else
+        return IEEEfloat(0x3f800000 | y);
+}
+
+IEEEdouble BigInt::DoubleValue() const
+{
+    u4 *xa, w, y, z, hi, lo;
+    int k;
+    xa = data + wds;
+    y = *--xa;
+    k = hi0bits(y);
+    if (k < 11)
+    {
+        hi = 0x3ff00000 | y >> 11 - k;
+        w = xa > data ? *--xa : 0;
+        lo = y << (32- 11) + k | w >> 11 - k;
+        return IEEEdouble(hi, lo);
+    }
+    z = xa > data ? *--xa : 0;
+    if (k -= 11)
+    {
+        hi = 0x3ff00000 | y << k | z >> 32 - k;
+        y = xa > data ? *--xa : 0;
+        lo = z << k | y >> 32 - k;
+    }
+    else
+    {
+        hi = 0x3ff00000 | y;
+        lo = z;
+    }
+    return IEEEdouble(hi, lo);
+}
+
+
 
 #ifdef	HAVE_JIKES_NAMESPACE
 }			// Close namespace Jikes block

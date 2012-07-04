@@ -1,4 +1,4 @@
-// $Id: system.cpp,v 1.33 2001/01/10 16:49:45 mdejong Exp $
+// $Id: system.cpp,v 1.34 2001/04/28 19:34:37 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -126,7 +126,7 @@ void Control::FindPathsToDirectory(PackageSymbol *package)
                         strcat(directory_name, package -> Utf8Name());
 
                         if (SystemIsDirectory(directory_name))
-                            subdirectory_symbol = owner_directory_symbol -> InsertDirectorySymbol(package -> Identity());
+                            subdirectory_symbol = owner_directory_symbol -> InsertDirectorySymbol(package -> Identity(), owner_directory_symbol -> IsSourceDirectory());
 
                         delete [] directory_name;
                     }
@@ -162,7 +162,7 @@ void Control::FindPathsToDirectory(PackageSymbol *package)
                         strcat(directory_name, package -> Utf8Name());
 
                         if (SystemIsDirectory(directory_name))
-                            directory_symbol = path_symbol -> RootDirectory() -> InsertDirectorySymbol(package -> Identity());
+                            directory_symbol = path_symbol -> RootDirectory() -> InsertDirectorySymbol(package -> Identity(), path_symbol -> RootDirectory() -> IsSourceDirectory());
                         delete [] directory_name;
                     }
 
@@ -438,8 +438,12 @@ void Control::ProcessPath()
     // We need a place to start. Allocate a "." directory with no owner initially. (Hence, the null argument.)
     // Allocate a "." path whose associated directory is the "." directory.
     // Identify the "." path as the owner of the "." directory.
+    // It's not a sourcepath, so pass false.
     //
-    DirectorySymbol *default_directory = new DirectorySymbol(dot_name_symbol, NULL);
+    DirectorySymbol *default_directory = new DirectorySymbol(dot_name_symbol, NULL, false);
+    // Since the "." directory may not be the first directory, set
+    // dot_classpath_index to the first instance in classpath.
+    dot_classpath_index = classpath.Length();
     classpath.Next() = classpath_table.InsertPathSymbol(dot_path_name_symbol, default_directory);
     default_directory -> ReadDirectory(); // Note that the default_directory is reset after it has been assigned the owner above.
     system_directories.Next() = default_directory;
@@ -465,16 +469,433 @@ void Control::ProcessPath()
     // We need a place to start. Allocate a "." directory with no owner initially. (Hence, the null argument.)
     // Allocate a "." path whose associated directory is the "." directory.
     // Identify the "." path as the owner of the "." directory.
+    // It's not a sourcepath, so pass false.
     //
-    DirectorySymbol *default_directory = new DirectorySymbol(dot_name_symbol, NULL);
+    DirectorySymbol *default_directory = new DirectorySymbol(dot_name_symbol, NULL, false);
+    // Since the "." directory may not be the first directory, set
+    // dot_classpath_index to the first instance in classpath.
+    dot_classpath_index = classpath.Length();
     classpath.Next() = classpath_table.InsertPathSymbol(dot_path_name_symbol, default_directory);
     default_directory -> ReadDirectory(); // Note that the default_directory is reset after it has been assigned the owner above.
     system_directories.Next() = default_directory;
 #endif
+    //
+    //
+    //
+
+    ProcessBootClassPath();
+
+    ProcessExtDirs();
+
+    ProcessClassPath();
+
+    ProcessSourcePath();
 
     //
+    // TODO: If the user did not specify "." in the class path we assume it.
+    // javac makes that assumption also. Is that correct?
     //
-    //
+    if (dot_classpath_index == -1)
+        unnamed_package -> directory.Next() = classpath[0] -> RootDirectory();
+
+    return;
+}
+
+void Control::ProcessBootClassPath()
+{
+    if (option.bootclasspath)
+    {
+        int max_path_name_length = strlen(option.bootclasspath) + 1; // The longest possible path name we can encounter
+        wchar_t *path_name = new wchar_t[max_path_name_length + 1]; // +1 for '\0'
+
+        wchar_t *input_name = NULL;
+#ifdef WIN32_FILE_SYSTEM
+        char * full_directory_name = NULL;
+#endif
+
+        for (char *path = option.bootclasspath, *path_tail = &path[strlen(path)]; path < path_tail; path++)
+        {
+#ifdef WIN32_FILE_SYSTEM
+            delete [] full_directory_name;
+            delete [] input_name;
+#endif
+            char *head;
+            for (head = path; path < path_tail && *path != PathSeparator(); path++)
+                ;
+            *path = U_NULL; // If a separator was encountered, replace it by \0 to terminate the string.
+            int input_name_length = path - head;
+
+            int path_name_length = input_name_length;
+            for (int i = 0; i < path_name_length; i++)
+                path_name[i] = head[i];
+            path_name[path_name_length] = U_NULL;
+
+#ifdef UNIX_FILE_SYSTEM
+
+            input_name = path_name;
+
+#elif defined(WIN32_FILE_SYSTEM)
+
+            input_name = NULL;
+            full_directory_name = NULL;
+            char disk = (input_name_length >= 2 && Case::IsAsciiAlpha(head[0]) && head[1] == U_COLON ? head[0] : 0);
+
+            //
+            // Look for the directory. If it is found, update input_name and head.
+            //
+            option.SaveCurrentDirectoryOnDisk(disk);
+            if (SetCurrentDirectory(head))
+            {
+                char tmp[1];
+                DWORD directory_length = GetCurrentDirectory(0, tmp); // first, get the right size
+                full_directory_name = new char[directory_length + 1];  // allocate the directory
+                DWORD length = GetCurrentDirectory(directory_length, full_directory_name);
+                if (length <= directory_length)
+                {
+                    for (char *ptr = full_directory_name; *ptr; ptr++)
+                        *ptr = (*ptr != U_BACKSLASH ? *ptr : (char) U_SLASH); // turn '\' to '/'.
+
+                    input_name_length = length;
+                    input_name = new wchar_t[input_name_length + 1];
+                    for (int k = 0; k < input_name_length; k++)
+                        input_name[k] = full_directory_name[k];
+                    input_name[input_name_length] = U_NULL;
+                    head = full_directory_name;
+                }
+            }
+
+            //
+            // Default input_name, in case we do not succeed in finding the directory
+            //
+            if (! input_name)
+            {
+                input_name = new wchar_t[input_name_length + 1];
+                for (int j = 0; j < input_name_length; j++)
+                    input_name[j] = path_name[j];
+                input_name[input_name_length] = U_NULL;
+            }
+
+            option.ResetCurrentDirectoryOnDisk(disk); // reset the current directory on disk
+            option.SetMainCurrentDirectory();         // reset the real current directory...
+#endif
+
+            //
+            //
+            //
+            if (input_name_length > 0)
+            {
+                NameSymbol *name_symbol = FindOrInsertName(path_name, path_name_length);
+
+                //
+                // If a directory is specified more than once, ignore the duplicates.
+                //
+                if (classpath_table.FindPathSymbol(name_symbol))
+                {
+                    if (name_symbol == dot_name_symbol)
+                    {
+
+                        dot_classpath_index = classpath.Length(); // The next index
+                        classpath.Next() = classpath[0];          // share the "." directory
+                        unnamed_package -> directory.Next() = classpath[0] -> RootDirectory();
+                    }
+
+                    continue;
+                }
+
+                //
+                // Check whether or not the path points to a system directory. If not, assume it's a zip file
+                //
+                if (SystemIsDirectory(head))
+                {
+                    // This is the bootclasspath so it's not sourcepath, pass false
+                    DirectorySymbol *dot_directory = ProcessSubdirectories(input_name, input_name_length, false);
+                    unnamed_package -> directory.Next() = dot_directory;
+                    classpath.Next() = classpath_table.InsertPathSymbol(name_symbol, dot_directory);
+                }
+                else
+                {
+                    Zip *zipinfo = new Zip(*this, head);
+                    if (! zipinfo -> IsValid()) // If the zipfile is all screwed up, give up here !!!
+                    {
+                        wchar_t *name = new wchar_t[input_name_length + 1];
+                        for (int i = 0; i < input_name_length; i++)
+                            name[i] = input_name[i];
+                        name[input_name_length] = U_NULL;
+                        wchar_t *tail = &name[input_name_length - 3];
+                        if (Case::StringSegmentEqual(tail, StringConstant::US__zip, 3) || Case::StringSegmentEqual(tail, StringConstant::US__jar, 3))
+                            bad_zip_filenames.Next() = name;
+                        else
+                            bad_dirnames.Next() = name;
+                    }
+
+                    unnamed_package -> directory.Next() = zipinfo -> RootDirectory();
+
+                    //
+                    // Create the new path symbol and update the class path with it.
+                    //
+                    PathSymbol *path_symbol = classpath_table.InsertPathSymbol(name_symbol, zipinfo -> RootDirectory());
+                    path_symbol -> zipfile = zipinfo;
+                    classpath.Next() = path_symbol;
+                }
+            }
+        }
+
+#ifdef WIN32_FILE_SYSTEM
+        delete [] full_directory_name;
+        delete [] input_name;
+#endif
+
+        delete [] path_name;
+    }
+}
+
+void Control::ProcessExtDirs()
+{
+    SymbolSet extdirs_set;
+    if (option.extdirs)
+    {
+        int max_path_name_length = strlen(option.extdirs) + 1; // The longest possible path name we can encounter
+        wchar_t *path_name = new wchar_t[max_path_name_length + 1]; // +1 for '\0'
+
+        wchar_t *input_name = NULL;
+#ifdef WIN32_FILE_SYSTEM
+        char * full_directory_name = NULL;
+#endif
+
+        for (char *path = option.extdirs, *path_tail = &path[strlen(path)]; path < path_tail; path++)
+        {
+#ifdef WIN32_FILE_SYSTEM
+            delete [] full_directory_name;
+            delete [] input_name;
+#endif
+            char *head;
+            for (head = path; path < path_tail && *path != PathSeparator(); path++)
+                ;
+            *path = U_NULL; // If a separator was encountered, replace it by \0 to terminate the string.
+
+            int input_name_length = path - head;
+
+            int path_name_length = input_name_length;
+            for (int i = 0; i < path_name_length; i++)
+                path_name[i] = head[i];
+            path_name[path_name_length] = U_NULL;
+
+#ifdef UNIX_FILE_SYSTEM
+
+            input_name = path_name;
+
+#elif defined(WIN32_FILE_SYSTEM)
+
+            input_name = NULL;
+            full_directory_name = NULL;
+            char disk = (input_name_length >= 2 && Case::IsAsciiAlpha(head[0]) && head[1] == U_COLON ? head[0] : 0);
+
+            //
+            // Look for the directory. If it is found, update input_name and head.
+            //
+            option.SaveCurrentDirectoryOnDisk(disk);
+            if (SetCurrentDirectory(head))
+            {
+                char tmp[1];
+                DWORD directory_length = GetCurrentDirectory(0, tmp); // first, get the right size
+                full_directory_name = new char[directory_length + 1];  // allocate the directory
+                DWORD length = GetCurrentDirectory(directory_length, full_directory_name);
+                if (length <= directory_length)
+                {
+                    for (char *ptr = full_directory_name; *ptr; ptr++)
+                        *ptr = (*ptr != U_BACKSLASH ? *ptr : (char) U_SLASH); // turn '\' to '/'.
+
+                    input_name_length = length;
+                    input_name = new wchar_t[input_name_length + 1];
+                    for (int k = 0; k < input_name_length; k++)
+                        input_name[k] = full_directory_name[k];
+                    input_name[input_name_length] = U_NULL;
+                    head = full_directory_name;
+                }
+            }
+
+            //
+            // Default input_name, in case we do not succeed in finding the directory
+            //
+            if (! input_name)
+            {
+                input_name = new wchar_t[input_name_length + 1];
+                for (int j = 0; j < input_name_length; j++)
+                    input_name[j] = path_name[j];
+                input_name[input_name_length] = U_NULL;
+            }
+
+            option.ResetCurrentDirectoryOnDisk(disk); // reset the current directory on disk
+            option.SetMainCurrentDirectory();         // reset the real current directory...
+#endif
+
+            //
+            //
+            //
+            if (input_name_length > 0)
+            {
+                NameSymbol *name_symbol = FindOrInsertName(path_name, path_name_length);
+
+                //
+                // If a directory is specified more than once, ignore the duplicates.
+                //
+                if (extdirs_set.IsElement(name_symbol))
+                    continue;
+
+                extdirs_set.AddElement(name_symbol);
+
+                //
+                // Check whether or not the path points to a system
+                // directory. TODO If not, should we print a warning ??
+                //
+                if (SystemIsDirectory(head))
+                {
+//FIXME: should be in platform.cpp??
+#ifdef UNIX_FILE_SYSTEM
+
+                    DIR* extdir = opendir(head);
+
+                    if (extdir)
+                    {
+                        for (dirent *entry = readdir(extdir); entry; entry =
+                             readdir(extdir))
+                        {
+                            int entry_length = strlen(entry -> d_name);
+                            int fullpath_length = input_name_length + entry_length + 1; // + 1 for possible '/' between path and file.
+                            if ((! strcmp(entry->d_name, ".")) ||
+                                 (! strcmp(entry->d_name, "..")))
+                                continue;
+
+                            char* extdir_entry = new char[fullpath_length + 1];  // + 1 for '\0'
+                            // First put on path.
+                            strcpy(extdir_entry, head);
+
+                            // Add '/' if it's not already there
+                            if (head[input_name_length - 1] != U_SLASH)
+                                strcat(extdir_entry, U8S__SL);
+
+                            // Then add the filename.
+                            strcat(extdir_entry, entry -> d_name);
+
+                            wchar_t* extdir_entry_name = new wchar_t[fullpath_length + 1];  // + 1 for '\0'
+                            for (int i = 0; i < fullpath_length; ++i)
+                                extdir_entry_name[i] = extdir_entry[i];
+
+                            Zip *zipinfo = new Zip(*this, extdir_entry);
+                            if (! zipinfo -> IsValid())
+                            {
+                                wchar_t *name = new wchar_t[fullpath_length + 1];
+                                for (int i = 0; i < fullpath_length; ++i)
+                                    name[i] = extdir_entry_name[i];
+                                name[fullpath_length] = U_NULL;
+                                bad_zip_filenames.Next() = name;
+                            }
+
+                            unnamed_package->directory.Next() = zipinfo -> RootDirectory();
+
+                            //
+                            // Make a new PathSymbol to add to the classpath.
+                            //
+                            NameSymbol *extdir_entry_symbol = FindOrInsertName(extdir_entry_name, fullpath_length);
+                            PathSymbol *path_symbol = classpath_table.InsertPathSymbol(extdir_entry_symbol, zipinfo -> RootDirectory());
+                            path_symbol -> zipfile = zipinfo;
+                            classpath.Next() = path_symbol;
+                        }
+                        closedir(extdir);
+                    }
+#elif defined(WIN32_FILE_SYSTEM)
+
+                    char *directory_name = new char[input_name_length + 3]; // +2 for "/*" +1 for '\0'
+                    strcpy(directory_name, head);
+                    if (directory_name[input_name_length - 1] != U_SLASH)
+                        strcat(directory_name, StringConstant::U8S__SL);
+                    strcat(directory_name, StringConstant::U8S__ST);
+
+                    WIN32_FIND_DATA entry;
+                    HANDLE file_handle = FindFirstFile(directory_name, &entry);
+                    if (file_handle != INVALID_HANDLE_VALUE)
+                    {
+                        do
+                        {
+                            int entry_length = strlen(entry.cFileName);
+                            int fullpath_length = input_name_length + entry_length + 1; // + 1 for possible '/' between path and file.
+
+                            if ((! strcmp(entry.cFileName, ".")) ||
+                                 (! strcmp(entry.cFileName, "..")))
+                                continue;
+
+                            char *extdir_entry = new char[fullpath_length + 1]; // + 1 for '\0'
+                            wchar_t* extdir_entry_name = new wchar_t[fullpath_length + 1];  // + 1 for '\0'
+                            // First put path
+                            strcpy(extdir_entry, head);
+
+                            // If no slash, add slash before copying filename.
+                            if (head[input_name_length - 1] != U_SLASH)
+                            {
+                                int path_length = input_name_length + 1;
+                                strcat(extdir_entry, U8S__SL);
+
+                                for (int i = 0; i < entry_length; i++)
+                                    extdir_entry[i + path_length] = (entry.cFileName[i] == U_BACKSLASH ? U_SLASH : entry.cFileName[i]);
+                            }
+                            else
+                            { // If it's there, just append filename.
+                                for (int i = 0; i < entry_length; i++)
+                                    extdir_entry[i + input_name_length] = (entry.cFileName[i] == U_BACKSLASH ? U_SLASH : entry.cFileName[i]);
+                            }
+
+                            for (int i = 0; i < fullpath_length; ++i)
+                                extdir_entry_name[i] = extdir_entry[i];
+
+                            Zip *zipinfo = new Zip(*this, extdir_entry);
+                            if (! zipinfo -> IsValid())
+                            {
+                                wchar_t *name = new wchar_t[fullpath_length + 1];
+                                for (int i = 0; i < fullpath_length; ++i)
+                                    name[i] = extdir_entry_name[i];
+                                name[fullpath_length] = U_NULL;
+                                bad_zip_filenames.Next() = name;
+                            }
+
+                            unnamed_package->directory.Next() = zipinfo -> RootDirectory();
+
+                            NameSymbol *extdir_entry_symbol = FindOrInsertName(extdir_entry_name, fullpath_length);
+                            //
+                            // Make a new PathSymbol to add to the classpath.
+                            //
+                            PathSymbol *path_symbol = classpath_table.InsertPathSymbol(extdir_entry_symbol, zipinfo -> RootDirectory());
+                            path_symbol -> zipfile = zipinfo;
+                            classpath.Next() = path_symbol;
+
+                        } while (FindNextFile(file_handle, &entry));
+                        FindClose(file_handle);
+                    }
+
+                    delete [] directory_name;
+#endif
+                }
+                else
+                {
+                    wchar_t *name = new wchar_t[input_name_length + 1]; // + 1 for '\0'
+                    for (int i = 0; i < input_name_length; ++i)
+                        name[i] = input_name[i];
+                    name[input_name_length] = U_NULL;
+                    bad_dirnames.Next() = name;
+                }
+            }
+        }
+
+#ifdef WIN32_FILE_SYSTEM
+        delete [] full_directory_name;
+        delete [] input_name;
+#endif
+
+        delete [] path_name;
+    }
+}
+
+void Control::ProcessClassPath()
+{
     if (option.classpath)
     {
         int max_path_name_length = strlen(option.classpath) + 1; // The longest possible path name we can encounter
@@ -494,7 +915,7 @@ void Control::ProcessPath()
             char *head;
             for (head = path; path < path_tail && *path != PathSeparator(); path++)
                 ;
-            *path = U_NULL; // If a seperator was encountered, replace it by \0 to terminate the string.
+            *path = U_NULL; // If a separator was encountered, replace it by \0 to terminate the string.
             int input_name_length = path - head;
 
             int path_name_length = input_name_length;
@@ -578,7 +999,8 @@ void Control::ProcessPath()
                 //
                 if (SystemIsDirectory(head))
                 {
-                    DirectorySymbol *dot_directory = ProcessSubdirectories(input_name, input_name_length);
+                    // This is the classpath so it's not sourcepath, pass false
+                    DirectorySymbol *dot_directory = ProcessSubdirectories(input_name, input_name_length, false);
                     unnamed_package -> directory.Next() = dot_directory;
                     classpath.Next() = classpath_table.InsertPathSymbol(name_symbol, dot_directory);
                 }
@@ -591,7 +1013,11 @@ void Control::ProcessPath()
                         for (int i = 0; i < input_name_length; i++)
                             name[i] = input_name[i];
                         name[input_name_length] = U_NULL;
-                        bad_zip_filenames.Next() = name;
+                        wchar_t *tail = &name[input_name_length - 3];
+                        if (Case::StringSegmentEqual(tail, StringConstant::US__zip, 3) || Case::StringSegmentEqual(tail, StringConstant::US__jar, 3))
+                            bad_zip_filenames.Next() = name;
+                        else
+                            bad_dirnames.Next() = name;
                     }
 
                     unnamed_package -> directory.Next() = zipinfo -> RootDirectory();
@@ -613,17 +1039,138 @@ void Control::ProcessPath()
 
         delete [] path_name;
     }
-
-    //
-    // TODO: If the user did not specify "." in the class path we assume it.
-    // javac makes that assumption also. Is that correct?
-    //
-    if (dot_classpath_index == 0)
-        unnamed_package -> directory.Next() = classpath[0] -> RootDirectory();
-
-    return;
 }
 
+void Control::ProcessSourcePath()
+{
+    if (option.sourcepath)
+    {
+        int max_path_name_length = strlen(option.sourcepath) + 1; // The longest possible path name we can encounter
+        wchar_t *path_name = new wchar_t[max_path_name_length + 1]; // +1 for '\0'
+
+        wchar_t *input_name = NULL;
+#ifdef WIN32_FILE_SYSTEM
+        char * full_directory_name = NULL;
+#endif
+
+        for (char *path = option.sourcepath, *path_tail = &path[strlen(path)]; path < path_tail; path++)
+        {
+#ifdef WIN32_FILE_SYSTEM
+            delete [] full_directory_name;
+            delete [] input_name;
+#endif
+            char *head;
+            for (head = path; path < path_tail && *path != PathSeparator(); path++)
+                ;
+            *path = U_NULL; // If a separator was encountered, replace it by \0 to terminate the string.
+            int input_name_length = path - head;
+
+            int path_name_length = input_name_length;
+            for (int i = 0; i < path_name_length; i++)
+                path_name[i] = head[i];
+            path_name[path_name_length] = U_NULL;
+
+#ifdef UNIX_FILE_SYSTEM
+
+            input_name = path_name;
+
+#elif defined(WIN32_FILE_SYSTEM)
+
+            input_name = NULL;
+            full_directory_name = NULL;
+            char disk = (input_name_length >= 2 && Case::IsAsciiAlpha(head[0]) && head[1] == U_COLON ? head[0] : 0);
+
+            //
+            // Look for the directory. If it is found, update input_name and head.
+            //
+            option.SaveCurrentDirectoryOnDisk(disk);
+            if (SetCurrentDirectory(head))
+            {
+                char tmp[1];
+                DWORD directory_length = GetCurrentDirectory(0, tmp); // first, get the right size
+                full_directory_name = new char[directory_length + 1];  // allocate the directory
+                DWORD length = GetCurrentDirectory(directory_length, full_directory_name);
+                if (length <= directory_length)
+                {
+                    for (char *ptr = full_directory_name; *ptr; ptr++)
+                        *ptr = (*ptr != U_BACKSLASH ? *ptr : (char) U_SLASH); // turn '\' to '/'.
+
+                    input_name_length = length;
+                    input_name = new wchar_t[input_name_length + 1];
+                    for (int k = 0; k < input_name_length; k++)
+                        input_name[k] = full_directory_name[k];
+                    input_name[input_name_length] = U_NULL;
+                    head = full_directory_name;
+                }
+            }
+
+            //
+            // Default input_name, in case we do not succeed in finding the directory
+            //
+            if (! input_name)
+            {
+                input_name = new wchar_t[input_name_length + 1];
+                for (int j = 0; j < input_name_length; j++)
+                    input_name[j] = path_name[j];
+                input_name[input_name_length] = U_NULL;
+            }
+
+            option.ResetCurrentDirectoryOnDisk(disk); // reset the current directory on disk
+            option.SetMainCurrentDirectory();         // reset the real current directory...
+#endif
+
+            //
+            //
+            //
+            if (input_name_length > 0)
+            {
+                NameSymbol *name_symbol = FindOrInsertName(path_name, path_name_length);
+
+                //
+                // If a directory is specified more than once, ignore the duplicates.
+                //
+                if (classpath_table.FindPathSymbol(name_symbol))
+                {
+                    if (name_symbol == dot_name_symbol)
+                    {
+                        dot_classpath_index = classpath.Length(); // The next index
+                        classpath.Next() = classpath[0];          // share the "." directory
+                        unnamed_package -> directory.Next() = classpath[0] -> RootDirectory();
+                    }
+
+                    continue;
+                }
+
+                //
+                // Check whether or not the path points to a system directory. If not, assume it's a zip file
+                //
+                if (SystemIsDirectory(head))
+                {
+                    // This is the sourcepath, so pass true
+                    DirectorySymbol *dot_directory = ProcessSubdirectories(input_name, input_name_length, true);
+                    unnamed_package -> directory.Next() = dot_directory;
+                    classpath.Next() = classpath_table.InsertPathSymbol(name_symbol, dot_directory);
+                }
+                else
+                {
+                    // We don't process zip files as source directories
+                    wchar_t *name = new wchar_t[input_name_length + 1];
+                    for (int i = 0; i < input_name_length; i++)
+                        name[i] = input_name[i];
+                    name[input_name_length] = U_NULL;
+                    bad_dirnames.Next() = name;
+                }
+            }
+        }
+
+#ifdef WIN32_FILE_SYSTEM
+        delete [] full_directory_name;
+        delete [] input_name;
+#endif
+
+        delete [] path_name;
+    }
+}
 
 TypeSymbol *Control::GetPrimitiveType(wchar_t *name, char *signature)
 {
@@ -722,7 +1269,8 @@ DirectorySymbol *Control::GetOutputDirectory(FileSymbol *file_symbol)
             name[i] = directory_name[i];
         name[length] = U_NULL;
 
-        directory_symbol = control.ProcessSubdirectories(name, length);
+        // This is the output directory, so unless it's added to the classpath, it won't matter whether it's a sourcedir or not.
+        directory_symbol = control.ProcessSubdirectories(name, length, false);
 
         delete [] name;
         delete [] directory_name;
@@ -810,7 +1358,7 @@ FileSymbol *Control::GetFileBoth(Control &control, PackageSymbol *package, NameS
             if (! path_symbol -> IsZip())
             {
                 DirectoryEntry *java_entry = directory_symbol -> FindEntry(java_name, java_length),
-                *class_entry = (((! control.option.depend) || (java_entry == NULL))
+                *class_entry = ((((! control.option.depend) || (java_entry == NULL)) && (! directory_symbol -> IsSourceDirectory()))
                                 ? directory_symbol -> FindEntry(class_name, class_length)
                                 : (DirectoryEntry *) NULL);
 

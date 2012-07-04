@@ -1,4 +1,4 @@
-// $Id: stream.h,v 1.27 2001/02/20 06:47:51 mdejong Exp $
+// $Id: stream.h,v 1.29 2001/03/31 05:02:39 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -26,7 +26,7 @@
 #include <stdio.h>
 */
 
-#if defined(HAVE_LIB_ICU_UC)
+#if defined(HAVE_LIBICU_UC)
 # include <unicode/ucnv.h>
 #elif defined(HAVE_ICONV_H)
 # include <iconv.h>
@@ -127,7 +127,7 @@ public:
         return input_buffer = new wchar_t[size + 4];
     }
 
-#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
+#if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
     static bool IsSupportedEncoding(char* encoding);
     bool SetEncoding(char* encoding);
 #endif
@@ -137,18 +137,58 @@ protected:
     wchar_t *input_buffer;
     size_t input_buffer_length;
 
+    const char *source_ptr;    // Start of data buffer to decoded
+    const char *source_tail;   // End of data buffer to be decoded
+    const char *data_buffer;   // The data to be decoded
+
+    bool  error_decode_next_character;
+
 //private: // FIXME : Make vars private once extracted from LexStream!
 
-#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
+#if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
 
-#if defined(HAVE_LIB_ICU_UC)
-     UConverter * _converter;
+#if defined(HAVE_LIBICU_UC)
+     UConverter * _decoder;
 #elif defined(HAVE_ICONV_H)
-     iconv_t _converter;
+     iconv_t _decoder;
 #endif
 
     void DestroyEncoding();
+
+    // Read the next wchar_t from the stream.
+    // If an error occurs the ErrorDecodeNextCharacter
+    // method will return true on the next call.
+
+    wchar_t DecodeNextCharacter();
+
+    inline bool ErrorDecodeNextCharacter() {
+        bool result = error_decode_next_character;
+        if (result)
+            error_decode_next_character = false;
+        return result;
+    }
+
+    // Returns true if an encoding has been set
+
+    inline bool HaveDecoder() {
+#if defined(HAVE_LIBICU_UC)
+        return (_decoder != NULL);
+#elif defined(HAVE_ICONV_H)
+        return (_decoder != (iconv_t)-1);
 #endif
+    }
+
+#endif // defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
+
+    inline void InitializeDataBuffer(const char * buffer, long size) {
+        data_buffer = buffer;
+        source_ptr = data_buffer;
+        source_tail = data_buffer + size - 1;
+    }
+
+    inline bool HasMoreData() {
+        return (source_ptr <= source_tail);
+    }
 };
 
 
@@ -363,7 +403,7 @@ private:
 
     int hexvalue(wchar_t ch);
     
-#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
+#if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
     enum UnicodeLexerState
     {
         START,
@@ -461,10 +501,11 @@ private:
 
     void ReadInput();
     void ProcessInput(const char *, long);
-    void ProcessInputAscii(const char *, long);
-#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
+#if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
     void ProcessInputUnicode(const char *, long);
-#endif  
+#else
+    void ProcessInputAscii(const char *, long);
+#endif // defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
 
     wchar_t *KeywordName(int);
 

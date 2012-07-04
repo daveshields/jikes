@@ -1,4 +1,4 @@
-// $Id: long.h,v 1.15 2001/02/17 06:26:55 mdejong Exp $
+// $Id: long.h,v 1.18 2001/05/08 15:08:36 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -25,6 +25,14 @@ class ULongInt;
 class BaseLong
 {
 protected:
+    enum 
+    {
+        MAX_INT    = 0x7FFFFFFF, // max value of i4
+        MIN_INT    = 0x80000000, // min value of i4
+        SHORT_MASK = 0xFFFF,     // mask for lower half of i4
+        SIGN_BIT   = 0x80000000 // sign bit
+    };
+
     union
     {
         double double_value;
@@ -91,19 +99,19 @@ public:
 
 #ifndef HAVE_UNSIGNED_LONG_LONG
 # ifndef WORDS_BIGENDIAN
-    inline u4 HighWord(void) { return value.word[1]; }
-    inline u4 LowWord(void)  { return value.word[0]; }
+    inline u4 HighWord(void) const { return value.word[1]; }
+    inline u4 LowWord(void) const  { return value.word[0]; }
 # else
-    inline u4 HighWord(void) { return value.word[0]; }
-    inline u4 LowWord(void)  { return value.word[1]; }
+    inline u4 HighWord(void) const { return value.word[0]; }
+    inline u4 LowWord(void) const  { return value.word[1]; }
 # endif
 #else
-    inline u4 HighWord(void) { return ((u4) (value.words >> 32)); }
-    inline u4 LowWord(void)  { return ((u4) value.words); }
-    inline u8 Words(void)    { return value.words; }
+    inline u4 HighWord(void) const { return ((u4) (value.words >> 32)); }
+    inline u4 LowWord(void) const  { return ((u4) value.words); }
+    inline u8 Words(void) const    { return value.words; }
 #endif // HAVE_UNSIGNED_LONG_LONG
 
-    double DoubleView(void) { return value.double_value; }
+    double DoubleView(void) const { return value.double_value; }
 
     BaseLong(u4 high, u4 low);
     BaseLong(u4 a); // no sign extension
@@ -113,49 +121,50 @@ public:
     inline BaseLong(u8 a) { value.words = a; } // construct in one step
 #endif // HAVE_UNSIGNED_LONG_LONG
 
-    BaseLong  operator+  (BaseLong); // binary addition
-    BaseLong  operator+  (void);     // unary plus
-    BaseLong &operator+= (BaseLong); // add and assign
+    BaseLong  operator+  (const BaseLong) const; // binary addition
+    BaseLong  operator+  (void) const;     // unary plus
+    BaseLong &operator+= (const BaseLong); // add and assign
     BaseLong  operator++ (int);      // postfix increment
     BaseLong  operator++ (void);     // prefix increment
 
-    BaseLong  operator-  (BaseLong); // binary subtraction
-    BaseLong  operator-  (void);     // unary minus
-    BaseLong &operator-= (BaseLong); // subtract and assign
+    BaseLong  operator-  (const BaseLong) const; // binary subtraction
+    BaseLong  operator-  (void) const;     // unary minus
+    BaseLong &operator-= (const BaseLong); // subtract and assign
     BaseLong  operator-- (int);      // postfix decrement
     BaseLong  operator-- (void);     // prefix decrement
 
-    BaseLong  operator*  (BaseLong); // multiplication
-    BaseLong &operator*= (BaseLong); // multiply and assign
+    BaseLong  operator*  (const BaseLong) const; // multiplication
+    BaseLong &operator*= (const BaseLong); // multiply and assign
 
     //
-    // NOTE: To match the JLS, mask the argument with 0x3f
+    // NOTE: To match the JLS, mask the argument with
+    // Semantic::LONG_SHIFT_MASK (0x3f)
     //
-    BaseLong  operator<< (int);      // left shift
+    BaseLong  operator<< (int) const;      // left shift
     BaseLong &operator<<=(int);      // left shift and assign
 
-    bool      operator== (BaseLong); // equal
-    bool      operator!= (BaseLong); // not equal
-    bool      operator!  (void);     // logical complement
+    bool      operator== (const BaseLong) const; // equal
+    bool      operator!= (const BaseLong) const; // not equal
+    bool      operator!  (void) const;     // logical complement
 
-    BaseLong  operator~  (void);     // bitwise complement
-    BaseLong  operator^  (BaseLong); // bitwise XOR
-    BaseLong &operator^= (BaseLong); // bitwise XOR and assign
-    BaseLong  operator|  (BaseLong); // bitwise OR
-    BaseLong &operator|= (BaseLong); // bitwise OR and assign
-    BaseLong  operator&  (BaseLong); // bitwise AND
-    BaseLong &operator&= (BaseLong); // bitwise AND and assign
+    BaseLong  operator~  (void) const;     // bitwise complement
+    BaseLong  operator^  (const BaseLong) const; // bitwise XOR
+    BaseLong &operator^= (const BaseLong); // bitwise XOR and assign
+    BaseLong  operator|  (const BaseLong) const; // bitwise OR
+    BaseLong &operator|= (const BaseLong); // bitwise OR and assign
+    BaseLong  operator&  (const BaseLong) const; // bitwise AND
+    BaseLong &operator&= (const BaseLong); // bitwise AND and assign
 
-    bool      operator&& (BaseLong); // logical AND (not short-circuit)
-    bool      operator|| (BaseLong); // logical OR (not short circuit)
+    bool      operator&& (const BaseLong) const; // logical AND (not short-circuit)
+    bool      operator|| (const BaseLong) const; // logical OR (not short circuit)
 
-    static void Divide(BaseLong &, BaseLong &, BaseLong &, BaseLong &);
+    static void Divide(const BaseLong &, const BaseLong &, BaseLong &, BaseLong &);
 
-    operator LongInt(void);          // Cast to LongInt
-    operator ULongInt(void);         // Cast to ULongInt
+    operator LongInt(void) const;          // Cast to LongInt
+    operator ULongInt(void) const;         // Cast to ULongInt
 
     // mirrors java.lang.Long, useful in hashing
-    inline i4 hashCode(void) { return (HighWord() ^ LowWord()); }
+    inline i4 hashCode(void) const { return (HighWord() ^ LowWord()); }
 };
 
 
@@ -170,12 +179,12 @@ public:
 #ifdef HAVE_EXPLICIT
     explicit
 #endif
-           LongInt (IEEEdouble); // narrowing conversion of double to long
+           LongInt (const IEEEdouble &); // narrowing conversion of double to long
 
 #ifdef HAVE_EXPLICIT
     explicit 
 #endif
-    LongInt (IEEEfloat); // narrowing conversion of float to long
+           LongInt (const IEEEfloat &); // narrowing conversion of float to long
 #ifdef HAVE_UNSIGNED_LONG_LONG
     inline LongInt(u8 a) : BaseLong (a) {} // construct in one step
 #endif // HAVE_UNSIGNED_LONG_LONG
@@ -196,32 +205,37 @@ public:
     }
     static void ConstantCleanup(void)
     {
+        // The explicit casts are there to workaround a MSVC
+        // behaviour which doesn't allow an implicit cast
+        // from const X* to void* for the delete operator.
         if (max_long_const)
-            delete max_long_const;
+            delete (LongInt*)max_long_const;
         if (min_long_const)
-            delete min_long_const;
+            delete (LongInt*)min_long_const;
     }
 
+
 private:
-    static LongInt *max_long_const, *min_long_const;
+    static const LongInt *max_long_const, *min_long_const;
 
 public:
-    LongInt  operator/  (LongInt); // divide
-    LongInt &operator/= (LongInt); // divide and assign
+    LongInt  operator/  (const LongInt) const; // divide
+    LongInt &operator/= (const LongInt); // divide and assign
 
-    LongInt  operator%  (LongInt); // modulus
-    LongInt &operator%= (LongInt); // modulus and assign
+    LongInt  operator%  (const LongInt) const; // modulus
+    LongInt &operator%= (const LongInt); // modulus and assign
 
     //
-    // NOTE: To match the JLS, mask the argument with 0x3f
+    // NOTE: To match the JLS, mask the argument with
+    // Semantic::LONG_SHIFT_MASK (0x3f)
     //
-    LongInt  operator>> (int);     // right shift
+    LongInt  operator>> (int) const;     // right shift
     LongInt &operator>>=(int);     // right shift and assign
 
-    bool     operator<  (LongInt); // less-than
-    bool     operator>  (LongInt); // greater-than
-    bool     operator<= (LongInt); // less-than or equal
-    bool     operator>= (LongInt); // greater-than or equal
+    bool     operator<  (const LongInt) const; // less-than
+    bool     operator>  (const LongInt) const; // greater-than
+    bool     operator<= (const LongInt) const; // less-than or equal
+    bool     operator>= (const LongInt) const; // greater-than or equal
 };
 
 
@@ -237,22 +251,23 @@ public:
     inline ULongInt(u8 a) : BaseLong (a) {} // construct in one step
 #endif // HAVE_UNSIGNED_LONG_LONG
 
-    ULongInt  operator/  (ULongInt); // divide
-    ULongInt &operator/= (ULongInt); // divide and assign
+    ULongInt  operator/  (const ULongInt) const; // divide
+    ULongInt &operator/= (const ULongInt); // divide and assign
 
-    ULongInt  operator%  (ULongInt); // modulus
-    ULongInt &operator%= (ULongInt); // modulus and assign
+    ULongInt  operator%  (const ULongInt) const; // modulus
+    ULongInt &operator%= (const ULongInt); // modulus and assign
 
     //
-    // NOTE: To match the JLS, mask the argument with 0x3f
+    // NOTE: To match the JLS, mask the argument with
+    // Semantic::LONG_SHIFT_MASK (0x3f)
     //
-    ULongInt  operator>> (int);      // right shift
+    ULongInt  operator>> (int) const;      // right shift
     ULongInt &operator>>=(int);      // right shift and assign
 
-    bool      operator<  (ULongInt); // less-than
-    bool      operator>  (ULongInt); // greater-than
-    bool      operator<= (ULongInt); // less-than or equal
-    bool      operator>= (ULongInt); // greater-than or equal
+    bool      operator<  (const ULongInt) const; // less-than
+    bool      operator>  (const ULongInt) const; // greater-than
+    bool      operator<= (const ULongInt) const; // less-than or equal
+    bool      operator>= (const ULongInt) const; // greater-than or equal
 };
 
 #ifdef	HAVE_JIKES_NAMESPACE

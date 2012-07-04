@@ -1,4 +1,4 @@
-// $Id: lookup.cpp,v 1.32 2001/02/17 08:08:54 mdejong Exp $
+// $Id: lookup.cpp,v 1.36 2001/05/04 23:03:58 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -14,13 +14,75 @@
 #include "ast.h"
 #include "case.h"
 
-#ifdef HAVE_RTTI
-#include <typeinfo>
-#endif
-
 #ifdef	HAVE_JIKES_NAMESPACE
 namespace Jikes {	// Open namespace Jikes block
 #endif
+
+PackageSymbol *Symbol::PackageCast()
+{
+    return DYNAMIC_CAST<PackageSymbol *, Symbol *>
+        (_kind == PACKAGE ? this : NULL);
+}
+
+TypeSymbol *Symbol::TypeCast()
+{
+    return DYNAMIC_CAST<TypeSymbol *, Symbol *>
+        (_kind == TYPE ? this : NULL);
+}
+
+MethodSymbol *Symbol::MethodCast()
+{
+    return DYNAMIC_CAST<MethodSymbol *, Symbol *>
+        (_kind == METHOD ? this : NULL);
+}
+
+BlockSymbol *Symbol::BlockCast()
+{
+    return DYNAMIC_CAST<BlockSymbol *, Symbol *>
+        (_kind == BLOCK ? this : NULL);
+}
+
+VariableSymbol *Symbol::VariableCast()
+{
+    return DYNAMIC_CAST<VariableSymbol *, Symbol *>
+        (_kind == VARIABLE ? this : NULL);
+}
+
+LabelSymbol *Symbol::LabelCast()
+{
+    return DYNAMIC_CAST<LabelSymbol *, Symbol *>
+        (_kind == LABEL ? this : NULL);
+}
+
+LiteralSymbol *Symbol::LiteralCast()
+{
+    return DYNAMIC_CAST<LiteralSymbol *, Symbol *>
+        (_kind == LITERAL ? this : NULL);
+}
+
+NameSymbol *Symbol::NameCast()
+{
+    return DYNAMIC_CAST<NameSymbol *, Symbol *>
+        (_kind == NAME ? this : NULL);
+}
+
+PathSymbol *Symbol::PathCast()
+{
+    return DYNAMIC_CAST<PathSymbol *, Symbol *>
+        (_kind == PATH ? this : NULL);
+}
+
+DirectorySymbol *Symbol::DirectoryCast()
+{
+    return DYNAMIC_CAST<DirectorySymbol *, Symbol *>
+        (_kind == _DIRECTORY ? this : NULL);
+}
+
+FileSymbol *Symbol::FileCast()
+{
+    return DYNAMIC_CAST<FileSymbol *, Symbol *>
+        (_kind == _FILE ? this : NULL);
+}
 
 int SystemTable::primes[] = {DEFAULT_HASH_SIZE, 101, 401, MAX_HASH_SIZE};
 
@@ -1621,33 +1683,21 @@ void Utf8LiteralTable::EvaluateConstant(AstExpression *expression, int start, in
 
 
 bool Utf8LiteralTable::IsConstant(AstExpression *expression,
-    Symbol *string_symbol)
+                                  TypeSymbol *string_type)
 {
-    if (expression -> symbol == string_symbol && expression -> IsConstant())
+    if (expression -> Type() != string_type)
+        return false;
+    if (expression -> IsConstant())
     {
         // The EvaluateConstant method only works with
-        // Utf8LiteralValue* types. Checking that
-        // the expression is of type String is
-        // enough to determine the type, but we do
-        // an extra RTTI/cast check to make sure.
+        // Utf8LiteralValue* types.
 
         assert(expression -> value);
 
         Utf8LiteralValue *literal =
-#ifndef HAVE_DYNAMIC_CAST
-	    (Utf8LiteralValue *) expression -> value;
-#else
-            dynamic_cast<Utf8LiteralValue *>(expression -> value);
-            if (! literal) {
-#ifdef HAVE_RTTI
-                const type_info& t = typeid(*(expression -> value));
-                const char *name = t.name();
-                fprintf(stderr, "expr value not a Utf8LiteralValue %s%s\n",
-                    "it's type was ", name);
-#endif
-                assert(literal && "expr value not a Utf8LiteralValue");
-            }
-#endif
+            DYNAMIC_CAST<Utf8LiteralValue *, LiteralValue *>
+                (expression -> value);
+
         assert(literal -> value);
 
         utf8_literals -> Next() = literal;
@@ -1664,11 +1714,11 @@ bool Utf8LiteralTable::IsConstant(AstExpression *expression,
         AstExpression *left  = binary_expression -> left_expression,
                       *right = binary_expression -> right_expression;
 
-        bool left_is_constant = IsConstant(left, string_symbol);
+        bool left_is_constant = IsConstant(left, string_type);
 
         int left_end_marker = utf8_literals -> Length();
 
-        bool right_is_constant = IsConstant(right, string_symbol);
+        bool right_is_constant = IsConstant(right, string_type);
         if (left_is_constant && right_is_constant)
              return true;
 
@@ -1681,10 +1731,10 @@ bool Utf8LiteralTable::IsConstant(AstExpression *expression,
         utf8_literals -> Reset(left_start_marker);
     }
     else if ((cast_expression = expression -> CastExpressionCast()))
-         return IsConstant(cast_expression -> expression, string_symbol);
+         return IsConstant(cast_expression -> expression, string_type);
     else if ((parenthesized_expression = expression -> ParenthesizedExpressionCast()))
          return IsConstant(parenthesized_expression -> expression,
-             string_symbol);
+                           string_type);
 
     return false; // Not a constant String expression
 }
@@ -1697,11 +1747,11 @@ void Utf8LiteralTable::CheckStringConstant(AstExpression *expression)
     // it flattens the expresion tree into a set of utf8 literals.
     utf8_literals = new Tuple<Utf8LiteralValue *>(256);
 
-    // CheckStringConstant must be called with an expression
-    // argument that has the symbol for the String type.
-    Symbol *string_symbol = expression -> symbol;
-
-    if (IsConstant(expression, string_symbol))
+    //
+    // Pass the type of this expression, which is known to be String, for
+    // use in IsConstant() to avoid casting problems.
+    //
+    if (IsConstant(expression, expression -> Type()))
         EvaluateConstant(expression, 0, utf8_literals -> Length());
 
     delete utf8_literals;

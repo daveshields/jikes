@@ -1,4 +1,4 @@
-// $Id: option.cpp,v 1.52 2001/02/24 22:19:24 mdejong Exp $
+// $Id: option.cpp,v 1.55 2001/05/11 05:07:55 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -209,7 +209,7 @@ Option::Option(ArgumentExpander &arguments) :
     current_directory[0] = main_current_directory;
 #endif
 
-    char * classpath_buffer;
+    char * paths_buffer;
     Tuple<int> filename_index(2048);
 
     for (int i = 1; i < arguments.argc; i++)
@@ -222,9 +222,9 @@ Option::Option(ArgumentExpander &arguments) :
 		
                 // Create a copy of the -classpath argument so we can modify
                 //   this copy and delete it later in ~JikesOption
-                classpath_buffer = new char[strlen(classpath)+1];
-                strcpy(classpath_buffer, classpath);
-                classpath = classpath_buffer;
+                paths_buffer = new char[strlen(classpath)+1];
+                strcpy(paths_buffer, classpath);
+                classpath = paths_buffer;
 
 #ifdef EBCDIC
                 //
@@ -234,9 +234,63 @@ Option::Option(ArgumentExpander &arguments) :
                     classpath[k] = Code::ToASCII(classpath[k]);
 #endif
             }
+            else if (strcmp(arguments.argv[i],"-bootclasspath") == 0 && ((i + 1) < arguments.argc))
+            {
+                bootclasspath = arguments.argv[++i];
+		
+                // Create a copy of the -bootclasspath argument so we can
+                // modify this copy and delete it later in ~JikesOption
+                paths_buffer = new char[strlen(bootclasspath)+1];
+                strcpy(paths_buffer, bootclasspath);
+                bootclasspath = paths_buffer;
+
+#ifdef EBCDIC
+                //
+                //  Maintain CLASSPATH in ASCII and translate back to EBCDIC when building file name
+                //
+                for (int k = 0; k < strlen(bootclasspath); k++)
+                    bootclasspath[k] = Code::ToASCII(bootclasspath[k]);
+#endif
+            }
+            else if (strcmp(arguments.argv[i],"-extdirs") == 0 && ((i + 1) < arguments.argc))
+            {
+                extdirs = arguments.argv[++i];
+		
+                // Create a copy of the -extdirs argument so we can modify
+                // this copy and delete it later in ~JikesOption
+                paths_buffer = new char[strlen(extdirs)+1];
+                strcpy(paths_buffer, extdirs);
+                extdirs = paths_buffer;
+
+#ifdef EBCDIC
+                //
+                //  Maintain CLASSPATH in ASCII and translate back to EBCDIC when building file name
+                //
+                for (int k = 0; k < strlen(extdirs); k++)
+                    extdirs[k] = Code::ToASCII(extdirs[k]);
+#endif
+            }
+            else if (strcmp(arguments.argv[i],"-sourcepath") == 0 && ((i + 1) < arguments.argc))
+            {
+                sourcepath = arguments.argv[++i];
+		
+                // Create a copy of the -sourcepath argument so we can
+                // modify this copy and delete it later in ~JikesOption
+                paths_buffer = new char[strlen(sourcepath)+1];
+                strcpy(paths_buffer, sourcepath);
+                sourcepath = paths_buffer;
+
+#ifdef EBCDIC
+                //
+                //  Maintain CLASSPATH in ASCII and translate back to EBCDIC when building file name
+                //
+                for (int k = 0; k < strlen(sourcepath); k++)
+                    sourcepath[k] = Code::ToASCII(sourcepath[k]);
+#endif
+            }
             else if (strcmp(arguments.argv[i], "-depend") == 0 || strcmp(arguments.argv[i], "-Xdepend") == 0)
                  depend = true;
-#if defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
+#if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
             else if (strcmp(arguments.argv[i], "-encoding") == 0 && ((i + 1) < arguments.argc))
             {
                 i++;
@@ -251,7 +305,7 @@ Option::Option(ArgumentExpander &arguments) :
 
                 continue;
             }
-#endif // defined(HAVE_LIB_ICU_UC) || defined(HAVE_ICONV_H)
+#endif // defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
             else if (strcmp(arguments.argv[i],"-verbose") == 0)
                  verbose = true;
             else if (strcmp(arguments.argv[i],"-g") == 0)
@@ -446,6 +500,66 @@ Option::Option(ArgumentExpander &arguments) :
         else filename_index.Next() = i;
     }
 
+    if (! bootclasspath)
+    {
+        bootclasspath = getenv("BOOTCLASSPATH");
+
+        if (bootclasspath)
+        {
+            /* Create a copy of the classpath string we can modify
+               this copy without worry that it will effect the env array */
+            paths_buffer = new char[strlen(bootclasspath)+1];
+            strcpy(paths_buffer, bootclasspath);
+            bootclasspath = paths_buffer;
+
+#ifdef EBCDIC
+            //
+            //  Maintain CLASSPATH in ASCII and translate back to EBCDIC when building file name
+            //
+            for (int k = 0; k < strlen(bootclasspath); k++)
+                bootclasspath[k] = Code::ToASCII(bootclasspath[k]);
+#endif
+            while (isspace(*bootclasspath))
+                bootclasspath++;
+
+            if (*bootclasspath == U_NULL) {
+	        // potential memory leak here, if that incr above executed.
+                delete [] bootclasspath;
+                bootclasspath = NULL;
+            }
+        }
+    }
+
+    if (! extdirs)
+    {
+        extdirs = getenv("EXTDIRS");
+
+        if (extdirs)
+        {
+            /* Create a copy of the extdirs string we can modify
+               this copy without worry that it will effect the env array */
+            paths_buffer = new char[strlen(extdirs)+1];
+            strcpy(paths_buffer, extdirs);
+            extdirs = paths_buffer;
+
+#ifdef EBCDIC
+            //
+            //  Maintain CLASSPATH in ASCII and translate back to EBCDIC when building file name
+            //
+            for (int k = 0; k < strlen(extdirs); k++)
+                extdirs[k] = Code::ToASCII(extdirs[k]);
+#endif
+            while (isspace(*extdirs))
+                extdirs++;
+
+            if (*extdirs == U_NULL) {
+	        // potential memory leak here, if that incr above executed.
+                delete [] extdirs;
+                extdirs = NULL;
+            }
+        }
+    }
+
     if (! classpath)
     {
         classpath = getenv("JIKESPATH");
@@ -456,9 +570,9 @@ Option::Option(ArgumentExpander &arguments) :
         {
             /* Create a copy of the classpath string we can modify
                this copy without worry that it will effect the env array */
-            classpath_buffer = new char[strlen(classpath)+1];
-            strcpy(classpath_buffer, classpath);
-            classpath = classpath_buffer;
+            paths_buffer = new char[strlen(classpath)+1];
+            strcpy(paths_buffer, classpath);
+            classpath = paths_buffer;
 
 #ifdef EBCDIC
             //
@@ -471,6 +585,7 @@ Option::Option(ArgumentExpander &arguments) :
                 classpath++;
 
             if (*classpath == U_NULL) {
+	        // potential memory leak here, if that incr above executed.
                 delete [] classpath;
                 classpath = NULL;
             }
@@ -483,6 +598,43 @@ Option::Option(ArgumentExpander &arguments) :
             classpath[1] = U_NULL;
         }
     }
+
+    if (! sourcepath)
+    {
+        sourcepath = getenv("SOURCEPATH");
+
+        if (sourcepath)
+        {
+            /* Create a copy of the sourcepath string we can modify
+               this copy without worry that it will effect the env array */
+            paths_buffer = new char[strlen(sourcepath)+1];
+            strcpy(paths_buffer, sourcepath);
+            sourcepath = paths_buffer;
+
+#ifdef EBCDIC
+            //
+            //  Maintain CLASSPATH in ASCII and translate back to EBCDIC when building file name
+            //
+            for (int k = 0; k < strlen(sourcepath); k++)
+                sourcepath[k] = Code::ToASCII(sourcepath[k]);
+#endif
+            while (isspace(*sourcepath))
+                sourcepath++;
+
+            if (*sourcepath == U_NULL) {
+	        // potential memory leak here, if that incr above executed.
+                delete [] sourcepath;
+                sourcepath = NULL;
+            }
+        }
+
+        if (! sourcepath)
+        {
+            sourcepath = new char[2];
+            sourcepath[0] = '.';
+            sourcepath[1] = U_NULL;
+        }
+    }
     
     // If we need to do a cygwin CLASSPATH conversion do it after the env is checked
     // so that it will work for a -classpath argument or a CLASSPATH env var.
@@ -492,10 +644,36 @@ Option::Option(ArgumentExpander &arguments) :
     // style path. A path like "C:\Cygwin\tmp;C:\Windows" is converted
     // into "/tmp:/cygdrive/c/Windows" (assuming C:\Cygwin is cygroot).
     // We can then parse it using the unix path seperator char ':'
-    classpath_buffer = new char[cygwin_win32_to_posix_path_list_buf_size(classpath)];
-    cygwin_win32_to_posix_path_list(classpath, classpath_buffer);
-    delete [] classpath;
-    classpath = classpath_buffer;
+    if (classpath) {
+      paths_buffer = new char[cygwin_win32_to_posix_path_list_buf_size(classpath)];
+      cygwin_win32_to_posix_path_list(classpath, paths_buffer);
+      delete [] classpath;
+      classpath = paths_buffer;
+    }
+
+    // Do the same for all the other paths.
+    if (bootclasspath) {
+      paths_buffer = new
+        char[cygwin_win32_to_posix_path_list_buf_size(bootclasspath)];
+      cygwin_win32_to_posix_path_list(bootclasspath, paths_buffer);
+      delete[] bootclasspath;
+      bootclasspath = paths_buffer;
+    }
+
+    if (extdirs) {
+      paths_buffer = new char[cygwin_win32_to_posix_path_list_buf_size(extdirs)];
+      cygwin_win32_to_posix_path_list(extdirs, paths_buffer);
+      delete[] extdirs;
+      extdirs = paths_buffer;
+    }
+
+    if (sourcepath) {
+      paths_buffer = new
+        char[cygwin_win32_to_posix_path_list_buf_size(sourcepath)];
+      cygwin_win32_to_posix_path_list(sourcepath, paths_buffer);
+      delete[] sourcepath;
+      sourcepath = paths_buffer;
+    }
 #endif
 
     //

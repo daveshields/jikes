@@ -1,4 +1,4 @@
-// $Id: bytecode.cpp,v 1.54 2001/02/18 23:21:18 mdejong Exp $
+// $Id: bytecode.cpp,v 1.62 2001/05/07 06:33:59 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -666,8 +666,9 @@ void ByteCode::DeclareField(VariableSymbol *symbol)
         LiteralValue *initial_value = (init ? init -> value : (LiteralValue *) NULL);
 
         TypeSymbol *type = symbol -> Type();
-        if (initial_value && (type -> Primitive() || (type == this_control.String() && initial_value != this_control.NullValue())))
+        if (initial_value)
         {
+            assert(type -> Primitive() || type == this_control.String());
             //
             // TODO: there seems to be a contradiction between the language spec and the VM spec.
             // The language spec seems to require that a variable be initialized (in the class file)
@@ -974,6 +975,16 @@ void ByteCode::InitializeClassVariable(AstVariableDeclarator *vd)
 
         if (expression -> IsConstant() && vd -> symbol -> ACC_FINAL())  // if already initialized
             return;
+
+        // Here, we add a line number attribute for this initializer for 
+        // this expression.  It seems that some debuggers (notably
+        // Sun's JDB) will not allow setting breakpoints at a specific line of code if a class contains
+        // initialized class variables but _no_ static initializer block.  We now add a line number attribute
+        // to appease that debugger.
+        
+        line_number_table_attribute -> AddLineNumber(code_attribute -> CodeLength(),
+                                                     this_semantic.lex_stream -> Line(expression -> LeftToken()));
+
         EmitExpression(expression);
     }
     else
@@ -981,6 +992,14 @@ void ByteCode::InitializeClassVariable(AstVariableDeclarator *vd)
         AstArrayInitializer *array_initializer = vd -> variable_initializer_opt -> ArrayInitializerCast();
 
         assert(array_initializer);
+
+        // Like the case above, we add a line number attribute for this initializer. In this case, the initializer
+        // is an array. It seems that some debuggers (notably Sun's JDB) will not allow setting breakpoints at a
+        // specific line of code if a class contains initialized class variables but _no_ static initializer block.
+        // We now add a line number attribute to appease that debugger.
+        
+        line_number_table_attribute -> AddLineNumber(code_attribute -> CodeLength(),
+                                                     this_semantic.lex_stream -> Line(array_initializer->LeftToken()));
 
         InitializeArray(vd -> symbol -> Type(), array_initializer);
     }
@@ -1477,22 +1496,30 @@ void ByteCode::EmitSwitchStatement(AstSwitchStatement *switch_statement)
         low = switch_statement -> Case(0) -> Value();
         high = switch_statement -> Case(ncases - 1) -> Value();
 
-        //
-        // want to compute
-        //  (2 + high-low + 1) < (1 + ncases * 2 + 30)
-        // but must guard against overflow, so factor out
-        //  high - low < ncases * 2 + 28
-        // but can't have number of labels < number of cases
-        //
-        LongInt range = LongInt(high) - low + 1;
-        if (range < (ncases * 2 + 28))
-        {
-            use_lookup = false; // use tableswitch
-            nlabels = range.LowWord();
+        // Workaround for Sun JVM TABLESWITCH bug in JDK 1.2, 1.3
+        // when case values of 0x7ffffff0 through 0x7fffffff are used.
+        // Force the generation of a LOOKUPSWITCH in these circumstances.
 
-            assert(range.HighWord() == 0);
-            assert(nlabels >= ncases);
-        }
+        assert(low <= high);
+
+        if ((unsigned long)high < 0x7ffffff0UL)
+        { 
+            // want to compute
+            //  (2 + high-low + 1) < (1 + ncases * 2 + 30)
+            // but must guard against overflow, so factor out
+            //  high - low < ncases * 2 + 28
+            // but can't have number of labels < number of cases
+
+            LongInt range = LongInt(high) - low + 1;
+            if (range < (ncases * 2 + 28))
+            {
+                use_lookup = false; // use tableswitch
+                nlabels = range.LowWord();
+    
+                assert(range.HighWord() == 0);
+                assert(nlabels >= ncases);
+            }
+        } 
     }
 
     //
@@ -2546,6 +2573,9 @@ int ByteCode::EmitExpression(AstExpression *expression)
              return EmitConditionalExpression((AstConditionalExpression *) expression);
         case Ast::ASSIGNMENT:
              return EmitAssignmentExpression((AstAssignmentExpression *) expression, true);
+        case Ast::NULL_LITERAL:
+             PutOp(OP_ACONST_NULL);
+             return 1;
         default:
              assert(false && "unknown expression kind");
              break;
@@ -2633,7 +2663,6 @@ void ByteCode::EmitFieldAccessLhsBase(AstExpression *expression)
     // We now have the right expression. Check if it's a field. If so, process base
     // Otherwise, it must be a simple name...
     //
-    field = expression -> FieldAccessCast();
     if (field)
         EmitExpression(field -> base);
     else
@@ -2877,6 +2906,21 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
             case LHS_FIELD:
                  EmitFieldAccessLhsBase(left_hand_side); // load base for field access
                  break;
+            case LHS_STATIC:
+                 //
+                 // if the access is qualified by an arbitrary base
+                 // expression, evaluate it for side effects.
+                 //
+                 if (left_hand_side -> FieldAccessCast())
+                 {
+                     AstExpression *base = left_hand_side -> FieldAccessCast() -> base;
+                     if (! base -> IsSimpleNameOrFieldAccess())
+                     {
+                         EmitExpression(base);
+                         PutOp(OP_POP);
+                     }
+                 }
+                 break;
             case LHS_METHOD:
                  if (! accessed_member -> ACC_STATIC()) // need to load address of object, obtained from resolution
                  {
@@ -2892,9 +2936,24 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
 
                      EmitExpression(field_expression -> base);
                  }
+                 else if (left_hand_side -> FieldAccessCast())
+                 {
+                     //
+                     // if the access is qualified by an arbitrary base
+                     // expression, evaluate it for side effects.
+                     //
+                     AstExpression *base = left_hand_side -> FieldAccessCast() -> base;
+                     if (! base -> IsSimpleNameOrFieldAccess())
+                     {
+                         EmitExpression(base);
+                         PutOp(OP_POP);
+                     }
+                 }
+                 break;
+            case LHS_LOCAL:
                  break;
             default:
-                 break;
+                 assert(false && "bad kind in EmitAssignmentExpression");
         }
 
         EmitExpression(assignment_expression -> expression);
@@ -2962,7 +3021,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
                  else ResolveAccess(left_hand_side);
                  break;
             default:
-                 break;
+                 assert(false && "bad kind in EmitAssignmentExpression");
         }
 
         //
@@ -3033,7 +3092,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
                          opc = OP_IXOR;
                          break;
                     default:
-                         break;
+                         assert(false && "bad op_type in EmitAssignmentExpression");
                 }
             }
             else if (op_type == this_control.long_type)
@@ -3074,7 +3133,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
                          opc = OP_LXOR;
                          break;
                     default:
-                         break;
+                         assert(false && "bad op_type in EmitAssignmentExpression");
                 }
             }
             else if (op_type == this_control.float_type)
@@ -3097,7 +3156,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
                          opc = OP_FSUB;
                          break;
                     default:
-                         break;
+                         assert(false && "bad op_type in EmitAssignmentExpression");
                 }
             }
             else if (op_type == this_control.double_type)
@@ -3120,7 +3179,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
                          opc = OP_DSUB;
                          break;
                     default:
-                         break;
+                         assert(false && "bad op_type in EmitAssignmentExpression");
                 }
             }
 
@@ -3175,7 +3234,7 @@ int ByteCode::EmitAssignmentExpression(AstAssignmentExpression *assignment_expre
             StoreVariable(kind, left_hand_side);
             break;
         default:
-            break;
+            assert(false && "bad kind in EmitAssignmentExpression");
     }
 
     if (this_control.option.g && assignment_expression -> assignment_tag == AstAssignmentExpression::DEFINITE_EQUAL)
@@ -3532,6 +3591,27 @@ void ByteCode::EmitCast(TypeSymbol *dest_type, TypeSymbol *source_type)
     return;
 }
 
+//
+// Emits the required check for null in a qualified instance creation or
+// super constructor call if the base expression can possibly be null.
+//
+void ByteCode::EmitCheckForNull(AstExpression *expression)
+{
+    if (expression -> ParenthesizedExpressionCast())
+        expression = UnParenthesize(expression);
+
+    if (! expression -> ClassInstanceCreationExpressionCast() &&
+        ! expression -> ThisExpressionCast())
+    {
+        PutOp(OP_DUP);
+        Label lab1;
+        EmitBranch(OP_IFNONNULL, lab1);
+        PutOp(OP_ACONST_NULL); // need to test for null, raising NullPointerException if so. So just do athrow
+        PutOp(OP_ATHROW);
+        DefineLabel(lab1);
+        CompleteLabel(lab1);
+    }
+}
 
 int ByteCode::EmitClassInstanceCreationExpression(AstClassInstanceCreationExpression *expression, bool need_value)
 {
@@ -3550,14 +3630,7 @@ int ByteCode::EmitClassInstanceCreationExpression(AstClassInstanceCreationExpres
     if (expression -> base_opt)
     {
         stack_words += EmitExpression(expression -> base_opt);
-        PutOp(OP_DUP);
-
-        Label lab1;
-        EmitBranch(OP_IFNONNULL, lab1);
-        PutOp(OP_ACONST_NULL); // need to test for null, raising NullPointerException if so. So just do athrow
-        PutOp(OP_ATHROW);
-        DefineLabel(lab1);
-        CompleteLabel(lab1);
+        EmitCheckForNull(expression -> base_opt);
     }
 
     //
@@ -3629,7 +3702,11 @@ int ByteCode::EmitFieldAccess(AstFieldAccess *expression)
     TypeSymbol *expression_type = expression -> Type();
     if (sym -> ACC_STATIC())
     {
-        if (! base -> IsSimpleNameOrFieldAccess()) // if the base expression is an arbitrary expression, evaluate it for side effects.
+        //
+        // if the access is qualified by an arbitrary base
+        // expression, evaluate it for side effects.
+        //
+        if (! base -> IsSimpleNameOrFieldAccess())
         {
             EmitExpression(base);
             PutOp(OP_POP);
@@ -3663,49 +3740,41 @@ void ByteCode::EmitMethodInvocation(AstMethodInvocation *expression)
 
     bool is_super = false; // set if super call
 
-    AstSimpleName *simple_name = method_call -> method -> SimpleNameCast();
     if (msym -> ACC_STATIC())
     {
-        AstFieldAccess *field = expression -> resolution_opt ?
-            (((MethodSymbol *)expression->symbol)->ACC_STATIC() ? expression->method->FieldAccessCast() : NULL)
-            :
-            method_call -> method -> FieldAccessCast()
-            ;
-
-        
-        if (field)
+        //
+        // if the access is qualified by an arbitrary base
+        // expression, evaluate it for side effects.
+        // Notice that accessor methods, which are always static, already
+        // evaluate the base expression.
+        //
+        AstFieldAccess *field = expression -> resolution_opt ||
+            (msym -> accessed_member &&
+             msym -> accessed_member -> VariableCast() &&
+             (! msym -> accessed_member -> VariableCast() -> ACC_STATIC()))
+            ? NULL
+            : method_call -> method -> FieldAccessCast();
+        if (field && ! field -> base -> IsSimpleNameOrFieldAccess())
         {
-            // JLS 15.11.4.7
-            if (field -> base -> MethodInvocationCast())
-            {
-                EmitMethodInvocation(field -> base -> MethodInvocationCast());
-                PutOp(OP_POP); // discard value (only evaluating for side effect)
-            }
-            else if (field -> base -> ClassInstanceCreationExpressionCast())
-            {
-                (void) EmitClassInstanceCreationExpression(field -> base -> ClassInstanceCreationExpressionCast(), false);
-            }
-            else 
-            {
-	        // FIXME : diasbled because it is crashing jikes !
-	        // This seems to have been caused by a fix for bug #198
-	        //PutOp(EmitExpression(field -> base) == 2 ? OP_POP2 : OP_POP); // discard value
-            }
-        }
+            EmitExpression(field -> base);
+            PutOp(OP_POP);
+        }        
     }
     else
     {
         AstFieldAccess *field = method_call -> method -> FieldAccessCast();
+        AstSimpleName *simple_name = method_call -> method -> SimpleNameCast();
         if (field)
         {
             AstFieldAccess *sub_field_access = field -> base -> FieldAccessCast();
-            is_super = field -> base -> SuperExpressionCast() || (sub_field_access && sub_field_access -> IsSuperAccess());
+            is_super = field -> base -> SuperExpressionCast() ||
+                (sub_field_access && sub_field_access -> IsSuperAccess());
 
             if (field -> base -> MethodInvocationCast())
                  EmitMethodInvocation(field -> base -> MethodInvocationCast());
             else EmitExpression(field -> base);
         }
-        else if (method_call -> method -> SimpleNameCast())
+        else if (simple_name)
         {
             if (simple_name -> resolution_opt) // use resolution if available
                 EmitExpression(simple_name -> resolution_opt);
@@ -3857,6 +3926,7 @@ void ByteCode::EmitPostUnaryExpressionField(int kind, AstPostUnaryExpression *ex
     {
         PutOp(OP_ICONST_1);
         PutOp(expression -> post_unary_tag == AstPostUnaryExpression::PLUSPLUS ? OP_IADD : OP_ISUB);
+        EmitCast(expression_type, this_control.int_type);
     }
     else if (expression_type == this_control.long_type)
     {
@@ -4146,10 +4216,10 @@ void ByteCode::EmitPreUnaryIncrementExpression(AstPreUnaryExpression *expression
 
 
 //
-//    AstExpression *expression;
-// POST_UNARY on name
-// load value of variable, do increment or decrement, duplicate, then store back, leaving original value
-// on top of stack.
+// AstExpression *expression;
+// PRE_UNARY on name
+// load value of variable, do increment or decrement, duplicate, then store
+// back, leaving new value on top of stack.
 //
 void ByteCode::EmitPreUnaryIncrementExpressionSimple(int kind, AstPreUnaryExpression *expression, bool need_value)
 {
@@ -4233,9 +4303,9 @@ void ByteCode::EmitPreUnaryIncrementExpressionArray(AstPreUnaryExpression *expre
          PutOp(OP_BALOAD);
          PutOp(OP_ICONST_1);
          PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS ? OP_IADD : OP_ISUB);
+         PutOp(OP_I2B);
          if (need_value)
              PutOp(OP_DUP_X2);
-         PutOp(OP_I2B);
          PutOp(OP_BASTORE);
     }
     else if (type == this_control.char_type)
@@ -4243,9 +4313,9 @@ void ByteCode::EmitPreUnaryIncrementExpressionArray(AstPreUnaryExpression *expre
          PutOp(OP_CALOAD);
          PutOp(OP_ICONST_1);
          PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS ? OP_IADD : OP_ISUB);
+         PutOp(OP_I2C);
          if (need_value)
              PutOp(OP_DUP_X2);
-         PutOp(OP_I2C);
          PutOp(OP_CASTORE);
     }
     else if (type == this_control.short_type)
@@ -4253,9 +4323,9 @@ void ByteCode::EmitPreUnaryIncrementExpressionArray(AstPreUnaryExpression *expre
          PutOp(OP_SALOAD);
          PutOp(OP_ICONST_1);
          PutOp(expression -> pre_unary_tag == AstPreUnaryExpression::PLUSPLUS ? OP_IADD : OP_ISUB);
+         PutOp(OP_I2S);
          if (need_value)
              PutOp(OP_DUP_X2);
-         PutOp(OP_I2S);
          PutOp(OP_SASTORE);
     }
     else if (type == this_control.long_type)
@@ -4392,7 +4462,10 @@ void ByteCode::EmitSuperInvocation(AstSuperCall *super_call)
 
     int stack_words = 0; // words on stack needed for arguments
     if (super_call -> base_opt)
+    {
         stack_words += EmitExpression(super_call -> base_opt);
+        EmitCheckForNull(super_call -> base_opt);
+    }
 
     for (int i = 0; i < super_call -> NumLocalArguments(); i++)
         stack_words += EmitExpression((AstExpression *) super_call -> LocalArgument(i));
@@ -4518,29 +4591,31 @@ void ByteCode::EmitStringAppendMethod(TypeSymbol *type)
 {
     //
     // Find appropriate append routine to add to string buffer
+    // Do not use append(char[]), because that inserts the contents instead
+    // of the correct char[].toString()
+    // Treating null as a String is slightly more efficient than as an Object
     //
     MethodSymbol *append_method =
-            (type -> num_dimensions == 1 && type -> base_type == this_control.char_type
-                   ? this_control.StringBuffer_append_char_arrayMethod()
-                   : type == this_control.char_type
-                          ? this_control.StringBuffer_append_charMethod()
-                          : type == this_control.boolean_type
-                                 ? this_control.StringBuffer_append_booleanMethod()
-                                 : type == this_control.int_type ||
-                                   type == this_control.short_type ||
-                                   type == this_control.byte_type
-                                        ? this_control.StringBuffer_append_intMethod()
-                                        : type == this_control.long_type
-                                               ? this_control.StringBuffer_append_longMethod()
-                                               : type == this_control.float_type
-                                                      ? this_control.StringBuffer_append_floatMethod()
-                                                      : type == this_control.double_type
-                                                             ? this_control.StringBuffer_append_doubleMethod()
-                                                             : type == this_control.String()
-                                                                    ? this_control.StringBuffer_append_stringMethod()
-                                                                    : IsReferenceType(type)
-                                                                          ? this_control.StringBuffer_append_objectMethod()
-                                                                          : this_control.StringBuffer_InitMethod()); // for assertion
+            (type == this_control.char_type
+                  ? this_control.StringBuffer_append_charMethod()
+                  : type == this_control.boolean_type
+                         ? this_control.StringBuffer_append_booleanMethod()
+                         : type == this_control.int_type ||
+                           type == this_control.short_type ||
+                           type == this_control.byte_type
+                                ? this_control.StringBuffer_append_intMethod()
+                                : type == this_control.long_type
+                                       ? this_control.StringBuffer_append_longMethod()
+                                       : type == this_control.float_type
+                                              ? this_control.StringBuffer_append_floatMethod()
+                                              : type == this_control.double_type
+                                                     ? this_control.StringBuffer_append_doubleMethod()
+                                                     : type == this_control.String() ||
+                                                       type == this_control.null_type
+                                                            ? this_control.StringBuffer_append_stringMethod()
+                                                            : IsReferenceType(type)
+                                                                   ? this_control.StringBuffer_append_objectMethod()
+                                                                   : this_control.StringBuffer_InitMethod()); // for assertion
 
     assert(append_method != this_control.StringBuffer_InitMethod() && "unable to find method for string buffer concatenation");
 
@@ -4739,11 +4814,7 @@ void ByteCode::LoadLocal(int varno, TypeSymbol *type)
 //
 void ByteCode::LoadLiteral(LiteralValue *litp, TypeSymbol *type)
 {
-    if (litp == this_control.NullValue())
-    {
-        PutOp(OP_ACONST_NULL);
-    }
-    else if (this_control.IsSimpleIntegerValueType(type) || type == this_control.boolean_type) // load literal using literal value
+    if (this_control.IsSimpleIntegerValueType(type) || type == this_control.boolean_type) // load literal using literal value
     {
         IntLiteralValue *vp = (IntLiteralValue *) litp;
         int val = vp -> value;
@@ -4869,6 +4940,20 @@ int ByteCode::LoadVariable(int kind, AstExpression *expr)
              {
                  if (sym -> ACC_STATIC())
                  {
+                     //
+                     // if the access is qualified by an arbitrary base
+                     // expression, evaluate it for side effects.
+                     //
+                     if (expr -> FieldAccessCast())
+                     {
+                         AstExpression *base = expr -> FieldAccessCast() -> base;
+                         if (! base -> IsSimpleNameOrFieldAccess())
+                         {
+                             EmitExpression(base);
+                             PutOp(OP_POP);
+                         }
+                     }
+
                      PutOp(OP_GETSTATIC);
                      ChangeStack(GetTypeWords(expression_type));
                  }
@@ -4918,6 +5003,16 @@ void ByteCode::LoadReference(AstExpression *expression)
 
         if (sym -> ACC_STATIC())
         {
+            //
+            // if the access is qualified by an arbitrary base
+            // expression, evaluate it for side effects.
+            //
+            if (! field_access -> base -> IsSimpleNameOrFieldAccess())
+            {
+                EmitExpression(field_access -> base);
+                PutOp(OP_POP);
+            }
+
             PutOp(OP_GETSTATIC);
             ChangeStack(1);
         }
