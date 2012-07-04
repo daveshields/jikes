@@ -1,10 +1,9 @@
-/* src/config.h.in.  Generated from configure.in by autoheader.  */
+/* src/config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* This software is subject to the terms of the IBM Jikes
 Compiler License Agreement available at the following URL:
 http://ibm.com/developerworks/opensource/jikes.
-Copyright (C) 1996, 2002 International Business Machines Corporation
-and others.  All Rights Reserved.
+Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 You must accept the terms of that agreement to use this software. */
 
 /* Defined when the compiler supports 64 bit integer math */
@@ -15,9 +14,6 @@ You must accept the terms of that agreement to use this software. */
 
 /* defined if bool is a built-in C++ type */
 #undef HAVE_BOOL
-
-/* known to be broken on mingwin beta 20 */
-#undef HAVE_BROKEN_USHRT_MAX
 
 /* define if the compiler supports const_cast<> */
 #undef HAVE_CONST_CAST
@@ -84,9 +80,6 @@ You must accept the terms of that agreement to use this software. */
 
 /* Define to 1 if you have the `icu-uc' library (-licu-uc). */
 #undef HAVE_LIBICU_UC
-
-/* Define to 1 if you have the `m' library (-lm). */
-#undef HAVE_LIBM
 
 /* Define to 1 if you have the <limits.h> header file. */
 #undef HAVE_LIMITS_H
@@ -160,7 +153,7 @@ You must accept the terms of that agreement to use this software. */
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
-/* Use visual C++ version of set_new_handler */
+/* Use Visual C++ version of set_new_handler */
 #undef HAVE_VCPP_SET_NEW_HANDLER
 
 /* Define to 1 if you have the <wchar.h> header file. */
@@ -207,7 +200,7 @@ You must accept the terms of that agreement to use this software. */
 /* Used to test results of stat call to see if it is a directory */
 #undef JIKES_STAT_S_IFDIR
 
-/* A string to indicate the release of jikes: Version 1.17 - 27 Sept 2002 */
+/* A string to indicate the release of jikes: Version 1.18 - 21 Nov 2002 */
 #undef JIKES_VERSION_STRING
 
 /* Name of package */
@@ -320,6 +313,10 @@ You must accept the terms of that agreement to use this software. */
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
+
+/* Defined when int32_t and int are equivalent types for method overloading.
+   */
+#undef TYPE_INT32_T_IS_INT
 
 /* quick hack to use UNIX file system, fixme */
 #undef UNIX_FILE_SYSTEM

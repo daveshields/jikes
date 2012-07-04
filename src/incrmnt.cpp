@@ -1,9 +1,9 @@
-// $Id: incrmnt.cpp,v 1.27 2002/05/06 16:35:09 ericb Exp $
+// $Id: incrmnt.cpp,v 1.29 2002/12/11 00:55:03 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -20,22 +20,22 @@
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-void Control::RemoveTrashedTypes(SymbolSet &type_trash_set)
+void Control::RemoveTrashedTypes(SymbolSet& type_trash_set)
 {
-    TypeSymbol *type;
+    TypeSymbol* type;
 
     //
     // For each type T that is going to be trashed, and for each parent P of T
     // that is not itself being trashed, remove T from the set of dependents of
     // P. If T is a subtype of P it is also removed from the subtypes set.
     //
-    for (type = (TypeSymbol *) type_trash_set.FirstElement();
-         type; type = (TypeSymbol *) type_trash_set.NextElement())
+    for (type = (TypeSymbol*) type_trash_set.FirstElement();
+         type; type = (TypeSymbol*) type_trash_set.NextElement())
     {
-        TypeSymbol *parent;
-        for (parent = (TypeSymbol *) type -> static_parents -> FirstElement();
+        TypeSymbol* parent;
+        for (parent = (TypeSymbol*) type -> static_parents -> FirstElement();
              parent;
-             parent = (TypeSymbol *) type -> static_parents -> NextElement())
+             parent = (TypeSymbol*) type -> static_parents -> NextElement())
         {
             if (! type_trash_set.IsElement(parent))
             {
@@ -44,9 +44,9 @@ void Control::RemoveTrashedTypes(SymbolSet &type_trash_set)
             }
         }
 
-        for (parent = (TypeSymbol *) type -> parents -> FirstElement();
+        for (parent = (TypeSymbol*) type -> parents -> FirstElement();
              parent;
-             parent = (TypeSymbol *) type -> parents -> NextElement())
+             parent = (TypeSymbol*) type -> parents -> NextElement())
         {
             if (! type_trash_set.IsElement(parent))
             {
@@ -59,17 +59,17 @@ void Control::RemoveTrashedTypes(SymbolSet &type_trash_set)
     //
     // We can now safely delete the type.
     //
-    for (type = (TypeSymbol *) type_trash_set.FirstElement();
-         type; type = (TypeSymbol *) type_trash_set.NextElement())
+    for (type = (TypeSymbol*) type_trash_set.FirstElement();
+         type; type = (TypeSymbol*) type_trash_set.NextElement())
     {
-        PackageSymbol *package = type -> ContainingPackage();
+        PackageSymbol* package = type -> ContainingPackage();
 
         //
         // If a type that is about to be trashed was read in via a class file,
         // remove the class file. Note that invoking RemoveElement for a file
         // that it does not contain has no ill effect.
         //
-        FileSymbol *file_symbol = type -> file_symbol;
+        FileSymbol* file_symbol = type -> file_symbol;
         if (file_symbol && type -> Identity() == file_symbol -> Identity())
             input_class_file_set.RemoveElement(file_symbol);
 
@@ -88,22 +88,20 @@ void Control::RemoveTrashedTypes(SymbolSet &type_trash_set)
 }
 
 
-inline DirectoryEntry *Control::FindInputFile(FileSymbol *file_symbol)
+inline DirectoryEntry* Control::FindInputFile(FileSymbol* file_symbol)
 {
     int length
         = file_symbol -> Utf8NameLength() + FileSymbol::java_suffix_length;
 
-    char *java_name = new char[length + 1]; // +1 for '\0'
+    char* java_name = new char[length + 1]; // +1 for '\0'
     strcpy(java_name, file_symbol -> Utf8Name());
     strcat(java_name, FileSymbol::java_suffix);
 
-    DirectoryEntry *java_entry
+    DirectoryEntry* java_entry
         = file_symbol -> directory_symbol -> FindEntry(java_name, length);
 
     delete [] java_name;
-
     return java_entry;
-
 }
 
 
@@ -111,12 +109,12 @@ inline DirectoryEntry *Control::FindInputFile(FileSymbol *file_symbol)
 // For each file whose associated source (".java") has changed, add it to the
 // list to be recompiled...
 //
-void Control::FindMoreRecentInputFiles(SymbolSet &file_candidates)
+void Control::FindMoreRecentInputFiles(SymbolSet& file_candidates)
 {
-    FileSymbol *file_symbol;
-    for (file_symbol = (FileSymbol *) file_candidates.FirstElement();
+    FileSymbol* file_symbol;
+    for (file_symbol = (FileSymbol*) file_candidates.FirstElement();
          file_symbol;
-         file_symbol = (FileSymbol *) file_candidates.NextElement())
+         file_symbol = (FileSymbol*) file_candidates.NextElement())
     {
         //
         // If the type is not zipped and it is not already contained in the
@@ -131,7 +129,7 @@ void Control::FindMoreRecentInputFiles(SymbolSet &file_candidates)
             // than file_symbol then reset file_symbol to NULL. Otherwise,
             // reset file symbol to the newer file.
             //
-            DirectoryEntry *java_entry = FindInputFile(file_symbol);
+            DirectoryEntry* java_entry = FindInputFile(file_symbol);
             if (! java_entry)
             {
                 // A source file that was compiled in the previous pass no
@@ -150,28 +148,28 @@ void Control::FindMoreRecentInputFiles(SymbolSet &file_candidates)
 }
 
 
-void Control::RereadDirectory(DirectorySymbol *directory_symbol)
+void Control::RereadDirectory(DirectorySymbol* directory_symbol)
 {
     directory_symbol -> ResetDirectory();
 
-    for (int i = 0; i < directory_symbol -> subdirectories.Length(); i++)
+    for (unsigned i = 0; i < directory_symbol -> subdirectories.Length(); i++)
         RereadDirectory(directory_symbol -> subdirectories[i]);
 }
 
 
 void Control::RereadDirectories()
 {
-    for (int i = (dot_classpath_index == 0 ? 0 : 1);
+    for (unsigned i = (dot_classpath_index == 0 ? 0 : 1);
          i < classpath.Length(); i++)
     {
-        PathSymbol *path_symbol = classpath[i];
+        PathSymbol* path_symbol = classpath[i];
         if (! path_symbol -> IsZip())
             RereadDirectory(path_symbol -> RootDirectory());
     }
 }
 
 
-void Control::ComputeRecompilationSet(TypeDependenceChecker &dependence_checker)
+void Control::ComputeRecompilationSet(TypeDependenceChecker& dependence_checker)
 {
     SymbolSet type_trash_set;
 
@@ -189,13 +187,13 @@ void Control::ComputeRecompilationSet(TypeDependenceChecker &dependence_checker)
     // previous compilation.
     //
     int length_estimate = input_java_file_set.Size(); // problem size estimate
-    Tuple<TypeSymbol *> input_types(length_estimate * 2);
-    FileSymbol *file_symbol;
-    for (file_symbol = (FileSymbol *) input_java_file_set.FirstElement();
+    Tuple<TypeSymbol*> input_types(length_estimate * 2);
+    FileSymbol* file_symbol;
+    for (file_symbol = (FileSymbol*) input_java_file_set.FirstElement();
          file_symbol;
-         file_symbol = (FileSymbol *) input_java_file_set.NextElement())
+         file_symbol = (FileSymbol*) input_java_file_set.NextElement())
     {
-        for (int i = 0; i < file_symbol -> types.Length(); i++)
+        for (unsigned i = 0; i < file_symbol -> types.Length(); i++)
             input_types.Next() = file_symbol -> types[i];
     }
 
@@ -206,13 +204,13 @@ void Control::ComputeRecompilationSet(TypeDependenceChecker &dependence_checker)
     // bad types.
     //
     SymbolSet dependents_closure(length_estimate);
-    for (int i = 0; i < type_trash_bin.Length(); i++)
+    for (unsigned i = 0; i < type_trash_bin.Length(); i++)
     {
-        TypeSymbol *type = type_trash_bin[i];
+        TypeSymbol* type = type_trash_bin[i];
         if (! dependents_closure.IsElement(type))
         {
             if (type -> dependents_closure)
-                 dependents_closure.Union(*(type -> dependents_closure));
+                 dependents_closure.Union(*type -> dependents_closure);
             else dependents_closure.AddElement(type);
         }
     }
@@ -228,7 +226,7 @@ void Control::ComputeRecompilationSet(TypeDependenceChecker &dependence_checker)
     file_seen = new_set;
 
     // How much space do we need for a package declaration? estimate 64 tokens.
-    StoragePool *ast_pool = new StoragePool(64);
+    StoragePool* ast_pool = new StoragePool(64);
 
     //
     // As long as there is a new_set of files to process,...
@@ -243,17 +241,17 @@ void Control::ComputeRecompilationSet(TypeDependenceChecker &dependence_checker)
         // previous compilation via a class file. If so, add all such types to
         // the dependents closure.
         //
-        for (FileSymbol *file_symbol = (FileSymbol *) new_set.FirstElement();
-                         file_symbol;
-                         file_symbol = (FileSymbol *) new_set.NextElement())
+        for (FileSymbol* file_symbol = (FileSymbol*) new_set.FirstElement();
+             file_symbol;
+             file_symbol = (FileSymbol*) new_set.NextElement())
         {
-            for (int i = 0; i < file_symbol -> types.Length(); i++)
+            for (unsigned i = 0; i < file_symbol -> types.Length(); i++)
             {
-                TypeSymbol *type = file_symbol -> types[i];
+                TypeSymbol* type = file_symbol -> types[i];
                 if (! dependents_closure.IsElement(type))
                 {
                     if (type -> dependents_closure)
-                        dependents_closure.Union(*(type -> dependents_closure));
+                        dependents_closure.Union(*type -> dependents_closure);
                     else dependents_closure.AddElement(type);
                 }
             }
@@ -265,12 +263,12 @@ void Control::ComputeRecompilationSet(TypeDependenceChecker &dependence_checker)
 
                 scanner -> Scan(file_symbol);
 
-                LexStream *lex_stream = file_symbol -> lex_stream;
+                LexStream* lex_stream = file_symbol -> lex_stream;
                 if (lex_stream) // did we have a successful scan!
                 {
-                    AstPackageDeclaration *package_declaration
+                    AstPackageDeclaration* package_declaration
                         = parser -> PackageHeaderParse(lex_stream, ast_pool);
-                    PackageSymbol *package
+                    PackageSymbol* package
                         = (package_declaration
                            ? FindOrInsertPackage(lex_stream,
                                                  package_declaration -> name)
@@ -282,20 +280,20 @@ void Control::ComputeRecompilationSet(TypeDependenceChecker &dependence_checker)
                     // one would have been deleted. We now delete the others if
                     // any...
                     //
-                    for (int k = 0; k < lex_stream -> NumTypes(); k++)
+                    for (unsigned k = 0; k < lex_stream -> NumTypes(); k++)
                     {
                         LexStream::TokenIndex identifier_token
                             = lex_stream -> Next(lex_stream -> Type(k));
-                        if (lex_stream -> Kind(identifier_token) == TK_Identifier)
+                        NameSymbol* name_symbol =
+                            lex_stream -> NameSymbol(identifier_token);
+                        if (name_symbol)
                         {
-                            NameSymbol *name_symbol
-                                = lex_stream -> NameSymbol(identifier_token);
-                            TypeSymbol *type
+                            TypeSymbol* type
                                 = package -> FindTypeSymbol(name_symbol);
                             if (type && (! dependents_closure.IsElement(type)))
                             {
                                 if (type -> dependents_closure)
-                                    dependents_closure.Union(*(type -> dependents_closure));
+                                    dependents_closure.Union(*type -> dependents_closure);
                                 else dependents_closure.AddElement(type);
                             }
                         }
@@ -315,14 +313,14 @@ void Control::ComputeRecompilationSet(TypeDependenceChecker &dependence_checker)
         // those new types to the trash pile.
         //
         new_set.SetEmpty();
-        TypeSymbol *type;
-        for (type = (TypeSymbol *) dependents_closure.FirstElement();
+        TypeSymbol* type;
+        for (type = (TypeSymbol*) dependents_closure.FirstElement();
              type;
-             type = (TypeSymbol *) dependents_closure.NextElement())
+             type = (TypeSymbol*) dependents_closure.NextElement())
         {
             type_trash_set.AddElement(type);
 
-            FileSymbol *file_symbol = type -> file_symbol;
+            FileSymbol* file_symbol = type -> file_symbol;
             if (file_symbol && (! file_seen.IsElement(file_symbol)))
             {
                 file_seen.AddElement(file_symbol);
@@ -350,17 +348,17 @@ void Control::ComputeRecompilationSet(TypeDependenceChecker &dependence_checker)
     //
     // Clean up the types that were compiled in the previous compilation pass.
     //
-    for (int j = 0; j < input_types.Length(); j++)
+    for (unsigned j = 0; j < input_types.Length(); j++)
         input_types[j] -> RemoveCompilationReferences();
 
     //
     // Reset the closure sets in all the types that were considered in the
     // dependence checker.
     //
-    Tuple<TypeSymbol *> &type_list = dependence_checker.TypeList();
-    for (int k = 0; k < type_list.Length(); k++)
+    Tuple<TypeSymbol*>& type_list = dependence_checker.TypeList();
+    for (unsigned k = 0; k < type_list.Length(); k++)
     {
-        TypeSymbol *type = type_list[k];
+        TypeSymbol* type = type_list[k];
 
         type -> index = TypeCycleChecker::OMEGA;
         type -> unit_index = TypeCycleChecker::OMEGA;
@@ -418,7 +416,7 @@ bool Control::IncrementalRecompilation()
 
     if (!candidates.IsEmpty())
     {
-        TypeDependenceChecker dependence_checker((Control *) this, candidates,
+        TypeDependenceChecker dependence_checker(this, candidates,
                                                  type_trash_bin);
         dependence_checker.PartialOrder();
 
@@ -442,7 +440,6 @@ bool Control::IncrementalRecompilation()
                            expired_file_set.IsEmpty()
                            ? "\nnothing changed...\n" : "\nok...\n"));
     fflush(stderr);
-
     return true;
 }
 

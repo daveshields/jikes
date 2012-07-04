@@ -1,6 +1,6 @@
 man_MANS = jikes.1
 
-docdir = $(prefix)/doc/${PACKAGE}-${VERSION}
+docdir = $(datadir)/doc/${PACKAGE}-${VERSION}
 
 doc_DATA = \
 license.htm

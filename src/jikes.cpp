@@ -1,10 +1,9 @@
-// $Id: jikes.cpp,v 1.93 2002/11/06 00:58:23 ericb Exp $
+// $Id: jikes.cpp,v 1.95 2004/01/07 13:58:11 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -32,32 +31,39 @@ int main(int argc, char *argv[])
                StringConstant::U8S_command_format);
         printf("\n"
                "\tRegular options:\n"
-               "-bootclasspath path location of system classes\n"
-               "-classpath path     location of user classes and source files\n"
-               "-d dir              write class files in directory dir\n"
+               "-bootclasspath path location of system classes [default '']\n"
+               "-classpath path     location of user classes and source files [default .]\n"
+               "-d dir              write class files in directory dir [default .]\n"
                "-debug              no effect (ignored for compatibility)\n"
                "-depend | -Xdepend  recompile all used classes\n"
                "-deprecation        report uses of deprecated features\n"
 #if defined(HAVE_ENCODING)
                "-encoding encoding  use specified encoding to read source files\n"
+               "                      [default is system and locale dependent]\n"
 # if defined(HAVE_LIBICU_UC)
-               "                    this binary requires the ICU library\n"
+               "                      this binary requires the ICU library\n"
 # endif
 #endif
                "-extdirs path       location of zip/jar files with platform extensions\n"
+               "                      [default '']\n"
                "-g | -g:none | -g:{lines,vars,source}\n"
-               "                    control level of debug information in class files\n"
+               "                      control level of debug information in class files\n"
+               "                      [default lines,source]\n"
                "-J...               no effect (ignored for compatibility)\n"
                "-nowarn             do not issue warning messages\n"
                "-nowrite            do not write any class files, useful with -verbose\n"
                "-O                  optimize bytecode (presently does nothing)\n"
                "-source release     interpret source by Java SDK release rules\n"
-               "-sourcepath path    location of user source files\n"
+               "                      [default to max(target, 1.3)]\n"
+               "-sourcepath path    location of user source files [default '']\n"
                "-target release     output bytecode for Java SDK release rules\n"
+               "                      [default to source if specified, else 1.4.2]\n"
                "-verbose            list files read and written\n"
                "-Xstdout            redirect output listings to stdout\n"
+               "-Xswitchcheck       warn about fallthrough between switch statement cases\n"
                "\tEnhanced options:\n"
                "++                  compile in incremental mode\n"
+               "+a                  omit assert statements from class files\n"
                "+B                  do not invoke bytecode generator\n"
                "+D                  report errors immediately in emacs-form without buffering\n"
                "+DR=filename        generate dependence report in filename\n"
@@ -86,8 +92,8 @@ int main(int argc, char *argv[])
                "+ud                 unparse AST, with extra debugging information\n"
 #endif
                "\tMiscellaneous options:\n"
-               "-help               display this message and exit\n"
-               "-version            display version and contact information, and exit\n");
+               "-help | --help      display this message and exit\n"
+               "-version | --version  display version and contact information, and exit\n");
 
         return_code = 0;
     }

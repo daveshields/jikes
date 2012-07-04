@@ -1,4 +1,4 @@
-// $Id: jikesapi.h,v 1.17 2002/11/06 00:58:23 ericb Exp $ -*- c++ -*-
+// $Id: jikesapi.h,v 1.18 2002/11/27 17:34:59 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -48,7 +48,9 @@ public:
         SDK1_1,
         SDK1_2,
         SDK1_3,
-        SDK1_4
+        SDK1_4,
+        SDK1_4_2,
+        SDK1_5
     };
 
     // This field can be 0 through 7 to represent all debug level combinations.

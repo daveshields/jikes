@@ -1,3 +1,108 @@
+*** Jikes 1.19 was released 1 February 2004.
+
+The default -source and -target options are now 1.4 (that is, the
+assert statement now compiles by default); for the old behavior you
+must specify -source 1.3 or -target 1.3 at the command line.
+
+Command line options have been improved.
+* Some pedantic warnings are controlled by name, so that you can
+select which warnings you get (for example, not everyone wants to know
+that 1L is preferred over 1l when writing a long literal).
+* More switches have long names.
+* Default state of switches now printed with --help.
+* New switch -Xswitchcheck: Warn about fallthrough in switch
+statements (compatible with javac).
+* New switch +Pnaming-convention: Warn about naming choices that
+violate Java's naming conventions. This switch is currently ON by
+default, +Pno-naming-convention will disable it for sites that use
+a different naming convention.
+* New switch --noassert: Omits assertions from .class files (not
+recommended for normal development, but provided to allow you to do
+-source 1.4 -target 1.3).
+* Now supports -target 1.4.2 (compatible with javac, no changes from
+-target 1.4 in emitted code).
+
+Warnings are given for some common violations of Joshua Bloch's book
+"Effective Java."  Error text has been improved for method calls, to
+list the parameter types the compiler is trying to match.  Error text
+on duplicate declarations tries harder to list the original
+declaration.
+
+The identifier `enum' will become a keyword once -source 1.5 is
+implemented (JDK 1.5: addition of generics (JSR 14); attributes (JSR
+175); autoboxing, enhanced for loop, enums, static import, and varargs
+(JSR 201); and enhanced .class files (JSR 202)).  Therefore, the
+compiler now warns where it is used as an identifier.
+
+The check for method ambiguity no longer looks at the type that
+declared each method.  Code that once caused an ambiguous method error
+is now legal, per Sun bug 4761586:
+class A {
+  void m(byte b) {}
+}
+class B extends A {
+  void m(int i) {}
+  void foo(byte b) {
+    m(b); // now calls inherited A.m(byte), rather than ambiguous
+  }
+}
+
+Blank finals used inside a local class must be definitely assigned
+before the class declaration, rather than simply before all calls to a
+constructor of the local class.  For example, this code now causes an
+error:
+class C {
+  void m() {
+    final int i;
+    class Local { int j = i; } // i has not been assigned before here
+    i = 1;
+    new Local(); // even though it has been before creating a Local
+  }
+}
+
+The scope of a local class declaration statement in a switch statement
+is corrected to be only the nearest case label (unlike local variable
+declarations which remain in scope for the entire switch
+statement). This has the following effects:
+class D {
+  void m(int i) {
+    switch (i) {
+    case 0:
+      class One {}
+      class Two {}
+      int j;
+      int k;
+      break;
+    case 1:
+      // new One(); // now illegal, declaration no longer in scope
+      class Two {} // now legal, no conflict with prior declaration
+      j = 1; // remains legal as before
+      // int k; // remains illegal as before
+    }
+  }
+}
+
+Constant instance variables are now initialized sooner, so that you
+cannot view their default 0 value even with reflection.
+
+The statement 'throw null;' is now treated as an unchecked exception,
+since it always results in a NullPointerException being thrown. This
+also means that throwing null does not make a checked exception catch
+clause reachable.
+
+Improved the parser. A few more syntactic errors have been deferred to
+semantic errors, in order to give a more helpful message.  The parser
+is slightly faster [for those that know parser theory, it is now
+LALR(1) instead of LALR(2)].
+
+The compiler now works around a bug in VMs when storing an array into
+a multi-dimensional array expression that happened to be null.
+
+Extranious error messages about non zip or jar content in extdirs has
+been removed.
+
+As always, minor bug fixes for several bugs in the database.
+
 *** Jikes 1.18 was released 21 November 2002.
 
 Compilation that encounters syntax errors is more robust.
@@ -9,6 +114,6 @@ Other minor bugs have been fixed.
 The regression with empty if-clauses was fixed.
 Inheritance issues and name shadowing were improved.
 Package handling was improved somewhat.
-Many other bugs were fixed. FIXME: This list is not complete.
+Many other bugs were fixed.
 
-FIXME: This file sould be updated appropriately.
+NEWS was not properly maintained in prior versions.

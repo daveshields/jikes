@@ -1,10 +1,9 @@
-// $Id: parser.h,v 1.15 2002/07/30 16:30:02 ericb Exp $ -*- c++ -*-
+// $Id: parser.h,v 1.21 2003/10/06 12:48:42 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2003 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -21,12 +20,18 @@ namespace Jikes { // Open namespace Jikes block
 
 class StoragePool;
 class Ast;
+class AstListNode;
+class AstStatement;
+class AstBlock;
+class AstName;
+class AstType;
+class AstTypeName;
 class AstPackageDeclaration;
 class AstCompilationUnit;
+class AstModifiers;
 class AstClassBody;
-class AstInterfaceDeclaration;
-class AstListNode;
 class AstMethodBody;
+class AstArguments;
 
 enum ParseErrorCode
 {
@@ -91,24 +96,19 @@ public:
         delete [] temp_stack;
     }
 
-    AstPackageDeclaration *PackageHeaderParse(LexStream *, StoragePool *);
-    AstCompilationUnit *HeaderParse(LexStream *, StoragePool * = NULL);
-    bool InitializerParse(LexStream *, AstClassBody *);
-    bool InitializerParse(LexStream *, AstInterfaceDeclaration *);
-    bool BodyParse(LexStream *, AstClassBody *);
-    bool BodyParse(LexStream *, AstInterfaceDeclaration *);
+    AstPackageDeclaration* PackageHeaderParse(LexStream*, StoragePool*);
+    AstCompilationUnit* HeaderParse(LexStream*, StoragePool* = NULL);
+    bool InitializerParse(LexStream*, AstClassBody*);
+    bool BodyParse(LexStream*, AstClassBody*);
 
 protected:
-
     TokenObject buffer[BUFF_SIZE];
     TokenObject end_token;
 
-    Ast *HeaderParse();
-    bool Initializer(AstClassBody *);
-    bool Initializer(AstInterfaceDeclaration *);
-    bool Body(AstClassBody *);
-    bool Body(AstInterfaceDeclaration *);
-    AstMethodBody *ParseSegment(TokenObject);
+    Ast* HeaderParse();
+    bool Initializer(AstClassBody*);
+    bool Body(AstClassBody*);
+    AstMethodBody* ParseSegment(TokenObject);
 
 #define HEADERS
 #include "javaact.h"
@@ -149,17 +149,17 @@ protected:
     // shifted tokens should also have a valid subtree.
     //
     //********************************************************************
-    inline void TokenAction(TokenObject curtok) { Sym(1) = NULL; }
+    inline void TokenAction(TokenObject) { Sym(1) = NULL; }
 
-    LexStream *lex_stream;
+    LexStream* lex_stream;
 
-    StoragePool *ast_pool,
-                *body_pool,
-                *list_node_pool;
+    StoragePool* ast_pool;
+    StoragePool* body_pool;
+    StoragePool* list_node_pool;
 
-    AstListNode *free_list_nodes;
-    AstListNode *AllocateListNode();
-    void FreeCircularList(AstListNode *);
+    AstListNode* free_list_nodes;
+    AstListNode* AllocateListNode();
+    void FreeCircularList(AstListNode*);
 
     bool parse_header_only,
          parse_package_header_only;
@@ -170,20 +170,20 @@ protected:
     // track of the location of the first token on which an action
     // was executed in the corresponding state.
     //
-    Location *location_stack;
-    Ast **parse_stack;
+    Location* location_stack;
+    Ast** parse_stack;
 
     enum { STACK_INCREMENT = 256 };
 
-    int stack_length,
-        state_stack_top,
-        *stack,
+    int stack_length;
+    int state_stack_top;
+    int* stack;
 
-        temp_stack_top,
-        *temp_stack;
+    int temp_stack_top;
+    int* temp_stack;
 
-    static inline int Min(int x, int y) { return ((x) < (y) ? (x) : (y)); }
-    static inline int Max(int x, int y) { return ((x) > (y) ? (x) : (y)); }
+    static inline int Min(int x, int y) { return x < y ? x : y; }
+    static inline int Max(int x, int y) { return x > y ? x : y; }
 
     void AllocateErrorStacks();
     void ReallocateStacks();

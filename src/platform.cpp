@@ -1,10 +1,9 @@
-// $Id: platform.cpp,v 1.35 2002/10/07 22:06:16 ericb Exp $
+// $Id: platform.cpp,v 1.42 2004/01/26 06:07:17 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 2000, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 //
@@ -50,113 +49,104 @@ namespace Jikes { // Open namespace Jikes block
 char PathSeparator() { return U_SEMICOLON; } // ";"
 #else
 char PathSeparator() { return U_COLON; } // ":"
-#endif
+#endif // ! HAVE_PATHNAME_STYLE_DOS
 
 
 // Define the SystemMkdir() function with the proper
 // impl for each platform.
 
-int SystemMkdir(char *dirname) {
-
-return
-
+int SystemMkdir(char* dirname)
+{
 #ifdef HAVE_GLIBC_MKDIR
- mkdir(dirname, S_IRWXU | S_IRWXG | S_IRWXO);
-#endif
+    return mkdir(dirname, S_IRWXU | S_IRWXG | S_IRWXO);
+#endif // HAVE_GLIBC_MKDIR
 
 #ifdef HAVE_LIBC5_MKDIR
- mkdir(dirname, S_IRWXU);
-#endif
+    reteurn mkdir(dirname, S_IRWXU);
+#endif // HAVE_LIBC5_MKDIR
 
 #ifdef HAVE_WIN32_MKDIR
- mkdir(dirname);
-#endif
+    return mkdir(dirname);
+#endif // HAVE_WIN32_MKDIR
 
 #ifdef HAVE_MAC_MKDIR
- mkdir(dirname, 0);
-#endif
-
+    return mkdir(dirname, 0);
+#endif // HAVE_MAC_MKDIR
+    assert(false);
+    return 0;
 }
 
 //
 // The configure script checks each of these to see if we need our own
-// implementation
+// implementation.
 //
-
 #ifndef HAVE_WCSLEN
-size_t wcslen(const wchar_t *cs)
+size_t wcslen(const wchar_t* cs)
 {
-  int n = 0;
-  while (*cs++)
-    n++;
-
-  return n;
+    int n = 0;
+    while (*cs++)
+        n++;
+    return n;
 }
-#endif
+#endif // HAVE_WCSLEN
 
 #ifndef HAVE_WCSCPY
-wchar_t *wcscpy(wchar_t *s, const wchar_t *ct)
+wchar_t* wcscpy(wchar_t* s, const wchar_t* ct)
 {
-  wchar_t *ptr;
-  for (ptr = s; *ct; ptr++, ct++)
-    *ptr = *ct;
-  *ptr = U_NULL;
-
-  return s;
+    wchar_t* ptr;
+    for (ptr = s; *ct; ptr++, ct++)
+        *ptr = *ct;
+    *ptr = U_NULL;
+    return s;
 }
-#endif
+#endif // HAVE_WCSCPY
 
 #ifndef HAVE_WCSNCPY
-wchar_t *wcsncpy(wchar_t *s, const wchar_t *ct, size_t n)
+wchar_t* wcsncpy(wchar_t* s, const wchar_t* ct, size_t n)
 {
-  wchar_t *ptr;
-  for (ptr = s; *ct && n-- > 0; ptr++, ct++)
-    *ptr = *ct;
-  while (n-- > 0)
-    *ptr++ = U_NULL;
-
-  return s;
+    wchar_t* ptr;
+    for (ptr = s; *ct && n-- > 0; ptr++, ct++)
+        *ptr = *ct;
+    while (n-- > 0)
+        *ptr++ = U_NULL;
+    return s;
 }
-#endif
+#endif // HAVE_WCSNCPY
 
 #ifndef HAVE_WCSCAT
-wchar_t *wcscat(wchar_t *s, const wchar_t *ct)
+wchar_t* wcscat(wchar_t* s, const wchar_t* ct)
 {
-  wchar_t *ptr = s;
-
-  while (*ptr)
-    ptr++;
-  wcscpy(ptr, ct);
-
-  return s;
+    wchar_t* ptr = s;
+    while (*ptr)
+        ptr++;
+    wcscpy(ptr, ct);
+    return s;
 }
-#endif
+#endif // HAVE_WCSCAT
 
 #ifndef HAVE_WCSCMP
-int wcscmp(const wchar_t *cs, const wchar_t *ct)
+int wcscmp(const wchar_t* cs, const wchar_t* ct)
 {
-  while (*cs == *ct && *cs && *ct)
-  {
-    cs++;
-    ct++;
-  }
-
-  return (*cs == *ct ? 0 : (*cs < *ct ? -1 : 1));
+    while (*cs == *ct && *cs && *ct)
+    {
+        cs++;
+        ct++;
+    }
+    return (*cs == *ct ? 0 : (*cs < *ct ? -1 : 1));
 }
-#endif
+#endif // HAVE_WCSCMP
 
 #ifndef HAVE_WCSNCMP
-int wcsncmp(const wchar_t *cs, const wchar_t *ct, size_t n)
+int wcsncmp(const wchar_t* cs, const wchar_t* ct, size_t n)
 {
-  while (*cs == *ct && *cs && *ct && n-- > 0)
-  {
-    cs++;
-    ct++;
-  }
-
-  return (n <= 0 || *cs == *ct ? 0 : (*cs < *ct ? -1 : 1));
+    while (*cs == *ct && *cs && *ct && n-- > 0)
+    {
+        cs++;
+        ct++;
+    }
+    return (n <= 0 || *cs == *ct ? 0 : (*cs < *ct ? -1 : 1));
 }
-#endif
+#endif // HAVE_WCSNCMP
 
 
 //
@@ -164,28 +154,26 @@ int wcsncmp(const wchar_t *cs, const wchar_t *ct, size_t n)
 // This is tricky because VC++ on windows uses a non standard
 // implementation of the set_new_handler function.
 //
-
 #ifdef HAVE_VCPP_SET_NEW_HANDLER
 int OutOfMemory(size_t)
 #else
 void OutOfMemory()
-#endif
+#endif // ! HAVE_VCPP_SET_NEW_HANDLER
 {
-  fprintf(stderr, "***System Failure: Out of memory\n");
-  exit(1);
-
+    fprintf(stderr, "***System Failure: Out of memory\n");
+    exit(1);
 #ifdef HAVE_VCPP_SET_NEW_HANDLER
-  return 0;
-#endif
+    return 0;
+#endif // HAVE_VCPP_SET_NEW_HANDLER
 }
 
 void SetNewHandler()
 {
-#ifdef  HAVE_VCPP_SET_NEW_HANDLER
-  _set_new_handler(OutOfMemory);
+#ifdef HAVE_VCPP_SET_NEW_HANDLER
+    _set_new_handler(OutOfMemory);
 #else
-  set_new_handler(OutOfMemory);
-#endif
+    set_new_handler(OutOfMemory);
+#endif // ! HAVE_VCPP_SET_NEW_HANDLER
 }
 
 
@@ -199,19 +187,18 @@ void SetNewHandler()
 void FloatingPointCheck()
 {
 #ifdef HAVE_ICC_FP_BUGS
-  _control87(EM_UNDERFLOW, EM_UNDERFLOW);
-  _control87(EM_ZERODIVIDE, EM_ZERODIVIDE);
-  _control87(EM_OVERFLOW, EM_OVERFLOW);
-  _control87(EM_INVALID, EM_INVALID);
-#endif
+    _control87(EM_UNDERFLOW, EM_UNDERFLOW);
+    _control87(EM_ZERODIVIDE, EM_ZERODIVIDE);
+    _control87(EM_OVERFLOW, EM_OVERFLOW);
+    _control87(EM_INVALID, EM_INVALID);
+#endif // HAVE_ICC_FP_BUGS
 }
 
 
 //
 // This next set of functions may need some porting to work on various systems
 //
-
-int SystemStat(const char *name, struct stat *stat_struct)
+int SystemStat(const char* name, struct stat* stat_struct)
 {
     int result = ::stat(name, stat_struct);
 #ifdef HAVE_SYS_CYGWIN_H
@@ -225,49 +212,49 @@ int SystemStat(const char *name, struct stat *stat_struct)
 #endif // HAVE_SYS_CYGWIN_H
     return result;
 }
-FILE *SystemFopen(const char *name, const char *mode)
+
+FILE* SystemFopen(const char* name, const char* mode)
 {
-  return fopen(name, mode);
-}
-size_t SystemFread(char *ptr, size_t element_size, size_t count, FILE *stream)
-{
-  return fread(ptr, element_size, count, stream);
-}
-int SystemIsDirectory(char *name)
-{
-  struct stat status;
-  return ((SystemStat(name, &status) == 0 &&
-           (status.st_mode & JIKES_STAT_S_IFDIR)) ? 1 : 0);
+    return fopen(name, mode);
 }
 
-int SystemMkdirhier(char *dirname)
+size_t SystemFread(char* ptr, size_t element_size, size_t count, FILE* stream)
+{
+    return fread(ptr, element_size, count, stream);
+}
+
+int SystemIsDirectory(char* name)
+{
+    struct stat status;
+    return ((SystemStat(name, &status) == 0 &&
+             (status.st_mode & JIKES_STAT_S_IFDIR)) ? 1 : 0);
+}
+
+int SystemMkdirhier(char* dirname)
 {
     if (SystemIsDirectory(dirname))
         return 0;
 
-    for (char *ptr = dirname; *ptr; ptr++)
+    for (char* ptr = dirname; *ptr; ptr++)
     {
         char delimiter = *ptr;
         if (delimiter == U_SLASH)
         {
             *ptr = U_NULL;
-
             if (! SystemIsDirectory(dirname))
                 SystemMkdir(dirname);
-
             *ptr = delimiter;
         }
     }
     SystemMkdir(dirname);
-
     return (! SystemIsDirectory(dirname));
 }
 
 
 // Create the specified directory and also any missing parent directories.
-int SystemMkdirhierForFile(char *filename)
+int SystemMkdirhierForFile(char* filename)
 {
-    for (int i = strlen(filename); i>=0; i--)
+    for (int i = strlen(filename); i >= 0; i--)
     {
         if (filename[i] == U_SLASH)
         {
@@ -329,133 +316,98 @@ char* wstring2string(wchar_t* in)
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
-IntToString::IntToString(int num)
-{
-    if (0x80000000 == (unsigned int) num)
-    {
-        str = info;
-        strcpy(str, StringConstant::U8S_smallest_int);
-    }
-    else
-    {
-        str = &info[TAIL_INDEX];
-        *str = U_NULL;
-        int n = (num < 0 ? -num : num);
-        do
-        {
-            *--str = (U_0 + n % 10);
-            n /= 10;
-        } while (n != 0);
-
-        if (num < 0)
-            *--str = U_MINUS;
-    }
-}
-
-
-IntToWstring::IntToWstring(int num)
-{
-    if (0x80000000 == (unsigned int) num)
-    {
-        wstr = winfo;
-        wcscpy(wstr,  StringConstant::US_smallest_int);
-    }
-    else
-    {
-        wstr = &winfo[TAIL_INDEX];
-        *wstr = U_NULL;
-        int n = (num < 0 ? -num : num);
-        do
-        {
-            *--wstr = (U_0 + n % 10);
-            n /= 10;
-        } while (n != 0);
-
-        if (num < 0)
-            *--wstr = U_MINUS;
-    }
-}
-
-
-ULongToDecString::ULongToDecString(ULongInt &num)
+IntToString::IntToString(i4 num)
 {
     str = &info[TAIL_INDEX];
     *str = U_NULL;
+    u4 n = num < 0 ? - num : num;
+    do
+    {
+        *--str = U_0 + n % 10;
+        n /= 10;
+    } while (n != 0);
+    if (num < 0)
+        *--str = U_MINUS;
+}
 
-    ULongInt n = num; // make a copy in order to not destroy reference argument
+IntToString::IntToString(u4 num, int width)
+{
+    str = &info[width];
+    *str = U_NULL;
+    do
+    {
+        char c = num & 0xf;
+        *--str = c < 10 ? U_0 + c : U_a - 10 + c;
+        num >>= 4;
+    } while (str != info);
+}
+
+
+IntToWstring::IntToWstring(i4 num)
+{
+    wstr = &winfo[TAIL_INDEX];
+    *wstr = U_NULL;
+    u4 n = num < 0 ? - num : num;
+    do
+    {
+        *--wstr = U_0 + n % 10;
+        n /= 10;
+    } while (n != 0);
+    if (num < 0)
+        *--wstr = U_MINUS;
+}
+
+
+LongToString::LongToString(const LongInt& num)
+{
+    str = &info[TAIL_INDEX];
+    *str = U_NULL;
+    ULongInt n = num < 0 ? (ULongInt) - num : (ULongInt) num;
     do
     {
         *--str = U_0 + (n % 10).LowWord();
         n /= 10;
     } while (n != 0);
+    if (num.HighWord() & 0x80000000)
+        *--str = U_MINUS;
+    base = str;
 }
 
-
-LongToOctString::LongToOctString(BaseLong &num)
+LongToString::LongToString(const ULongInt& num)
 {
     str = &info[TAIL_INDEX];
     *str = U_NULL;
-
-    ULongInt n = num; // make a copy in order to not destroy reference argument
+    ULongInt n = num;
     do
     {
-        *--str = U_0 + (n % 8).LowWord();
-        n /= 8;
+        *--str = U_0 + (n % 10).LowWord();
+        n /= 10;
     } while (n != 0);
-
-    *--str = U_0;
+    base = str;
 }
 
-
-LongToHexString::LongToHexString(BaseLong &num)
+LongToString::LongToString(const BaseLong& num, bool octal)
 {
     str = &info[TAIL_INDEX];
     *str = U_NULL;
-
-    ULongInt n = num; // make a copy in order to not destroy reference argument
+    ULongInt value = num;
     do
     {
-        *--str = U_0 + (n % 16).LowWord();
-        n /= 16;
-    } while (n != 0);
-
-    *--str = U_x;
-    *--str = U_0;
-}
-
-
-LongToDecString::LongToDecString(LongInt &num)
-{
-    if (num.HighWord() == 0x80000000 && num.LowWord() == 0x00000000)
-    {
-        str = info;
-        strcpy(str,  StringConstant::U8S_smallest_long_int);
-    }
-    else
-    {
-        str = &info[TAIL_INDEX];
-        *str = U_NULL;
-
-        // compute absolute value
-        ULongInt n = (num.HighWord() & 0x80000000 ?
-            (ULongInt) -num : (ULongInt) num);
-
-        do
-        {
-            *--str = U_0 + (n % 10).LowWord();
-            n /= 10;
-        } while (n != 0);
-
-        if (num.HighWord() & 0x80000000)
-            *--str = U_MINUS;
-    }
+        char c = value.LowWord() & (octal ? 7 : 0xf);
+        *--str = c < 10 ? U_0 + c : U_a - 10 + c;
+        value >>= (octal ? 3 : 4);
+    } while (value != 0);
+    base = str - 1;
+    if (! octal)
+        *base-- = U_x;
+    *base = U_0;
 }
 
 
 //
 // Convert an double to its character string representation.
 //
-FloatToString::FloatToString(const IEEEfloat &f)
+FloatToString::FloatToString(const IEEEfloat& f)
 {
     int bbits, b2, b5, be, i,
         j, j1, k, m2, m5, s2, s5;
@@ -465,7 +417,8 @@ FloatToString::FloatToString(const IEEEfloat &f)
         denorm,    // f is denormalized
         round;     // round trailing 9's up
     IEEEfloat fs, f1;
-    char *s, dig;
+    char* s;
+    char dig;
 
     //
     // Start with exceptional cases: zero, infinity, NaN
@@ -727,7 +680,7 @@ FloatToString::FloatToString(const IEEEfloat &f)
     Format(s, k, neg);
 }
 
-void FloatToString::Format(char *s, int exp, bool neg)
+void FloatToString::Format(char* s, int exp, bool neg)
 {
     //
     // at this point, str contains just the precise digits in the answer,
@@ -819,7 +772,7 @@ void FloatToString::Format(char *s, int exp, bool neg)
 //
 // Convert an double to its character string representation.
 //
-DoubleToString::DoubleToString(const IEEEdouble &d)
+DoubleToString::DoubleToString(const IEEEdouble& d)
 {
     int bbits, b2, b5, be, i,
         j, j1, k, m2, m5, s2, s5;
@@ -829,7 +782,8 @@ DoubleToString::DoubleToString(const IEEEdouble &d)
         denorm,    // f is denormalized
         round;     // round trailing 9's up
     IEEEdouble ds, d1;
-    char *s, dig;
+    char* s;
+    char dig;
 
     //
     // Start with exceptional cases: zero, infinity, NaN
@@ -872,7 +826,8 @@ DoubleToString::DoubleToString(const IEEEdouble &d)
     BigInt b(d, be, bbits);
     LongInt x;
     i = d.SplitInto(x);
-    d1 = IEEEdouble(x) / IEEEdouble(LongInt(1) << IEEEdouble::FractSize());
+    d1 = IEEEdouble(x) /
+        IEEEdouble(LongInt(LongInt(1) << IEEEdouble::FractSize()));
     denorm = i <= -IEEEdouble::Bias();
     //
     // log(x)   ~=~ log(1.5) + (x-1.5)/1.5
@@ -1093,7 +1048,7 @@ DoubleToString::DoubleToString(const IEEEdouble &d)
     Format(s, k, neg);
 }
 
-void DoubleToString::Format(char *s, int exp, bool neg)
+void DoubleToString::Format(char* s, int exp, bool neg)
 {
     //
     // at this point, str contains just the precise digits in the answer,
@@ -1184,22 +1139,22 @@ void DoubleToString::Format(char *s, int exp, bool neg)
 }
 
 
-Ostream &Ostream::operator<<(LongInt a)
+Ostream& Ostream::operator<<(LongInt a)
 {
     if (os -> flags() & os -> dec)
     {
-        LongToDecString long_int(a);
+        LongToString long_int(a);
         *os << long_int.String();
     }
     else if (os -> flags() & os -> oct)
     {
-        LongToOctString long_int(a);
+        LongToString long_int(a, true);
         *os << (os -> flags() & os -> showbase
                 ? long_int.StringWithBase() : long_int.String());
     }
     else if (os -> flags() & os -> hex)
     {
-        LongToHexString long_int(a);
+        LongToString long_int(a, false);
         *os << (os -> flags() & os -> showbase
                 ? long_int.StringWithBase() : long_int.String());
     }
@@ -1212,22 +1167,22 @@ Ostream &Ostream::operator<<(LongInt a)
     return *this;
 }
 
-Ostream &Ostream::operator<<(ULongInt a)
+Ostream& Ostream::operator<<(ULongInt a)
 {
     if (os -> flags() & os -> dec)
     {
-        ULongToDecString ulong_int(a);
+        LongToString ulong_int(a);
         *os << ulong_int.String();
     }
     else if (os -> flags() & os -> oct)
     {
-        LongToOctString ulong_int(a);
+        LongToString ulong_int(a, true);
         *os << (os -> flags() & os -> showbase
                 ? ulong_int.StringWithBase() : ulong_int.String());
     }
     else if (os -> flags() & os -> hex)
     {
-        LongToHexString ulong_int(a);
+        LongToString ulong_int(a, false);
         *os << (os -> flags() & os -> showbase
                 ? ulong_int.StringWithBase() : ulong_int.String());
     }
@@ -1243,465 +1198,526 @@ Ostream &Ostream::operator<<(ULongInt a)
 //
 // Punctuation and operators
 //
-wchar_t StringConstant::US_AND[] = {U_AM, U_NU}; // L"&"
-wchar_t StringConstant::US_AND_AND[] = {U_AM, U_AM, U_NU}; // L"&&"
-wchar_t StringConstant::US_AND_EQUAL[] = {U_AM, U_EQ, U_NU}; // L"&="
-wchar_t StringConstant::US_COLON[] = {U_CO, U_NU}; // L":"
-wchar_t StringConstant::US_COMMA[] = {U_CM, U_NU}; // L","
-wchar_t StringConstant::US_DIVIDE[] = {U_SL, U_NU}; // L"/"
-wchar_t StringConstant::US_DIVIDE_EQUAL[] = {U_SL, U_EQ, U_NU}; // L"/="
-wchar_t StringConstant::US_DOT[] = {U_DO, U_NU}; // L"."
-wchar_t StringConstant::US_EMPTY[] = {U_NU}; // L""
-wchar_t StringConstant::US_EQUAL[] = {U_EQ, U_NU}; // L"="
-wchar_t StringConstant::US_EQUAL_EQUAL[] = {U_EQ, U_EQ, U_NU}; // L"=="
-wchar_t StringConstant::US_GREATER[] = {U_GT, U_NU}; // L">"
-wchar_t StringConstant::US_GREATER_EQUAL[] = {U_GT, U_EQ, U_NU}; // L">="
-wchar_t StringConstant::US_LBRACE[] = {U_OS, U_NU}; // L"{"
-wchar_t StringConstant::US_LBRACKET[] = {U_LB, U_NU}; // L"["
-wchar_t StringConstant::US_LEFT_SHIFT[] = {U_LT, U_LT, U_NU}; // L"<<"
-wchar_t StringConstant::US_LEFT_SHIFT_EQUAL[] = {U_LT, U_LT, U_EQ,
-                                                 U_NU}; // L"<<="
-wchar_t StringConstant::US_LESS[] = {U_LT, U_NU}; // L"<"
-wchar_t StringConstant::US_LESS_EQUAL[] = {U_LT, U_EQ, U_NU}; // L"<="
-wchar_t StringConstant::US_LPAREN[] = {U_LP, U_NU}; // L"("
-wchar_t StringConstant::US_MINUS[] = {U_MI, U_NU}; // L"-"
-wchar_t StringConstant::US_MINUS_EQUAL[] = {U_MI, U_EQ, U_NU}; // L"-="
-wchar_t StringConstant::US_MINUS_MINUS[] = {U_MI, U_MI, U_NU}; // L"--"
-wchar_t StringConstant::US_MULTIPLY[] = {U_ST, U_NU}; // L"*"
-wchar_t StringConstant::US_MULTIPLY_EQUAL[] = {U_ST, U_EQ, U_NU}; // L"*="
-wchar_t StringConstant::US_NOT[] = {U_EX, U_NU}; // L"!"
-wchar_t StringConstant::US_NOT_EQUAL[] = {U_EX, U_EQ, U_NU}; // L"!="
-wchar_t StringConstant::US_OR[] = {U_BA, U_NU}; // L"|"
-wchar_t StringConstant::US_OR_EQUAL[] = {U_BA, U_EQ, U_NU}; // L"|="
-wchar_t StringConstant::US_OR_OR[] = {U_BA, U_BA, U_NU}; // L"||"
-wchar_t StringConstant::US_PLUS[] = {U_PL, U_NU}; // L"+"
-wchar_t StringConstant::US_PLUS_EQUAL[] = {U_PL, U_EQ, U_NU}; // L"+="
-wchar_t StringConstant::US_PLUS_PLUS[] = {U_PL, U_PL, U_NU}; // L"++"
-wchar_t StringConstant::US_QUESTION[] = {U_QU, U_NU}; // L"?"
-wchar_t StringConstant::US_RBRACE[] = {U_CS, U_NU}; // L"}"
-wchar_t StringConstant::US_RBRACKET[] = {U_RB, U_NU}; // L"]"
-wchar_t StringConstant::US_REMAINDER[] = {U_PE, U_NU}; // L"%"
-wchar_t StringConstant::US_REMAINDER_EQUAL[] = {U_PE, U_EQ, U_NU}; // L"%="
-wchar_t StringConstant::US_RIGHT_SHIFT[] = {U_GT, U_GT, U_NU}; // L">>"
-wchar_t StringConstant::US_RIGHT_SHIFT_EQUAL[] = {U_GT, U_GT, U_EQ,
-                                                  U_NU}; // L">>="
-wchar_t StringConstant::US_RPAREN[] = {U_RP, U_NU}; // L")"
-wchar_t StringConstant::US_SEMICOLON[] = {U_SC, U_NU}; // L";"
-wchar_t StringConstant::US_TWIDDLE[] = {U_TI, U_NU}; // L"~"
-wchar_t StringConstant::US_UNSIGNED_RIGHT_SHIFT[] = {U_GT, U_GT, U_GT,
-                                                     U_NU}; // L">>>"
-wchar_t StringConstant::US_UNSIGNED_RIGHT_SHIFT_EQUAL[] = {U_GT, U_GT,
-                                                           U_GT, U_EQ,
-                                                           U_NU}; // L">>>="
-wchar_t StringConstant::US_XOR[] = {U_CA, U_NU}; // L"^"
-wchar_t StringConstant::US_XOR_EQUAL[] = {U_CA, U_EQ, U_NU}; // L"^="
+const wchar_t StringConstant::US_AND[] = {U_AM, U_NU}; // L"&"
+const wchar_t StringConstant::US_AND_AND[] = {U_AM, U_AM, U_NU}; // L"&&"
+const wchar_t StringConstant::US_AND_EQUAL[] = {U_AM, U_EQ, U_NU}; // L"&="
+const wchar_t StringConstant::US_AT[] = {U_AT, U_NU}; // L"@"
+const wchar_t StringConstant::US_COLON[] = {U_CO, U_NU}; // L":"
+const wchar_t StringConstant::US_COMMA[] = {U_CM, U_NU}; // L","
+const wchar_t StringConstant::US_DIVIDE[] = {U_SL, U_NU}; // L"/"
+const wchar_t StringConstant::US_DIVIDE_EQUAL[] = {U_SL, U_EQ, U_NU}; // L"/="
+const wchar_t StringConstant::US_DOT[] = {U_DO, U_NU}; // L"."
+const wchar_t StringConstant::US_DOT_DOT_DOT[] = {
+    U_DO, U_DO, U_DO, U_NU}; // L"..."
+const wchar_t StringConstant::US_EMPTY[] = {U_NU}; // L""
+const wchar_t StringConstant::US_EQUAL[] = {U_EQ, U_NU}; // L"="
+const wchar_t StringConstant::US_EQUAL_EQUAL[] = {U_EQ, U_EQ, U_NU}; // L"=="
+const wchar_t StringConstant::US_GREATER[] = {U_GT, U_NU}; // L">"
+const wchar_t StringConstant::US_GREATER_EQUAL[] = {U_GT, U_EQ, U_NU}; // L">="
+const wchar_t StringConstant::US_LBRACE[] = {U_OS, U_NU}; // L"{"
+const wchar_t StringConstant::US_LBRACKET[] = {U_LB, U_NU}; // L"["
+const wchar_t StringConstant::US_LEFT_SHIFT[] = {U_LT, U_LT, U_NU}; // L"<<"
+const wchar_t StringConstant::US_LEFT_SHIFT_EQUAL[] = {
+    U_LT, U_LT, U_EQ, U_NU}; // L"<<="
+const wchar_t StringConstant::US_LESS[] = {U_LT, U_NU}; // L"<"
+const wchar_t StringConstant::US_LESS_EQUAL[] = {U_LT, U_EQ, U_NU}; // L"<="
+const wchar_t StringConstant::US_LPAREN[] = {U_LP, U_NU}; // L"("
+const wchar_t StringConstant::US_MINUS[] = {U_MI, U_NU}; // L"-"
+const wchar_t StringConstant::US_MINUS_EQUAL[] = {U_MI, U_EQ, U_NU}; // L"-="
+const wchar_t StringConstant::US_MINUS_MINUS[] = {U_MI, U_MI, U_NU}; // L"--"
+const wchar_t StringConstant::US_MULTIPLY[] = {U_ST, U_NU}; // L"*"
+const wchar_t StringConstant::US_MULTIPLY_EQUAL[] = {
+    U_ST, U_EQ, U_NU}; // L"*="
+const wchar_t StringConstant::US_NOT[] = {U_EX, U_NU}; // L"!"
+const wchar_t StringConstant::US_NOT_EQUAL[] = {U_EX, U_EQ, U_NU}; // L"!="
+const wchar_t StringConstant::US_OR[] = {U_BA, U_NU}; // L"|"
+const wchar_t StringConstant::US_OR_EQUAL[] = {U_BA, U_EQ, U_NU}; // L"|="
+const wchar_t StringConstant::US_OR_OR[] = {U_BA, U_BA, U_NU}; // L"||"
+const wchar_t StringConstant::US_PLUS[] = {U_PL, U_NU}; // L"+"
+const wchar_t StringConstant::US_PLUS_EQUAL[] = {U_PL, U_EQ, U_NU}; // L"+="
+const wchar_t StringConstant::US_PLUS_PLUS[] = {U_PL, U_PL, U_NU}; // L"++"
+const wchar_t StringConstant::US_QUESTION[] = {U_QU, U_NU}; // L"?"
+const wchar_t StringConstant::US_RBRACE[] = {U_CS, U_NU}; // L"}"
+const wchar_t StringConstant::US_RBRACKET[] = {U_RB, U_NU}; // L"]"
+const wchar_t StringConstant::US_REMAINDER[] = {U_PE, U_NU}; // L"%"
+const wchar_t StringConstant::US_REMAINDER_EQUAL[] = {
+    U_PE, U_EQ, U_NU}; // L"%="
+const wchar_t StringConstant::US_RIGHT_SHIFT[] = {U_GT, U_GT, U_NU}; // L">>"
+const wchar_t StringConstant::US_RIGHT_SHIFT_EQUAL[] = {
+    U_GT, U_GT, U_EQ, U_NU}; // L">>="
+const wchar_t StringConstant::US_RPAREN[] = {U_RP, U_NU}; // L")"
+const wchar_t StringConstant::US_SEMICOLON[] = {U_SC, U_NU}; // L";"
+const wchar_t StringConstant::US_TWIDDLE[] = {U_TI, U_NU}; // L"~"
+const wchar_t StringConstant::US_UNSIGNED_RIGHT_SHIFT[] = {
+    U_GT, U_GT, U_GT, U_NU}; // L">>>"
+const wchar_t StringConstant::US_UNSIGNED_RIGHT_SHIFT_EQUAL[] = {
+    U_GT, U_GT, U_GT, U_EQ, U_NU}; // L">>>="
+const wchar_t StringConstant::US_XOR[] = {U_CA, U_NU}; // L"^"
+const wchar_t StringConstant::US_XOR_EQUAL[] = {U_CA, U_EQ, U_NU}; // L"^="
 
 //
 // Common constant pool entries
 //
-wchar_t StringConstant::US_AssertionError[] = {
+const wchar_t StringConstant::US_AssertionError[] = {
     U_A, U_s, U_s, U_e, U_r, U_t, U_i, U_o, U_n,
     U_E, U_r, U_r, U_o, U_r, U_NU}; // L"AssertionError"
-wchar_t StringConstant::US_Boolean[] = {
+const wchar_t StringConstant::US_Boolean[] = {
     U_B, U_o, U_o, U_l, U_e, U_a, U_n, U_NU}; // L"Boolean"
-wchar_t StringConstant::US_Byte[] = {U_B, U_y, U_t, U_e, U_NU}; // L"Byte"
-wchar_t StringConstant::US_Character[] = {
+const wchar_t StringConstant::US_Byte[] = {
+    U_B, U_y, U_t, U_e, U_NU}; // L"Byte"
+const wchar_t StringConstant::US_Character[] = {
     U_C, U_h, U_a, U_r, U_a, U_c, U_t, U_e, U_r, U_NU}; // L"Character"
-wchar_t StringConstant::US_Class[] = {
+const wchar_t StringConstant::US_Class[] = {
     U_C, U_l, U_a, U_s, U_s, U_NU}; // L"Class"
-wchar_t StringConstant::US_ClassNotFoundException[] = {
-    U_C, U_l, U_a, U_s, U_s,
-    U_N, U_o, U_t, U_F, U_o, U_u, U_n, U_d,
+const wchar_t StringConstant::US_ClassNotFoundException[] = {
+    U_C, U_l, U_a, U_s, U_s, U_N, U_o, U_t, U_F, U_o, U_u, U_n, U_d,
     U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n,
     U_NU}; // L"ClassNotFoundException"
-wchar_t StringConstant::US_Cloneable[] = {
+const wchar_t StringConstant::US_Cloneable[] = {
     U_C, U_l, U_o, U_n, U_e, U_a, U_b, U_l, U_e, U_NU}; // L"Cloneable"
-wchar_t StringConstant::US_Comparable[] = {
+const wchar_t StringConstant::US_Comparable[] = {
     U_C, U_o, U_m, U_p, U_a, U_r, U_a, U_b, U_l, U_e, U_NU}; // L"Comparable"
-wchar_t StringConstant::US_Double[] = {
+const wchar_t StringConstant::US_Double[] = {
     U_D, U_o, U_u, U_b, U_l, U_e, U_NU}; // L"Double"
-wchar_t StringConstant::US_Error[] = {
+const wchar_t StringConstant::US_equals[] = {
+    U_e, U_q, U_u, U_a, U_l, U_s, U_NU}; // L"equals"
+const wchar_t StringConstant::US_Error[] = {
     U_E, U_r, U_r, U_o, U_r, U_NU}; // L"Error"
-wchar_t StringConstant::US_Exception[] = {
+const wchar_t StringConstant::US_Exception[] = {
     U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n, U_NU}; // L"Exception"
-wchar_t StringConstant::US_Float[] = {
+const wchar_t StringConstant::US_Float[] = {
     U_F, U_l, U_o, U_a, U_t, U_NU};  // L"Float"
-wchar_t StringConstant::US_Integer[] = {
+const wchar_t StringConstant::US_hashCode[] = {
+    U_h, U_a, U_s, U_h, U_C, U_o, U_d, U_e, U_NU}; // L"hashCode"
+const wchar_t StringConstant::US_Integer[] = {
     U_I, U_n, U_t, U_e, U_g, U_e, U_r, U_NU}; // L"Integer"
-wchar_t StringConstant::US_L[] = {U_L, U_NU}; // L"L"
-wchar_t StringConstant::US_Long[]  = {U_L, U_o, U_n, U_g, U_NU}; // L"Long"
-wchar_t StringConstant::US_NoClassDefFoundError[] = {
-    U_N, U_o, U_C, U_l, U_a, U_s, U_s,
-    U_D, U_e, U_f, U_F, U_o, U_u, U_n, U_d,
+const wchar_t StringConstant::US_L[] = {U_L, U_NU}; // L"L"
+const wchar_t StringConstant::US_Long[]  = {
+    U_L, U_o, U_n, U_g, U_NU}; // L"Long"
+const wchar_t StringConstant::US_NoClassDefFoundError[] = {
+    U_N, U_o, U_C, U_l, U_a, U_s, U_s, U_D, U_e, U_f, U_F, U_o, U_u, U_n, U_d,
     U_E, U_r, U_r, U_o, U_r, U_NU}; // L"NoClassDefFoundError"
-wchar_t StringConstant::US_Object[] = {
+const wchar_t StringConstant::US_Object[] = {
     U_O, U_b, U_j, U_e, U_c, U_t, U_NU}; // L"Object"
-wchar_t StringConstant::US_PObject[] = {
+const wchar_t StringConstant::US_PObject[] = {
     U_P, U_O, U_b, U_j, U_e, U_c, U_t, U_NU}; // L"PObject"
-wchar_t StringConstant::US_RuntimeException[] = {
+const wchar_t StringConstant::US_RuntimeException[] = {
     U_R, U_u, U_n, U_t, U_i, U_m, U_e,
     U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n, U_NU}; // L"RuntimeException"
-wchar_t StringConstant::US_Serializable[] = {
+const wchar_t StringConstant::US_Serializable[] = {
     U_S, U_e, U_r, U_i, U_a, U_l, U_i, U_z, U_a, U_b, U_l, U_e,
     U_NU}; // L"Serializable"
-wchar_t StringConstant::US_Short[] = {
+const wchar_t StringConstant::US_serialVersionUID[] = {
+    U_s, U_e, U_r, U_i, U_a, U_l, U_V, U_e, U_r, U_s, U_i, U_o,
+    U_n, U_U, U_I, U_D, U_NU}; // L"serialVersionUID"
+const wchar_t StringConstant::US_Short[] = {
     U_S, U_h, U_o, U_r, U_t, U_NU}; // L"Short"
-wchar_t StringConstant::US_String[] = {
+const wchar_t StringConstant::US_String[] = {
     U_S, U_t, U_r, U_i, U_n, U_g, U_NU}; // L"String"
-wchar_t StringConstant::US_StringBuffer[] = {
+const wchar_t StringConstant::US_StringBuffer[] = {
     U_S, U_t, U_r, U_i, U_n, U_g,
     U_B, U_u, U_f, U_f, U_e, U_r, U_NU}; // L"StringBuffer"
-wchar_t StringConstant::US_TYPE[] = {U_T, U_Y, U_P, U_E, U_NU}; // L"TYPE"
-wchar_t StringConstant::US_Throwable[] = {
+const wchar_t StringConstant::US_TYPE[] = {
+    U_T, U_Y, U_P, U_E, U_NU}; // L"TYPE"
+const wchar_t StringConstant::US_Throwable[] = {
     U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e, U_NU}; // L"Throwable"
-wchar_t StringConstant::US_Void[] = {U_V, U_o, U_i, U_d, U_NU}; // L"Void"
-wchar_t StringConstant::US_DO[] = {U_DO, U_NU}; // L"."
-wchar_t StringConstant::US_DO_DO[] = {U_DO, U_DO, U_NU}; // L".."
-wchar_t StringConstant::US_DS[] = {U_DS, U_NU}; // L"$"
-wchar_t StringConstant::US_LB_RB[] = {U_LB, U_RB, U_NU}; // L"[]"
-wchar_t StringConstant::US_LT_clinit_GT[] = {
+const wchar_t StringConstant::US_Void[] = {
+    U_V, U_o, U_i, U_d, U_NU}; // L"Void"
+const wchar_t StringConstant::US_DO[] = {U_DO, U_NU}; // L"."
+const wchar_t StringConstant::US_DO_DO[] = {U_DO, U_DO, U_NU}; // L".."
+const wchar_t StringConstant::US_DS[] = {U_DS, U_NU}; // L"$"
+const wchar_t StringConstant::US_LB_RB[] = {U_LB, U_RB, U_NU}; // L"[]"
+const wchar_t StringConstant::US_LT_clinit_GT[] = {
     U_LT, U_c, U_l, U_i, U_n, U_i, U_t, U_GT, U_NU}; // L"<clinit>"
-wchar_t StringConstant::US_LT_init_GT[] = {
+const wchar_t StringConstant::US_LT_init_GT[] = {
     U_LT, U_i, U_n, U_i, U_t, U_GT, U_NU}; // L"<init>"
-wchar_t StringConstant::US_QU_QU[] = {U_QU, U_QU, U_NU};  // L"??"
-wchar_t StringConstant::US_SC[] = {U_SC, U_NU}; // L";"
-wchar_t StringConstant::US_SL[] = {U_SL, U_NU}; // L"/"
-wchar_t StringConstant::US_zip[] = {U_z, U_i, U_p, U_NU}; // L"zip"
-wchar_t StringConstant::US_jar[] = {U_j, U_a, U_r, U_NU}; // L"jar"
+const wchar_t StringConstant::US_QU_QU[] = {U_QU, U_QU, U_NU};  // L"??"
+const wchar_t StringConstant::US_SC[] = {U_SC, U_NU}; // L";"
+const wchar_t StringConstant::US_SL[] = {U_SL, U_NU}; // L"/"
+const wchar_t StringConstant::US_zip[] = {U_z, U_i, U_p, U_NU}; // L"zip"
+const wchar_t StringConstant::US_jar[] = {U_j, U_a, U_r, U_NU}; // L"jar"
 
 //
 // Used in synthetic (compiler-generated) code.
 //
-wchar_t StringConstant::US_DOLLAR_noassert[] = {
+const wchar_t StringConstant::US_DOLLAR_noassert[] = {
     U_DS, U_n, U_o, U_a, U_s, U_s, U_e, U_r, U_t, U_NU}; // L"$noassert"
-wchar_t StringConstant::US_append[] = {
+const wchar_t StringConstant::US_append[] = {
     U_a, U_p, U_p, U_e, U_n, U_d, U_NU}; // L"append"
-wchar_t StringConstant::US_array[] = {
+const wchar_t StringConstant::US_array[] = {
     U_a, U_r, U_r, U_a, U_y, U_NU}; // L"array"
-wchar_t StringConstant::US_access_DOLLAR[] = {
+const wchar_t StringConstant::US_access_DOLLAR[] = {
     U_a, U_c, U_c, U_e, U_s, U_s, U_DS, U_NU}; // L"access$"
-wchar_t StringConstant::US_class_DOLLAR[] = {
+const wchar_t StringConstant::US_class_DOLLAR[] = {
     U_c, U_l, U_a, U_s, U_s, U_DS, U_NU}; // L"class$"
-wchar_t StringConstant::US_clone[] = {
+const wchar_t StringConstant::US_clone[] = {
     U_c, U_l, U_o, U_n, U_e, U_NU}; // L"clone"
-wchar_t StringConstant::US_constructor_DOLLAR[] = {
+const wchar_t StringConstant::US_constructor_DOLLAR[] = {
     U_c, U_o, U_n, U_s, U_t, U_r, U_u, U_c, U_t, U_o, U_r, U_DS,
     U_NU}; // L"constructor$"
-wchar_t StringConstant::US_desiredAssertionStatus[] = {
+const wchar_t StringConstant::US_desiredAssertionStatus[] = {
     U_d, U_e, U_s, U_i, U_r, U_e, U_d,
     U_A, U_s, U_s, U_e, U_r, U_t, U_i, U_o, U_n,
     U_S, U_t, U_a, U_t, U_u, U_s, U_NU}; // L"desiredAssertionStatus"
-wchar_t StringConstant::US_forName[] = {
+const wchar_t StringConstant::US_forName[] = {
     U_f, U_o, U_r, U_N, U_a, U_m, U_e, U_NU}; // L"forName"
-wchar_t StringConstant::US_getClass[] = {
+const wchar_t StringConstant::US_getClass[] = {
     U_g, U_e, U_t, U_C, U_l, U_a, U_s, U_s, U_NU}; // L"getClass"
-wchar_t StringConstant::US_getComponentType[] = {
+const wchar_t StringConstant::US_getComponentType[] = {
     U_g, U_e, U_t, U_C, U_o, U_m, U_p, U_o, U_n, U_e, U_n, U_t,
     U_T, U_y, U_p, U_e, U_NU}; // L"getComponentType"
-wchar_t StringConstant::US_getMessage[] = {
+const wchar_t StringConstant::US_getMessage[] = {
     U_g, U_e, U_t, U_M, U_e, U_s, U_s, U_a, U_g, U_e, U_NU}; // L"getMessage"
-wchar_t StringConstant::US_initCause[] = {
+const wchar_t StringConstant::US_initCause[] = {
     U_i, U_n, U_i, U_t, U_C, U_a, U_u, U_s, U_e, U_NU}; // L"initCause"
-wchar_t StringConstant::US_java_SL_io[] = {
+const wchar_t StringConstant::US_java_SL_io[] = {
     U_j, U_a, U_v, U_a, U_SL, U_i, U_o, U_NU}; // L"java/io"
-wchar_t StringConstant::US_java_SL_lang[] = {
+const wchar_t StringConstant::US_java_SL_lang[] = {
     U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_NU}; // L"java/lang"
-wchar_t StringConstant::US_length[] = {
+const wchar_t StringConstant::US_length[] = {
     U_l, U_e, U_n, U_g, U_t, U_h, U_NU}; // L"length"
-wchar_t StringConstant::US_this_DOLLAR[] = {
+const wchar_t StringConstant::US_this_DOLLAR[] = {
     U_t, U_h, U_i, U_s, U_DS, U_NU}; // L"this$"
-wchar_t StringConstant::US_this0[] = {
+const wchar_t StringConstant::US_this0[] = {
     U_t, U_h, U_i, U_s, U_DS, U_0, U_NU}; // L"this$0"
-wchar_t StringConstant::US_toString[] = {
+const wchar_t StringConstant::US_toString[] = {
     U_t, U_o, U_S, U_t, U_r, U_i, U_n, U_g, U_NU}; // L"toString"
-wchar_t StringConstant::US_val_DOLLAR[] = {
+const wchar_t StringConstant::US_val_DOLLAR[] = {
     U_v, U_a, U_l, U_DS, U_NU}; // L"val$"
 
 //
 // Java keywords.
 //
-wchar_t StringConstant::US_abstract[] = {
+const wchar_t StringConstant::US_abstract[] = {
     U_a, U_b, U_s, U_t, U_r, U_a, U_c, U_t, U_NU}; // L"abstract"
-wchar_t StringConstant::US_assert[] = {
+const wchar_t StringConstant::US_assert[] = {
     U_a, U_s, U_s, U_e, U_r, U_t, U_NU}; // L"assert"
-wchar_t StringConstant::US_boolean[] = {
+const wchar_t StringConstant::US_boolean[] = {
     U_b, U_o, U_o, U_l, U_e, U_a, U_n, U_NU}; // L"boolean"
-wchar_t StringConstant::US_break[] = {
+const wchar_t StringConstant::US_break[] = {
     U_b, U_r, U_e, U_a, U_k, U_NU}; // L"break"
-wchar_t StringConstant::US_byte[] = {U_b, U_y, U_t, U_e, U_NU}; // L"byte"
-wchar_t StringConstant::US_case[] = {U_c, U_a, U_s, U_e, U_NU}; // L"case"
-wchar_t StringConstant::US_catch[] = {
+const wchar_t StringConstant::US_byte[] = {
+    U_b, U_y, U_t, U_e, U_NU}; // L"byte"
+const wchar_t StringConstant::US_case[] = {
+    U_c, U_a, U_s, U_e, U_NU}; // L"case"
+const wchar_t StringConstant::US_catch[] = {
     U_c, U_a, U_t, U_c, U_h, U_NU}; // L"catch"
-wchar_t StringConstant::US_char[] = {U_c, U_h, U_a, U_r, U_NU}; // L"char"
-wchar_t StringConstant::US_class[] = {
+const wchar_t StringConstant::US_char[] = {
+    U_c, U_h, U_a, U_r, U_NU}; // L"char"
+const wchar_t StringConstant::US_class[] = {
     U_c, U_l, U_a, U_s, U_s, U_NU}; // L"class"
-wchar_t StringConstant::US_const[] = {
+const wchar_t StringConstant::US_const[] = {
     U_c, U_o, U_n, U_s, U_t, U_NU}; // L"const"
-wchar_t StringConstant::US_continue[] = {
+const wchar_t StringConstant::US_continue[] = {
     U_c, U_o, U_n, U_t, U_i, U_n, U_u, U_e, U_NU}; // L"continue"
-wchar_t StringConstant::US_default[] = {
+const wchar_t StringConstant::US_default[] = {
     U_d, U_e, U_f, U_a, U_u, U_l, U_t, U_NU}; // L"default"
-wchar_t StringConstant::US_do[] = {U_d, U_o, U_NU}; // L"do"
-wchar_t StringConstant::US_double[] = {
+const wchar_t StringConstant::US_do[] = {U_d, U_o, U_NU}; // L"do"
+const wchar_t StringConstant::US_double[] = {
     U_d, U_o, U_u, U_b, U_l, U_e, U_NU}; // L"double"
-wchar_t StringConstant::US_else[] = {U_e, U_l, U_s, U_e, U_NU}; // L"else"
-wchar_t StringConstant::US_extends[] = {
+const wchar_t StringConstant::US_else[] = {
+    U_e, U_l, U_s, U_e, U_NU}; // L"else"
+const wchar_t StringConstant::US_enum[] = {
+    U_e, U_n, U_u, U_m, U_NU}; // L"enum"
+const wchar_t StringConstant::US_extends[] = {
     U_e, U_x, U_t, U_e, U_n, U_d, U_s, U_NU}; // L"extends"
-wchar_t StringConstant::US_false[] = {
+const wchar_t StringConstant::US_false[] = {
     U_f, U_a, U_l, U_s, U_e, U_NU}; // L"false"
-wchar_t StringConstant::US_final[] = {
+const wchar_t StringConstant::US_final[] = {
     U_f, U_i, U_n, U_a, U_l, U_NU}; // L"final"
-wchar_t StringConstant::US_finally[] = {
+const wchar_t StringConstant::US_finally[] = {
     U_f, U_i, U_n, U_a, U_l, U_l, U_y, U_NU}; // L"finally"
-wchar_t StringConstant::US_float[] = {
+const wchar_t StringConstant::US_float[] = {
     U_f, U_l, U_o, U_a, U_t, U_NU}; // L"float"
-wchar_t StringConstant::US_for[] = {U_f, U_o, U_r, U_NU}; // L"for"
-wchar_t StringConstant::US_goto[] = {U_g, U_o, U_t, U_o, U_NU}; // L"goto"
-wchar_t StringConstant::US_if[] = {U_i, U_f, U_NU}; // L"if"
-wchar_t StringConstant::US_implements[] = {
+const wchar_t StringConstant::US_for[] = {U_f, U_o, U_r, U_NU}; // L"for"
+const wchar_t StringConstant::US_goto[] = {
+    U_g, U_o, U_t, U_o, U_NU}; // L"goto"
+const wchar_t StringConstant::US_if[] = {U_i, U_f, U_NU}; // L"if"
+const wchar_t StringConstant::US_implements[] = {
     U_i, U_m, U_p, U_l, U_e, U_m, U_e, U_n, U_t, U_s, U_NU}; // L"implements"
-wchar_t StringConstant::US_import[] = {
+const wchar_t StringConstant::US_import[] = {
     U_i, U_m, U_p, U_o, U_r, U_t, U_NU}; // L"import"
-wchar_t StringConstant::US_instanceof[] = {
+const wchar_t StringConstant::US_instanceof[] = {
     U_i, U_n, U_s, U_t, U_a, U_n, U_c, U_e, U_o, U_f, U_NU}; // L"instanceof"
-wchar_t StringConstant::US_int[] = {U_i, U_n, U_t, U_NU}; // L"int"
-wchar_t StringConstant::US_interface[] = {
+const wchar_t StringConstant::US_int[] = {U_i, U_n, U_t, U_NU}; // L"int"
+const wchar_t StringConstant::US_interface[] = {
     U_i, U_n, U_t, U_e, U_r, U_f, U_a, U_c, U_e, U_NU}; // L"interface"
-wchar_t StringConstant::US_long[] = {U_l, U_o, U_n, U_g, U_NU}; // L"long"
-wchar_t StringConstant::US_native[] = {
+const wchar_t StringConstant::US_long[] = {
+    U_l, U_o, U_n, U_g, U_NU}; // L"long"
+const wchar_t StringConstant::US_native[] = {
     U_n, U_a, U_t, U_i, U_v, U_e, U_NU}; // L"native"
-wchar_t StringConstant::US_new[] = {U_n, U_e, U_w, U_NU}; // L"new"
-wchar_t StringConstant::US_null[] = {U_n, U_u, U_l, U_l, U_NU}; // L"null"
-wchar_t StringConstant::US_package[] = {
+const wchar_t StringConstant::US_new[] = {U_n, U_e, U_w, U_NU}; // L"new"
+const wchar_t StringConstant::US_null[] = {
+    U_n, U_u, U_l, U_l, U_NU}; // L"null"
+const wchar_t StringConstant::US_package[] = {
     U_p, U_a, U_c, U_k, U_a, U_g, U_e, U_NU}; // L"package"
-wchar_t StringConstant::US_private[] = {
+const wchar_t StringConstant::US_private[] = {
     U_p, U_r, U_i, U_v, U_a, U_t, U_e, U_NU}; // L"private"
-wchar_t StringConstant::US_protected[] = {
+const wchar_t StringConstant::US_protected[] = {
     U_p, U_r, U_o, U_t, U_e, U_c, U_t, U_e, U_d, U_NU}; // L"protected"
-wchar_t StringConstant::US_public[] = {
+const wchar_t StringConstant::US_public[] = {
     U_p, U_u, U_b, U_l, U_i, U_c, U_NU}; // L"public"
-wchar_t StringConstant::US_return[] = {
+const wchar_t StringConstant::US_return[] = {
     U_r, U_e, U_t, U_u, U_r, U_n, U_NU}; // L"return"
-wchar_t StringConstant::US_short[] = {
+const wchar_t StringConstant::US_short[] = {
     U_s, U_h, U_o, U_r, U_t, U_NU}; // L"short"
-wchar_t StringConstant::US_static[] = {
+const wchar_t StringConstant::US_static[] = {
     U_s, U_t, U_a, U_t, U_i, U_c, U_NU}; // L"static"
-wchar_t StringConstant::US_strictfp[] = {
+const wchar_t StringConstant::US_strictfp[] = {
     U_s, U_t, U_r, U_i, U_c, U_t, U_f, U_p, U_NU}; // L"strictfp"
-wchar_t StringConstant::US_super[] = {
+const wchar_t StringConstant::US_super[] = {
     U_s, U_u, U_p, U_e, U_r, U_NU}; // L"super"
-wchar_t StringConstant::US_switch[] = {
+const wchar_t StringConstant::US_switch[] = {
     U_s, U_w, U_i, U_t, U_c, U_h, U_NU}; // L"switch"
-wchar_t StringConstant::US_synchronized[] = {
+const wchar_t StringConstant::US_synchronized[] = {
     U_s, U_y, U_n, U_c, U_h, U_r, U_o, U_n, U_i, U_z, U_e, U_d,
     U_NU}; // L"synchronized"
-wchar_t StringConstant::US_this[] = {U_t, U_h, U_i, U_s, U_NU}; // L"this"
-wchar_t StringConstant::US_throw[] = {
+const wchar_t StringConstant::US_this[] = {
+    U_t, U_h, U_i, U_s, U_NU}; // L"this"
+const wchar_t StringConstant::US_throw[] = {
     U_t, U_h, U_r, U_o, U_w, U_NU}; // L"throw"
-wchar_t StringConstant::US_throws[] = {
+const wchar_t StringConstant::US_throws[] = {
     U_t, U_h, U_r, U_o, U_w, U_s, U_NU}; // L"throws"
-wchar_t StringConstant::US_transient[] = {
+const wchar_t StringConstant::US_transient[] = {
     U_t, U_r, U_a, U_n, U_s, U_i, U_e, U_n, U_t, U_NU}; // L"transient"
-wchar_t StringConstant::US_true[] = {U_t, U_r, U_u, U_e, U_NU}; // L"true"
-wchar_t StringConstant::US_try[] = {U_t, U_r, U_y, U_NU}; // L"try"
-wchar_t StringConstant::US_void[] = {U_v, U_o, U_i, U_d, U_NU}; // L"void"
-wchar_t StringConstant::US_volatile[] = {
+const wchar_t StringConstant::US_true[] = {
+    U_t, U_r, U_u, U_e, U_NU}; // L"true"
+const wchar_t StringConstant::US_try[] = {U_t, U_r, U_y, U_NU}; // L"try"
+const wchar_t StringConstant::US_void[] = {
+    U_v, U_o, U_i, U_d, U_NU}; // L"void"
+const wchar_t StringConstant::US_volatile[] = {
     U_v, U_o, U_l, U_a, U_t, U_i, U_l, U_e, U_NU}; // L"volatile"
-wchar_t StringConstant::US_while[] = {
+const wchar_t StringConstant::US_while[] = {
     U_w, U_h, U_i, U_l, U_e, U_NU}; // L"while"
 
 //
 // Miscellaneous strings.
 //
-wchar_t StringConstant::US_EOF[] = {U_E, U_O, U_F, U_NU}; // L"EOF"
+const wchar_t StringConstant::US_EOF[] = {U_E, U_O, U_F, U_NU}; // L"EOF"
 
-wchar_t StringConstant::US_smallest_int[] = {
-    U_MINUS, U_2, U_1, U_4, U_7, U_4, U_8, U_3, U_6, U_4, U_8,
-    U_NU}; // L"-2147483648"
-
-char StringConstant::U8S_help_header[] = "Jikes Compiler - " JIKES_VERSION_STRING
-        "\n(C) Copyright IBM Corp. 1997, 1998, 1999, 2000, 2001, 2002.\n"
-        "- Licensed Materials - Program Property of IBM - All Rights Reserved.\n";
-char StringConstant::U8S_command_format[] = "use: jikes [options] [@files] file.java...\n";
+const char StringConstant::U8S_help_header[] =
+    "Jikes Compiler - " JIKES_VERSION_STRING
+    "\nCopyright (C) IBM Corporation 1997-2003, 2004.\n"
+    "- Licensed Materials - Program Property of IBM - All Rights Reserved.\n";
+const char StringConstant::U8S_command_format[] =
+    "use: jikes [options] [@files] file.java...\n";
 
 //
 // Constant pool entries.
 //
-char StringConstant::U8S_B[] = {U_B, U_NU}; // "B"
-char StringConstant::U8S_C[] = {U_C, U_NU}; // "C"
-char StringConstant::U8S_Code[] = {U_C, U_o, U_d, U_e, U_NU}; // "Code"
-char StringConstant::U8S_ConstantValue[] = {
+const char StringConstant::U8S_AnnotationDefault[] = {
+    U_A, U_n, U_n, U_o, U_t, U_a, U_t, U_i, U_o, U_n,
+    U_D, U_e, U_f, U_a, U_u, U_l, U_t, U_NU}; // "AnnotationDefault
+const char StringConstant::U8S_B[] = {U_B, U_NU}; // "B"
+const char StringConstant::U8S_C[] = {U_C, U_NU}; // "C"
+const char StringConstant::U8S_Code[] = {U_C, U_o, U_d, U_e, U_NU}; // "Code"
+const char StringConstant::U8S_ConstantValue[] = {
     U_C, U_o, U_n, U_s, U_t, U_a, U_n, U_t,
     U_V, U_a, U_l, U_u, U_e, U_NU}; // "ConstantValue"
-char StringConstant::U8S_D[] = {U_D, U_NU}; // "D"
-char StringConstant::U8S_Exceptions[] = {
+const char StringConstant::U8S_D[] = {U_D, U_NU}; // "D"
+const char StringConstant::U8S_Deprecated[] = {
+    U_D, U_e, U_p, U_r, U_e, U_c, U_a, U_t, U_e, U_d, U_NU}; // "Deprecated"
+const char StringConstant::U8S_EnclosingMethod[] = {
+    U_E, U_n, U_c, U_l, U_o, U_s, U_i, U_n, U_g,
+    U_M, U_e, U_t, U_h, U_o, U_d, U_NU}; // "EnclosingMethod"
+const char StringConstant::U8S_Exceptions[] = {
     U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n, U_s, U_NU}; // "Exceptions"
-char StringConstant::U8S_F[] = {U_F, U_NU}; // "F"
-char StringConstant::U8S_I[] = {U_I, U_NU}; // "I"
-char StringConstant::U8S_InnerClasses[] = {
+const char StringConstant::U8S_F[] = {U_F, U_NU}; // "F"
+const char StringConstant::U8S_I[] = {U_I, U_NU}; // "I"
+const char StringConstant::U8S_InnerClasses[] = {
     U_I, U_n, U_n, U_e, U_r,
     U_C, U_l, U_a, U_s, U_s, U_e, U_s, U_NU}; // "InnerClasses"
-char StringConstant::U8S_J[] = {U_J, U_NU};  // "J"
-char StringConstant::U8S_LP_C_RP_V[] = {U_LP, U_C, U_RP, U_V, U_NU}; // "(C)V"
-char StringConstant::U8S_LP_D_RP_V[] = {U_LP, U_D, U_RP, U_V, U_NU}; // "(D)V"
-char StringConstant::U8S_LP_F_RP_V[] = {U_LP, U_F, U_RP, U_V, U_NU}; // "(F)V"
-char StringConstant::U8S_LP_I_RP_V[] = {U_LP, U_I, U_RP, U_V, U_NU}; // "(I)V"
-char StringConstant::U8S_LP_J_RP_V[] = {U_LP, U_J, U_RP, U_V, U_NU}; // "(J)V"
-char StringConstant::U8S_LP_Object_RP_V[] = {
+const char StringConstant::U8S_J[] = {U_J, U_NU};  // "J"
+const char StringConstant::U8S_LP_C_RP_V[] = {
+    U_LP, U_C, U_RP, U_V, U_NU}; // "(C)V"
+const char StringConstant::U8S_LP_D_RP_V[] = {
+    U_LP, U_D, U_RP, U_V, U_NU}; // "(D)V"
+const char StringConstant::U8S_LP_F_RP_V[] = {
+    U_LP, U_F, U_RP, U_V, U_NU}; // "(F)V"
+const char StringConstant::U8S_LP_I_RP_V[] = {
+    U_LP, U_I, U_RP, U_V, U_NU}; // "(I)V"
+const char StringConstant::U8S_LP_J_RP_V[] = {
+    U_LP, U_J, U_RP, U_V, U_NU}; // "(J)V"
+const char StringConstant::U8S_LP_Object_RP_V[] = {
     U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_O, U_b, U_j, U_e, U_c, U_t, U_SC, U_RP, U_V,
     U_NU}; // "(Ljava/lang/Object;)V"
-char StringConstant::U8S_LP_String_RP_Class[] = {
+const char StringConstant::U8S_LP_String_RP_Class[] = {
     U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_RP,
     U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_C, U_l, U_a, U_s, U_s, U_SC,
     U_NU}; // "(Ljava/lang/String;)Ljava/lang/Class;"
-char StringConstant::U8S_LP_Throwable_RP_Throwable[] = {
+const char StringConstant::U8S_LP_Throwable_RP_Throwable[] = {
     U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e, U_SC, U_RP,
     U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e, U_SC,
     U_NU}; // "(Ljava/lang/Throable;)Ljava/lang/Throwable;"
-char StringConstant::U8S_LP_String_RP_V[] = {
+const char StringConstant::U8S_LP_String_RP_V[] = {
     U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_RP, U_V,
     U_NU}; // "(Ljava/lang/String;)V"
-char StringConstant::U8S_LP_RP_Class[] = {
+const char StringConstant::U8S_LP_RP_Class[] = {
     U_LP, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_C, U_l, U_a, U_s, U_s, U_SC, U_NU}; // "()Ljava/lang/Class;"
-char StringConstant::U8S_LP_RP_String[] = {
+const char StringConstant::U8S_LP_RP_String[] = {
     U_LP, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_NU}; // "()Ljava/lang/String;"
-char StringConstant::U8S_LP_RP_V[] = {U_LP, U_RP, U_V, U_NU}; // "()V"
-char StringConstant::U8S_LP_RP_Z[] = {U_LP, U_RP, U_Z, U_NU}; // "()Z"
-char StringConstant::U8S_LP_Z_RP_V[] = {U_LP, U_Z, U_RP, U_V, U_NU}; // "(Z)V"
-char StringConstant::U8S_LineNumberTable[] = {
+const char StringConstant::U8S_LP_RP_V[] = {U_LP, U_RP, U_V, U_NU}; // "()V"
+const char StringConstant::U8S_LP_RP_Z[] = {U_LP, U_RP, U_Z, U_NU}; // "()Z"
+const char StringConstant::U8S_LP_Z_RP_V[] = {
+    U_LP, U_Z, U_RP, U_V, U_NU}; // "(Z)V"
+const char StringConstant::U8S_LineNumberTable[] = {
     U_L, U_i, U_n, U_e, U_N, U_u, U_m, U_b, U_e, U_r,
     U_T, U_a, U_b, U_l, U_e, U_NU}; // "LineNumberTable"
-char StringConstant::U8S_LocalVariableTable[] = {
+const char StringConstant::U8S_LocalVariableTable[] = {
     U_L, U_o, U_c, U_a, U_l, U_V, U_a, U_r, U_i, U_a, U_b, U_l, U_e,
     U_T, U_a, U_b, U_l, U_e, U_NU}; // "LocalVariableTable"
-char StringConstant::U8S_S[] = {U_S, U_NU}; // "S"
-char StringConstant::U8S_SourceFile[] = {
+const char StringConstant::U8S_LocalVariableTypeTable[] = {
+    U_L, U_o, U_c, U_a, U_l, U_V, U_a, U_r, U_i, U_a, U_b, U_l, U_e,
+    U_T, U_y, U_p, U_e, U_T, U_a, U_b, U_l, U_e,
+    U_NU}; // "LocalVariableTypeTable"
+const char StringConstant::U8S_RuntimeInvisibleAnnotations[] = {
+    U_R, U_u, U_n, U_t, U_i, U_m, U_e,
+    U_I, U_n, U_v, U_i, U_s, U_i, U_b, U_l, U_e,
+    U_A, U_n, U_n, U_o, U_t, U_a, U_t, U_i, U_o, U_n, U_s,
+    U_NU}; // 'RuntimeInvisibleAnnotations"
+const char StringConstant::U8S_RuntimeVisibleAnnotations[] = {
+    U_R, U_u, U_n, U_t, U_i, U_m, U_e, U_V, U_i, U_s, U_i, U_b, U_l, U_e,
+    U_A, U_n, U_n, U_o, U_t, U_a, U_t, U_i, U_o, U_n, U_s,
+    U_NU}; // 'RuntimeVisibleAnnotations"
+const char StringConstant::U8S_RuntimeInvisibleParameterAnnotations[] = {
+    U_R, U_u, U_n, U_t, U_i, U_m, U_e,
+    U_I, U_n, U_v, U_i, U_s, U_i, U_b, U_l, U_e,
+    U_P, U_a, U_r, U_a, U_m, U_e, U_t, U_e, U_r,
+    U_A, U_n, U_n, U_o, U_t, U_a, U_t, U_i, U_o, U_n, U_s,
+    U_NU}; // 'RuntimeInvisibleParameterAnnotations"
+const char StringConstant::U8S_RuntimeVisibleParameterAnnotations[] = {
+    U_R, U_u, U_n, U_t, U_i, U_m, U_e, U_V, U_i, U_s, U_i, U_b, U_l, U_e,
+    U_P, U_a, U_r, U_a, U_m, U_e, U_t, U_e, U_r,
+    U_A, U_n, U_n, U_o, U_t, U_a, U_t, U_i, U_o, U_n, U_s,
+    U_NU}; // 'RuntimeVisibleParameterAnnotations"
+const char StringConstant::U8S_S[] = {U_S, U_NU}; // "S"
+const char StringConstant::U8S_Signature[] = {
+    U_S, U_i, U_g, U_n, U_a, U_t, U_u, U_r, U_e, U_NU}; // "Signature"
+const char StringConstant::U8S_SourceFile[] = {
     U_S, U_o, U_u, U_r, U_c, U_e, U_F, U_i, U_l, U_e, U_NU}; // "SourceFile"
-char StringConstant::U8S_Synthetic[] = {
+const char StringConstant::U8S_StackMap[] = {
+    U_S, U_t, U_a, U_c, U_k, U_M, U_a, U_p, U_NU}; // "StackMap"
+const char StringConstant::U8S_Synthetic[] = {
     U_S, U_y, U_n, U_t, U_h, U_e, U_t, U_i, U_c, U_NU}; // "Synthetic"
-char StringConstant::U8S_Deprecated[] = {
-    U_D, U_e, U_p, U_r, U_e, U_c, U_a, U_t, U_e, U_d, U_NU}; // "Deprecated"
-char StringConstant::U8S_V[] = {U_V, U_NU}; // "V"
-char StringConstant::U8S_Z[] = {U_Z, U_NU}; // "Z"
+const char StringConstant::U8S_V[] = {U_V, U_NU}; // "V"
+const char StringConstant::U8S_Z[] = {U_Z, U_NU}; // "Z"
 
-char StringConstant::U8S_DO[] = {U_DO, U_NU}; // "."
-char StringConstant::U8S_DO_DO[] = {U_DO, U_DO, U_NU}; // ".."
-char StringConstant::U8S_DO_class[] = {
+const char StringConstant::U8S_DO[] = {U_DO, U_NU}; // "."
+const char StringConstant::U8S_DO_DO[] = {U_DO, U_DO, U_NU}; // ".."
+const char StringConstant::U8S_DO_class[] = {
     U_DO, U_c, U_l, U_a, U_s, U_s, U_NU}; // ".class"
-char StringConstant::U8S_DO_java[] = {
+const char StringConstant::U8S_DO_java[] = {
     U_DO, U_j, U_a, U_v, U_a, U_NU}; // ".java"
-char StringConstant::U8S_DO_tok[] = {U_DO, U_t, U_o, U_k, U_NU}; // ".tok"
-char StringConstant::U8S_DO_u[] = {U_DO, U_u, U_NU}; // ".u"
-char StringConstant::U8S_LP[] = {U_LP, U_NU}; // "("
-char StringConstant::U8S_RP[] = {U_RP, U_NU}; // ")"
-char StringConstant::U8S_SL[] = {U_SL, U_NU}; // "/"
-char StringConstant::U8S_ST[] = {U_ST, U_NU}; // "*"
+const char StringConstant::U8S_DO_tok[] = {
+    U_DO, U_t, U_o, U_k, U_NU}; // ".tok"
+const char StringConstant::U8S_DO_u[] = {U_DO, U_u, U_NU}; // ".u"
+const char StringConstant::U8S_LP[] = {U_LP, U_NU}; // "("
+const char StringConstant::U8S_RP[] = {U_RP, U_NU}; // ")"
+const char StringConstant::U8S_SL[] = {U_SL, U_NU}; // "/"
+const char StringConstant::U8S_ST[] = {U_ST, U_NU}; // "*"
 
-char StringConstant::U8S_class[] = {U_c, U_l, U_a, U_s, U_s, U_NU}; // "class"
-char StringConstant::U8S_java[] = {U_j, U_a, U_v, U_a, U_NU}; // "java"
-char StringConstant::U8S_java_SL_lang_SL_ClassNotFoundException[] = {
+const char StringConstant::U8S_class[] = {
+    U_c, U_l, U_a, U_s, U_s, U_NU}; // "class"
+const char StringConstant::U8S_java[] = {U_j, U_a, U_v, U_a, U_NU}; // "java"
+const char StringConstant::U8S_java_SL_lang_SL_ClassNotFoundException[] = {
     U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_C, U_l, U_a, U_s, U_s, U_N, U_o, U_t, U_F, U_o, U_u, U_n, U_d,
     U_E, U_x, U_c, U_e, U_p, U_t, U_i, U_o, U_n,
     U_NU}; // "java/lang/ClassNotFoundException"
-char StringConstant::U8S_java_SL_lang_SL_Class[] = {
+const char StringConstant::U8S_java_SL_lang_SL_Class[] = {
     U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_C, U_l, U_a, U_s, U_s, U_NU}; // "java/lang/Class"
-char StringConstant::U8S_java_SL_lang_SL_InternalError[] = {
+const char StringConstant::U8S_java_SL_lang_SL_InternalError[] = {
     U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_I, U_n, U_t, U_e, U_r, U_n, U_a, U_l, U_E, U_r, U_r, U_o, U_r,
     U_NU}; // "java/lang/InternalError"
-char StringConstant::U8S_java_SL_lang_SL_NoClassDefFoundError[] = {
+const char StringConstant::U8S_java_SL_lang_SL_NoClassDefFoundError[] = {
     U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_N, U_o, U_C, U_l, U_a, U_s, U_s,
     U_D, U_e, U_f, U_F, U_o, U_u, U_n, U_d,
     U_E, U_r, U_r, U_o, U_r, U_NU}; // "java/lang/NoClassDefFoundError"
-char StringConstant::U8S_java_SL_lang_SL_StringBuffer[] = {
+const char StringConstant::U8S_java_SL_lang_SL_StringBuffer[] = {
     U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r,
     U_NU}; // "java/lang/StringBuffer"
-char StringConstant::U8S_java_SL_lang_SL_Throwable[] = {
+const char StringConstant::U8S_java_SL_lang_SL_Throwable[] = {
     U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_T, U_h, U_r, U_o, U_w, U_a, U_b, U_l, U_e,
     U_NU}; // "java/lang/Throwable"
-char StringConstant::U8S_false[] = {U_f, U_a, U_l, U_s, U_e, U_NU}; // "false"
-char StringConstant::U8S_null[] = {U_n, U_u, U_l, U_l, U_NU}; // "null"
-char StringConstant::U8S_quit[] = {U_q, U_u, U_i, U_t, U_NU}; // "quit"
-char StringConstant::U8S_this[] = {U_t, U_h, U_i, U_s, U_NU}; // "this"
-char StringConstant::U8S_true[] = {U_t, U_r, U_u, U_e, U_NU}; // "true"
+const char StringConstant::U8S_false[] = {
+    U_f, U_a, U_l, U_s, U_e, U_NU}; // "false"
+const char StringConstant::U8S_null[] = {U_n, U_u, U_l, U_l, U_NU}; // "null"
+const char StringConstant::U8S_quit[] = {U_q, U_u, U_i, U_t, U_NU}; // "quit"
+const char StringConstant::U8S_this[] = {U_t, U_h, U_i, U_s, U_NU}; // "this"
+const char StringConstant::U8S_true[] = {U_t, U_r, U_u, U_e, U_NU}; // "true"
 
-char StringConstant::U8S_LP_C_RP_StringBuffer[] = {
+const char StringConstant::U8S_LP_C_RP_StringBuffer[] = {
     U_LP, U_C, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
     U_NU}; // "(C)Ljava/lang/StringBuffer;"
-char StringConstant::U8S_LP_Z_RP_StringBuffer[] = {
+const char StringConstant::U8S_LP_Z_RP_StringBuffer[] = {
     U_LP, U_Z, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
     U_NU}; // "(Z)Ljava/lang/StringBuffer;"
-char StringConstant::U8S_LP_I_RP_StringBuffer[] = {
+const char StringConstant::U8S_LP_I_RP_StringBuffer[] = {
     U_LP, U_I, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
     U_NU}; // "(I)Ljava/lang/StringBuffer;"
-char StringConstant::U8S_LP_J_RP_StringBuffer[] = {
+const char StringConstant::U8S_LP_J_RP_StringBuffer[] = {
     U_LP, U_J, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
     U_NU}; // "(J)Ljava/lang/StringBuffer;"
-char StringConstant::U8S_LP_F_RP_StringBuffer[] = {
+const char StringConstant::U8S_LP_F_RP_StringBuffer[] = {
     U_LP, U_F, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
     U_NU}; // "(F)Ljava/lang/StringBuffer;"
-char StringConstant::U8S_LP_D_RP_StringBuffer[] = {
+const char StringConstant::U8S_LP_D_RP_StringBuffer[] = {
     U_LP, U_D, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
     U_NU}; // "(D)Ljava/lang/StringBuffer;"
-char StringConstant::U8S_LP_String_RP_StringBuffer[] = {
+const char StringConstant::U8S_LP_String_RP_StringBuffer[] = {
     U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_RP,
     U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
     U_NU}; // "(Ljava/lang/String;)Ljava/lang/StringBuffer;"
-char StringConstant::U8S_LP_Object_RP_StringBuffer[] = {
+const char StringConstant::U8S_LP_Object_RP_StringBuffer[] = {
     U_LP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_O, U_b, U_j, U_e, U_c, U_t, U_SC, U_RP,
     U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_B, U_u, U_f, U_f, U_e, U_r, U_SC,
     U_NU}; // "(Ljava/lang/Object;)Ljava/lang/StringBuffer;"
 
-char StringConstant::U8S_smallest_int[] = {
-    U_MINUS, U_2, U_1, U_4, U_7, U_4, U_8, U_3, U_6, U_4, U_8,
-    U_NU}; // "-2147483648"
-char StringConstant::U8S_smallest_long_int[] = {
-    U_MINUS, U_9, U_2, U_2, U_3, U_3, U_7, U_2, U_0, U_3, U_6, U_8, U_5,
-    U_4, U_7, U_7, U_5, U_8, U_0, U_8, U_NU}; // "-9223372036854775808"
-char StringConstant::U8S_NaN[] = {U_N, U_a, U_N, U_NU}; // "NaN"
-char StringConstant::U8S_pos_Infinity[] = {
+const char StringConstant::U8S_NaN[] = {U_N, U_a, U_N, U_NU}; // "NaN"
+const char StringConstant::U8S_pos_Infinity[] = {
     U_I, U_n, U_f, U_i, U_n, U_i, U_t, U_y, U_NU}; // "Infinity"
-char StringConstant::U8S_neg_Infinity[] = {
+const char StringConstant::U8S_neg_Infinity[] = {
     U_MINUS, U_I, U_n, U_f, U_i, U_n, U_i, U_t, U_y, U_NU}; // "-Infinity"
-char StringConstant::U8S_pos_Zero[] = {U_0, U_DOT, U_0, U_NU}; // "0.0"
-char StringConstant::U8S_neg_Zero[] = {
+const char StringConstant::U8S_pos_Zero[] = {U_0, U_DOT, U_0, U_NU}; // "0.0"
+const char StringConstant::U8S_neg_Zero[] = {
     U_MINUS, U_0, U_DOT, U_0, U_NU}; // "-0.0"
 
-int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue);
-int StringConstant::U8S_Exceptions_length = strlen(U8S_Exceptions);
-int StringConstant::U8S_InnerClasses_length = strlen(U8S_InnerClasses);
-int StringConstant::U8S_Synthetic_length = strlen(U8S_Synthetic);
-int StringConstant::U8S_Deprecated_length = strlen(U8S_Deprecated);
-int StringConstant::U8S_LineNumberTable_length = strlen(U8S_LineNumberTable);
-int StringConstant::U8S_LocalVariableTable_length = strlen(U8S_LocalVariableTable);
-int StringConstant::U8S_Code_length = strlen(U8S_Code);
-int StringConstant::U8S_SourceFile_length = strlen(U8S_SourceFile);
-
-int StringConstant::U8S_null_length = strlen(U8S_null);
-int StringConstant::U8S_this_length = strlen(U8S_this);
+const int StringConstant::U8S_ConstantValue_length = strlen(U8S_ConstantValue);
+const int StringConstant::U8S_Exceptions_length = strlen(U8S_Exceptions);
+const int StringConstant::U8S_InnerClasses_length = strlen(U8S_InnerClasses);
+const int StringConstant::U8S_Synthetic_length = strlen(U8S_Synthetic);
+const int StringConstant::U8S_Deprecated_length = strlen(U8S_Deprecated);
+const int StringConstant::U8S_LineNumberTable_length =
+    strlen(U8S_LineNumberTable);
+const int StringConstant::U8S_LocalVariableTable_length =
+    strlen(U8S_LocalVariableTable);
+const int StringConstant::U8S_Code_length = strlen(U8S_Code);
+const int StringConstant::U8S_SourceFile_length = strlen(U8S_SourceFile);
+const int StringConstant::U8S_null_length = strlen(U8S_null);
+const int StringConstant::U8S_this_length = strlen(U8S_this);
 
 
 Ostream Coutput;
@@ -1709,4 +1725,3 @@ Ostream Coutput;
 #ifdef HAVE_JIKES_NAMESPACE
 } // Close namespace Jikes block
 #endif
-

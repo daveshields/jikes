@@ -1,10 +1,9 @@
-// $Id: depend.cpp,v 1.33 2002/10/07 22:06:13 ericb Exp $
+// $Id: depend.cpp,v 1.36 2004/01/17 14:10:19 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -35,7 +34,7 @@ inline void TypeCycleChecker::ReverseTypeList()
 }
 
 
-void TypeCycleChecker::PartialOrder(Tuple<Semantic *> &semantic, int start)
+void TypeCycleChecker::PartialOrder(Tuple<Semantic*>& semantic, int start)
 {
     type_list.Reset();
 
@@ -43,27 +42,21 @@ void TypeCycleChecker::PartialOrder(Tuple<Semantic *> &semantic, int start)
     // assert that the "index" of all types that should be checked is initially
     // set to OMEGA
     //
-    for (int i = start; i < semantic.Length(); i++)
+    for (unsigned i = start; i < semantic.Length(); i++)
     {
-        Semantic *sem = semantic[i];
-
-        for (int k = 0; k < sem -> compilation_unit -> NumTypeDeclarations();
-             k++)
+        Semantic* sem = semantic[i];
+        for (unsigned k = 0;
+             k < sem -> compilation_unit -> NumTypeDeclarations(); k++)
         {
-            AstClassDeclaration *class_declaration =
-                sem -> compilation_unit -> TypeDeclaration(k) ->
-                ClassDeclarationCast();
-            AstInterfaceDeclaration *interface_declaration =
-                sem -> compilation_unit -> TypeDeclaration(k) ->
-                InterfaceDeclarationCast();
-            SemanticEnvironment *env =
-                class_declaration ? class_declaration -> semantic_environment
-                : interface_declaration
-                ? interface_declaration -> semantic_environment
-                : (SemanticEnvironment *) NULL;
+            AstDeclaredType* declared =
+                sem -> compilation_unit -> TypeDeclaration(k);
+            if (declared -> EmptyDeclarationCast())
+                continue;
+            SemanticEnvironment* env =
+                declared -> class_body -> semantic_environment;
             if (env) // type was successfully compiled thus far?
             {
-                TypeSymbol *type = env -> Type();
+                TypeSymbol* type = env -> Type();
                 if (type -> index == OMEGA)
                    ProcessSubtypes(type);
             }
@@ -132,7 +125,7 @@ void TypeCycleChecker::ProcessSubtypes(TypeSymbol *type)
 
 ConstructorCycleChecker::ConstructorCycleChecker(AstClassBody *class_body)
 {
-    for (int k = 0; k < class_body -> NumConstructors(); k++)
+    for (unsigned k = 0; k < class_body -> NumConstructors(); k++)
     {
         AstConstructorDeclaration *constructor_declaration =
             class_body -> Constructor(k);
@@ -227,7 +220,7 @@ void TypeDependenceChecker::PartialOrder()
                      file_symbol;
                      file_symbol = (FileSymbol *) file_set.NextElement())
     {
-        for (int j = 0; j < file_symbol -> types.Length(); j++)
+        for (unsigned j = 0; j < file_symbol -> types.Length(); j++)
         {
             TypeSymbol *type = file_symbol -> types[j];
             if (type -> incremental_index == OMEGA)
@@ -235,7 +228,7 @@ void TypeDependenceChecker::PartialOrder()
         }
     }
 
-    for (int k = 0; k < type_trash_bin.Length(); k++)
+    for (unsigned k = 0; k < type_trash_bin.Length(); k++)
     {
         TypeSymbol *type = type_trash_bin[k];
         if (type -> incremental_index == OMEGA)
@@ -288,7 +281,7 @@ void TypeDependenceChecker::OutputMake(FILE *outfile, char *output_name,
 {
     assert(outfile);
 
-    for (int i = 0; i < file_list.Length(); i++)
+    for (unsigned i = 0; i < file_list.Length(); i++)
     {
         FileSymbol *file_symbol = file_list[i];
         char *name = file_symbol -> FileName();
@@ -323,8 +316,8 @@ void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
     //
     //
     //
-    char *name;
-    char *buf = NULL;
+    const char* name;
+    char* buf = NULL;
     int length;
 
     if (control -> option.directory == NULL)
@@ -372,7 +365,7 @@ void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
     //
     //
     SymbolSet file_set;
-    for (int i = 0; i < file_symbol -> types.Length(); i++)
+    for (unsigned i = 0; i < file_symbol -> types.Length(); i++)
     {
         TypeSymbol *type = file_symbol -> types[i];
         TypeSymbol *parent;
@@ -415,8 +408,8 @@ void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
 void TypeDependenceChecker::OutputDependences()
 {
     SymbolSet new_file_set;
-
-    for (int i = 0; i < type_list.Length(); i++)
+    unsigned i;
+    for (i = 0; i < type_list.Length(); i++)
     {
         TypeSymbol *type = type_list[i];
         type -> parents_closure = new SymbolSet;
@@ -426,9 +419,9 @@ void TypeDependenceChecker::OutputDependences()
             new_file_set.AddElement(file_symbol);
     }
 
-    for (int l = 0; l < type_list.Length(); l++)
+    for (i = 0; i < type_list.Length(); i++)
     {
-        TypeSymbol *parent = type_list[l];
+        TypeSymbol *parent = type_list[i];
         TypeSymbol *dependent;
         for (dependent = (TypeSymbol *) parent -> dependents_closure -> FirstElement();
              dependent;
@@ -444,9 +437,9 @@ void TypeDependenceChecker::OutputDependences()
         OutputMake(symbol);
     }
 
-    for (int n = 0; n < type_list.Length(); n++)
+    for (i = 0; i < type_list.Length(); i++)
     {
-        TypeSymbol *type = type_list[n];
+        TypeSymbol *type = type_list[i];
         delete type -> parents_closure;
         type -> parents_closure = NULL;
     }
@@ -501,6 +494,48 @@ TopologicalSort::~TopologicalSort()
 {
     delete pending;
 }
+
+
+void Semantic::AddDependence(TypeSymbol* base_type, TypeSymbol* parent_type,
+                             bool static_access)
+{
+    if (base_type -> Bad() || parent_type -> Bad())
+        return;
+    base_type = base_type -> outermost_type;
+    parent_type = parent_type -> outermost_type;
+
+    parent_type -> dependents -> AddElement(base_type);
+    if (static_access)
+        base_type -> static_parents -> AddElement(parent_type);
+    else base_type -> parents -> AddElement(parent_type);
+
+    //
+    // It is not possible to import from the unnamed package, and without
+    // imports, it is impossible to reference a class in the unnamed
+    // package from a package.
+    //
+    assert(parent_type -> ContainingPackage() != control.unnamed_package ||
+           base_type -> ContainingPackage() == control.unnamed_package);
+}
+
+void Semantic::AddStringConversionDependence(TypeSymbol* type)
+{
+    if (type == control.null_type)
+        ; // no dependence
+    else if (type == control.boolean_type)
+        AddDependence(ThisType(), control.Boolean());
+    else if (type == control.char_type)
+        AddDependence(ThisType(), control.Character());
+    else if (type == control.int_type)
+        AddDependence(ThisType(), control.Integer());
+    else if (type == control.long_type)
+        AddDependence(ThisType(), control.Long());
+    else if (type == control.float_type)
+        AddDependence(ThisType(), control.Float());
+    else // (type == control.double_type)
+        AddDependence(ThisType(), control.Double());
+}
+
 
 #ifdef HAVE_JIKES_NAMESPACE
 } // Close namespace Jikes block

@@ -1,4 +1,4 @@
-// $Id: jikesapi.cpp,v 1.42 2002/10/07 22:06:16 ericb Exp $
+// $Id: jikesapi.cpp,v 1.44 2002/12/11 00:55:03 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -169,7 +169,7 @@ char** JikesAPI::parseOptions(int argc, char** argv)
 
     if (bad_options.Length() > 0)
     {
-        for (int i = 0; i < bad_options.Length(); i++)
+        for (unsigned i = 0; i < bad_options.Length(); i++)
             Coutput << bad_options[i] -> GetErrorMessage() << endl;
         parsedOptions = NULL;
     }
@@ -187,7 +187,7 @@ char** JikesAPI::parseOptions(int argc, char** argv)
         parsedOptions[n] = NULL;
     }
 
-    for (int i = 0; i < bad_options.Length(); i++)
+    for (unsigned i = 0; i < bad_options.Length(); i++)
         delete bad_options[i];
 
     delete args;
@@ -467,9 +467,10 @@ int DefaultFileWriter::isValid()
 }
 
 // Copy the input data to the mapped memory.
-size_t DefaultFileWriter::doWrite(const unsigned char *data, size_t size)
+size_t DefaultFileWriter::doWrite(const unsigned char* data, size_t size)
 {
-    memmove(&string_buffer[dataWritten], data, size * sizeof(u1));
+    // This assumes that data never overlaps string_buffer.
+    memcpy(&string_buffer[dataWritten], data, size * sizeof(u1));
     dataWritten += size;
     return size;
 }

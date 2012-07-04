@@ -1,9 +1,9 @@
-// $Id: spell.h,v 1.10 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
+// $Id: spell.h,v 1.11 2002/12/05 21:56:13 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -29,7 +29,7 @@ class Spell
     static inline int Min(int x, int y) { return (x < y ? x : y); }
 
 public:
-    static int Index(wchar_t *str1, wchar_t *str2)
+    static int Index(const wchar_t* str1, const wchar_t* str2)
     {
         int len1 = wcslen(str1),
             len2 = wcslen(str2);

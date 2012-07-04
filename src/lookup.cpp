@@ -1,10 +1,9 @@
-// $Id: lookup.cpp,v 1.46 2002/08/06 20:52:41 ericb Exp $
+// $Id: lookup.cpp,v 1.51 2004/01/26 06:07:16 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2003 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -14,69 +13,128 @@
 #include "code.h"
 #include "ast.h"
 #include "case.h"
+#include <cwchar>
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-PackageSymbol *Symbol::PackageCast()
+PackageSymbol* Symbol::PackageCast()
 {
-    return DYNAMIC_CAST<PackageSymbol *> (_kind == PACKAGE ? this : NULL);
+    return DYNAMIC_CAST<PackageSymbol*> (_kind == PACKAGE ? this : NULL);
 }
 
-TypeSymbol *Symbol::TypeCast()
+const PackageSymbol* Symbol::PackageCast() const
 {
-    return DYNAMIC_CAST<TypeSymbol *> (_kind == TYPE ? this : NULL);
+    return DYNAMIC_CAST<const PackageSymbol*> (_kind == PACKAGE ? this : NULL);
 }
 
-MethodSymbol *Symbol::MethodCast()
+TypeSymbol* Symbol::TypeCast()
 {
-    return DYNAMIC_CAST<MethodSymbol *> (_kind == METHOD ? this : NULL);
+    return DYNAMIC_CAST<TypeSymbol*> (_kind == TYPE ? this : NULL);
 }
 
-BlockSymbol *Symbol::BlockCast()
+const TypeSymbol* Symbol::TypeCast() const
 {
-    return DYNAMIC_CAST<BlockSymbol *> (_kind == BLOCK ? this : NULL);
+    return DYNAMIC_CAST<const TypeSymbol*> (_kind == TYPE ? this : NULL);
 }
 
-VariableSymbol *Symbol::VariableCast()
+MethodSymbol* Symbol::MethodCast()
 {
-    return DYNAMIC_CAST<VariableSymbol *> (_kind == VARIABLE ? this : NULL);
+    return DYNAMIC_CAST<MethodSymbol*> (_kind == METHOD ? this : NULL);
 }
 
-LabelSymbol *Symbol::LabelCast()
+const MethodSymbol* Symbol::MethodCast() const
 {
-    return DYNAMIC_CAST<LabelSymbol *> (_kind == LABEL ? this : NULL);
+    return DYNAMIC_CAST<const MethodSymbol*> (_kind == METHOD ? this : NULL);
 }
 
-LiteralSymbol *Symbol::LiteralCast()
+BlockSymbol* Symbol::BlockCast()
 {
-    return DYNAMIC_CAST<LiteralSymbol *> (_kind == LITERAL ? this : NULL);
+    return DYNAMIC_CAST<BlockSymbol*> (_kind == BLOCK ? this : NULL);
 }
 
-NameSymbol *Symbol::NameCast()
+const BlockSymbol* Symbol::BlockCast() const
 {
-    return DYNAMIC_CAST<NameSymbol *> (_kind == NAME ? this : NULL);
+    return DYNAMIC_CAST<const BlockSymbol*> (_kind == BLOCK ? this : NULL);
 }
 
-PathSymbol *Symbol::PathCast()
+VariableSymbol* Symbol::VariableCast()
 {
-    return DYNAMIC_CAST<PathSymbol *> (_kind == PATH ? this : NULL);
+    return DYNAMIC_CAST<VariableSymbol*> (_kind == VARIABLE ? this : NULL);
 }
 
-DirectorySymbol *Symbol::DirectoryCast()
+const VariableSymbol* Symbol::VariableCast() const
 {
-    return DYNAMIC_CAST<DirectorySymbol *> (_kind == _DIRECTORY ? this : NULL);
+    return DYNAMIC_CAST<const VariableSymbol*>
+        (_kind == VARIABLE ? this : NULL);
 }
 
-FileSymbol *Symbol::FileCast()
+LabelSymbol* Symbol::LabelCast()
 {
-    return DYNAMIC_CAST<FileSymbol *> (_kind == _FILE ? this : NULL);
+    return DYNAMIC_CAST<LabelSymbol*> (_kind == LABEL ? this : NULL);
 }
 
-int SystemTable::primes[] = {DEFAULT_HASH_SIZE, 101, 401, MAX_HASH_SIZE};
+const LabelSymbol* Symbol::LabelCast() const
+{
+    return DYNAMIC_CAST<const LabelSymbol*> (_kind == LABEL ? this : NULL);
+}
 
-SystemTable::SystemTable(int hash_size_) : directories(1024)
+LiteralSymbol* Symbol::LiteralCast()
+{
+    return DYNAMIC_CAST<LiteralSymbol*> (_kind == LITERAL ? this : NULL);
+}
+
+const LiteralSymbol* Symbol::LiteralCast() const
+{
+    return DYNAMIC_CAST<const LiteralSymbol*> (_kind == LITERAL ? this : NULL);
+}
+
+NameSymbol* Symbol::NameCast()
+{
+    return DYNAMIC_CAST<NameSymbol*> (_kind == NAME ? this : NULL);
+}
+
+const NameSymbol* Symbol::NameCast() const
+{
+    return DYNAMIC_CAST<const NameSymbol*> (_kind == NAME ? this : NULL);
+}
+
+PathSymbol* Symbol::PathCast()
+{
+    return DYNAMIC_CAST<PathSymbol*> (_kind == PATH ? this : NULL);
+}
+
+const PathSymbol* Symbol::PathCast() const
+{
+    return DYNAMIC_CAST<const PathSymbol*> (_kind == PATH ? this : NULL);
+}
+
+DirectorySymbol* Symbol::DirectoryCast()
+{
+    return DYNAMIC_CAST<DirectorySymbol*> (_kind == _DIRECTORY ? this : NULL);
+}
+
+const DirectorySymbol* Symbol::DirectoryCast() const
+{
+    return DYNAMIC_CAST<const DirectorySymbol*>
+        (_kind == _DIRECTORY ? this : NULL);
+}
+
+FileSymbol* Symbol::FileCast()
+{
+    return DYNAMIC_CAST<FileSymbol*> (_kind == _FILE ? this : NULL);
+}
+
+const FileSymbol* Symbol::FileCast() const
+{
+    return DYNAMIC_CAST<const FileSymbol*> (_kind == _FILE ? this : NULL);
+}
+
+unsigned SystemTable::primes[] = {DEFAULT_HASH_SIZE, 101, 401, MAX_HASH_SIZE};
+
+SystemTable::SystemTable(unsigned hash_size_)
+    : directories(1024)
 {
     hash_size = (hash_size_ <= 0 ? 1 : hash_size_);
 
@@ -88,13 +146,13 @@ SystemTable::SystemTable(int hash_size_) : directories(1024)
         prime_index++;
     } while (primes[prime_index] < MAX_HASH_SIZE);
 
-    base = (Element **) memset(new Element *[hash_size], 0,
-                               hash_size * sizeof(Element *));
+    base = (Element**) memset(new Element*[hash_size], 0,
+                              hash_size * sizeof(Element*));
 }
 
 SystemTable::~SystemTable()
 {
-    for (int i = 0; i < directories.Length(); i++)
+    for (unsigned i = 0; i < directories.Length(); i++)
         delete directories[i];
 
     delete [] base;
@@ -105,12 +163,12 @@ void SystemTable::Rehash()
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (Element **) memset(new Element *[hash_size], 0,
-                               hash_size * sizeof(Element *));
+    base = (Element**) memset(new Element*[hash_size], 0,
+                              hash_size * sizeof(Element*));
 
-    for (int k = 0; k < directories.Length(); k++)
+    for (unsigned k = 0; k < directories.Length(); k++)
     {
-        Element *element = directories[k];
+        Element* element = directories[k];
 
         int i = hash(element -> device, element -> inode);
         element -> next = base[i];
@@ -118,25 +176,24 @@ void SystemTable::Rehash()
     }
 }
 
-DirectorySymbol *SystemTable::FindDirectorySymbol(dev_t device, ino_t inode)
+DirectorySymbol* SystemTable::FindDirectorySymbol(dev_t device, ino_t inode)
 {
     int k = hash(device, inode);
 
-    for (Element *element = base[k]; element; element = element -> next)
+    for (Element* element = base[k]; element; element = element -> next)
     {
         if (element -> device == device && element -> inode == inode)
             return element -> directory_symbol;
     }
-
     return NULL;
 }
 
 void SystemTable::InsertDirectorySymbol(dev_t device, ino_t inode,
-                                        DirectorySymbol *directory_symbol)
+                                        DirectorySymbol* directory_symbol)
 {
     int k = hash(device, inode);
 
-    Element *element = new Element(device, inode, directory_symbol);
+    Element* element = new Element(device, inode, directory_symbol);
     directories.Next() = element;
 
     element -> next = base[k];
@@ -155,37 +212,39 @@ void SystemTable::InsertDirectorySymbol(dev_t device, ino_t inode,
     }
 }
 
-int DirectoryTable::primes[] = {DEFAULT_HASH_SIZE, 2039, 4093, MAX_HASH_SIZE};
+unsigned DirectoryTable::primes[] = {
+    DEFAULT_HASH_SIZE, 2039, 4093, MAX_HASH_SIZE
+};
 
-DirectoryTable::DirectoryTable(int estimate) : entry_pool(estimate),
-                                               hash_size(primes[0]),
-                                               prime_index(0)
+DirectoryTable::DirectoryTable(int estimate)
+    : entry_pool(estimate),
+      hash_size(primes[0]),
+      prime_index(0)
 {
-    base = (DirectoryEntry **) memset(new DirectoryEntry *[hash_size], 0,
-                                      hash_size * sizeof(DirectoryEntry *));
+    base = (DirectoryEntry**) memset(new DirectoryEntry*[hash_size], 0,
+                                     hash_size * sizeof(DirectoryEntry*));
 }
 
 DirectoryTable::~DirectoryTable()
 {
-    for (int i = 0; i < entry_pool.Length(); i++)
+    for (unsigned i = 0; i < entry_pool.Length(); i++)
         delete entry_pool[i];
     delete [] base;
 }
 
 
-DirectoryEntry *DirectoryTable::FindEntry(char *str, int len)
+DirectoryEntry* DirectoryTable::FindEntry(char* str, int len)
 {
     int k = Hash(str, len) % hash_size;
-    DirectoryEntry *entry;
+    DirectoryEntry* entry;
     for (entry = base[k]; entry; entry = entry -> next)
     {
         if (len == entry -> length &&
             memcmp(entry -> name, str, len * sizeof(char)) == 0)
         {
-            return (entry -> IsDummy() ? (DirectoryEntry *) NULL : entry);
+            return entry -> IsDummy() ? (DirectoryEntry*) NULL : entry;
         }
     }
-
     return NULL;
 }
 
@@ -195,12 +254,12 @@ void DirectoryTable::Rehash()
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (DirectoryEntry **) memset(new DirectoryEntry *[hash_size], 0,
-                                      hash_size * sizeof(DirectoryEntry *));
+    base = (DirectoryEntry**) memset(new DirectoryEntry*[hash_size], 0,
+                                     hash_size * sizeof(DirectoryEntry*));
 
-    for (int i = 0; i < entry_pool.Length(); i++)
+    for (unsigned i = 0; i < entry_pool.Length(); i++)
     {
-        DirectoryEntry *e = entry_pool[i];
+        DirectoryEntry* e = entry_pool[i];
         int k = Hash(e -> name, e -> length) % hash_size;
         e -> next = base[k];
         base[k] = e;
@@ -208,11 +267,11 @@ void DirectoryTable::Rehash()
 }
 
 
-DirectoryEntry *DirectoryTable::InsertEntry(DirectorySymbol *directory_symbol,
-                                            char *str, int len)
+DirectoryEntry* DirectoryTable::InsertEntry(DirectorySymbol* directory_symbol,
+                                            char* str, int len)
 {
     int k = Hash(str, len) % hash_size;
-    DirectoryEntry *entry;
+    DirectoryEntry* entry;
     for (entry = base[k]; entry; entry = entry -> next)
     {
         if (len == entry -> length &&
@@ -237,36 +296,34 @@ DirectoryEntry *DirectoryTable::InsertEntry(DirectorySymbol *directory_symbol,
     //
     if (entry_pool.Length() > (hash_size << 1) && hash_size < MAX_HASH_SIZE)
         Rehash();
-
     return entry;
 }
 
 
 #ifdef WIN32_FILE_SYSTEM
-DirectoryEntry *DirectoryTable::FindCaseInsensitiveEntry(char *name,
+DirectoryEntry* DirectoryTable::FindCaseInsensitiveEntry(char* name,
                                                          int length)
 {
-    char *lower_name = new char[length + 1];
+    char* lower_name = new char[length + 1];
     for (int i = 0; i < length; i++)
         lower_name[i] = Case::ToAsciiLower(name[i]);
     lower_name[length] = U_NULL;
 
-    DirectoryEntry *entry = FindEntry(lower_name, length);
+    DirectoryEntry* entry = FindEntry(lower_name, length);
     delete [] lower_name;
-
-    return (entry ? entry -> Image() : entry);
+    return entry ? entry -> Image() : entry;
 }
 
-void DirectoryTable::InsertCaseInsensitiveEntry(DirectoryEntry *image)
+void DirectoryTable::InsertCaseInsensitiveEntry(DirectoryEntry* image)
 {
     int length = image -> length;
-    char *lower_name = new char[length + 1];
+    char* lower_name = new char[length + 1];
     for (int i = 0; i < length; i++)
         lower_name[i] = Case::ToAsciiLower(image -> name[i]);
     lower_name[length] = U_NULL;
 
     int k = Hash(lower_name, length) % hash_size;
-    DirectoryEntry *entry;
+    DirectoryEntry* entry;
     for (entry = base[k]; entry; entry = entry -> next)
     {
         if (length == entry -> length &&
@@ -278,7 +335,7 @@ void DirectoryTable::InsertCaseInsensitiveEntry(DirectoryEntry *image)
 
     if (! entry)
     {
-        FoldedDirectoryEntry *folded_entry = new FoldedDirectoryEntry(image);
+        FoldedDirectoryEntry* folded_entry = new FoldedDirectoryEntry(image);
         entry_pool.Next() = folded_entry;
         folded_entry -> Initialize(image, lower_name, length);
 
@@ -307,10 +364,10 @@ time_t DirectoryEntry::Mtime()
 {
     if (mtime_ == 0)
     {
-        char *dirname = this -> directory -> DirectoryName();
+        char* dirname = this -> directory -> DirectoryName();
         int length = this -> directory -> DirectoryNameLength() +
             this -> length + 1; // +1 for '/'
-        char *file_name = new char[length + 1];
+        char* file_name = new char[length + 1];
         strcpy(file_name, dirname);
         if (dirname[this -> directory -> DirectoryNameLength() - 1] != U_SLASH)
             strcat(file_name, StringConstant::U8S_SL);
@@ -323,12 +380,11 @@ time_t DirectoryEntry::Mtime()
 
         delete [] file_name;
     }
-
     return mtime_;
 }
 
 
-int NameLookupTable::primes[] = {
+unsigned NameLookupTable::primes[] = {
     DEFAULT_HASH_SIZE, 8191, 16411, MAX_HASH_SIZE
 };
 
@@ -337,13 +393,13 @@ NameLookupTable::NameLookupTable(int estimate)
       hash_size(primes[0]),
       prime_index(0)
 {
-    base = (NameSymbol **) memset(new NameSymbol *[hash_size], 0,
-                                  hash_size * sizeof(NameSymbol *));
+    base = (NameSymbol**) memset(new NameSymbol*[hash_size], 0,
+                                 hash_size * sizeof(NameSymbol*));
 }
 
 NameLookupTable::~NameLookupTable()
 {
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
 }
@@ -354,12 +410,12 @@ void NameLookupTable::Rehash()
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (NameSymbol **) memset(new NameSymbol *[hash_size], 0,
-                                  hash_size * sizeof(NameSymbol *));
+    base = (NameSymbol**) memset(new NameSymbol*[hash_size], 0,
+                                 hash_size * sizeof(NameSymbol*));
 
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
     {
-        NameSymbol *ns = symbol_pool[i];
+        NameSymbol* ns = symbol_pool[i];
         int k = ns -> hash_address % hash_size;
         ns -> next = base[k];
         base[k] = ns;
@@ -367,12 +423,12 @@ void NameLookupTable::Rehash()
 }
 
 
-NameSymbol *NameLookupTable::FindOrInsertName(wchar_t *str, size_t len)
+NameSymbol* NameLookupTable::FindOrInsertName(const wchar_t* str, unsigned len)
 {
     unsigned hash_address = Hash(str, len);
     int k = hash_address % hash_size;
-    NameSymbol *symbol;
-    for (symbol = base[k]; symbol; symbol = (NameSymbol *) symbol -> next)
+    NameSymbol* symbol;
+    for (symbol = base[k]; symbol; symbol = (NameSymbol*) symbol -> next)
     {
         if (hash_address == symbol -> hash_address &&
             len == symbol -> NameLength() &&
@@ -398,12 +454,11 @@ NameSymbol *NameLookupTable::FindOrInsertName(wchar_t *str, size_t len)
     //
     if (symbol_pool.Length() > (hash_size << 1) && hash_size < MAX_HASH_SIZE)
         Rehash();
-
     return symbol;
 }
 
 
-int TypeLookupTable::primes[] = {
+unsigned TypeLookupTable::primes[] = {
     DEFAULT_HASH_SIZE, 8191, 16411, MAX_HASH_SIZE
 };
 
@@ -412,8 +467,8 @@ TypeLookupTable::TypeLookupTable(int estimate)
       hash_size(primes[0]),
       prime_index(0)
 {
-    base = (TypeSymbol **) memset(new TypeSymbol *[hash_size], 0,
-                                  hash_size * sizeof(TypeSymbol *));
+    base = (TypeSymbol**) memset(new TypeSymbol*[hash_size], 0,
+                                 hash_size * sizeof(TypeSymbol*));
 }
 
 
@@ -428,12 +483,12 @@ void TypeLookupTable::Rehash()
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (TypeSymbol **) memset(new TypeSymbol *[hash_size], 0,
-                                  hash_size * sizeof(TypeSymbol *));
+    base = (TypeSymbol**) memset(new TypeSymbol*[hash_size], 0,
+                                 hash_size * sizeof(TypeSymbol*));
 
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
     {
-        TypeSymbol *type = symbol_pool[i];
+        TypeSymbol* type = symbol_pool[i];
         int k = type -> hash_address % hash_size;
         type -> next_type = base[k];
         base[k] = type;
@@ -441,16 +496,16 @@ void TypeLookupTable::Rehash()
 }
 
 
-TypeSymbol *TypeLookupTable::FindType(const char *str, int len)
+TypeSymbol* TypeLookupTable::FindType(const char* str, int len)
 {
     unsigned hash_address = Hash(str, len);
     int k = hash_address % hash_size;
 
-    for (TypeSymbol *type = base[k]; type; type = type -> next_type)
+    for (TypeSymbol* type = base[k]; type; type = type -> next_type)
     {
         assert(type -> fully_qualified_name);
 
-        Utf8LiteralValue *fully_qualified_name = type -> fully_qualified_name;
+        Utf8LiteralValue* fully_qualified_name = type -> fully_qualified_name;
         if (len == fully_qualified_name -> length &&
             memcmp(fully_qualified_name -> value, str,
                    len * sizeof(char)) == 0)
@@ -458,12 +513,11 @@ TypeSymbol *TypeLookupTable::FindType(const char *str, int len)
             return type;
         }
     }
-
     return NULL;
 }
 
 
-void TypeLookupTable::InsertType(TypeSymbol *type)
+void TypeLookupTable::InsertType(TypeSymbol* type)
 {
     assert(type && type -> fully_qualified_name);
 
@@ -472,7 +526,7 @@ void TypeLookupTable::InsertType(TypeSymbol *type)
     int k = hash_address % hash_size;
 
 #ifdef JIKES_DEBUG
-    for (TypeSymbol *t = base[k]; t; t = t -> next_type)
+    for (TypeSymbol* t = base[k]; t; t = t -> next_type)
         assert (type != t && "Type was already entered in type table");
 #endif
 
@@ -499,45 +553,45 @@ void TypeLookupTable::InsertType(TypeSymbol *type)
 void TypeLookupTable::SetEmpty()
 {
     symbol_pool.Reset();
-    (void) memset(base, 0, hash_size * sizeof(TypeSymbol *));
+    (void) memset(base, 0, hash_size * sizeof(TypeSymbol*));
 }
 
 
 int IntLiteralTable::int32_limit = 0x7FFFFFFF / 10;
-int IntLiteralTable::primes[] = {
+unsigned IntLiteralTable::primes[] = {
     DEFAULT_HASH_SIZE, 8191, 16411, MAX_HASH_SIZE
 };
 
-IntLiteralTable::IntLiteralTable(LiteralValue *bad_value_)
+IntLiteralTable::IntLiteralTable(LiteralValue* bad_value_)
     : symbol_pool(16384),
       hash_size(primes[0]),
       prime_index(0),
       bad_value(bad_value_)
 {
-    base = (IntLiteralValue **) memset(new IntLiteralValue *[hash_size], 0,
-                                       hash_size * sizeof(IntLiteralValue *));
+    base = (IntLiteralValue**) memset(new IntLiteralValue*[hash_size], 0,
+                                      hash_size * sizeof(IntLiteralValue*));
     symbol_pool.Next() = NULL; // do not use the 0th element
 }
 
 IntLiteralTable::~IntLiteralTable()
 {
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
 }
 
 
-LiteralValue *IntLiteralTable::FindOrInsertChar(LiteralSymbol *literal)
+LiteralValue* IntLiteralTable::FindOrInsertChar(LiteralSymbol* literal)
 {
-    wchar_t *name = literal -> Name() + 1;
+    const wchar_t* name = literal -> Name() + 1;
     int len = literal -> NameLength() - 2; // discard ''
 
     if (len <= 0) // An isolated or unterminated quote.
         return literal -> value = bad_value;
     if (len == 1) // A regular character.
-        return literal -> value = FindOrInsert((int) name[0]);
+        return literal -> value = FindOrInsert((i4) name[0]);
 
-    int value = -1;
+    i4 value = -1;
 
     if (name[0] == U_BACKSLASH)
         switch (name[1])
@@ -577,16 +631,15 @@ LiteralValue *IntLiteralTable::FindOrInsertChar(LiteralSymbol *literal)
                     value = value * 8 + name[i] - U_0;
             }
         }
-
     return literal -> value = (value < 0 || value > 65535 ? bad_value
                                : FindOrInsert(value));
 }
 
 
-LiteralValue *IntLiteralTable::FindOrInsertHexInt(LiteralSymbol *literal)
+LiteralValue* IntLiteralTable::FindOrInsertHexInt(LiteralSymbol* literal)
 {
-    wchar_t *head = literal -> Name() + 1, // point to X
-            *tail = &literal -> Name()[literal -> NameLength() - 1];
+    const wchar_t* head = literal -> Name() + 1; // point to X
+    const wchar_t* tail = &literal -> Name()[literal -> NameLength() - 1];
 
     u4 uvalue = 0;
 
@@ -600,15 +653,14 @@ LiteralValue *IntLiteralTable::FindOrInsertHexInt(LiteralSymbol *literal)
                         : ((Code::IsLower(*tail) ? U_a : U_A) - 10));
         uvalue |= (d << i);
     }
-
-    return (tail > head ? bad_value : FindOrInsert((int) uvalue));
+    return tail > head ? bad_value : FindOrInsert((i4) uvalue);
 }
 
 
-LiteralValue *IntLiteralTable::FindOrInsertOctalInt(LiteralSymbol *literal)
+LiteralValue* IntLiteralTable::FindOrInsertOctalInt(LiteralSymbol* literal)
 {
-    wchar_t *head = literal -> Name(), // point to initial '0'
-            *tail = &head[literal -> NameLength() - 1];
+    const wchar_t* head = literal -> Name(); // point to initial '0'
+    const wchar_t* tail = &head[literal -> NameLength() - 1];
 
     u4 uvalue = 0;
     for (++head; tail > head && *head == U_0; head++) // skip leading zeroes
@@ -631,14 +683,13 @@ LiteralValue *IntLiteralTable::FindOrInsertOctalInt(LiteralSymbol *literal)
             uvalue |= (d << 30);
         }
     }
-
-    return (tail > head ? bad_value : FindOrInsert((int) uvalue));
+    return tail > head ? bad_value : FindOrInsert((i4) uvalue);
 }
 
 
-LiteralValue *IntLiteralTable::FindOrInsertInt(LiteralSymbol *literal)
+LiteralValue* IntLiteralTable::FindOrInsertInt(LiteralSymbol* literal)
 {
-    wchar_t *name = literal -> Name();
+    const wchar_t* name = literal -> Name();
 
     if (name[0] == U_0)
         literal -> value = (name[1] == U_x || name[1] == U_X
@@ -646,9 +697,9 @@ LiteralValue *IntLiteralTable::FindOrInsertInt(LiteralSymbol *literal)
                             : FindOrInsertOctalInt(literal));
     else
     {
-        int value = 0;
+        i4 value = 0;
 
-        wchar_t *p;
+        const wchar_t* p;
         for (p = name; *p; p++)
         {
             int digit = *p - U_0;
@@ -659,21 +710,20 @@ LiteralValue *IntLiteralTable::FindOrInsertInt(LiteralSymbol *literal)
 
         literal -> value = (*p ? bad_value : FindOrInsert(value));
     }
-
     return literal -> value;
 }
 
 
-LiteralValue *IntLiteralTable::FindOrInsertNegativeInt(LiteralSymbol *literal)
+LiteralValue* IntLiteralTable::FindOrInsertNegativeInt(LiteralSymbol* literal)
 {
     if (literal -> value && literal -> value != bad_value)
     {
         // A positive value already exists.
-        IntLiteralValue *int_literal = (IntLiteralValue *) literal -> value;
+        IntLiteralValue* int_literal = (IntLiteralValue*) literal -> value;
         return FindOrInsert(- int_literal -> value);
     }
 
-    wchar_t *name = literal -> Name();
+    const wchar_t* name = literal -> Name();
 
     //
     // We can assert that the name of a literal contains at least two
@@ -681,16 +731,16 @@ LiteralValue *IntLiteralTable::FindOrInsertNegativeInt(LiteralSymbol *literal)
     //
     if (name[0] == U_0)
     {
-        IntLiteralValue *int_literal =
-            (IntLiteralValue *) (name[1] == U_x || name[1] == U_X
+        IntLiteralValue* int_literal =
+            (IntLiteralValue*) (name[1] == U_x || name[1] == U_X
                                  ? FindOrInsertHexInt(literal)
                                  : FindOrInsertOctalInt(literal));
         return FindOrInsert(- int_literal -> value);
     }
 
-    int value = 0;
+    i4 value = 0;
 
-    wchar_t *p;
+    const wchar_t* p;
     for (p = name; *p; p++)
     {
         int digit = *p - U_0;
@@ -698,8 +748,7 @@ LiteralValue *IntLiteralTable::FindOrInsertNegativeInt(LiteralSymbol *literal)
             break;
         value = value * 10 + digit;
     }
-
-    return (*p ? bad_value : FindOrInsert(-value));
+    return *p ? bad_value : FindOrInsert(- value);
 }
 
 
@@ -708,15 +757,15 @@ void IntLiteralTable::Rehash()
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (IntLiteralValue **) memset(new IntLiteralValue *[hash_size], 0,
-                                       hash_size * sizeof(IntLiteralValue *));
+    base = (IntLiteralValue**) memset(new IntLiteralValue*[hash_size], 0,
+                                      hash_size * sizeof(IntLiteralValue*));
 
     //
     // Recall that the 0th element is unused.
     //
-    for (int i = 1; i < symbol_pool.Length(); i++)
+    for (unsigned i = 1; i < symbol_pool.Length(); i++)
     {
-        IntLiteralValue *ilv = symbol_pool[i];
+        IntLiteralValue* ilv = symbol_pool[i];
         // The unsigned casting turns the negative values into positive values.
         int k = ((unsigned) ilv -> value) % hash_size;
         ilv -> next = base[k];
@@ -725,29 +774,28 @@ void IntLiteralTable::Rehash()
 }
 
 
-IntLiteralValue *IntLiteralTable::Find(int value)
+IntLiteralValue* IntLiteralTable::Find(i4 value)
 {
     // The unsigned casting turns the negative values into positive values.
     int k = ((unsigned) value) % hash_size;
 
-    IntLiteralValue *lit = NULL;
-    for (lit = base[k]; lit; lit = (IntLiteralValue *) lit -> next)
+    IntLiteralValue* lit = NULL;
+    for (lit = base[k]; lit; lit = (IntLiteralValue*) lit -> next)
     {
         if (lit -> value == value)
             break;
     }
-
     return lit;
 }
 
 
-IntLiteralValue *IntLiteralTable::FindOrInsert(int value)
+IntLiteralValue* IntLiteralTable::FindOrInsert(i4 value)
 {
     // The unsigned casting turns the negative values into positive values.
     int k = ((unsigned) value) % hash_size;
 
-    IntLiteralValue *lit;
-    for (lit = base[k]; lit; lit = (IntLiteralValue *) lit -> next)
+    IntLiteralValue* lit;
+    for (lit = base[k]; lit; lit = (IntLiteralValue*) lit -> next)
     {
         if (lit -> value == value)
             return lit;
@@ -768,43 +816,42 @@ IntLiteralValue *IntLiteralTable::FindOrInsert(int value)
     //
     if (symbol_pool.Length() > (hash_size << 1) && hash_size < MAX_HASH_SIZE)
         Rehash();
-
     return lit;
 }
 
 
 LongInt LongLiteralTable::int64_limit = LongInt(0x7FFFFFFF, 0xFFFFFFFF) / 10;
-int LongLiteralTable::primes[] = {
+unsigned LongLiteralTable::primes[] = {
     DEFAULT_HASH_SIZE, 2039, 4093, MAX_HASH_SIZE
 };
 
-LongLiteralTable::LongLiteralTable(LiteralValue *bad_value_)
+LongLiteralTable::LongLiteralTable(LiteralValue* bad_value_)
     : symbol_pool(16384),
       hash_size(primes[0]),
       prime_index(0),
       bad_value(bad_value_)
 {
-    base = (LongLiteralValue **) memset(new LongLiteralValue *[hash_size], 0,
-                                        hash_size * sizeof(LongLiteralValue *));
+    base = (LongLiteralValue**) memset(new LongLiteralValue*[hash_size], 0,
+                                       hash_size * sizeof(LongLiteralValue*));
     symbol_pool.Next() = NULL; // do not use the 0th element
 }
 
 LongLiteralTable::~LongLiteralTable()
 {
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
 }
 
 
-LiteralValue *LongLiteralTable::FindOrInsertHexLong(LiteralSymbol *literal)
+LiteralValue* LongLiteralTable::FindOrInsertHexLong(LiteralSymbol* literal)
 {
     u4 high = 0,
        low = 0;
 
-    wchar_t *head = literal -> Name() + 1, // point to X
-        // -2 to skip the 'L' suffix
-            *tail = &literal -> Name()[literal -> NameLength() - 2];
+    const wchar_t* head = literal -> Name() + 1; // point to X
+    // -2 to skip the 'L' suffix
+    const wchar_t* tail = &literal -> Name()[literal -> NameLength() - 2];
 
     for (++head; tail > head && *head == U_0; head++) // skip leading zeroes
         ;
@@ -823,16 +870,15 @@ LiteralValue *LongLiteralTable::FindOrInsertHexLong(LiteralSymbol *literal)
                                                       ? U_a : U_A) - 10);
         high |= (d << j);
     }
-
-    return (tail > head ? bad_value : FindOrInsert(LongInt(high, low)));
+    return tail > head ? bad_value : FindOrInsert(LongInt(high, low));
 }
 
 
-LiteralValue *LongLiteralTable::FindOrInsertOctalLong(LiteralSymbol *literal)
+LiteralValue* LongLiteralTable::FindOrInsertOctalLong(LiteralSymbol* literal)
 {
-    wchar_t *head = literal -> Name(), // point to initial '0'
-        // -2 to skip the 'L' suffix
-            *tail = &head[literal -> NameLength() - 2];
+    const wchar_t* head = literal -> Name(); // point to initial '0'
+    // -2 to skip the 'L' suffix
+    const wchar_t* tail = &head[literal -> NameLength() - 2];
 
     ULongInt uvalue = 0;
     for (++head; tail > head && *head == U_0; head++) // skip leading zeroes
@@ -855,14 +901,13 @@ LiteralValue *LongLiteralTable::FindOrInsertOctalLong(LiteralSymbol *literal)
             uvalue |= ULongInt((d << 31), 0);
         }
     }
-
-    return (tail > head ? bad_value : FindOrInsert((LongInt) uvalue));
+    return tail > head ? bad_value : FindOrInsert((LongInt) uvalue);
 }
 
 
-LiteralValue *LongLiteralTable::FindOrInsertLong(LiteralSymbol *literal)
+LiteralValue* LongLiteralTable::FindOrInsertLong(LiteralSymbol* literal)
 {
-    wchar_t *name = literal -> Name();
+    const wchar_t* name = literal -> Name();
 
     //
     // We can assert that the name of a literal contains at least two
@@ -876,7 +921,7 @@ LiteralValue *LongLiteralTable::FindOrInsertLong(LiteralSymbol *literal)
     {
         LongInt value = 0;
 
-        wchar_t *p;
+        const wchar_t* p;
         for (p = name; *p != U_L && *p != U_l; p++)
         {
             u4 digit = *p - U_0;
@@ -888,29 +933,28 @@ LiteralValue *LongLiteralTable::FindOrInsertLong(LiteralSymbol *literal)
         literal -> value = (*p != U_L && *p != U_l ? bad_value
                             : FindOrInsert(value));
     }
-
     return literal -> value;
 }
 
 
-LiteralValue *LongLiteralTable::FindOrInsertNegativeLong(LiteralSymbol *literal)
+LiteralValue* LongLiteralTable::FindOrInsertNegativeLong(LiteralSymbol* literal)
 {
     // A positive value already exists.
     if (literal -> value && literal -> value != bad_value)
     {
-        LongLiteralValue *long_literal = (LongLiteralValue *) literal -> value;
+        LongLiteralValue* long_literal = (LongLiteralValue*) literal -> value;
         return FindOrInsert(- long_literal -> value);
     }
 
-    wchar_t *name = literal -> Name();
+    const wchar_t* name = literal -> Name();
     //
     // We can assert that the name of a literal contains at least two
     // characters: at least one digit and the terminating '\0'.
     //
     if (name[0] == U_0)
     {
-        LongLiteralValue *long_literal =
-            (LongLiteralValue *) (name[1] == U_x || name[1] == U_X
+        LongLiteralValue* long_literal =
+            (LongLiteralValue*) (name[1] == U_x || name[1] == U_X
                                   ? FindOrInsertHexLong(literal)
                                   : FindOrInsertOctalLong(literal));
         return FindOrInsert(- long_literal -> value);
@@ -918,7 +962,7 @@ LiteralValue *LongLiteralTable::FindOrInsertNegativeLong(LiteralSymbol *literal)
 
     LongInt value = 0;
 
-    wchar_t *p;
+    const wchar_t* p;
     for (p = name; *p != U_L && *p != U_l && value >= 0; p++)
     {
         u4 digit = *p - U_0;
@@ -926,8 +970,7 @@ LiteralValue *LongLiteralTable::FindOrInsertNegativeLong(LiteralSymbol *literal)
             break;
         value = value * 10 + digit;
     }
-
-    return (*p != U_L && *p != U_l ? bad_value : FindOrInsert(-value));
+    return *p != U_L && *p != U_l ? bad_value : FindOrInsert(- value);
 }
 
 
@@ -936,15 +979,15 @@ void LongLiteralTable::Rehash()
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (LongLiteralValue **) memset(new LongLiteralValue *[hash_size], 0,
-                                        hash_size * sizeof(LongLiteralValue *));
+    base = (LongLiteralValue**) memset(new LongLiteralValue*[hash_size], 0,
+                                       hash_size * sizeof(LongLiteralValue*));
 
     //
     // Recall that the 0th element is unused.
     //
-    for (int i = 1; i < symbol_pool.Length(); i++)
+    for (unsigned i = 1; i < symbol_pool.Length(); i++)
     {
-        LongLiteralValue *llv = symbol_pool[i];
+        LongLiteralValue* llv = symbol_pool[i];
         // The hash function for LongInt values is cheap so we don't need to
         // save it.
         int k = Hash(llv -> value) % hash_size;
@@ -954,12 +997,12 @@ void LongLiteralTable::Rehash()
 }
 
 
-LongLiteralValue *LongLiteralTable::FindOrInsert(LongInt value)
+LongLiteralValue* LongLiteralTable::FindOrInsert(LongInt value)
 {
     int k = Hash(value) % hash_size;
 
-    LongLiteralValue *lit;
-    for (lit = base[k]; lit; lit = (LongLiteralValue *) lit -> next)
+    LongLiteralValue* lit;
+    for (lit = base[k]; lit; lit = (LongLiteralValue*) lit -> next)
     {
         if (lit -> value == value)
             return lit;
@@ -980,38 +1023,37 @@ LongLiteralValue *LongLiteralTable::FindOrInsert(LongInt value)
     //
     if (symbol_pool.Length() > (hash_size << 1) && hash_size < MAX_HASH_SIZE)
         Rehash();
-
     return lit;
 }
 
 
-int FloatLiteralTable::primes[] = {
+unsigned FloatLiteralTable::primes[] = {
     DEFAULT_HASH_SIZE, 2039, 4093, MAX_HASH_SIZE
 };
 
-FloatLiteralTable::FloatLiteralTable(LiteralValue *bad_value_)
+FloatLiteralTable::FloatLiteralTable(LiteralValue* bad_value_)
     : symbol_pool(16384),
       hash_size(primes[0]),
       prime_index(0),
       bad_value(bad_value_)
 {
-    base = (FloatLiteralValue **) memset(new FloatLiteralValue *[hash_size], 0,
-                                         hash_size * sizeof(FloatLiteralValue *));
+    base = (FloatLiteralValue**) memset(new FloatLiteralValue*[hash_size], 0,
+                                        hash_size * sizeof(FloatLiteralValue*));
     symbol_pool.Next() = NULL; // do not use the 0th element
 }
 
 FloatLiteralTable::~FloatLiteralTable()
 {
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
 }
 
 
-LiteralValue *FloatLiteralTable::FindOrInsertFloat(LiteralSymbol *literal)
+LiteralValue* FloatLiteralTable::FindOrInsertFloat(LiteralSymbol* literal)
 {
-    char *name = new char[literal -> NameLength() + 1];
-    for (size_t i = 0; i < literal -> NameLength(); i++)
+    char* name = new char[literal -> NameLength() + 1];
+    for (unsigned i = 0; i < literal -> NameLength(); i++)
         name[i] = (char) literal -> Name()[i];
     name[literal -> NameLength()] = U_NULL;
 
@@ -1025,7 +1067,6 @@ LiteralValue *FloatLiteralTable::FindOrInsertFloat(LiteralSymbol *literal)
     literal -> value = (value.IsNaN() ? bad_value : FindOrInsert(value));
 
     delete [] name;
-
     return literal -> value;
 }
 
@@ -1035,15 +1076,15 @@ void FloatLiteralTable::Rehash()
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (FloatLiteralValue **) memset(new FloatLiteralValue *[hash_size], 0,
-                                         hash_size * sizeof(FloatLiteralValue *));
+    base = (FloatLiteralValue**) memset(new FloatLiteralValue*[hash_size], 0,
+                                        hash_size * sizeof(FloatLiteralValue*));
 
     //
     // Recall that the 0th element is unused.
     //
-    for (int i = 1; i < symbol_pool.Length(); i++)
+    for (unsigned i = 1; i < symbol_pool.Length(); i++)
     {
-        FloatLiteralValue *flv = symbol_pool[i];
+        FloatLiteralValue* flv = symbol_pool[i];
         // The hash function for float values is cheap so we don't need to
         // save it.
         int k = Hash(flv -> value) % hash_size;
@@ -1053,12 +1094,12 @@ void FloatLiteralTable::Rehash()
 }
 
 
-FloatLiteralValue *FloatLiteralTable::FindOrInsert(IEEEfloat value)
+FloatLiteralValue* FloatLiteralTable::FindOrInsert(IEEEfloat value)
 {
     int k = Hash(value) % hash_size;
 
-    FloatLiteralValue *lit;
-    for (lit = base[k]; lit; lit = (FloatLiteralValue *) lit -> next)
+    FloatLiteralValue* lit;
+    for (lit = base[k]; lit; lit = (FloatLiteralValue*) lit -> next)
     {
         if (lit -> value.equals(value))
             return lit;
@@ -1079,39 +1120,37 @@ FloatLiteralValue *FloatLiteralTable::FindOrInsert(IEEEfloat value)
     //
     if (symbol_pool.Length() > (hash_size << 1) && hash_size < MAX_HASH_SIZE)
         Rehash();
-
     return lit;
 }
 
 
-int DoubleLiteralTable::primes[] = {
+unsigned DoubleLiteralTable::primes[] = {
     DEFAULT_HASH_SIZE, 2039, 4093, MAX_HASH_SIZE
 };
 
-DoubleLiteralTable::DoubleLiteralTable(LiteralValue *bad_value_)
+DoubleLiteralTable::DoubleLiteralTable(LiteralValue* bad_value_)
     : symbol_pool(16384),
       hash_size(primes[0]),
       prime_index(0),
       bad_value(bad_value_)
 {
-    base = (DoubleLiteralValue **) memset(new DoubleLiteralValue *[hash_size],
-                                          0,
-                                          hash_size * sizeof(DoubleLiteralValue *));
+    base = (DoubleLiteralValue**) memset(new DoubleLiteralValue*[hash_size], 0,
+                                         hash_size * sizeof(DoubleLiteralValue*));
     symbol_pool.Next() = NULL; // do not use the 0th element
 }
 
 DoubleLiteralTable::~DoubleLiteralTable()
 {
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
 }
 
 
-LiteralValue *DoubleLiteralTable::FindOrInsertDouble(LiteralSymbol *literal)
+LiteralValue* DoubleLiteralTable::FindOrInsertDouble(LiteralSymbol* literal)
 {
-    char *name = new char[literal -> NameLength() + 1];
-    for (size_t i = 0; i < literal -> NameLength(); i++)
+    char* name = new char[literal -> NameLength() + 1];
+    for (unsigned i = 0; i < literal -> NameLength(); i++)
         name[i] = (char) literal -> Name()[i];
     name[literal -> NameLength()] = U_NULL;
 
@@ -1125,7 +1164,6 @@ LiteralValue *DoubleLiteralTable::FindOrInsertDouble(LiteralSymbol *literal)
     literal -> value = (value.IsNaN() ? bad_value : FindOrInsert(value));
 
     delete [] name;
-
     return literal -> value;
 }
 
@@ -1135,16 +1173,15 @@ void DoubleLiteralTable::Rehash()
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (DoubleLiteralValue **) memset(new DoubleLiteralValue *[hash_size],
-                                          0,
-                                          hash_size * sizeof(DoubleLiteralValue *));
+    base = (DoubleLiteralValue**) memset(new DoubleLiteralValue*[hash_size], 0,
+                                         hash_size * sizeof(DoubleLiteralValue*));
 
     //
     // Recall that the 0th element is unused.
     //
-    for (int i = 1; i < symbol_pool.Length(); i++)
+    for (unsigned i = 1; i < symbol_pool.Length(); i++)
     {
-        DoubleLiteralValue *dlv = symbol_pool[i];
+        DoubleLiteralValue* dlv = symbol_pool[i];
         // The hash function for double values is cheap so we don't need to
         // save it.
         int k = Hash(dlv -> value) % hash_size;
@@ -1154,12 +1191,12 @@ void DoubleLiteralTable::Rehash()
 }
 
 
-DoubleLiteralValue *DoubleLiteralTable::FindOrInsert(IEEEdouble value)
+DoubleLiteralValue* DoubleLiteralTable::FindOrInsert(IEEEdouble value)
 {
     int k = Hash(value) % hash_size;
 
-    DoubleLiteralValue *lit;
-    for (lit = base[k]; lit; lit = (DoubleLiteralValue *) lit -> next)
+    DoubleLiteralValue* lit;
+    for (lit = base[k]; lit; lit = (DoubleLiteralValue*) lit -> next)
     {
         if (lit -> value.equals(value))
             return lit;
@@ -1180,18 +1217,17 @@ DoubleLiteralValue *DoubleLiteralTable::FindOrInsert(IEEEdouble value)
     //
     if (symbol_pool.Length() > (hash_size << 1) && hash_size < MAX_HASH_SIZE)
         Rehash();
-
     return lit;
 }
 
 
-LiteralValue *Utf8LiteralTable::FindOrInsertString(LiteralSymbol *literal)
+LiteralValue* Utf8LiteralTable::FindOrInsertString(LiteralSymbol* literal)
 {
-    wchar_t *name = literal -> Name() + 1;
+    const wchar_t* name = literal -> Name() + 1;
     int literal_length = literal -> NameLength() - 2; // discard ""
 
     // Big enough for the worst case: 3 bytes/char + \0.
-    char *value = new char[literal_length * 3 + 1];
+    char* value = new char[literal_length * 3 + 1];
     int len = 0;
     int i = -1;
 
@@ -1279,7 +1315,7 @@ LiteralValue *Utf8LiteralTable::FindOrInsertString(LiteralSymbol *literal)
 }
 
 
-Utf8LiteralValue *Utf8LiteralTable::FindOrInsert(wchar_t ch)
+Utf8LiteralValue* Utf8LiteralTable::FindOrInsert(wchar_t ch)
 {
     int len = 0;
     char str[4];
@@ -1304,7 +1340,6 @@ Utf8LiteralValue *Utf8LiteralTable::FindOrInsert(wchar_t ch)
     }
 
     str[len] = U_NULL;
-
     return FindOrInsert(str, len);
 }
 
@@ -1314,15 +1349,15 @@ void Utf8LiteralTable::Rehash()
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (Utf8LiteralValue **) memset(new Utf8LiteralValue *[hash_size], 0,
-                                        hash_size * sizeof(Utf8LiteralValue *));
+    base = (Utf8LiteralValue**) memset(new Utf8LiteralValue*[hash_size], 0,
+                                       hash_size * sizeof(Utf8LiteralValue*));
 
     //
     // Recall that the 0th element is unused.
     //
-    for (int i = 1; i < symbol_pool.Length(); i++)
+    for (unsigned i = 1; i < symbol_pool.Length(); i++)
     {
-        Utf8LiteralValue *ulv = symbol_pool[i];
+        Utf8LiteralValue* ulv = symbol_pool[i];
         int k = ulv -> hash_address % hash_size;
         ulv -> next = base[k];
         base[k] = ulv;
@@ -1330,37 +1365,37 @@ void Utf8LiteralTable::Rehash()
 }
 
 
-int Utf8LiteralTable::primes[] = {
+unsigned Utf8LiteralTable::primes[] = {
     DEFAULT_HASH_SIZE, 8191, 16411, MAX_HASH_SIZE
 };
 
-Utf8LiteralTable::Utf8LiteralTable(LiteralValue *bad_value_)
+Utf8LiteralTable::Utf8LiteralTable(LiteralValue* bad_value_)
     : symbol_pool(16384),
       hash_size(primes[0]),
       prime_index(0),
       bad_value(bad_value_)
 {
-    base = (Utf8LiteralValue **) memset(new Utf8LiteralValue *[hash_size], 0,
-                                        hash_size * sizeof(Utf8LiteralValue *));
+    base = (Utf8LiteralValue**) memset(new Utf8LiteralValue*[hash_size], 0,
+                                       hash_size * sizeof(Utf8LiteralValue*));
     symbol_pool.Next() = NULL; // do not use the 0th element
 }
 
 
 Utf8LiteralTable::~Utf8LiteralTable()
 {
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
 }
 
 
-Utf8LiteralValue *Utf8LiteralTable::FindOrInsert(const char *str, int len)
+Utf8LiteralValue* Utf8LiteralTable::FindOrInsert(const char* str, int len)
 {
     unsigned hash_address = Hash(str, len);
     int k = hash_address % hash_size;
 
-    Utf8LiteralValue *lit;
-    for (lit = base[k]; lit; lit = (Utf8LiteralValue *) lit -> next)
+    Utf8LiteralValue* lit;
+    for (lit = base[k]; lit; lit = (Utf8LiteralValue*) lit -> next)
     {
         if (hash_address == lit -> hash_address &&
             len == lit -> length &&
@@ -1385,7 +1420,6 @@ Utf8LiteralValue *Utf8LiteralTable::FindOrInsert(const char *str, int len)
     //
     if (symbol_pool.Length() > (hash_size << 1) && hash_size < MAX_HASH_SIZE)
         Rehash();
-
     return lit;
 }
 
@@ -1397,7 +1431,7 @@ Utf8LiteralValue *Utf8LiteralTable::FindOrInsert(const char *str, int len)
 //
 void Utf8LiteralTable::CollectStrings()
 {
-    int count = utf8_literals -> Length();
+    unsigned count = utf8_literals -> Length();
     assert(count && leftmost_constant_expr);
     if (count == 1)
     {
@@ -1407,18 +1441,18 @@ void Utf8LiteralTable::CollectStrings()
     else
     {
         int length = 0;
-        for (int i = 0; i < count; i++)
+        for (unsigned i = 0; i < count; i++)
             length += (*utf8_literals)[i] -> length;
-        char *str = new char[length + 1]; // +1 for '\0'
+        char* str = new char[length + 1]; // +1 for '\0'
 
         int index = 0;
-        for (int k = 0; k < count; k++)
+        for (unsigned k = 0; k < count; k++)
         {
-            Utf8LiteralValue *literal = (*utf8_literals)[k];
+            Utf8LiteralValue* literal = (*utf8_literals)[k];
             assert(literal -> value);
 
-            memmove(&str[index], literal -> value,
-                    literal -> length * sizeof(char));
+            memcpy(&str[index], literal -> value,
+                   literal -> length * sizeof(char));
             index += literal -> length;
         }
         str[length] = U_NULL;
@@ -1440,7 +1474,7 @@ void Utf8LiteralTable::CollectStrings()
 // is not constant, all strings in the tuple are collected into the leftmost
 // constant of the previous chain.
 //
-bool Utf8LiteralTable::EndsInKnownString(AstExpression *expression)
+bool Utf8LiteralTable::EndsInKnownString(AstExpression* expression)
 {
     if (expression -> IsConstant())
     {
@@ -1452,8 +1486,8 @@ bool Utf8LiteralTable::EndsInKnownString(AstExpression *expression)
         // (nonconst + "a") + "b"; become (nonconst + "ab") + "";.  The
         // bytecode emitter is then smart enough to ignore the "".
         //
-        Utf8LiteralValue *literal =
-            DYNAMIC_CAST<Utf8LiteralValue *> (expression -> value);
+        Utf8LiteralValue* literal =
+            DYNAMIC_CAST<Utf8LiteralValue*> (expression -> value);
         assert(literal -> value);
 
         utf8_literals -> Next() = literal;
@@ -1464,11 +1498,11 @@ bool Utf8LiteralTable::EndsInKnownString(AstExpression *expression)
         return true;
     }
 
-    AstBinaryExpression *binary_expr = expression -> BinaryExpressionCast();
-    AstCastExpression *cast_expr = expression -> CastExpressionCast();
-    AstParenthesizedExpression *paren_expr =
+    AstBinaryExpression* binary_expr = expression -> BinaryExpressionCast();
+    AstCastExpression* cast_expr = expression -> CastExpressionCast();
+    AstParenthesizedExpression* paren_expr =
         expression -> ParenthesizedExpressionCast();
-    AstNullLiteral *null_expr = expression -> NullLiteralCast();
+    AstNullLiteral* null_expr = expression -> NullLiteralCast();
     if (binary_expr)
     {
         //
@@ -1480,8 +1514,8 @@ bool Utf8LiteralTable::EndsInKnownString(AstExpression *expression)
         // This relies on the fact that this binary expression is of type
         // String. Remember that the null literal is not constant.
         //
-        AstExpression *left  = binary_expr -> left_expression,
-                      *right = binary_expr -> right_expression;
+        AstExpression* left  = binary_expr -> left_expression;
+        AstExpression* right = binary_expr -> right_expression;
         if (left -> IsConstant() ||
             left -> Type() == expression -> Type())
         {
@@ -1551,9 +1585,9 @@ bool Utf8LiteralTable::EndsInKnownString(AstExpression *expression)
 // the correct value, but some intermediate subexpressions may return a
 // harmless false negative.
 //
-void Utf8LiteralTable::CheckStringConstant(AstExpression *expression)
+void Utf8LiteralTable::CheckStringConstant(AstExpression* expression)
 {
-    utf8_literals = new Tuple<Utf8LiteralValue *>(256);
+    utf8_literals = new Tuple<Utf8LiteralValue*>(256);
     leftmost_constant_expr = NULL;
 
     if (EndsInKnownString(expression))
@@ -1563,21 +1597,22 @@ void Utf8LiteralTable::CheckStringConstant(AstExpression *expression)
 }
 
 
-int LiteralLookupTable::primes[] = {
+unsigned LiteralLookupTable::primes[] = {
     DEFAULT_HASH_SIZE, 2039, 4093, MAX_HASH_SIZE
 };
 
-LiteralLookupTable::LiteralLookupTable() : symbol_pool(16384),
-                                           hash_size(primes[0]),
-                                           prime_index(0)
+LiteralLookupTable::LiteralLookupTable()
+    : symbol_pool(16384),
+      hash_size(primes[0]),
+      prime_index(0)
 {
-    base = (LiteralSymbol **) memset(new LiteralSymbol *[hash_size], 0,
-                                     hash_size * sizeof(LiteralSymbol *));
+    base = (LiteralSymbol**) memset(new LiteralSymbol*[hash_size], 0,
+                                    hash_size * sizeof(LiteralSymbol*));
 }
 
 LiteralLookupTable::~LiteralLookupTable()
 {
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
 }
@@ -1588,12 +1623,12 @@ void LiteralLookupTable::Rehash()
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (LiteralSymbol **) memset(new LiteralSymbol *[hash_size], 0,
-                                     hash_size * sizeof(LiteralSymbol *));
+    base = (LiteralSymbol**) memset(new LiteralSymbol*[hash_size], 0,
+                                    hash_size * sizeof(LiteralSymbol*));
 
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
     {
-        LiteralSymbol *ls = symbol_pool[i];
+        LiteralSymbol* ls = symbol_pool[i];
         int k = ls -> hash_address % hash_size;
         ls -> next = base[k];
         base[k] = ls;
@@ -1601,13 +1636,13 @@ void LiteralLookupTable::Rehash()
 }
 
 
-LiteralSymbol *LiteralLookupTable::FindOrInsertLiteral(wchar_t *str,
-                                                       size_t len)
+LiteralSymbol* LiteralLookupTable::FindOrInsertLiteral(const wchar_t* str,
+                                                       unsigned len)
 {
     unsigned hash_address = Hash(str, len);
     int k = hash_address % hash_size;
-    LiteralSymbol *symbol;
-    for (symbol = base[k]; symbol; symbol = (LiteralSymbol *) symbol -> next)
+    LiteralSymbol* symbol;
+    for (symbol = base[k]; symbol; symbol = (LiteralSymbol*) symbol -> next)
     {
         if (hash_address == symbol -> hash_address &&
             len == symbol -> NameLength() &&
@@ -1632,8 +1667,57 @@ LiteralSymbol *LiteralLookupTable::FindOrInsertLiteral(wchar_t *str,
     //
     if (symbol_pool.Length() > (hash_size << 1) && hash_size < MAX_HASH_SIZE)
         Rehash();
-
     return symbol;
+}
+
+bool NameSymbol::Contains(wchar_t character) const
+{
+    for (wchar_t* ptr = name_; *ptr; ptr++)
+    {
+        if (*ptr == character)
+            return true;
+    }
+    return false;
+}
+
+//
+// JLS2 6.8 describes the well-established Java naming conventions.
+// See also "Effective Java", item 38.
+//
+
+bool NameSymbol::IsBadStyleForClass() const
+{
+    // JLS2 6.8.2
+    return Code::IsLower(*name_) || Contains(U_UNDERSCORE);
+}
+
+bool NameSymbol::IsBadStyleForConstantField() const
+{
+    // JLS2 6.8.5
+    for (wchar_t* ptr = name_; *ptr; ptr++)
+    {
+        if (Code::IsLower(*ptr))
+        return true;
+    }
+    return false;
+}
+
+bool NameSymbol::IsBadStyleForField() const
+{
+    // JLS2 6.8.4
+    return IsBadStyleForVariable();
+}
+
+bool NameSymbol::IsBadStyleForMethod() const
+{
+    // JLS2 6.8.3
+    return IsBadStyleForVariable();
+}
+
+bool NameSymbol::IsBadStyleForVariable() const
+{
+    // JLS2 6.8.3, 6.8.4, 6.8.6
+    return Code::IsUpper(*name_) || Contains(U_UNDERSCORE);
 }
 
 #ifdef HAVE_JIKES_NAMESPACE

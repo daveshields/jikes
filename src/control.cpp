@@ -1,10 +1,9 @@
-// $Id: control.cpp,v 1.62 2002/11/11 14:51:18 ericb Exp $
+// $Id: control.cpp,v 1.67 2004/01/20 04:10:22 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 #include "control.h"
@@ -14,12 +13,13 @@
 #include "error.h"
 #include "bytecode.h"
 #include "case.h"
+#include "option.h"
 
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-Control::Control(char **arguments, Option &option_)
+Control::Control(char** arguments, Option& option_)
     : return_code(0),
       option(option_),
       dot_classpath_index(0),
@@ -116,13 +116,13 @@ Control::Control(char **arguments, Option &option_)
     // For each input file, copy it into the input_files array and process
     // its package declaration. Estimate we need 64 tokens.
     //
-    StoragePool *ast_pool = new StoragePool(64);
-    FileSymbol **input_files = new FileSymbol*[input_java_file_set.Size() + 1];
+    StoragePool* ast_pool = new StoragePool(64);
+    FileSymbol** input_files = new FileSymbol*[input_java_file_set.Size() + 1];
     int num_files = 0;
-    FileSymbol *file_symbol;
-    for (file_symbol = (FileSymbol *) input_java_file_set.FirstElement();
+    FileSymbol* file_symbol;
+    for (file_symbol = (FileSymbol*) input_java_file_set.FirstElement();
          file_symbol;
-         file_symbol = (FileSymbol *) input_java_file_set.NextElement())
+         file_symbol = (FileSymbol*) input_java_file_set.NextElement())
     {
         input_files[num_files++] = file_symbol;
 #ifdef JIKES_DEBUG
@@ -131,7 +131,7 @@ Control::Control(char **arguments, Option &option_)
         scanner -> Scan(file_symbol);
         if (file_symbol -> lex_stream) // did we have a successful scan!
         {
-            AstPackageDeclaration *package_declaration =
+            AstPackageDeclaration* package_declaration =
                 parser -> PackageHeaderParse(file_symbol -> lex_stream,
                                              ast_pool);
             ProcessPackageDeclaration(file_symbol, package_declaration);
@@ -142,7 +142,7 @@ Control::Control(char **arguments, Option &option_)
     //
     //
     //
-    FileSymbol *main_file_clone;
+    FileSymbol* main_file_clone;
     if (num_files > 0)
         main_file_clone = input_files[0] -> Clone();
     else
@@ -151,7 +151,7 @@ Control::Control(char **arguments, Option &option_)
         // Some name, any name !!! We use dot_name_symbol as a bad file name
         // because no file can be named ".".
         //
-        FileSymbol *file_symbol = classpath[dot_classpath_index] ->
+        FileSymbol* file_symbol = classpath[dot_classpath_index] ->
             RootDirectory() -> InsertFileSymbol(dot_name_symbol);
         file_symbol -> directory_symbol = classpath[dot_classpath_index] ->
             RootDirectory();
@@ -171,26 +171,22 @@ Control::Control(char **arguments, Option &option_)
     if (option.BadMainDisk())
     {
         system_semantic -> ReportSemError(SemanticError::NO_CURRENT_DIRECTORY,
-                                          0,
-                                          0);
+                                          LexStream::BadToken());
     }
-#endif
+#endif // WIN32_FILE_SYSTEM
 
-    //
-    //
-    //
-    int l;
-    for (l = 0; l < bad_dirnames.Length(); ++l)
+    unsigned i;
+    for (i = 0; i < bad_dirnames.Length(); i++)
     {
-        system_semantic -> ReportSemError(SemanticError::CANNOT_OPEN_PATH_DIRECTORY,
-                                          0, 0, bad_dirnames[l]);
+        system_semantic ->
+            ReportSemError(SemanticError::CANNOT_OPEN_PATH_DIRECTORY,
+                           LexStream::BadToken(), bad_dirnames[i]);
     }
-
-    for (l = 0; l < bad_zip_filenames.Length(); l++)
+    for (i = 0; i < bad_zip_filenames.Length(); i++)
     {
         system_semantic -> ReportSemError(SemanticError::CANNOT_OPEN_ZIP_FILE,
-                                          0, 0, bad_zip_filenames[l]);
-
+                                          LexStream::BadToken(),
+                                          bad_zip_filenames[i]);
     }
 
     //
@@ -199,8 +195,7 @@ Control::Control(char **arguments, Option &option_)
     if (system_package -> directory.Length() == 0)
     {
         system_semantic -> ReportSemError(SemanticError::PACKAGE_NOT_FOUND,
-                                          0,
-                                          0,
+                                          LexStream::BadToken(),
                                           StringConstant::US_java_SL_lang);
     }
 
@@ -212,7 +207,7 @@ Control::Control(char **arguments, Option &option_)
     {
         if (! SystemIsDirectory(option.directory))
         {
-            for (char *ptr = option.directory; *ptr; ptr++)
+            for (char* ptr = option.directory; *ptr; ptr++)
             {
                 char delimiter = *ptr;
                 if (delimiter == U_SLASH)
@@ -231,14 +226,12 @@ Control::Control(char **arguments, Option &option_)
             if (! SystemIsDirectory(option.directory))
             {
                 int length = strlen(option.directory);
-                wchar_t *name = new wchar_t[length + 1];
-                for (int i = 0; i < length; i++)
-                    name[i] = option.directory[i];
+                wchar_t* name = new wchar_t[length + 1];
+                for (int j = 0; j < length; j++)
+                    name[j] = option.directory[j];
                 name[length] = U_NULL;
                 system_semantic -> ReportSemError(SemanticError::CANNOT_OPEN_DIRECTORY,
-                                                  0,
-                                                  0,
-                                                  name);
+                                                  LexStream::BadToken(), name);
                 delete [] name;
             }
         }
@@ -247,23 +240,21 @@ Control::Control(char **arguments, Option &option_)
     //
     //
     //
-    for (int m = 0; m < bad_input_filenames.Length(); m++)
+    for (i = 0; i < bad_input_filenames.Length(); i++)
     {
         system_semantic -> ReportSemError(SemanticError::BAD_INPUT_FILE,
-                                          0,
-                                          0,
-                                          bad_input_filenames[m]);
+                                          LexStream::BadToken(),
+                                          bad_input_filenames[i]);
     }
 
     //
     //
     //
-    for (int n = 0; n < unreadable_input_filenames.Length(); n++)
+    for (i = 0; i < unreadable_input_filenames.Length(); i++)
     {
         system_semantic -> ReportSemError(SemanticError::UNREADABLE_INPUT_FILE,
-                                          0,
-                                          0,
-                                          unreadable_input_filenames[n]);
+                                          LexStream::BadToken(),
+                                          unreadable_input_filenames[i]);
     }
 
     //
@@ -281,9 +272,9 @@ Control::Control(char **arguments, Option &option_)
         //
         system_semantic -> PrintMessages();
         input_java_file_set.SetEmpty();
-        for (int i = 0; i < num_files; i++)
+        for (int j = 0; j < num_files; j++)
         {
-            FileSymbol *file_symbol = input_files[i];
+            FileSymbol* file_symbol = input_files[j];
             if (! input_java_file_set.IsElement(file_symbol))
                 ProcessFile(file_symbol);
         }
@@ -292,10 +283,10 @@ Control::Control(char **arguments, Option &option_)
         // Clean up all the files that have just been compiled in this new
         // batch.
         //
-        FileSymbol *file_symbol;
-        for (file_symbol = (FileSymbol *) input_java_file_set.FirstElement();
+        FileSymbol* file_symbol;
+        for (file_symbol = (FileSymbol*) input_java_file_set.FirstElement();
              file_symbol;
-             file_symbol = (FileSymbol *) input_java_file_set.NextElement())
+             file_symbol = (FileSymbol*) input_java_file_set.NextElement())
         {
             CleanUp(file_symbol);
         }
@@ -330,41 +321,41 @@ Control::Control(char **arguments, Option &option_)
                 //
                 //
                 //
-                for (int m = 0; m < bad_input_filenames.Length(); m++)
+                for (i = 0; i < bad_input_filenames.Length(); i++)
                 {
-                    system_semantic -> ReportSemError(SemanticError::BAD_INPUT_FILE,
-                                                      0,
-                                                      0,
-                                                      bad_input_filenames[m]);
+                    system_semantic ->
+                        ReportSemError(SemanticError::BAD_INPUT_FILE,
+                                       LexStream::BadToken(),
+                                       bad_input_filenames[i]);
                 }
 
                 //
                 //
                 //
-                for (int n = 0; n < unreadable_input_filenames.Length(); n++)
+                for (i = 0; i < unreadable_input_filenames.Length(); i++)
                 {
-                    system_semantic -> ReportSemError(SemanticError::UNREADABLE_INPUT_FILE,
-                                                      0,
-                                                      0,
-                                                      unreadable_input_filenames[n]);
+                    system_semantic ->
+                        ReportSemError(SemanticError::UNREADABLE_INPUT_FILE,
+                                       LexStream::BadToken(),
+                                       unreadable_input_filenames[i]);
                 }
 
-                FileSymbol *file_symbol;
+                FileSymbol* file_symbol;
 
                 num_files = 0;
                 delete [] input_files; // delete previous copy
                 input_files = new FileSymbol*[recompilation_file_set.Size()];
-                for (file_symbol = (FileSymbol *) recompilation_file_set.FirstElement();
+                for (file_symbol = (FileSymbol*) recompilation_file_set.FirstElement();
                      file_symbol;
-                     file_symbol = (FileSymbol *) recompilation_file_set.NextElement())
+                     file_symbol = (FileSymbol*) recompilation_file_set.NextElement())
                 {
                     input_java_file_set.RemoveElement(file_symbol);
                     input_files[num_files++] = file_symbol;
 
-                    LexStream *lex_stream = file_symbol -> lex_stream;
+                    LexStream* lex_stream = file_symbol -> lex_stream;
                     if (lex_stream)
                     {
-                        AstPackageDeclaration *package_declaration = parser ->
+                        AstPackageDeclaration* package_declaration = parser ->
                             PackageHeaderParse(lex_stream, ast_pool);
                         ProcessPackageDeclaration(file_symbol,
                                                   package_declaration);
@@ -375,9 +366,9 @@ Control::Control(char **arguments, Option &option_)
                 //
                 // If a file was erased, remove it from the input file set.
                 //
-                for (file_symbol = (FileSymbol *) expired_file_set.FirstElement();
+                for (file_symbol = (FileSymbol*) expired_file_set.FirstElement();
                      file_symbol;
-                     file_symbol = (FileSymbol *) expired_file_set.NextElement())
+                     file_symbol = (FileSymbol*) expired_file_set.NextElement())
                 {
                     input_java_file_set.RemoveElement(file_symbol);
                 }
@@ -393,9 +384,9 @@ Control::Control(char **arguments, Option &option_)
                 // For each file that should be recompiled, process it if it
                 // has not already been dragged in by dependence.
                 //
-                for (int k = 0; k < num_files; k++)
+                for (int j = 0; j < num_files; j++)
                 {
-                    FileSymbol *file_symbol = input_files[k];
+                    FileSymbol* file_symbol = input_files[j];
                     if (! input_java_file_set.IsElement(file_symbol))
                         ProcessFile(file_symbol);
                 }
@@ -404,10 +395,10 @@ Control::Control(char **arguments, Option &option_)
                 // Clean up all the files that have just been compiled in
                 // this new batch.
                 //
-                for (file_symbol = (FileSymbol *) input_java_file_set.FirstElement();
+                for (file_symbol = (FileSymbol*) input_java_file_set.FirstElement();
                     // delete file_symbol
                      file_symbol;
-                     file_symbol = (FileSymbol *) input_java_file_set.NextElement())
+                     file_symbol = (FileSymbol*) input_java_file_set.NextElement())
                 {
                     // delete file_symbol
                     CleanUp(file_symbol);
@@ -433,7 +424,7 @@ Control::Control(char **arguments, Option &option_)
         {
             if (option.dependence_report)
             {
-                FILE *outfile = SystemFopen(option.dependence_report_name,
+                FILE* outfile = SystemFopen(option.dependence_report_name,
                                             "w");
                 if (outfile == NULL)
                     Coutput << "*** Cannot open dependence output file "
@@ -441,23 +432,23 @@ Control::Control(char **arguments, Option &option_)
                 else
                 {
                     SymbolSet types_in_new_files;
-                    FileSymbol *file_symbol;
-                    for (file_symbol = (FileSymbol *) input_java_file_set.FirstElement();
+                    FileSymbol* file_symbol;
+                    for (file_symbol = (FileSymbol*) input_java_file_set.FirstElement();
                          file_symbol;
-                         file_symbol = (FileSymbol *) input_java_file_set.NextElement())
+                         file_symbol = (FileSymbol*) input_java_file_set.NextElement())
                     {
-                        char *java_name = file_symbol -> FileName();
+                        char* java_name = file_symbol -> FileName();
 
-                        for (int j = 0; j < file_symbol -> types.Length(); j++)
+                        for (i = 0; i < file_symbol -> types.Length(); i++)
                         {
-                            TypeSymbol *type = file_symbol -> types[j];
+                            TypeSymbol* type = file_symbol -> types[i];
                             fprintf(outfile, "%s : %s\n", java_name,
                                     type -> SignatureString());
 
-                            TypeSymbol *static_parent;
-                            for (static_parent = (TypeSymbol *) type -> static_parents -> FirstElement();
+                            TypeSymbol* static_parent;
+                            for (static_parent = (TypeSymbol*) type -> static_parents -> FirstElement();
                                  static_parent;
-                                 static_parent = (TypeSymbol *) type -> static_parents -> NextElement())
+                                 static_parent = (TypeSymbol*) type -> static_parents -> NextElement())
                             {
                                 if (! type -> parents ->
                                     IsElement(static_parent))
@@ -478,10 +469,10 @@ Control::Control(char **arguments, Option &option_)
                                 }
                             }
 
-                            TypeSymbol *parent;
-                            for (parent = (TypeSymbol *) type -> parents -> FirstElement();
+                            TypeSymbol* parent;
+                            for (parent = (TypeSymbol*) type -> parents -> FirstElement();
                                  parent;
-                                 parent = (TypeSymbol *) type -> parents -> NextElement())
+                                 parent = (TypeSymbol*) type -> parents -> NextElement())
                             {
                                 fprintf(outfile, "    %s\n",
                                         parent -> SignatureString());
@@ -502,12 +493,12 @@ Control::Control(char **arguments, Option &option_)
                     //
                     // Print the list of class files that are referenced.
                     //
-                    TypeSymbol *type;
-                    for (type = (TypeSymbol *) types_in_new_files.FirstElement();
+                    TypeSymbol* type;
+                    for (type = (TypeSymbol*) types_in_new_files.FirstElement();
                          type;
-                         type = (TypeSymbol *) types_in_new_files.NextElement())
+                         type = (TypeSymbol*) types_in_new_files.NextElement())
                     {
-                        char *class_name = type -> file_symbol -> FileName();
+                        char* class_name = type -> file_symbol -> FileName();
                         fprintf(outfile, "%s : %s\n", class_name,
                                 type -> SignatureString());
                     }
@@ -517,13 +508,13 @@ Control::Control(char **arguments, Option &option_)
             }
             else
             {
-                SymbolSet *candidates =
+                SymbolSet* candidates =
                     new SymbolSet(input_java_file_set.Size() +
                                   input_class_file_set.Size());
                 *candidates = input_java_file_set;
                 candidates -> Union(input_class_file_set);
 
-                TypeDependenceChecker *dependence_checker =
+                TypeDependenceChecker* dependence_checker =
                     new TypeDependenceChecker(this, *candidates,
                                               type_trash_bin);
                 dependence_checker -> PartialOrder();
@@ -543,17 +534,15 @@ Control::Control(char **arguments, Option &option_)
 
 Control::~Control()
 {
-    for (int i = 0; i < bad_zip_filenames.Length(); i++)
+    unsigned i;
+    for (i = 0; i < bad_zip_filenames.Length(); i++)
         delete [] bad_zip_filenames[i];
-
-    for (int j = 0; j < bad_input_filenames.Length(); j++)
-        delete [] bad_input_filenames[j];
-
-    for (int k = 0; k < unreadable_input_filenames.Length(); k++)
-        delete [] unreadable_input_filenames[k];
-
-    for (int l = 0; l < system_directories.Length(); l++)
-        delete system_directories[l];
+    for (i = 0; i < bad_input_filenames.Length(); i++)
+        delete [] bad_input_filenames[i];
+    for (i = 0; i < unreadable_input_filenames.Length(); i++)
+        delete [] unreadable_input_filenames[i];
+    for (i = 0; i < system_directories.Length(); i++)
+        delete system_directories[i];
 
     delete scanner;
     delete parser;
@@ -570,23 +559,23 @@ Control::~Control()
                 << input_files_processed << " \".java\" files processed"
                 << endl;
     }
-#endif
+#endif // JIKES_DEBUG
 }
 
 
-PackageSymbol *Control::ProcessPackage(wchar_t *name)
+PackageSymbol* Control::ProcessPackage(const wchar_t* name)
 {
     int name_length = wcslen(name);
-    wchar_t *package_name = new wchar_t[name_length];
+    wchar_t* package_name = new wchar_t[name_length];
     int length;
     for (length = 0;
          length < name_length && name[length] != U_SLASH; length++)
     {
          package_name[length] = name[length];
     }
-    NameSymbol *name_symbol = FindOrInsertName(package_name, length);
+    NameSymbol* name_symbol = FindOrInsertName(package_name, length);
 
-    PackageSymbol *package_symbol =
+    PackageSymbol* package_symbol =
         external_table.FindPackageSymbol(name_symbol);
     if (! package_symbol)
     {
@@ -604,7 +593,7 @@ PackageSymbol *Control::ProcessPackage(wchar_t *name)
              package_name[i] = name[length];
         }
         name_symbol = FindOrInsertName(package_name, length - start);
-        PackageSymbol *subpackage_symbol =
+        PackageSymbol* subpackage_symbol =
             package_symbol -> FindPackageSymbol(name_symbol);
         if (! subpackage_symbol)
         {
@@ -616,7 +605,6 @@ PackageSymbol *Control::ProcessPackage(wchar_t *name)
     }
 
     delete [] package_name;
-
     return package_symbol;
 }
 
@@ -625,12 +613,12 @@ PackageSymbol *Control::ProcessPackage(wchar_t *name)
 // When searching for a subdirectory in a zipped file, it must already be
 // present in the hierarchy.
 //
-DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol,
-                                           wchar_t *name, int name_length)
+DirectorySymbol* Control::FindSubdirectory(PathSymbol* path_symbol,
+                                           wchar_t* name, int name_length)
 {
-    wchar_t *directory_name = new wchar_t[name_length + 1];
+    wchar_t* directory_name = new wchar_t[name_length + 1];
 
-    DirectorySymbol *directory_symbol = path_symbol -> RootDirectory();
+    DirectorySymbol* directory_symbol = path_symbol -> RootDirectory();
     for (int start = 0, end;
          directory_symbol && start < name_length;
          start = end + 1)
@@ -638,14 +626,13 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol,
         end = start;
         for (int i = 0; end < name_length && name[end] != U_SLASH; i++, end++)
              directory_name[i] = name[end];
-        NameSymbol *name_symbol = FindOrInsertName(directory_name,
+        NameSymbol* name_symbol = FindOrInsertName(directory_name,
                                                    end - start);
         directory_symbol =
             directory_symbol -> FindDirectorySymbol(name_symbol);
     }
 
     delete [] directory_name;
-
     return directory_symbol;
 }
 
@@ -655,17 +642,17 @@ DirectorySymbol *Control::FindSubdirectory(PathSymbol *path_symbol,
 // in the hierarchy insert it and attempt to read it from the system...
 //
 #ifdef UNIX_FILE_SYSTEM
-DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
+DirectorySymbol* Control::ProcessSubdirectories(wchar_t* source_name,
                                                 int source_name_length,
                                                 bool source_dir)
 {
     int name_length = (source_name_length < 0 ? 0 : source_name_length);
-    char *input_name = new char[name_length + 1];
+    char* input_name = new char[name_length + 1];
     for (int i = 0; i < name_length; i++)
         input_name[i] = source_name[i];
     input_name[name_length] = U_NULL;
 
-    DirectorySymbol *directory_symbol = NULL;
+    DirectorySymbol* directory_symbol = NULL;
     struct stat status;
     if (SystemStat(input_name, &status) == 0 &&
         (status.st_mode & JIKES_STAT_S_IFDIR))
@@ -690,7 +677,7 @@ DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
         }
         else
         {
-            wchar_t *name = new wchar_t[name_length + 1];
+            wchar_t* name = new wchar_t[name_length + 1];
             for (int i = 0; i < name_length; i++)
                 name[i] = source_name[i];
             name[name_length] = U_NULL;
@@ -699,7 +686,7 @@ DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
             directory_symbol =
                 classpath[dot_classpath_index] -> RootDirectory();
 
-            wchar_t *directory_name = new wchar_t[name_length];
+            wchar_t* directory_name = new wchar_t[name_length];
             int end = 0;
             for (int start = end; start < name_length; start = end)
             {
@@ -721,7 +708,7 @@ DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
                         if (directory_symbol -> Identity() == dot_name_symbol ||
                             directory_symbol -> Identity() == dot_dot_name_symbol)
                         {
-                            DirectorySymbol *subdirectory_symbol =
+                            DirectorySymbol* subdirectory_symbol =
                                 directory_symbol -> FindDirectorySymbol(dot_dot_name_symbol);
                             if (! subdirectory_symbol)
                                 subdirectory_symbol =
@@ -733,9 +720,9 @@ DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
                     }
                     else
                     {
-                        NameSymbol *name_symbol =
+                        NameSymbol* name_symbol =
                             FindOrInsertName(directory_name, length);
-                        DirectorySymbol *subdirectory_symbol =
+                        DirectorySymbol* subdirectory_symbol =
                             directory_symbol -> FindDirectorySymbol(name_symbol);
                         if (! subdirectory_symbol)
                             subdirectory_symbol =
@@ -771,20 +758,19 @@ DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
     }
 
     delete [] input_name;
-
     return directory_symbol;
 }
 #elif defined(WIN32_FILE_SYSTEM)
-DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
+DirectorySymbol* Control::ProcessSubdirectories(wchar_t* source_name,
                                                 int source_name_length,
                                                 bool source_dir)
 {
-    DirectorySymbol *directory_symbol =
+    DirectorySymbol* directory_symbol =
         classpath[dot_classpath_index] -> RootDirectory();
 
     int name_length = (source_name_length < 0 ? 0 : source_name_length);
-    wchar_t *name = new wchar_t[name_length + 1];
-    char *input_name = new char[name_length + 1];
+    wchar_t* name = new wchar_t[name_length + 1];
+    char* input_name = new char[name_length + 1];
     for (int i = 0; i < name_length; i++)
         input_name[i] = name[i] = source_name[i];
     input_name[name_length] = name[name_length] = U_NULL;
@@ -798,15 +784,15 @@ DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
         {
             // First, get the right size.
             DWORD directory_length = GetCurrentDirectory(0, input_name);
-            char *full_directory_name = new char[directory_length + 1];
+            char* full_directory_name = new char[directory_length + 1];
             DWORD length = GetCurrentDirectory(directory_length, full_directory_name);
             if (length <= directory_length)
             {
                 // Turn '\' to '/'.
-                for (char *ptr = full_directory_name; *ptr; ptr++)
+                for (char* ptr = full_directory_name; *ptr; ptr++)
                     *ptr = (*ptr != U_BACKSLASH ? *ptr : (char) U_SLASH);
 
-                char *current_directory = option.GetMainCurrentDirectory();
+                char* current_directory = option.GetMainCurrentDirectory();
                 int prefix_length = strlen(current_directory);
                 int start = (prefix_length <= (int) length &&
                              Case::StringSegmentEqual(current_directory,
@@ -851,14 +837,14 @@ DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
              end++); // keep all extra leading '/'
     }
 
-    wchar_t *directory_name = new wchar_t[name_length];
+    wchar_t* directory_name = new wchar_t[name_length];
     int length;
     if (end > 0)
     {
         for (length = 0; length < end; length++)
             directory_name[length] = name[length];
-        NameSymbol *name_symbol = FindOrInsertName(directory_name, length);
-        DirectorySymbol *subdirectory_symbol =
+        NameSymbol* name_symbol = FindOrInsertName(directory_name, length);
+        DirectorySymbol* subdirectory_symbol =
             directory_symbol -> FindDirectorySymbol(name_symbol);
         if (! subdirectory_symbol)
             subdirectory_symbol =
@@ -886,7 +872,7 @@ DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
                 if (directory_symbol -> Identity() == dot_name_symbol ||
                     directory_symbol -> Identity() == dot_dot_name_symbol)
                 {
-                    DirectorySymbol *subdirectory_symbol =
+                    DirectorySymbol* subdirectory_symbol =
                         directory_symbol -> FindDirectorySymbol(dot_dot_name_symbol);
                     if (! subdirectory_symbol)
                         subdirectory_symbol =
@@ -898,9 +884,9 @@ DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
             }
             else
             {
-                NameSymbol *name_symbol = FindOrInsertName(directory_name,
+                NameSymbol* name_symbol = FindOrInsertName(directory_name,
                                                            length);
-                DirectorySymbol *subdirectory_symbol =
+                DirectorySymbol* subdirectory_symbol =
                     directory_symbol -> FindDirectorySymbol(name_symbol);
                 if (! subdirectory_symbol)
                     subdirectory_symbol =
@@ -920,20 +906,19 @@ DirectorySymbol *Control::ProcessSubdirectories(wchar_t *source_name,
     delete [] directory_name;
     delete [] name;
     delete [] input_name;
-
     return directory_symbol;
 }
-#endif
+#endif // WIN32_FILE_SYSTEM
 
 
-void Control::ProcessNewInputFiles(SymbolSet &file_set, char **arguments)
+void Control::ProcessNewInputFiles(SymbolSet& file_set, char** arguments)
 {
-    for (int i = 0; i < bad_input_filenames.Length(); i++)
+    unsigned i;
+    for (i = 0; i < bad_input_filenames.Length(); i++)
         delete [] bad_input_filenames[i];
     bad_input_filenames.Reset();
-
-    for (int k = 0; k < unreadable_input_filenames.Length(); k++)
-        delete [] unreadable_input_filenames[k];
+    for (i = 0; i < unreadable_input_filenames.Length(); i++)
+        delete [] unreadable_input_filenames[i];
     unreadable_input_filenames.Reset();
 
     //
@@ -946,11 +931,11 @@ void Control::ProcessNewInputFiles(SymbolSet &file_set, char **arguments)
         int j = 0;
         while (arguments[j])
         {
-            char *file_name = arguments[j++];
-            int file_name_length = strlen(file_name);
+            char* file_name = arguments[j++];
+            unsigned file_name_length = strlen(file_name);
 
-            wchar_t *name = new wchar_t[file_name_length + 1];
-            for (int i = 0; i < file_name_length; i++)
+            wchar_t* name = new wchar_t[file_name_length + 1];
+            for (unsigned i = 0; i < file_name_length; i++)
                 name[i] = (file_name[i] != U_BACKSLASH ? file_name[i]
                            : (wchar_t) U_SLASH); // Change '\' to '/'.
             name[file_name_length] = U_NULL;
@@ -966,7 +951,7 @@ void Control::ProcessNewInputFiles(SymbolSet &file_set, char **arguments)
             }
             else
             {
-                FileSymbol *file_symbol =
+                FileSymbol* file_symbol =
                     FindOrInsertJavaInputFile(name,
                                               file_name_length - FileSymbol::java_suffix_length);
 
@@ -983,18 +968,18 @@ void Control::ProcessNewInputFiles(SymbolSet &file_set, char **arguments)
 }
 
 
-FileSymbol *Control::FindOrInsertJavaInputFile(DirectorySymbol *directory_symbol,
-                                               NameSymbol *file_name_symbol)
+FileSymbol* Control::FindOrInsertJavaInputFile(DirectorySymbol* directory_symbol,
+                                               NameSymbol* file_name_symbol)
 {
-    FileSymbol *file_symbol = NULL;
+    FileSymbol* file_symbol = NULL;
 
     int length = file_name_symbol -> Utf8NameLength() +
         FileSymbol::java_suffix_length;
-    char *java_name = new char[length + 1]; // +1 for \0
+    char* java_name = new char[length + 1]; // +1 for \0
     strcpy(java_name, file_name_symbol -> Utf8Name());
     strcat(java_name, FileSymbol::java_suffix);
 
-    DirectoryEntry *entry = directory_symbol -> FindEntry(java_name, length);
+    DirectoryEntry* entry = directory_symbol -> FindEntry(java_name, length);
     if (entry)
     {
         file_symbol = directory_symbol -> FindFileSymbol(file_name_symbol);
@@ -1011,14 +996,13 @@ FileSymbol *Control::FindOrInsertJavaInputFile(DirectorySymbol *directory_symbol
     }
 
     delete [] java_name;
-
     return file_symbol;
 }
 
 
-FileSymbol *Control::FindOrInsertJavaInputFile(wchar_t *name, int name_length)
+FileSymbol* Control::FindOrInsertJavaInputFile(wchar_t* name, int name_length)
 {
-    FileSymbol *file_symbol = NULL;
+    FileSymbol* file_symbol = NULL;
 
     //
     // The name has been preprocessed so that if it contains any
@@ -1026,8 +1010,8 @@ FileSymbol *Control::FindOrInsertJavaInputFile(wchar_t *name, int name_length)
     // for the occurrence of the first slash (if any) that separates
     // the file name from its directory name.
     //
-    DirectorySymbol *directory_symbol;
-    NameSymbol *file_name_symbol;
+    DirectorySymbol* directory_symbol;
+    NameSymbol* file_name_symbol;
 #ifdef UNIX_FILE_SYSTEM
     int len;
     for (len = name_length - 1; len >= 0 && name[len] != U_SLASH; len--)
@@ -1047,9 +1031,9 @@ FileSymbol *Control::FindOrInsertJavaInputFile(wchar_t *name, int name_length)
                                              true);
     file_name_symbol = FindOrInsertName(&name[len + 1],
                                         name_length - (len + 1));
-#endif
+#endif // WIN32_FILE_SYSTEM
 
-    for (int i = 1; i < classpath.Length(); i++)
+    for (unsigned i = 1; i < classpath.Length(); i++)
     {
         if (i == dot_classpath_index) // the current directory (.).
         {
@@ -1060,7 +1044,7 @@ FileSymbol *Control::FindOrInsertJavaInputFile(wchar_t *name, int name_length)
         }
         else if (classpath[i] -> IsZip())
         {
-            DirectorySymbol *directory_symbol = FindSubdirectory(classpath[i],
+            DirectorySymbol* directory_symbol = FindSubdirectory(classpath[i],
                                                                  name, len);
             if (directory_symbol)
             {
@@ -1077,51 +1061,48 @@ FileSymbol *Control::FindOrInsertJavaInputFile(wchar_t *name, int name_length)
     // If the file was found, return it; otherwise, in case the (.) directory
     // was not specified in the classpath, search for the file in it...
     //
-    return (file_symbol ? file_symbol
-            : FindOrInsertJavaInputFile(directory_symbol, file_name_symbol));
+    return file_symbol ? file_symbol
+        : FindOrInsertJavaInputFile(directory_symbol, file_name_symbol);
 }
 
 
-PackageSymbol *Control::FindOrInsertPackage(LexStream *lex_stream,
-                                            AstExpression *name)
+PackageSymbol* Control::FindOrInsertPackage(LexStream* lex_stream,
+                                            AstName* name)
 {
-    PackageSymbol *package;
+    PackageSymbol* package;
 
-    AstFieldAccess* field_access = name -> FieldAccessCast();
-    if (field_access)
+    if (name -> base_opt)
     {
-        package = FindOrInsertPackage(lex_stream, field_access -> base);
-        NameSymbol *name_symbol =
-            lex_stream -> NameSymbol(field_access -> identifier_token);
-        PackageSymbol *subpackage = package -> FindPackageSymbol(name_symbol);
+        package = FindOrInsertPackage(lex_stream, name -> base_opt);
+        NameSymbol* name_symbol =
+            lex_stream -> NameSymbol(name -> identifier_token);
+        PackageSymbol* subpackage = package -> FindPackageSymbol(name_symbol);
         if (! subpackage)
             subpackage = package -> InsertPackageSymbol(name_symbol);
         package = subpackage;
     }
     else
     {
-        AstSimpleName *simple_name = (AstSimpleName *) name;
-        NameSymbol *name_symbol =
-            lex_stream -> NameSymbol(simple_name -> identifier_token);
+        NameSymbol* name_symbol =
+            lex_stream -> NameSymbol(name -> identifier_token);
         package = external_table.FindPackageSymbol(name_symbol);
         if (! package)
             package = external_table.InsertPackageSymbol(name_symbol, NULL);
     }
 
     FindPathsToDirectory(package);
-
     return package;
 }
 
 
-void Control::ProcessFile(FileSymbol *file_symbol)
+void Control::ProcessFile(FileSymbol* file_symbol)
 {
     ProcessHeaders(file_symbol);
 
     //
     // As long as there are new bodies, ...
     //
-    for (int i = 0; i < needs_body_work.Length(); i++)
+    for (unsigned i = 0; i < needs_body_work.Length(); i++)
     {
         assert(semantic.Length() == 0);
 
@@ -1135,7 +1116,7 @@ void Control::ProcessFile(FileSymbol *file_symbol)
 }
 
 
-void Control::ProcessHeaders(FileSymbol *file_symbol)
+void Control::ProcessHeaders(FileSymbol* file_symbol)
 {
     if (file_symbol -> semantic)
         return;
@@ -1182,13 +1163,13 @@ void Control::ProcessHeaders(FileSymbol *file_symbol)
 
 void Control::ProcessMembers()
 {
-    Tuple<TypeSymbol *> partially_ordered_types(1024);
+    Tuple<TypeSymbol*> partially_ordered_types(1024);
     SymbolSet needs_member_work(101);
     TypeCycleChecker cycle_checker(partially_ordered_types);
     TopologicalSort topological_sorter(needs_member_work,
                                        partially_ordered_types);
 
-    int start = 0;
+    unsigned start = 0;
     while (start < semantic.Length())
     {
         needs_member_work.SetEmpty();
@@ -1206,9 +1187,9 @@ void Control::ProcessMembers()
             //
             // Process the extends and implements clauses.
             //
-            for (int j = 0; j < partially_ordered_types.Length(); j++)
+            for (unsigned j = 0; j < partially_ordered_types.Length(); j++)
             {
-                TypeSymbol *type = partially_ordered_types[j];
+                TypeSymbol* type = partially_ordered_types[j];
                 needs_member_work.AddElement(type);
                 type -> ProcessTypeHeaders();
                 type -> semantic_environment -> sem ->
@@ -1223,9 +1204,9 @@ void Control::ProcessMembers()
         // ProcessTypeHeaders.
         //
         topological_sorter.Sort();
-        for (int i = 0; i < partially_ordered_types.Length(); i++)
+        for (unsigned i = 0; i < partially_ordered_types.Length(); i++)
         {
-            TypeSymbol *type = partially_ordered_types[i];
+            TypeSymbol* type = partially_ordered_types[i];
             needs_body_work.Next() = type;
             type -> ProcessMembers();
         }
@@ -1235,18 +1216,18 @@ void Control::ProcessMembers()
 }
 
 
-void Control::CollectTypes(TypeSymbol *type, Tuple<TypeSymbol *> &types)
+void Control::CollectTypes(TypeSymbol* type, Tuple<TypeSymbol*>& types)
 {
     types.Next() = type;
 
-    for (int j = 0; j < type -> NumAnonymousTypes(); j++)
+    for (unsigned j = 0; j < type -> NumAnonymousTypes(); j++)
         CollectTypes(type -> AnonymousType(j), types);
 
     if (type -> local)
     {
-        for (TypeSymbol *local_type = (TypeSymbol *) type -> local -> FirstElement();
+        for (TypeSymbol* local_type = (TypeSymbol*) type -> local -> FirstElement();
              local_type;
-             local_type = (TypeSymbol *) type -> local -> NextElement())
+             local_type = (TypeSymbol*) type -> local -> NextElement())
         {
             CollectTypes(local_type, types);
         }
@@ -1254,9 +1235,9 @@ void Control::CollectTypes(TypeSymbol *type, Tuple<TypeSymbol *> &types)
 
     if (type -> non_local)
     {
-        for (TypeSymbol *non_local_type = (TypeSymbol *) type -> non_local -> FirstElement();
+        for (TypeSymbol* non_local_type = (TypeSymbol*) type -> non_local -> FirstElement();
              non_local_type;
-             non_local_type = (TypeSymbol *) type -> non_local -> NextElement())
+             non_local_type = (TypeSymbol*) type -> non_local -> NextElement())
         {
             CollectTypes(non_local_type, types);
         }
@@ -1264,30 +1245,25 @@ void Control::CollectTypes(TypeSymbol *type, Tuple<TypeSymbol *> &types)
 }
 
 
-void Control::ProcessBodies(TypeSymbol *type)
+void Control::ProcessBodies(TypeSymbol* type)
 {
-    Semantic *sem = type -> semantic_environment -> sem;
+    Semantic* sem = type -> semantic_environment -> sem;
 
     if (type -> declaration &&
         ! sem -> compilation_unit -> BadCompilationUnitCast())
     {
-        AstInterfaceDeclaration *interface_declaration =
-            type -> declaration -> InterfaceDeclarationCast();
-        AstClassDeclaration *class_declaration =
-            type -> declaration -> ClassDeclarationCast();
-
 #ifdef WIN32_FILE_SYSTEM
         if (! type -> file_symbol -> IsZip())
         {
             int length = type -> Utf8NameLength() +
                 FileSymbol::class_suffix_length;
-            char *classfile_name = new char[length + 1]; // +1 for "\0"
+            char* classfile_name = new char[length + 1]; // +1 for "\0"
             strcpy(classfile_name, type -> Utf8Name());
             strcat(classfile_name, FileSymbol::class_suffix);
 
-            DirectorySymbol *directory =
+            DirectorySymbol* directory =
                 type -> file_symbol -> OutputDirectory();
-            DirectoryEntry *entry =
+            DirectoryEntry* entry =
                 directory -> FindCaseInsensitiveEntry(classfile_name, length);
 
             //
@@ -1297,68 +1273,42 @@ void Control::ProcessBodies(TypeSymbol *type)
             //
             if (entry && strcmp(classfile_name, entry -> name) != 0)
             {
-                wchar_t *entry_name = new wchar_t[entry -> length + 1];
+                wchar_t* entry_name = new wchar_t[entry -> length + 1];
                 for (int i = 0; i < length; i++)
                     entry_name[i] = entry -> name[i];
                 entry_name[entry -> length] = U_NULL;
-                LexStream::TokenIndex identifier_token =
-                    (interface_declaration
-                     ? interface_declaration -> identifier_token
-                     : class_declaration -> identifier_token);
-
                 sem -> ReportSemError(SemanticError::FILE_FILE_CONFLICT,
-                                      identifier_token,
-                                      identifier_token,
-                                      type -> Name(),
-                                      entry_name,
+                                      type -> declaration -> identifier_token,
+                                      type -> Name(), entry_name,
                                       directory -> Name());
-
                 delete [] entry_name;
             }
-
             delete [] classfile_name;
         }
-#endif
+#endif // WIN32_FILE_SYSTEM
 
-        if (interface_declaration)
+        if (! parser -> InitializerParse(sem -> lex_stream,
+                                         type -> declaration))
         {
-            if (! parser -> InitializerParse(sem -> lex_stream,
-                                             interface_declaration))
-                // Recall that syntax errors were detected.
-                sem -> compilation_unit -> kind = Ast::BAD_COMPILATION;
-            else
-            {
-                type -> CompleteSymbolTable();
-                if (! parser -> BodyParse(sem -> lex_stream,
-                                          interface_declaration))
-                    // Mark that syntax errors were detected.
-                     sem -> compilation_unit -> kind = Ast::BAD_COMPILATION;
-                else type -> ProcessExecutableBodies();
-            }
+            // Mark that syntax errors were detected.
+            sem -> compilation_unit -> kind = Ast::BAD_COMPILATION;
         }
         else
         {
-            if (! parser -> InitializerParse(sem -> lex_stream,
-                                             class_declaration -> class_body))
-                // Recall that syntax errors were detected.
-                sem -> compilation_unit -> kind = Ast::BAD_COMPILATION;
-            else
+            type -> CompleteSymbolTable();
+            if (! parser -> BodyParse(sem -> lex_stream, type -> declaration))
             {
-                type -> CompleteSymbolTable();
-                if (! parser -> BodyParse(sem -> lex_stream,
-                                          class_declaration -> class_body))
-                    // Mark that syntax errors were detected.
-                    sem -> compilation_unit -> kind = Ast::BAD_COMPILATION;
-
-                else type -> ProcessExecutableBodies();
+                // Mark that syntax errors were detected.
+                sem -> compilation_unit -> kind = Ast::BAD_COMPILATION;
             }
+            else type -> ProcessExecutableBodies();
         }
 
         if (sem -> NumErrors() == 0 &&
             sem -> lex_stream -> NumBadTokens() == 0 &&
             ! sem -> compilation_unit -> BadCompilationUnitCast())
         {
-            Tuple<TypeSymbol *> *types = new Tuple<TypeSymbol *>(1024);
+            Tuple<TypeSymbol*>* types = new Tuple<TypeSymbol*>(1024);
             CollectTypes(type, *types);
 
             //
@@ -1366,16 +1316,13 @@ void Control::ProcessBodies(TypeSymbol *type)
             //
             if (option.bytecode)
             {
-                for (int k = 0; k < types -> Length(); k++)
+                for (unsigned k = 0; k < types -> Length(); k++)
                 {
-                    TypeSymbol *type = (*types)[k];
-
+                    TypeSymbol* type = (*types)[k];
                     // Make sure the literal is available for bytecode.
                     type -> file_symbol -> SetFileNameLiteral(this);
-
-                    ByteCode *code = new ByteCode(type);
+                    ByteCode* code = new ByteCode(type);
                     code -> GenerateCode();
-
                     delete code;
                 }
             }
@@ -1386,40 +1333,23 @@ void Control::ProcessBodies(TypeSymbol *type)
             //
             if (! option.nocleanup)
             {
-            if (sem -> NumErrors() == 0)
-            {
-                for (int k = 0; k < types -> Length(); k++)
+                if (sem -> NumErrors() == 0)
                 {
-                    TypeSymbol *type = (*types)[k];
-
-                    delete type -> semantic_environment;
-                    type -> semantic_environment = NULL;
-
-                    if (type -> ACC_INTERFACE())
+                    for (unsigned k = 0; k < types -> Length(); k++)
                     {
-                        AstInterfaceDeclaration *interface_declaration =
-                            (AstInterfaceDeclaration *) type -> declaration;
-                        interface_declaration -> semantic_environment = NULL;
-                    }
-                    else
-                    {
-                        AstClassDeclaration *class_declaration =
-                            type -> declaration -> ClassDeclarationCast();
-
-                        if (class_declaration)
-                            class_declaration -> semantic_environment = NULL;
+                        TypeSymbol* type = (*types)[k];
+                        delete type -> semantic_environment;
+                        type -> semantic_environment = NULL;
+                        type -> declaration -> semantic_environment = NULL;
                     }
                 }
+                delete types;
             }
-
-            delete types;
         }
-    }
     }
 
     sem -> types_to_be_processed.RemoveElement(type);
-    if (! option.nocleanup)
-    if (sem -> types_to_be_processed.Size() == 0)
+    if (! option.nocleanup && sem -> types_to_be_processed.Size() == 0)
     {
         // All types belonging to this compilation unit have been processed.
         CleanUp(sem -> source_file_symbol);
@@ -1432,25 +1362,25 @@ void Control::ProcessBodies(TypeSymbol *type)
 // This procedure is invoked directly only while doing
 // an incremental compilation.
 //
-void Control::ProcessPackageDeclaration(FileSymbol *file_symbol,
-                                        AstPackageDeclaration *package_declaration)
+void Control::ProcessPackageDeclaration(FileSymbol* file_symbol,
+                                        AstPackageDeclaration* package_declaration)
 {
     file_symbol -> package = (package_declaration
                               ? FindOrInsertPackage(file_symbol -> lex_stream,
                                                     package_declaration -> name)
                               : unnamed_package);
 
-    for (int i = 0; i < file_symbol -> lex_stream -> NumTypes(); i++)
+    for (unsigned i = 0; i < file_symbol -> lex_stream -> NumTypes(); i++)
     {
         LexStream::TokenIndex identifier_token =
             file_symbol -> lex_stream -> Next(file_symbol -> lex_stream -> Type(i));
         if (file_symbol -> lex_stream -> Kind(identifier_token) == TK_Identifier)
         {
-            NameSymbol *name_symbol =
+            NameSymbol* name_symbol =
                 file_symbol -> lex_stream -> NameSymbol(identifier_token);
             if (! file_symbol -> package -> FindTypeSymbol(name_symbol))
             {
-                TypeSymbol *type =
+                TypeSymbol* type =
                     file_symbol -> package -> InsertOuterTypeSymbol(name_symbol);
                 type -> file_symbol = file_symbol;
                 type -> outermost_type = type;
@@ -1476,9 +1406,9 @@ void Control::ProcessPackageDeclaration(FileSymbol *file_symbol,
 }
 
 
-void Control::CleanUp(FileSymbol *file_symbol)
+void Control::CleanUp(FileSymbol* file_symbol)
 {
-    Semantic *sem = file_symbol -> semantic;
+    Semantic* sem = file_symbol -> semantic;
 
     if (sem)
     {
@@ -1501,7 +1431,7 @@ void Control::CleanUp(FileSymbol *file_symbol)
             sem -> compilation_unit -> Unparse(sem -> lex_stream,
                                                "unparsed/");
         }
-#endif
+#endif // JIKES_DEBUG
         sem -> PrintMessages();
         if (sem -> return_code > 0)
             return_code = 1;
@@ -1510,7 +1440,7 @@ void Control::CleanUp(FileSymbol *file_symbol)
     }
 }
 
-MethodSymbol *Control::Object_getClassMethod()
+MethodSymbol* Control::Object_getClassMethod()
 {
     //
     // This requires lazy initialization for the case when the user is
@@ -1519,13 +1449,13 @@ MethodSymbol *Control::Object_getClassMethod()
     //
     if (! Object_getClass_method)
     {
-        TypeSymbol *Object_type = Object();
+        TypeSymbol* Object_type = Object();
         if (! Object_type -> Bad())
         {
             //
             // Search for relevant getClass method
             //
-            for (MethodSymbol *method =
+            for (MethodSymbol* method =
                      Object_type -> FindMethodSymbol(getClass_name_symbol);
                  method; method = method -> next_method)
             {
@@ -1540,7 +1470,7 @@ MethodSymbol *Control::Object_getClassMethod()
             if (! Object_getClass_method)
             {
                 system_semantic -> ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
-                                                  0,
+                                                  LexStream::BadToken(),
                                                   Object_type -> ContainingPackageName(),
                                                   Object_type -> ExternalName());
                 Object_type -> MarkBad();

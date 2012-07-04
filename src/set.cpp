@@ -1,9 +1,9 @@
-// $Id: set.cpp,v 1.16 2002/07/30 16:30:02 ericb Exp $
+// $Id: set.cpp,v 1.17 2002/12/11 00:55:04 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -14,19 +14,20 @@
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-int SymbolSet::primes[] = {DEFAULT_HASH_SIZE, 101, 401, MAX_HASH_SIZE};
+unsigned SymbolSet::primes[] = {DEFAULT_HASH_SIZE, 101, 401, MAX_HASH_SIZE};
 
 void SymbolSet::Rehash()
 {
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (ShadowSymbol **) memset(new ShadowSymbol *[hash_size], 0, hash_size * sizeof(ShadowSymbol *));
+    base = (ShadowSymbol**) memset(new ShadowSymbol*[hash_size], 0,
+                                   hash_size * sizeof(ShadowSymbol*));
 
-    for (int k = 0; k < symbol_pool.Length(); k++)
+    for (unsigned k = 0; k < symbol_pool.Length(); k++)
     {
-        ShadowSymbol *shadow = symbol_pool[k];
-        int i = shadow -> Identity() -> index % hash_size;
+        ShadowSymbol* shadow = symbol_pool[k];
+        unsigned i = shadow -> Identity() -> index % hash_size;
         shadow -> next = base[i];
         base[i] = shadow;
     }
@@ -40,25 +41,26 @@ SymbolSet::~SymbolSet()
 }
 
 
-bool SymbolSet::operator==(SymbolSet& rhs)
+bool SymbolSet::operator==(const SymbolSet& rhs) const
 {
     if (this != &rhs)
     {
         if (symbol_pool.Length() != rhs.symbol_pool.Length())
             return false;
 
-        for (int i = 0; i < symbol_pool.Length(); i++)
+        for (unsigned i = 0; i < symbol_pool.Length(); i++)
         {
-            ShadowSymbol *shadow = symbol_pool[i];
-            Symbol *symbol = shadow -> symbol;
-            for (int k = 0; symbol; symbol = (Symbol *) (k < shadow -> NumConflicts() ? shadow -> Conflict(k++) : NULL))
+            ShadowSymbol* shadow = symbol_pool[i];
+            Symbol* symbol = shadow -> symbol;
+            for (unsigned k = 0; symbol;
+                 symbol = (Symbol*) (k < shadow -> NumConflicts()
+                                     ? shadow -> Conflict(k++) : NULL))
             {
                 if (! rhs.IsElement(symbol))
                     return false;
             }
         }
     }
-
     return true;
 }
 
@@ -66,15 +68,17 @@ bool SymbolSet::operator==(SymbolSet& rhs)
 //
 // Union the set in question with the set passed as argument: "set"
 //
-void SymbolSet::Union(SymbolSet &set)
+void SymbolSet::Union(const SymbolSet& set)
 {
     if (this != &set)
     {
-        for (int i = 0; i < set.symbol_pool.Length(); i++)
+        for (unsigned i = 0; i < set.symbol_pool.Length(); i++)
         {
-            ShadowSymbol *shadow = set.symbol_pool[i];
-            Symbol *symbol = shadow -> symbol;
-            for (int k = 0; symbol; symbol = (Symbol *) (k < shadow -> NumConflicts() ? shadow -> Conflict(k++) : NULL))
+            ShadowSymbol* shadow = set.symbol_pool[i];
+            Symbol* symbol = shadow -> symbol;
+            for (unsigned k = 0; symbol;
+                 symbol = (Symbol*) (k < shadow -> NumConflicts()
+                                     ? shadow -> Conflict(k++) : NULL))
                 AddElement(symbol);
         }
     }
@@ -84,22 +88,23 @@ void SymbolSet::Union(SymbolSet &set)
 //
 // Intersect the set in question with the set passed as argument: "set"
 //
-void SymbolSet::Intersection(SymbolSet &set)
+void SymbolSet::Intersection(const SymbolSet& set)
 {
     if (this != &set)
     {
-        Tuple<Symbol *> old_symbol_pool(this -> symbol_pool.Length());
-        for (int i = 0; i < this -> symbol_pool.Length(); i++)
+        Tuple<Symbol*> old_symbol_pool(symbol_pool.Length());
+        for (unsigned i = 0; i < symbol_pool.Length(); i++)
         {
-            ShadowSymbol *shadow = this -> symbol_pool[i];
-            Symbol *symbol = shadow -> symbol;
-            for (int k = 0; symbol; symbol = (Symbol *) (k < shadow -> NumConflicts() ? shadow -> Conflict(k++) : NULL))
+            ShadowSymbol* shadow = symbol_pool[i];
+            Symbol* symbol = shadow -> symbol;
+            for (unsigned k = 0; symbol;
+                 symbol = (Symbol*) (k < shadow -> NumConflicts()
+                                     ? shadow -> Conflict(k++) : NULL))
                 old_symbol_pool.Next() = symbol;
         }
 
-        this -> SetEmpty();
-
-        for (int j = 0; j < old_symbol_pool.Length(); j++)
+        SetEmpty();
+        for (unsigned j = 0; j < old_symbol_pool.Length(); j++)
         {
             if (set.IsElement(old_symbol_pool[j]))
                 AddElement(old_symbol_pool[j]);
@@ -109,20 +114,22 @@ void SymbolSet::Intersection(SymbolSet &set)
 
 
 //
-// Return a bolean value indicating whether or not the set in question intersects the set passed as argument: "set"
-// i.e., is there at least one element of set that is also an element of "this" set.
+// Return a boolean value indicating whether or not the set in question
+// intersects the set passed as argument: "set" i.e., is there at least one
+// element of set that is also an element of "this" set.
 //
-bool SymbolSet::Intersects(SymbolSet &set)
+bool SymbolSet::Intersects(const SymbolSet& set) const
 {
-    for (int i = 0; i < set.symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < set.symbol_pool.Length(); i++)
     {
-        ShadowSymbol *shadow = set.symbol_pool[i];
-        Symbol *symbol = shadow -> symbol;
-        for (int k = 0; symbol; symbol = (Symbol *) (k < shadow -> NumConflicts() ? shadow -> Conflict(k++) : NULL))
+        ShadowSymbol* shadow = set.symbol_pool[i];
+        Symbol* symbol = shadow -> symbol;
+        for (unsigned k = 0; symbol;
+             symbol = (Symbol*) (k < shadow -> NumConflicts()
+                                 ? shadow -> Conflict(k++) : NULL))
             if (IsElement(symbol))
                 return true;
     }
-
     return false;
 }
 
@@ -130,19 +137,21 @@ bool SymbolSet::Intersects(SymbolSet &set)
 //
 // Remove element from the set
 //
-void SymbolSet::RemoveElement(Symbol *element)
+void SymbolSet::RemoveElement(const Symbol* element)
 {
-    NameSymbol *name_symbol = element -> Identity();
-    int i = name_symbol -> index % hash_size;
-    ShadowSymbol *previous = NULL,
-                 *shadow;
+    const NameSymbol* name_symbol = element -> Identity();
+    unsigned i = name_symbol -> index % hash_size;
+    ShadowSymbol* previous = NULL;
+    ShadowSymbol* shadow;
     for (shadow = base[i]; shadow; previous = shadow, shadow = shadow -> next)
     {
         if (shadow -> Identity() == name_symbol)
         {
-            Symbol *symbol = shadow -> symbol;
-            int k;
-            for (k = 0; symbol; symbol = (Symbol *) (k < shadow -> NumConflicts() ? shadow -> Conflict(k++) : NULL))
+            Symbol* symbol = shadow -> symbol;
+            unsigned k;
+            for (k = 0; symbol;
+                 symbol = (Symbol*) (k < shadow -> NumConflicts()
+                                     ? shadow -> Conflict(k++) : NULL))
             {
                 if (symbol == element)
                     break;
@@ -154,7 +163,6 @@ void SymbolSet::RemoveElement(Symbol *element)
                     break;
                 shadow -> RemoveConflict(k - 1);
             }
-
             return;
         }
     }
@@ -165,45 +173,48 @@ void SymbolSet::RemoveElement(Symbol *element)
              base[i] = shadow -> next;
         else previous -> next = shadow -> next;
 
-        int last_index = symbol_pool.Length() - 1;
+        unsigned last_index = symbol_pool.Length() - 1;
         if (shadow -> pool_index != last_index)
-        {// move last element to position previously occupied by element being deleted
+        {
+            // move last element to position previously occupied by element
+            // being deleted
             symbol_pool[last_index] -> pool_index = shadow -> pool_index;
             symbol_pool[shadow -> pool_index] = symbol_pool[last_index];
         }
 
         symbol_pool.Reset(last_index); // remove last slot in symbol_pool
-
         delete shadow;
     }
 }
 
 
-int SymbolMap::primes[] = {DEFAULT_HASH_SIZE, 101, 401, MAX_HASH_SIZE};
+unsigned SymbolMap::primes[] = {DEFAULT_HASH_SIZE, 101, 401, MAX_HASH_SIZE};
 
 void SymbolMap::Rehash()
 {
     hash_size = primes[++prime_index];
 
     delete [] base;
-    base = (Element **) memset(new Element *[hash_size], 0, hash_size * sizeof(Element *));
+    base = (Element**) memset(new Element*[hash_size], 0,
+                              hash_size * sizeof(Element*));
 
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
     {
-        Element *element = symbol_pool[i];
-        int k = element -> domain_element -> Identity() -> index % hash_size;
+        Element* element = symbol_pool[i];
+        unsigned k =
+            element -> domain_element -> Identity() -> index % hash_size;
         element -> next = base[k];
         base[k] = element;
     }
 }
 
 
-void SymbolMap::Map(Symbol *symbol, Symbol *image)
+void SymbolMap::Map(Symbol* symbol, Symbol* image)
 {
     assert(symbol);
 
-    Element *element;
-    int k = symbol -> Identity() -> index % hash_size;
+    Element* element;
+    unsigned k = symbol -> Identity() -> index % hash_size;
     for (element = base[k]; element; element = element -> next)
     {
         if (element -> domain_element == symbol)
@@ -226,21 +237,23 @@ void SymbolMap::Map(Symbol *symbol, Symbol *image)
         // If the number of unique elements in the map exceeds 2 times
         // the size of the base, and we have not yet reached the maximum
         // allowable size for a base, reallocate a larger base and rehash
-         // the elements.
+        // the elements.
         //
-        if ((symbol_pool.Length() > (hash_size << 1)) && (hash_size < MAX_HASH_SIZE))
+        if (symbol_pool.Length() > (hash_size << 1) &&
+            hash_size < MAX_HASH_SIZE)
+        {
             Rehash();
+        }
     }
     else
     {
         fprintf(stderr, "WARNING: This should not have happened !!!");
     }
-
     element -> image = image;
 }
 
 
-SymbolMap::SymbolMap(int hash_size_)
+SymbolMap::SymbolMap(unsigned hash_size_)
 {
     hash_size = (hash_size_ <= 0 ? 1 : hash_size_);
 
@@ -252,15 +265,15 @@ SymbolMap::SymbolMap(int hash_size_)
         prime_index++;
     } while (primes[prime_index] < MAX_HASH_SIZE);
 
-    base = (Element **) memset(new Element *[hash_size], 0, hash_size * sizeof(Element *));
+    base = (Element**) memset(new Element*[hash_size], 0,
+                              hash_size * sizeof(Element*));
 }
 
 
 SymbolMap::~SymbolMap()
 {
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
-
     delete [] base;
 }
 

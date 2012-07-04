@@ -1,9 +1,9 @@
-// $Id: diagnose.cpp,v 1.30 2002/11/06 00:58:22 ericb Exp $
+// $Id: diagnose.cpp,v 1.34 2003/03/02 04:27:29 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -27,45 +27,45 @@ void DiagnoseParser::ReallocateStacks()
 
     assert(stack_length <= SHRT_MAX);
 
-    int *old_stack = stack;
-    stack = (int *) memmove(new int[stack_length], stack,
-                            old_stack_length * sizeof(int));
+    int* old_stack = stack;
+    stack = (int*) memcpy(new int[stack_length], stack,
+                          old_stack_length * sizeof(int));
     delete [] old_stack;
 
-    Location *old_location_stack = location_stack;
-    location_stack = (Location *) memmove(new Location[stack_length],
-                                          location_stack,
-                                          old_stack_length * sizeof(Location));
+    Location* old_location_stack = location_stack;
+    location_stack = (Location*) memcpy(new Location[stack_length],
+                                        location_stack,
+                                        old_stack_length * sizeof(Location));
     delete [] old_location_stack;
 
-    Ast **old_parse_stack = parse_stack;
-    parse_stack = (Ast **) memmove(new Ast *[stack_length], parse_stack,
-                                   old_stack_length * sizeof(Ast *));
+    Ast** old_parse_stack = parse_stack;
+    parse_stack = (Ast**) memcpy(new Ast*[stack_length], parse_stack,
+                                 old_stack_length * sizeof(Ast*));
     delete [] old_parse_stack;
 
-    int *old_temp_stack = temp_stack;
-    temp_stack = (int *) memmove(new int[stack_length], temp_stack,
-                                 old_stack_length * sizeof(int));
+    int* old_temp_stack = temp_stack;
+    temp_stack = (int*) memcpy(new int[stack_length], temp_stack,
+                               old_stack_length * sizeof(int));
     delete [] old_temp_stack;
 
-    int *old_next_stack = next_stack;
-    next_stack = (int *) memmove(new int[stack_length], next_stack,
-                                 old_stack_length * sizeof(int));
+    int* old_next_stack = next_stack;
+    next_stack = (int*) memcpy(new int[stack_length], next_stack,
+                               old_stack_length * sizeof(int));
     delete [] old_next_stack;
 
-    int *old_prev_stack = prev_stack;
-    prev_stack = (int *) memmove(new int[stack_length], prev_stack,
-                                 old_stack_length * sizeof(int));
+    int* old_prev_stack = prev_stack;
+    prev_stack = (int*) memcpy(new int[stack_length], prev_stack,
+                               old_stack_length * sizeof(int));
     delete [] old_prev_stack;
 
-    int *old_scope_index = scope_index;
-    scope_index = (int *) memmove(new int[stack_length], scope_index,
-                                  old_stack_length * sizeof(int));
+    int* old_scope_index = scope_index;
+    scope_index = (int*) memcpy(new int[stack_length], scope_index,
+                                old_stack_length * sizeof(int));
     delete [] old_scope_index;
 
-    int *old_scope_position = scope_position;
-    scope_position = (int *) memmove(new int[stack_length], scope_position,
-                                     old_stack_length * sizeof(int));
+    int* old_scope_position = scope_position;
+    scope_position = (int*) memcpy(new int[stack_length], scope_position,
+                                   old_stack_length * sizeof(int));
     delete [] old_scope_position;
 }
 
@@ -2184,7 +2184,8 @@ const wchar_t* ParseErrorInfo::regularErrorString()
 
     lex_stream -> OutputSource(this, s);
 
-    s << endl << "*** Syntax: " << getErrorMessage();
+    s << endl << "*** Syntax " << getSeverityString() << ": "
+      << getErrorMessage();
 
     return s.Array();
 }
@@ -2196,7 +2197,7 @@ const wchar_t* ParseErrorInfo::emacsErrorString()
     s << getFileName()
       << ':' << left_line_no  << ':' << left_column_no
       << ':' << right_line_no << ':' << right_column_no
-      << ": " << getSeverityString() << ": "
+      << ": Syntax " << getSeverityString() << ": "
       << getErrorMessage() << endl;
 
     return s.Array();
@@ -2233,7 +2234,8 @@ void ParseError::PrintMessages()
             name[i] = file_name[i];
         name[length] = U_NULL;
         control.system_semantic ->
-            ReportSemError(SemanticError::CANNOT_REOPEN_FILE, 0, 0, name);
+            ReportSemError(SemanticError::CANNOT_REOPEN_FILE,
+                           LexStream::BadToken(), name);
         delete [] name;
         return;
     }
@@ -2241,9 +2243,9 @@ void ParseError::PrintMessages()
     SortMessages();
 
     int stack_top = -1;
-    int *error_stack = new int[errors.Length()];
+    int* error_stack = new int[errors.Length()];
 
-    for (int k = 0; k < errors.Length(); k++)
+    for (unsigned k = 0; k < errors.Length(); k++)
     {
         for ( ; stack_top >= 0 &&
                   (errors[error_stack[stack_top]].right_token <=

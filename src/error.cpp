@@ -1,10 +1,9 @@
-// $Id: error.cpp,v 1.112 2002/11/09 16:41:43 ericb Exp $
+// $Id: error.cpp,v 1.127 2004/01/30 14:11:08 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -263,11 +262,37 @@ void SemanticError::Report(SemanticErrorKind msg_code,
     // Don't report warnings that have been turned off on the command-line.
     //
     assert(msg_code < _num_kinds);
-    if (clone_count > 0 || warning[msg_code] == DISABLED ||
-        (control.option.nowarn &&
-         (warning[msg_code] == WEAK_WARNING ||
-          (warning[msg_code] == STRONG_WARNING &&
-           ! control.option.zero_defect))))
+    if (clone_count)
+        return;
+
+    //
+    // Some warning severities are dependent on command-line options, and
+    // may need rewriting from what we have in warning[].
+    //
+    switch (warning[msg_code])
+    {
+    case NAMED_WEAK_OFF:
+    case NAMED_STRONG_OFF:
+    case DISABLED:
+        warning[msg_code] = DISABLED;
+        return;
+    case NAMED_WEAK_ON:
+    case WEAK_WARNING:
+        warning[msg_code] = WEAK_WARNING;
+        break;
+    case NAMED_STRONG_ON:
+    case STRONG_WARNING:
+        warning[msg_code] = control.option.zero_defect ? MANDATORY_ERROR
+                                                       : STRONG_WARNING;
+        break;
+    case MANDATORY_ERROR:
+        break;
+    }
+
+    //
+    // Don't report non-mandatory errors if we're in -nowarn mode.
+    //
+    if (control.option.nowarn && warning[msg_code] != MANDATORY_ERROR)
     {
         return;
     }
@@ -436,7 +461,7 @@ void SemanticError::Report(SemanticErrorKind msg_code,
             buffer.Reset();
         }
         // we need at least 1 error in order for the return code to be
-        // set properly. See print_messages
+        // set properly. See PrintMessages().
         error.Reset(1);
     }
 }
@@ -451,12 +476,21 @@ void SemanticError::StaticInitializer()
 
     memset(warning, MANDATORY_ERROR, _num_kinds * sizeof(unsigned char));
 
+    //
+    // Named warnings. These must be given one of the NAMED_* enum values,
+    // which will be used as the default state if no +P options are specified.
+    //
+    warning[REDUNDANT_MODIFIER] = NAMED_WEAK_OFF;
+    warning[RECOMMENDED_MODIFIER_ORDER] = NAMED_WEAK_OFF;
+    warning[SWITCH_FALLTHROUGH] = NAMED_WEAK_OFF;
+
+    //
+    // Weak warnings.
+    //
     warning[CANNOT_OPEN_ZIP_FILE] = WEAK_WARNING;
     warning[CANNOT_OPEN_PATH_DIRECTORY] = WEAK_WARNING;
 
     warning[EMPTY_DECLARATION] = WEAK_WARNING;
-    warning[REDUNDANT_MODIFIER] = WEAK_WARNING;
-    warning[RECOMMENDED_MODIFIER_ORDER] = WEAK_WARNING;
     warning[DUPLICATE_THROWS_CLAUSE_CLASS] = WEAK_WARNING;
     warning[REDUNDANT_THROWS_CLAUSE_CLASS] = WEAK_WARNING;
     warning[UNCHECKED_THROWS_CLAUSE_CLASS] = WEAK_WARNING;
@@ -481,7 +515,30 @@ void SemanticError::StaticInitializer()
         WEAK_WARNING;
 
     //
-    // Something stronger warnings, but code will be generated anyway.
+    // Warnings based on advice in the book "Effective Java" by Josh Bloch.
+    //
+    warning[EJ_AVOID_OVERLOADING_EQUALS] = STRONG_WARNING;
+    warning[EJ_EMPTY_CATCH_BLOCK] = WEAK_WARNING;
+    warning[EJ_EMPTY_FINALLY_BLOCK] = STRONG_WARNING;
+    warning[EJ_EQUALS_WITHOUT_HASH_CODE] = STRONG_WARNING;
+    warning[EJ_HASH_CODE_WITHOUT_EQUALS] = STRONG_WARNING;
+    warning[EJ_INTERFACE_DOES_NOT_DEFINE_TYPE] = WEAK_WARNING;
+    warning[EJ_MISSING_PRIVATE_CONSTRUCTOR] = WEAK_WARNING;
+    warning[EJ_OVERLY_GENERAL_THROWS_CLAUSE] = WEAK_WARNING;
+    warning[EJ_PUBLIC_STATIC_FINAL_ARRAY_FIELD] = WEAK_WARNING;
+    warning[EJ_RETURN_OF_NULL_ARRAY] = WEAK_WARNING;
+    
+    //
+    // Naming convention warnings.
+    //
+    warning[UNCONVENTIONAL_CLASS_NAME] = WEAK_WARNING;
+    warning[UNCONVENTIONAL_CONSTANT_FIELD_NAME] = WEAK_WARNING;
+    warning[UNCONVENTIONAL_FIELD_NAME] = WEAK_WARNING;
+    warning[UNCONVENTIONAL_METHOD_NAME] = WEAK_WARNING;
+    warning[UNCONVENTIONAL_VARIABLE_NAME] = WEAK_WARNING;
+
+    //
+    // Somewhat stronger warnings, but code will be generated anyway.
     //
     warning[OBSOLESCENT_BRACKETS] = STRONG_WARNING;
     warning[BAD_INPUT_FILE] = STRONG_WARNING;
@@ -499,35 +556,36 @@ void SemanticError::StaticInitializer()
 
 
 //
-// Describes an error code for the purpose of turning it on or off by name.
-// The name is used on the command-line, in Jikes' -help output.
-//
-struct NamedError
-{
-    const char* name;
-    const char* reason;
-    SemanticError::SemanticErrorKind code;
-};
-
-//
 // HOWTO: Add a +Pno-<something> flag to selectively enable/disable a warning.
 //
-// Add an entry to the 'namedErrors' array. The three items are the text to
-// appear after "+Pno-" on the command-line, the text to appear after
-// "warn about " in the -help output, and the SemanticErrorKind enum value for
-// the warning in question.
+// Add an entry to the 'named_errors' array. The four items are the text to
+// appear after "+P[no-]" on the command-line, the text to appear after
+// "warn about " in the -help output, the SemanticErrorKind enum value for
+// the warning in question, and the WarningLevel::NAMED_* enum value which
+// determines the default state of the warning when plain +P is used and no
+// prior +P option was used.
+//
+// Update the warning[] entry for the SemanticErrorKind to be one of the
+// WarningLevel::NAMED_* enum values. This will specify the default state of
+// the warning when no +P option is used.
 //
 // Update the documentation in docs/jikes.1 to reflect the new option.
 //
-static NamedError namedErrors[] =
+SemanticError::NamedError SemanticError::named_errors[] =
 {
     { "modifier-order", "modifiers appearing out of order",
-      SemanticError::RECOMMENDED_MODIFIER_ORDER },
+      RECOMMENDED_MODIFIER_ORDER, NAMED_WEAK_OFF },
     { "redundant-modifiers", "modifiers which are implied",
-      SemanticError::REDUNDANT_MODIFIER },
+      REDUNDANT_MODIFIER, NAMED_WEAK_OFF },
+    { "switchcheck", "fallthrough between switch statement cases",
+      SWITCH_FALLTHROUGH, NAMED_WEAK_ON },
+    //this next one is really a meta switch, it is special cased below
+    // to turn on/off several flags instead of just one
+    { "naming-convention", "names which differ from standard convention",
+      UNCONVENTIONAL_NAMES, NAMED_WEAK_ON },
 
     // The table must end with this entry. New items *MUST* be added above.
-    { 0, 0, SemanticError::BAD_ERROR }
+    { 0, 0, BAD_ERROR, DISABLED }
 };
 
 //
@@ -536,26 +594,42 @@ static NamedError namedErrors[] =
 //
 void SemanticError::PrintNamedWarnings()
 {
-    for (NamedError* pair = namedErrors; pair -> name; ++pair)
+    for (NamedError* pair = named_errors; pair -> name; ++pair)
     {
         static const unsigned SPACE_FOR_NAME = 15;
         printf("+P[no-]%-*s", SPACE_FOR_NAME, pair -> name);
         if (strlen(pair -> name) >= SPACE_FOR_NAME)
-            printf("\n                    ");
-        printf("warn about %s\n", pair -> reason);
+            printf("\n                      ");
+        printf("warn about %s, %sactivated by +P\n", pair -> reason,
+	       ((pair->level == NAMED_WEAK_OFF)?"not ":""));
     }
 }
 
 //
-// Turns all named warnings to their default level, used by the plain +P
-// pedantic command-line flag.
-// TODO: Should we add in smarts to have some warnings left out of +P, or
-// to default to STRONG warnings?
+// Turns all named warnings not previously initialized to their plain +P
+// default level, using NamedError::level (see documentation of named_errors).
 //
 void SemanticError::EnableDefaultWarnings()
 {
-    for (NamedError* pair = namedErrors; pair -> name; ++pair)
-        warning[pair -> code] = WEAK_WARNING;
+    StaticInitializer();
+    for (NamedError* pair = named_errors; pair -> name; ++pair)
+    {
+        assert(pair -> level > DISABLED);
+        if (warning[pair -> code] > DISABLED)
+	    if (pair -> code == UNCONVENTIONAL_NAMES)
+	    {
+		//This is a meta flag for several warnings actually
+		warning[UNCONVENTIONAL_CLASS_NAME] = pair -> level;
+		warning[UNCONVENTIONAL_CONSTANT_FIELD_NAME] = pair -> level;
+		warning[UNCONVENTIONAL_FIELD_NAME] = pair -> level;
+		warning[UNCONVENTIONAL_METHOD_NAME] = pair -> level;
+		warning[UNCONVENTIONAL_VARIABLE_NAME] = pair -> level;
+	    }
+	    else
+	    {
+		warning[pair -> code] = pair -> level;
+	    }
+    }
 }
 
 //
@@ -565,26 +639,61 @@ void SemanticError::EnableDefaultWarnings()
 // Command-line options are of the form +P<name> or +Pno-<name> to
 // enable or disable the warning <name> respectively.
 //
-// The 'image' parameter should not include the "+P" prefix.
+// The 'image' parameter should not include the "+P" prefix (partly because
+// synonyms like -Xswitchcheck also use this method).
 //
 bool SemanticError::ProcessWarningSwitch(const char* image)
 {
     StaticInitializer();
     bool enable = true;
+    SemanticError::WarningLevel name_value;
     if (strncmp(image, "no-", 3) == 0)
     {
         image += 3;
         enable = false;
     }
-
-    for (NamedError* pair = namedErrors; pair -> name; ++pair)
+    for (NamedError* pair = named_errors; pair -> name; ++pair)
     {
-        if (strcmp(pair -> name, image) == 0)
-        {
-            assert(warning[pair -> code] != MANDATORY_ERROR);
-            warning[pair -> code] = enable ? WEAK_WARNING : DISABLED;
-            return true;
-        }
+	if (strcmp(pair -> name, image) == 0)
+	{
+	    if (pair -> code == UNCONVENTIONAL_NAMES)
+	    {
+		//This is a meta flag for several warnings actually
+		if (enable && (pair -> level == NAMED_STRONG_ON ||
+			       pair -> level == NAMED_STRONG_OFF)  )
+		    name_value = STRONG_WARNING;
+		else if (enable && (pair -> level == NAMED_WEAK_ON ||
+				     pair -> level == NAMED_WEAK_OFF)  )
+		    name_value = STRONG_WARNING;
+		else
+		{
+		    assert((!enable) && "how did we get here?");
+		    name_value = DISABLED;
+		}
+		warning[UNCONVENTIONAL_CLASS_NAME] = name_value;
+		warning[UNCONVENTIONAL_CONSTANT_FIELD_NAME] = name_value;
+		warning[UNCONVENTIONAL_FIELD_NAME] = name_value;
+		warning[UNCONVENTIONAL_METHOD_NAME] = name_value;
+		warning[UNCONVENTIONAL_VARIABLE_NAME] = name_value;
+		return true;
+	    }
+	    else
+	    {
+		switch(pair -> level)
+		{
+		    case NAMED_STRONG_ON:
+		    case NAMED_STRONG_OFF:
+			warning[pair -> code] = enable ? STRONG_WARNING : DISABLED;
+			return true;
+		    case NAMED_WEAK_ON:
+		    case NAMED_WEAK_OFF:
+			warning[pair -> code] = enable ? WEAK_WARNING : DISABLED;
+			return true;
+		    default:
+			assert(false && "Invalid default level for named warning");
+		}
+	    }
+	}
     }
     return false;
 }
@@ -697,7 +806,7 @@ int SemanticError::PrintMessages()
     int return_code = (num_errors > 0 ? 1 : 0);
 
     //
-    // If the errors were alread dumped, return.
+    // If the errors were already dumped, return.
     //
     if (control.option.dump_errors)
         return return_code;
@@ -752,7 +861,8 @@ int SemanticError::PrintMessages()
                 name[i] = file_name[i];
             name[length] = U_NULL;
             control.system_semantic ->
-                ReportSemError(SemanticError::CANNOT_REOPEN_FILE, 0, 0, name);
+                ReportSemError(SemanticError::CANNOT_REOPEN_FILE,
+                               LexStream::BadToken(), name);
             delete [] name;
         }
     }
@@ -761,7 +871,7 @@ int SemanticError::PrintMessages()
         lex_stream -> InputBuffer())
     {
         SortMessages();
-        for (int k = 0; k < error.Length(); k++)
+        for (unsigned k = 0; k < error.Length(); k++)
         {
             if (warning[error[k].msg_code] != 1 || ! control.option.nowarn)
                 reportError(k);
@@ -790,11 +900,10 @@ const wchar_t* ErrorInfo::getInsert(unsigned index)
 static void FormatClasspath(ErrorString& s, Control& control)
 {
     s << endl;
-    for (int i = 1; i < control.classpath.Length(); i++)
+    for (unsigned i = 1; i < control.classpath.Length(); i++)
     {
         PathSymbol* path_symbol = control.classpath[i];
-        wchar_t* path = path_symbol -> Name();
-        s << "                " << path << endl;
+        s << "                " << path_symbol -> Name() << endl;
     }
 }
 
@@ -1041,6 +1150,10 @@ void SemanticError::InitializeMessages()
         "See system messages for more information.";
     messages[CANNOT_REOPEN_FILE] = "Unable to reopen file \"%1\".";
     messages[CANNOT_WRITE_FILE] = "Unable to write file \"%1\".";
+    messages[ASSERT_UNSUPPORTED_IN_TARGET] =
+        "The type \"%T1\" requires support for assert statements not present "
+        "in your choice of -target. Either use \"-target 1.4\" or greater, or "
+        "use \"--noassert\" (or \"+a\") at the command line.";
     messages[CONSTANT_POOL_OVERFLOW] =
         "The type \"%T1\" produced a constant pool that exceeded "
         "the limit of 65535 elements.";
@@ -1089,11 +1202,14 @@ void SemanticError::InitializeMessages()
         "An EmptyDeclaration is useless. \";\" ignored.";
     messages[REDUNDANT_MODIFIER] =
         "The use of the \"%1\" modifier in this context "
-        "is redundant and strongly discouraged as a matter of style.";
+        "is redundant and is discouraged as a matter of style.";
     messages[RECOMMENDED_MODIFIER_ORDER] =
-        "The modifier \"%1\" did not appear in the recommended order "
+        "The modifier \"%1\" did not appear in the recommended order: "
         "public/protected/private, abstract, static, final, synchronized, "
-        "transient, volatile, strictfp.";
+        "transient, volatile, native, strictfp.";
+    messages[SWITCH_FALLTHROUGH] =
+        "This switch block can fall through to the next case. Did you forget "
+        "a break statement?";
     messages[OBSOLESCENT_BRACKETS] =
         "The use of empty bracket pairs following a MethodDeclarator should "
         "not be used in new Java programs.";
@@ -1123,6 +1239,69 @@ void SemanticError::InitializeMessages()
     messages[VOID_TO_STRING] =
         "Attempt to convert a void expression into java.lang.String.";
 
+    // "Effective Java" warnings.
+    messages[EJ_AVOID_OVERLOADING_EQUALS] =
+        "The class \"%1\" has an \"equals\" method with parameter of a type "
+        "other than \"java.lang.Object\". This will overload, rather than "
+        "override, \"java.lang.Object.equals\". "
+        "(See item 7 of \"Effective Java\".)";
+    messages[EJ_EMPTY_CATCH_BLOCK] =
+        "An empty catch block defeats the purpose of exceptions. "
+        "(See item 47 of \"Effective Java\".)";
+    messages[EJ_EMPTY_FINALLY_BLOCK] =
+        "An empty finally block is unnecessary and misleading.";
+    messages[EJ_EQUALS_WITHOUT_HASH_CODE] =
+        "The class \"%1\" overrides \"equals\" without overriding "
+        "\"hashCode\". "
+        "Equal objects must return equal values from \"hashCode\", so always "
+        "override \"hashCode\" when you override \"equals\". "
+        "(See item 8 of \"Effective Java\".)";
+    messages[EJ_HASH_CODE_WITHOUT_EQUALS] =
+        "The class \"%1\" overrides \"hashCode\" without overriding "
+        "\"equals\". "
+        "Equal objects must return equal values from \"hashCode\", and "
+        "though this may still be the case here, overriding \"hashCode\" "
+        "without overriding \"equals\" is usually a mistake. "
+        "(See item 8 of \"Effective Java\".)";
+    messages[EJ_INTERFACE_DOES_NOT_DEFINE_TYPE] =
+        "An interface should define a type with behavior. "
+        "Should \"%1\" have been an enum or a noninstantiable utility class? "
+        "(See item 7 of \"Effective Java\".)";
+    messages[EJ_MISSING_PRIVATE_CONSTRUCTOR] =
+        "A private constructor would enforce the noninstantiability of \"%1\". "
+        "(See item 3 of \"Effective Java\".)";
+    messages[EJ_OVERLY_GENERAL_THROWS_CLAUSE] =
+        "An overly-general throws clause obscures which exceptions may "
+        "actually be thrown. "
+        "(See item 44 of \"Effective Java\".)";
+    messages[EJ_PUBLIC_STATIC_FINAL_ARRAY_FIELD] =
+        "The field \"%1\" can be modified by clients. It is nearly always "
+        "wrong to have a public static final array field. The public array "
+        "should be replaced by a private array and a public immutable "
+        "\"java.util.List\". "
+        "(See item 12 of \"Effective Java\".)";
+    messages[EJ_RETURN_OF_NULL_ARRAY] =
+        "Return a zero-length array instead of null. This avoids the need "
+        "for special-case code in the caller. "
+        "(See item 27 of \"Effective Java\".)";
+    
+    // Naming convention warnings.
+    messages[UNCONVENTIONAL_CLASS_NAME] =
+        "Use names ThatLookLikeThis for classes such as \"%1\". "
+        "(See item 38 of \"Effective Java\".)";
+    messages[UNCONVENTIONAL_CONSTANT_FIELD_NAME] =
+        "Use names THAT_LOOK_LIKE_THIS for fields such as \"%1\". "
+        "(See item 38 of \"Effective Java\".)";
+    messages[UNCONVENTIONAL_FIELD_NAME] =
+        "Use names thatLookLikeThis for fields such as \"%1\". "
+        "(See item 38 of \"Effective Java\".)";
+    messages[UNCONVENTIONAL_METHOD_NAME] =
+        "Use names thatLookLikeThis for methods such as \"%1\". "
+        "(See item 38 of \"Effective Java\".)";
+    messages[UNCONVENTIONAL_VARIABLE_NAME] =
+        "Use names thatLookLikeThis for variables such as \"%1\". "
+        "(See item 38 of \"Effective Java\".)";
+    
     // Type and package related errors.
     messages[DUPLICATE_INNER_TYPE_NAME] =
         "The nested type name \"%1\" is illegal, as it is enclosed in "
@@ -1156,7 +1335,7 @@ void SemanticError::InitializeMessages()
     messages[PACKAGE_NOT_TYPE] =
         "Package \"%1\" was found when a type was expected.";
     messages[TYPE_NOT_FOUND] =
-        "Type %T1 was not found.";
+        "Type \"%T1\" was not found.";
     messages[INVALID_TYPE_FOUND] =
         "A candidate for type \"%1\" was found, but it is invalid and needs "
         "to be fixed before this type will successfully compile.";
@@ -1184,11 +1363,14 @@ void SemanticError::InitializeMessages()
     messages[OBJECT_HAS_NO_SUPER_TYPE] =
         "The type \"java.lang.Object\" does not have a supertype.";
     messages[DUPLICATE_FIELD] =
-        "Duplicate declaration of field \"%1\" in type \"%2\".";
+        "Duplicate declaration of field \"%1\" in type \"%2\". The other "
+        "occurrence is at location \"%3\".";
     messages[DUPLICATE_METHOD] =
-        "Duplicate declaration of method \"%1\" in type \"%2\".";
+        "Duplicate declaration of method \"%1\" in type \"%2\". The other "
+        "occurrence is at location \"%3\".";
     messages[DUPLICATE_CONSTRUCTOR] =
-        "Duplicate declaration of this constructor signature in type \"%1\".";
+        "Duplicate declaration of this constructor signature in type \"%1\". "
+        "The other occurrence is at location \"%2\".";
     messages[MISMATCHED_INHERITED_METHOD] =
         "The return type of method \"%1\" does not match the return type of "
         "the accessible method \"%2\" declared in type \"%T3\".";
@@ -1223,19 +1405,14 @@ void SemanticError::InitializeMessages()
 
     // Statement and expression related errors.
     messages[DUPLICATE_LOCAL_VARIABLE_DECLARATION] =
-        "Duplicate declaration of local variable \"%1\".";
+        "Duplicate declaration of local variable \"%1\". The other occurrence "
+        "is at location \"%2\".";
     messages[MULTIPLE_DEFAULT_LABEL] =
         "Multiple specification of default label in switch statement.";
     messages[UNDECLARED_LABEL] =
         "\"%1\" is an undeclared label.";
     messages[DUPLICATE_LABEL] =
         "Duplicate declaration of label \"%1\".";
-    messages[CATCH_PRIMITIVE_TYPE] =
-        "A primitive type cannot be used to declare a catch clause "
-        "parameter.";
-    messages[CATCH_ARRAY_TYPE] =
-        "A array type cannot be used to declare a catch clause "
-        "parameter.";
     messages[AMBIGUOUS_FIELD] =
         "Ambiguous access of field \"%1\". At least two fields are "
         "accessible from here: one declared in type \"%T2\" and "
@@ -1245,11 +1422,11 @@ void SemanticError::InitializeMessages()
         "are accessible from here: one declared in type \"%T2\" "
         "and one declared in type \"%T4\".";
     messages[FIELD_NOT_FOUND] =
-        "No field named \"%1\" was found in type \"%T2\".";
+        "No accessible field named \"%1\" was found in type \"%T2\".";
     messages[FIELD_NAME_MISSPELLED] =
-        "No field named \"%1\" was found in type \"%T2\". "
-        "However, there is an accessible field \"%4\" "
-        "whose name closely matches the name \"%1\".";
+        "No field named \"%1\" was found in type \"%T2\". However, there is "
+        "an accessible field \"%4\" whose name closely matches the name "
+        "\"%1\".";
     messages[METHOD_NOT_FIELD] =
         "The name \"%1\" is not a field name but the name of a method "
         "declared in the type \"%T2\".";
@@ -1264,15 +1441,16 @@ void SemanticError::InitializeMessages()
     messages[NOT_A_NUMERIC_VARIABLE] =
         "Only a variable of numeric type can appear in this context.";
     messages[METHOD_OVERLOAD_NOT_FOUND] =
-        "No applicable overload for the method named \"%1\" was found "
+        "No applicable overload for a method with signature \"%1\" was found "
         "in type \"%T2\". Perhaps you wanted the overloaded version \"%4\" "
         "instead?";
     messages[METHOD_NOT_FOUND] =
-        "No method named \"%1\" was found in type \"%T2\".";
+        "No accessible method with signature \"%1\" was found in type "
+        "\"%T2\".";
     messages[METHOD_NAME_MISSPELLED] =
-        "No method named \"%1\" was found in type \"%T2\". "
-        "However, there is an accessible method \"%4\" "
-        "whose name closely matches the name \"%1\".";
+        "No method named \"%1\" was found in type \"%T2\". However, there is "
+        "an accessible method \"%4\" whose name closely matches the name "
+        "\"%1\".";
     messages[HIDDEN_METHOD_IN_ENCLOSING_CLASS] =
         "The method \"%1\" contained in the enclosing type \"%T2\" "
         "is a perfect match for this method call. "
@@ -1299,22 +1477,21 @@ void SemanticError::InitializeMessages()
         "are accessible from here: \"%2\" declared in type \"%T3\" "
         "and \"%5\" declared in type \"%T6\".";
     messages[CONSTRUCTOR_NOT_FOUND] =
-        "No match was found for constructor \"%1\".";
+        "No constructor with signature \"%1\" was found in type \"%T2\".";
     messages[METHOD_FOUND_FOR_CONSTRUCTOR] =
         "No match was found for constructor \"%1\". However, a method "
         "with the same name was found at location %2.";
     messages[CONSTRUCTOR_OVERLOAD_NOT_FOUND] =
-        "No applicable overload was found for a constructor of "
-        "type \"%T1\". Perhaps you wanted the overloaded version "
-        "\"%3\" instead?";
+        "No applicable overload was found for a constructor with signature "
+        "\"%1\" in type \"%T2\". Perhaps you wanted the overloaded version "
+        "\"%4\" instead?";
     messages[ABSTRACT_TYPE_CREATION] =
         "Attempt to instantiate an abstract class \"%1\".";
     messages[INVALID_INSTANCEOF_CONVERSION] =
         "The type of the left sub-expression, \"%T1\", cannot possibly "
         "be an instance of type \"%T3\".";
     messages[INVALID_CAST_CONVERSION] =
-        "An expression of type \"%1\" cannot be cast into type \"%2\".";
-    messages[INVALID_CAST_TYPE] = "Expression found where a type is expected.";
+        "An expression of type \"%T1\" cannot be cast into type \"%T3\".";
     messages[INCOMPATIBLE_TYPE_FOR_INITIALIZATION] =
         "The type of the initializer, \"%T3\", is not "
         "assignable to the variable, of type \"%T1\".";
@@ -1395,8 +1572,6 @@ void SemanticError::InitializeMessages()
         "The blank final field \"%1\" must be initialized in this and "
         "every constructor which does not call a form of this(); or else "
         "once in an instance initializer block or instance field initializer.";
-    messages[UNINITIALIZED_FINAL_VARIABLE_IN_INTERFACE] =
-        "The interface field \"%1\" must have an initializer.";
     messages[INIT_SCALAR_WITH_ARRAY] =
         "An array initializer cannot be used to initialize a variable of "
         "type \"%1\".";
@@ -1408,7 +1583,7 @@ void SemanticError::InitializeMessages()
     messages[INVALID_SHORT_VALUE] =
         "A short value must be an integer value in the range -32768..32767.";
     messages[INVALID_CHARACTER_VALUE] =
-        "A character must be an the range 0..65535 ('\\u0000'..'\\uffff').";
+        "A character must be in the range 0..65535 ('\\u0000'..'\\uffff').";
     messages[INVALID_INT_VALUE] =
         "The value of an \"int\" literal must be a decimal value in the "
         "range -2147483648..2147483647 or a hexadecimal or octal literal "
@@ -1568,6 +1743,8 @@ void SemanticError::InitializeMessages()
     messages[SYNTHETIC_CONSTRUCTOR_INVOCATION] =
         "Illegal attempt to invoke the synthetic constructor \"%1\" from "
         "class \"%T2\".";
+    messages[SYNTHETIC_TYPE_ACCESS] =
+        "Illegal attempt to use the synthetic type \"%T1\".";
     messages[SELF_IN_EXPLICIT_CONSTRUCTOR] =
         "The expression \"%1\" is not yet initialized here.";
     messages[EXPRESSION_NOT_CONSTANT] =
@@ -1593,9 +1770,9 @@ void SemanticError::InitializeMessages()
         "This constructor must declare the checked exception \"%T1\" "
         "thrown by the explicit super() call to type \"%T3\".";
     messages[UNREACHABLE_CATCH_CLAUSE] =
-        "This catch block is unreachable because there is no exception "
-        "whose type is assignable to \"%T1\" that can be thrown during "
-        "execution of the body of the try block.";
+        "This catch block is unreachable because there is no non-null "
+        "exception whose type is assignable to \"%T1\" that can be thrown "
+        "during execution of the body of the try block.";
     messages[UNREACHABLE_STATEMENT] = "This statement is unreachable.";
     messages[UNREACHABLE_STATEMENTS] = "These statements are unreachable.";
     messages[BLOCKED_CATCH_CLAUSE] =
@@ -1613,14 +1790,9 @@ void SemanticError::InitializeMessages()
         "the corresponding method with default access in class \"%T4\".";
 
     // Package related errors.
-    messages[TYPE_NOT_IN_UNNAMED_PACKAGE] =
-        "The file \"%1.class\" was found in directory \"%2\" specified "
-        "in the CLASSPATH. However, that class file specifies a type "
-        "associated with the named package \"%3\" instead of the unnamed "
-        "package.";
-    messages[TYPE_IN_WRONG_PACKAGE] =
-        "The type \"%1\" was found in package \"%2\". However, that type "
-        "is associated with %P3.";
+    messages[WRONG_TYPE_IN_CLASSFILE] =
+        "The file \"%1.class\" was found in directory \"%F2\" specified in the"
+        "CLASSPATH. However, that class file specifies the type \"%4\".";
     messages[TYPE_NAME_MISMATCH] =
         "The name of the type specified, \"%T1\", does not match "
         "the name found in the class file: \"%3\".";

@@ -1,11 +1,10 @@
-// $Id: javaprs.h,v 1.24 2002/07/30 16:30:02 ericb Exp $
+// $Id: javaprs.h,v 1.29 2004/01/23 12:07:03 ericb Exp $
 // DO NOT MODIFY THIS FILE - it is generated using jikespg on java.g.
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1997, 1998, 1999, 2001, 2002 International
-// Business Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2003 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -25,34 +24,35 @@ class LexStream;
 
 class javaprs_table
 {
+    int dummy; /* Prevents empty class from causing compile error. */
 public:
     static int original_state(int state) { return -base_check[state]; }
     static int asi(int state) { return asb[original_state(state)]; }
     static int nasi(int state) { return nasb[original_state(state)]; }
     static int in_symbol(int state) { return in_symb[original_state(state)]; }
 
-    static const unsigned char rhs[];
-    static const signed short check_table[];
-    static const signed short *base_check;
+    static const unsigned char  rhs[];
+    static const   signed short check_table[];
+    static const   signed short *base_check;
     static const unsigned short lhs[];
     static const unsigned short *base_action;
-    static const unsigned char term_check[];
+    static const unsigned char  term_check[];
     static const unsigned short term_action[];
 
     static const unsigned short asb[];
-    static const unsigned char asr[];
+    static const unsigned char  asr[];
     static const unsigned short nasb[];
     static const unsigned short nasr[];
     static const unsigned short name_start[];
-    static const unsigned char name_length[];
-    static const char string_buffer[];
+    static const unsigned char  name_length[];
+    static const          char  string_buffer[];
     static const unsigned short terminal_index[];
     static const unsigned short non_terminal_index[];
     static const unsigned short scope_prefix[];
     static const unsigned short scope_suffix[];
     static const unsigned short scope_lhs[];
-    static const unsigned char scope_la[];
-    static const unsigned char scope_state_set[];
+    static const unsigned char  scope_la[];
+    static const unsigned char  scope_state_set[];
     static const unsigned short scope_rhs[];
     static const unsigned short scope_state[];
     static const unsigned short in_symb[];
@@ -62,29 +62,11 @@ public:
         return base_action[state + sym];
     }
 
-    static int t_action(int act, int sym, LexStream *stream)
+    static int t_action(int state, int sym, LexStream *)
     {
-        act = base_action[act];
-        int i = act + sym;
-
-        act = term_action[term_check[i] == sym ? i : act];
-
-        if (act > LA_STATE_OFFSET)
-        {
-            for (TokenObject tok = stream -> Peek();
-                 ;
-                 tok = stream -> Next(tok))
-            {
-               act -= LA_STATE_OFFSET;
-               sym = stream -> Kind(tok);
-               i = act + sym;
-               act = term_action[term_check[i] == sym ? i : act];
-               if (act <= LA_STATE_OFFSET)
-                   break;
-            }
-        }
-
-        return act;
+        return term_action[term_check[base_action[state]+sym] == sym
+                               ? base_action[state] + sym
+                               : base_action[state]];
     }
 };
 

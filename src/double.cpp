@@ -1,10 +1,9 @@
-// $Id: double.cpp,v 1.29 2002/09/11 21:57:56 ericb Exp $
+// $Id: double.cpp,v 1.30 2003/09/27 18:16:58 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2003 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 //
@@ -2710,7 +2709,7 @@ BigInt &BigInt::operator *(unsigned op) const
     ULongInt product; // product
     BigInt *result = new BigInt(*this);
     u4 *x = result -> data; // access to data
-    ULongInt factor = op; // avoid creating object multiple times
+    ULongInt factor = (u4) op; // avoid creating object multiple times
 
     do
     {
@@ -2831,7 +2830,7 @@ BigInt &BigInt::multadd(unsigned m, unsigned a)
     u4 *x = data; // access to data
     u4 carry = a; // carry between words
     ULongInt product; // product
-    ULongInt factor = m; // avoid creating object multiple times
+    ULongInt factor = (u4) m; // avoid creating object multiple times
 
     do
     {

@@ -5,6 +5,7 @@ ast.cpp \
 body.cpp \
 bytecode.cpp \
 case.cpp \
+class.cpp \
 code.cpp \
 control.cpp \
 decl.cpp \
@@ -15,7 +16,6 @@ double.cpp \
 dump.cpp \
 error.cpp \
 expr.cpp \
-getclass.cpp \
 incrmnt.cpp \
 init.cpp \
 javaact.cpp \
@@ -55,7 +55,6 @@ depend.h \
 diagnose.h \
 double.h \
 error.h \
-getclass.h \
 javaact.h \
 javadcl.h \
 javadef.h \
@@ -104,7 +103,7 @@ $(PARSER_FILES): $(srcdir)/java.g
 # FIXME: hardcoded at the moment, makes bootstrap difficult...
 JAVA = java
 JAVAC = jikes
-code.h: gencode.java
+code.h: $(srcdir)/gencode.java
 	$(JAVAC) -d $(srcdir) $<
 	(cd $(srcdir); $(JAVA) -classpath . gencode)
 
@@ -114,115 +113,6 @@ endif
 
 # This rule will build an efence malloc debugging enabled version of jikes.
 # This should be used for testing purposes only! It is really slow!
-
 efence:
 	@rm -f jikes$(EXEEXT)
 	$(CXXLINK) -o jikes$(EXEEXT) $(jikes_OBJECTS) -lstdc++ -lefence
-
-
-# The rest of the entries in this file are dependencies manually extracted
-# from the source files; I used ``g++ 3.2 -MM -Ipath/to/jikes/src *.cpp'',
-# then replaced .o with .$(OBJEXT) and filtered config.h out of the lists.
-#
-# We choose not use the automatic dependency tracking available in
-# automake because the depcomp script still has some
-# portability problems with non-gcc compilers. If
-# dependencies are changed in the source code, these
-# deps will need to be manually updated.
-
-$(jikes_OBJECTS): config.h
-
-ast.$(OBJEXT): ast.cpp ast.h platform.h stream.h tuple.h jikesapi.h \
-  depend.h symbol.h lookup.h long.h double.h access.h
-body.$(OBJEXT): body.cpp platform.h semantic.h ast.h stream.h tuple.h \
-  jikesapi.h depend.h error.h symbol.h lookup.h long.h double.h access.h \
-  control.h set.h option.h
-bytecode.$(OBJEXT): bytecode.cpp bytecode.h platform.h tuple.h \
-  jikesapi.h ast.h stream.h depend.h class.h semantic.h error.h symbol.h \
-  lookup.h long.h double.h access.h control.h set.h op.h option.h \
-  segment.h table.h
-case.$(OBJEXT): case.cpp case.h platform.h config.h
-code.$(OBJEXT): code.cpp code.h platform.h config.h
-control.$(OBJEXT): control.cpp control.h platform.h symbol.h stream.h \
-  tuple.h jikesapi.h lookup.h long.h double.h access.h set.h scanner.h \
-  parser.h lpginput.h javasym.h javadef.h javaprs.h javaact.h semantic.h \
-  ast.h depend.h error.h bytecode.h class.h op.h option.h segment.h \
-  case.h
-decl.$(OBJEXT): decl.cpp platform.h semantic.h ast.h stream.h tuple.h \
-  jikesapi.h depend.h error.h symbol.h lookup.h long.h double.h access.h \
-  control.h set.h table.h spell.h case.h javasym.h option.h
-definite.$(OBJEXT): definite.cpp platform.h semantic.h ast.h stream.h \
-  tuple.h jikesapi.h depend.h error.h symbol.h lookup.h long.h double.h \
-  access.h control.h set.h option.h
-depend.$(OBJEXT): depend.cpp depend.h platform.h tuple.h jikesapi.h \
-  control.h symbol.h stream.h lookup.h long.h double.h access.h set.h \
-  ast.h semantic.h error.h option.h
-diagnose.$(OBJEXT): diagnose.cpp diagnose.h platform.h parser.h \
-  lpginput.h stream.h tuple.h jikesapi.h javasym.h javadef.h javaprs.h \
-  javaact.h control.h symbol.h lookup.h long.h double.h access.h set.h \
-  semantic.h ast.h depend.h error.h case.h spell.h option.h
-double.$(OBJEXT): double.cpp double.h platform.h long.h
-dump.$(OBJEXT): dump.cpp platform.h javasym.h control.h symbol.h \
-  stream.h tuple.h jikesapi.h lookup.h long.h double.h access.h set.h
-error.$(OBJEXT): error.cpp error.h platform.h stream.h tuple.h \
-  jikesapi.h control.h symbol.h lookup.h long.h double.h access.h set.h \
-  semantic.h ast.h depend.h diagnose.h parser.h lpginput.h javasym.h \
-  javadef.h javaprs.h javaact.h option.h
-expr.$(OBJEXT): expr.cpp platform.h double.h long.h parser.h lpginput.h \
-  stream.h tuple.h jikesapi.h javasym.h javadef.h javaprs.h javaact.h \
-  semantic.h ast.h depend.h error.h symbol.h lookup.h access.h control.h \
-  set.h table.h spell.h case.h option.h
-getclass.$(OBJEXT): getclass.cpp getclass.h platform.h semantic.h ast.h \
-  stream.h tuple.h jikesapi.h depend.h error.h symbol.h lookup.h long.h \
-  double.h access.h control.h set.h zip.h unzip.h option.h code.h
-incrmnt.$(OBJEXT): incrmnt.cpp platform.h control.h symbol.h stream.h \
-  tuple.h jikesapi.h lookup.h long.h double.h access.h set.h scanner.h \
-  parser.h lpginput.h javasym.h javadef.h javaprs.h javaact.h semantic.h \
-  ast.h depend.h error.h case.h
-init.$(OBJEXT): init.cpp platform.h semantic.h ast.h stream.h tuple.h \
-  jikesapi.h depend.h error.h symbol.h lookup.h long.h double.h access.h \
-  control.h set.h
-javaact.$(OBJEXT): javaact.cpp platform.h parser.h lpginput.h stream.h \
-  tuple.h jikesapi.h javasym.h javadef.h javaprs.h javaact.h ast.h \
-  depend.h
-jikesapi.$(OBJEXT): jikesapi.cpp platform.h control.h symbol.h stream.h \
-  tuple.h jikesapi.h lookup.h long.h double.h access.h set.h option.h
-jikes.$(OBJEXT): jikes.cpp platform.h jikesapi.h error.h stream.h tuple.h
-long.$(OBJEXT): long.cpp long.h platform.h double.h
-lookup.$(OBJEXT): lookup.cpp lookup.h platform.h tuple.h jikesapi.h \
-  long.h double.h control.h symbol.h stream.h access.h set.h code.h ast.h \
-  depend.h case.h
-lpginput.$(OBJEXT): lpginput.cpp lpginput.h platform.h stream.h tuple.h \
-  jikesapi.h javasym.h javadef.h javaprs.h javadcl.h
-modifier.$(OBJEXT): modifier.cpp platform.h semantic.h ast.h stream.h \
-  tuple.h jikesapi.h depend.h error.h symbol.h lookup.h long.h double.h \
-  access.h control.h set.h option.h
-op.$(OBJEXT): op.cpp op.h platform.h tuple.h jikesapi.h
-option.$(OBJEXT): option.cpp option.h platform.h tuple.h jikesapi.h \
-  javasym.h error.h stream.h case.h tab.h code.h
-parser.$(OBJEXT): parser.cpp parser.h platform.h lpginput.h stream.h \
-  tuple.h jikesapi.h javasym.h javadef.h javaprs.h javaact.h ast.h \
-  depend.h
-platform.$(OBJEXT): platform.cpp platform.h long.h double.h
-scanner.$(OBJEXT): scanner.cpp scanner.h platform.h stream.h tuple.h \
-  jikesapi.h control.h symbol.h lookup.h long.h double.h access.h set.h \
-  error.h javadef.h javasym.h option.h code.h
-segment.$(OBJEXT): segment.cpp segment.h platform.h tuple.h jikesapi.h
-set.$(OBJEXT): set.cpp set.h platform.h lookup.h tuple.h jikesapi.h \
-  long.h double.h
-stream.$(OBJEXT): stream.cpp stream.h platform.h tuple.h jikesapi.h \
-  code.h zip.h unzip.h symbol.h lookup.h long.h double.h access.h \
-  control.h set.h semantic.h ast.h depend.h error.h javasym.h option.h \
-  tab.h
-symbol.$(OBJEXT): symbol.cpp symbol.h platform.h stream.h tuple.h \
-  jikesapi.h lookup.h long.h double.h access.h control.h set.h ast.h \
-  depend.h semantic.h error.h table.h zip.h unzip.h case.h option.h
-system.$(OBJEXT): system.cpp platform.h control.h symbol.h stream.h \
-  tuple.h jikesapi.h lookup.h long.h double.h access.h set.h semantic.h \
-  ast.h depend.h error.h zip.h unzip.h option.h case.h
-tab.$(OBJEXT): tab.cpp tab.h platform.h config.h
-unparse.$(OBJEXT): unparse.cpp ast.h platform.h stream.h tuple.h \
-  jikesapi.h depend.h
-unzip.$(OBJEXT): unzip.cpp unzip.h platform.h config.h
-zip.$(OBJEXT): zip.cpp zip.h platform.h tuple.h jikesapi.h unzip.h \
-  control.h symbol.h stream.h lookup.h long.h double.h access.h set.h

@@ -1,10 +1,9 @@
-// $Id: error.h,v 1.80 2002/11/06 15:32:34 ericb Exp $ -*- c++ -*-
+// $Id: error.h,v 1.89 2004/01/26 06:07:16 cabbey Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -29,13 +28,14 @@ class SemanticError;
 //
 // Since basic_ostringstream<wchar_t> is not supported correctly by all
 // compilers, we now use this workaround class.
-// WARNING: It is not threadsafe - calling Array() in multiple threads may
+// WARNING: It is not thread-safe - calling Array() in multiple threads may
 // cause a race condition, getting the wrong string as a result.
 //
 class ErrorString : public ConvertibleArray<wchar_t>
 {
 public:
     ErrorString();
+    ~ErrorString() {}
 
     ErrorString& operator<<(const wchar_t* s);
     ErrorString& operator<<(const wchar_t c);
@@ -52,7 +52,7 @@ public:
     void fill(const char c);
 
     //
-    // The returned value is not threadsafe, and is only guaranteed valid
+    // The returned value is not thread-safe, and is only guaranteed valid
     // until the next call to Array().
     //
     const wchar_t* Array();
@@ -121,7 +121,11 @@ public:
         MANDATORY_ERROR = ErrorInfo::JIKES_ERROR,
         STRONG_WARNING = ErrorInfo::JIKES_CAUTION,
         WEAK_WARNING = ErrorInfo::JIKES_WARNING,
-        DISABLED
+        DISABLED,
+        NAMED_STRONG_ON,
+        NAMED_STRONG_OFF,
+        NAMED_WEAK_ON,
+        NAMED_WEAK_OFF
     };
 
     enum SemanticErrorKind
@@ -141,6 +145,7 @@ public:
         LIBRARY_METHOD_NOT_FOUND,
         CANNOT_REOPEN_FILE,
         CANNOT_WRITE_FILE,
+        ASSERT_UNSUPPORTED_IN_TARGET,
         CONSTANT_POOL_OVERFLOW,
         INTERFACES_OVERFLOW,
         METHODS_OVERFLOW,
@@ -161,6 +166,7 @@ public:
         EMPTY_DECLARATION,
         REDUNDANT_MODIFIER,
         RECOMMENDED_MODIFIER_ORDER,
+        SWITCH_FALLTHROUGH,
         OBSOLESCENT_BRACKETS,
         NO_TYPES,
         MULTIPLE_PUBLIC_TYPES,
@@ -172,6 +178,25 @@ public:
         ZERO_DIVIDE_CAUTION,
         VOID_TO_STRING,
 
+        // "Effective Java" warnings.
+        EJ_AVOID_OVERLOADING_EQUALS,
+        EJ_EMPTY_CATCH_BLOCK,
+        EJ_EMPTY_FINALLY_BLOCK,
+        EJ_EQUALS_WITHOUT_HASH_CODE,
+        EJ_HASH_CODE_WITHOUT_EQUALS,
+        EJ_INTERFACE_DOES_NOT_DEFINE_TYPE,
+        EJ_MISSING_PRIVATE_CONSTRUCTOR,
+        EJ_OVERLY_GENERAL_THROWS_CLAUSE,
+        EJ_PUBLIC_STATIC_FINAL_ARRAY_FIELD,
+        EJ_RETURN_OF_NULL_ARRAY,
+        
+        // Naming convention warnings.
+        UNCONVENTIONAL_CLASS_NAME,
+        UNCONVENTIONAL_CONSTANT_FIELD_NAME,
+        UNCONVENTIONAL_FIELD_NAME,
+        UNCONVENTIONAL_METHOD_NAME,
+        UNCONVENTIONAL_VARIABLE_NAME,
+        
         // Type and package related errors.
         DUPLICATE_INNER_TYPE_NAME,
         DUPLICATE_TYPE_DECLARATION,
@@ -214,8 +239,6 @@ public:
         MULTIPLE_DEFAULT_LABEL,
         UNDECLARED_LABEL,
         DUPLICATE_LABEL,
-        CATCH_PRIMITIVE_TYPE,
-        CATCH_ARRAY_TYPE,
         AMBIGUOUS_FIELD,
         AMBIGUOUS_TYPE,
         FIELD_NOT_FOUND,
@@ -241,7 +264,6 @@ public:
         ABSTRACT_TYPE_CREATION,
         INVALID_INSTANCEOF_CONVERSION,
         INVALID_CAST_CONVERSION,
-        INVALID_CAST_TYPE,
         INCOMPATIBLE_TYPE_FOR_INITIALIZATION,
         INCOMPATIBLE_TYPE_FOR_ASSIGNMENT,
         INCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION,
@@ -271,7 +293,6 @@ public:
         UNINITIALIZED_FINAL_VARIABLE,
         UNINITIALIZED_STATIC_FINAL_VARIABLE,
         UNINITIALIZED_FINAL_VARIABLE_IN_CONSTRUCTOR,
-        UNINITIALIZED_FINAL_VARIABLE_IN_INTERFACE,
         INIT_SCALAR_WITH_ARRAY,
         INIT_ARRAY_WITH_SCALAR,
         INVALID_BYTE_VALUE,
@@ -329,6 +350,7 @@ public:
         SYNTHETIC_VARIABLE_ACCESS,
         SYNTHETIC_METHOD_INVOCATION,
         SYNTHETIC_CONSTRUCTOR_INVOCATION,
+        SYNTHETIC_TYPE_ACCESS,
         SELF_IN_EXPLICIT_CONSTRUCTOR,
         EXPRESSION_NOT_CONSTANT,
         UNCAUGHT_METHOD_EXCEPTION,
@@ -346,8 +368,7 @@ public:
         DEFAULT_METHOD_NOT_OVERRIDDEN,
 
         // Package related errors.
-        TYPE_NOT_IN_UNNAMED_PACKAGE,
-        TYPE_IN_WRONG_PACKAGE,
+        WRONG_TYPE_IN_CLASSFILE,
         TYPE_NAME_MISMATCH,
         DEPRECATED_TYPE,
         DEPRECATED_FIELD,
@@ -374,8 +395,31 @@ public:
         ENCLOSING_INSTANCE_NOT_ACCESSIBLE,
         INVALID_ENCLOSING_INSTANCE,
 
-        _num_kinds
+	//this counts the number of legitimate types in the enum
+	// it must follow all of the real error types
+        _num_kinds,
+
+	//this is a made up, bogus, error type. It is used as
+	// token for *all* of the UNCONVENTIONAL_*_NAME errors
+	// above, but ONLY in the argument processing logic,
+	// where it is used as a token, but not as an index into
+	// the tables that are indexed by the above... no point
+	// wasting space in those tables for it.
+	UNCONVENTIONAL_NAMES
     };
+
+    //
+    // Describes an error code for the purpose of turning it on or off by name.
+    // The name is used on the command-line, in Jikes' -help output.
+    //
+    struct NamedError
+    {
+        const char* name;
+        const char* reason;
+        SemanticErrorKind code;
+        WarningLevel level;
+    };
+    static NamedError named_errors[];
 
     static void StaticInitializer();
     static void InitializeMessages();
@@ -394,7 +438,7 @@ public:
     SemanticError(Control&, FileSymbol*);
     ~SemanticError()
     {
-        for (int i = 0; i < buffer.Length(); i++)
+        for (unsigned i = 0; i < buffer.Length(); i++)
             delete [] buffer[i];
     }
 

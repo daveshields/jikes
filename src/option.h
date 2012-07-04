@@ -1,4 +1,4 @@
-// $Id: option.h,v 1.41 2002/11/06 00:58:23 ericb Exp $ -*- c++ -*-
+// $Id: option.h,v 1.42 2002/11/27 17:34:59 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -59,7 +59,8 @@ public:
     {
         INVALID_OPTION,
         MISSING_OPTION_ARGUMENT,
-        INVALID_SDK_ARGUMENT,
+        INVALID_SOURCE_ARGUMENT,
+        INVALID_TARGET_ARGUMENT,
         INVALID_K_OPTION,
         INVALID_K_TARGET,
         INVALID_TAB_VALUE,
@@ -147,7 +148,8 @@ public:
          unzip,
          dump_errors,
          errors,
-         pedantic;
+         pedantic,
+         noassert;
 
     char *dependence_report_name;
 

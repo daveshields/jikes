@@ -1,10 +1,9 @@
-// $Id: op.h,v 1.15 2002/02/01 06:46:19 ericb Exp $ -*- c++ -*-
+// $Id: op.h,v 1.18 2004/01/20 04:10:26 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -18,7 +17,7 @@
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-class cp_info;
+class ConstantPool;
 
 // code dealing with describing and listing byte code
 class Operators
@@ -232,58 +231,65 @@ public:
         OP_HARDWARE = 0xff
     };
 
-    static void OpDmp(Tuple<cp_info *> &, Tuple<u1> &);
-
 protected:
-
     static int stack_effect[];
 
-private:
+#ifdef JIKES_DEBUG
+public:
+    static void OpDmp(const ConstantPool&, const Tuple<u1>&);
+    static int OpDesc(Opcode, const char** name, const char** desc);
 
-    enum
+private:
+    enum OpInfo
     {
-        INFO_NONE = 0,
-        INFO_LOCAL = 1,
-        INFO_CONST = 2,
-        INFO_DONE  = 3
+        INFO_NONE,
+        INFO_LOCAL,
+        INFO_CONST,
+        INFO_DONE,
+        INFO_WIDE
     };
 
-protected:
-    static void OpDesc(Opcode, const char **name, const char **desc);
-
-private:
-    inline static signed char GetI1(Tuple<u1> &code, int pc)
+    inline static i1 GetAndSkipI1(const Tuple<u1>& code, unsigned& pc)
     {
-        return code[pc];
+        return (i1) code[pc++];
     }
 
-    inline static short GetI2(Tuple<u1> &code, int pc)
+    inline static i2 GetAndSkipI2(const Tuple<u1>& code, unsigned& pc)
     {
-        return  code[pc] << 8 | code[pc + 1];
+        i2 s = code[pc++] << 8;
+        return s | code[pc++];
     }
 
-    inline static int GetI4(Tuple<u1> &code, int pc)
+    inline static i4 GetAndSkipI4(const Tuple<u1>& code, unsigned& pc)
     {
-        return  code[pc] << 24 | code[pc + 1] << 16 | code[pc + 2] << 8 | code[pc + 3];
+        i4 i = code[pc++] << 24;
+        i |= code[pc++] << 16;
+        i |= code[pc++] << 8;
+        return i | code[pc++];
     }
 
-    inline static unsigned GetU1(Tuple<u1> &code, int pc)
+    inline static u1 GetAndSkipU1(const Tuple<u1>& code, unsigned& pc)
     {
-        return code[pc];
+        return code[pc++];
     }
 
-    inline static unsigned GetU2(Tuple<u1> &code, int pc)
+    inline static u2 GetAndSkipU2(const Tuple<u1>& code, unsigned& pc)
     {
-        return (unsigned) (code[pc] << 8 | code[pc + 1]);
+        u2 u = code[pc++] << 8;
+        return u | code[pc++];
     }
 
-    inline static unsigned GetU4(Tuple<u1> &code, int pc)
+    inline static u4 GetAndSkipU4(const Tuple<u1>& code, unsigned& pc)
     {
-        return (unsigned) (code[pc] << 24 | code[pc + 1] << 16 | code[pc + 2] << 8 | code[pc + 3]);
+        u4 u = code[pc++] << 24;
+        u |= code[pc++] << 16;
+        u |= code[pc++] << 8;
+        return u | code[pc++];
     }
 
-    static void OpLine(Tuple<cp_info *> &, const char *, int, Opcode,
-                       const char *, char *, const char *, int, int);
+    static void OpLine(const ConstantPool&, char, int, const char*,
+                       char*, const char*, OpInfo, unsigned);
+#endif // JIKES_DEBUG
 };
 
 #ifdef HAVE_JIKES_NAMESPACE

@@ -1,10 +1,9 @@
-// $Id: init.cpp,v 1.23 2002/11/11 14:51:19 ericb Exp $
+// $Id: init.cpp,v 1.25 2004/01/26 13:53:40 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -16,9 +15,9 @@
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-void Semantic::ProcessVariableInitializer(AstVariableDeclarator *variable_declarator)
+void Semantic::ProcessVariableInitializer(AstVariableDeclarator* variable_declarator)
 {
-    VariableSymbol *symbol = variable_declarator -> symbol;
+    VariableSymbol* symbol = variable_declarator -> symbol;
 
     if (! variable_declarator -> variable_initializer_opt)
     {
@@ -26,16 +25,16 @@ void Semantic::ProcessVariableInitializer(AstVariableDeclarator *variable_declar
         return;
     }
 
-    AstArrayInitializer *array_initializer = variable_declarator ->
+    AstArrayInitializer* array_initializer = variable_declarator ->
         variable_initializer_opt -> ArrayInitializerCast();
     if (array_initializer)
         ProcessArrayInitializer(array_initializer, symbol -> Type());
     else
     {
-        AstExpression *init =
-            (AstExpression *) variable_declarator -> variable_initializer_opt;
+        AstExpression* init =
+            (AstExpression*) variable_declarator -> variable_initializer_opt;
         ProcessExpressionOrStringConstant(init);
-        TypeSymbol *field_type = symbol -> Type();
+        TypeSymbol* field_type = symbol -> Type();
 
         if (field_type != init -> Type() && init -> Type() != control.no_type)
         {
@@ -49,23 +48,17 @@ void Semantic::ProcessVariableInitializer(AstVariableDeclarator *variable_declar
                      control.IsSimpleIntegerValueType(field_type))
             {
                 if (field_type == control.byte_type)
-                     ReportSemError(SemanticError::INVALID_BYTE_VALUE,
-                                    init -> LeftToken(),
-                                    init -> RightToken());
+                    ReportSemError(SemanticError::INVALID_BYTE_VALUE, init);
                 else if (field_type == control.char_type)
-                     ReportSemError(SemanticError::INVALID_CHARACTER_VALUE,
-                                    init -> LeftToken(),
-                                    init -> RightToken());
-                else ReportSemError(SemanticError::INVALID_SHORT_VALUE,
-                                    init -> LeftToken(),
-                                    init -> RightToken());
+                    ReportSemError(SemanticError::INVALID_CHARACTER_VALUE,
+                                   init);
+                else ReportSemError(SemanticError::INVALID_SHORT_VALUE, init);
                 init -> value = NULL;
             }
             else
             {
                 ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_ASSIGNMENT,
-                               variable_declarator -> LeftToken(),
-                               init -> RightToken(),
+                               variable_declarator,
                                field_type -> ContainingPackageName(),
                                field_type -> ExternalName(),
                                init -> Type() -> ContainingPackageName(),
@@ -84,11 +77,9 @@ void Semantic::ProcessVariableInitializer(AstVariableDeclarator *variable_declar
             else if (symbol -> ACC_STATIC() && ThisType() -> IsInner())
             {
                 ReportSemError(SemanticError::STATIC_FIELD_IN_INNER_CLASS_NOT_CONSTANT,
-                               variable_declarator -> LeftToken(),
-                               variable_declarator -> RightToken(),
-                               lex_stream -> NameString(variable_declarator -> variable_declarator_name -> identifier_token),
-                               ThisType() -> Name(),
-                               ThisType() -> FileLoc());
+                               variable_declarator,
+                               lex_stream -> NameString(variable_declarator -> LeftToken()),
+                               ThisType() -> Name(), ThisType() -> FileLoc());
             }
         }
     }
@@ -96,28 +87,27 @@ void Semantic::ProcessVariableInitializer(AstVariableDeclarator *variable_declar
 }
 
 
-void Semantic::ProcessArrayInitializer(AstArrayInitializer *array_initializer,
-                                       TypeSymbol *type)
+void Semantic::ProcessArrayInitializer(AstArrayInitializer* array_initializer,
+                                       TypeSymbol* type)
 {
     if (! type -> IsArray())
     {
         ReportSemError(SemanticError::INIT_SCALAR_WITH_ARRAY,
-                       array_initializer -> LeftToken(),
-                       array_initializer -> RightToken(),
-                       type -> Name());
+                       array_initializer, type -> Name());
     }
     else
     {
-        for (int i = 0; i < array_initializer -> NumVariableInitializers(); i++)
+        for (unsigned i = 0;
+             i < array_initializer -> NumVariableInitializers(); i++)
         {
-            AstArrayInitializer *sub_array_initializer = array_initializer ->
+            AstArrayInitializer* sub_array_initializer = array_initializer ->
                 VariableInitializer(i) -> ArrayInitializerCast();
-            TypeSymbol *array_subtype = type -> ArraySubtype();
+            TypeSymbol* array_subtype = type -> ArraySubtype();
             if (sub_array_initializer)
                  ProcessArrayInitializer(sub_array_initializer, array_subtype);
             else
             {
-                AstExpression *init = (AstExpression *) array_initializer ->
+                AstExpression* init = (AstExpression*) array_initializer ->
                     VariableInitializer(i);
                 ProcessExpressionOrStringConstant(init);
 
@@ -130,31 +120,25 @@ void Semantic::ProcessArrayInitializer(AstArrayInitializer *array_initializer,
                              init -> Type() -> Primitive())
                     {
                         ReportSemError(SemanticError::INIT_ARRAY_WITH_SCALAR,
-                                       init -> LeftToken(),
-                                       init -> RightToken(),
-                                       array_subtype -> Name());
+                                       init, array_subtype -> Name());
                     }
                     else if (init -> IsConstant() &&
                              control.IsSimpleIntegerValueType(init -> Type()) &&
                              control.IsSimpleIntegerValueType(array_subtype))
                     {
                         if (array_subtype == control.byte_type)
-                             ReportSemError(SemanticError::INVALID_BYTE_VALUE,
-                                            init -> LeftToken(),
-                                            init -> RightToken());
+                            ReportSemError(SemanticError::INVALID_BYTE_VALUE,
+                                           init);
                         else if (array_subtype == control.char_type)
-                             ReportSemError(SemanticError::INVALID_CHARACTER_VALUE,
-                                            init -> LeftToken(),
-                                            init -> RightToken());
+                            ReportSemError(SemanticError::INVALID_CHARACTER_VALUE,
+                                           init);
                         else ReportSemError(SemanticError::INVALID_SHORT_VALUE,
-                                            init -> LeftToken(),
-                                            init -> RightToken());
+                                            init);
                     }
                     else
                     {
                         ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_INITIALIZATION,
-                                       init -> LeftToken(),
-                                       init -> RightToken(),
+                                       init,
                                        array_subtype -> ContainingPackageName(),
                                        array_subtype -> ExternalName(),
                                        init -> Type() -> ContainingPackageName(),
@@ -167,9 +151,9 @@ void Semantic::ProcessArrayInitializer(AstArrayInitializer *array_initializer,
 }
 
 
-void Semantic::ComputeFinalValue(VariableSymbol *variable)
+void Semantic::ComputeFinalValue(VariableSymbol* variable)
 {
-    AstVariableDeclarator *variable_declarator = variable -> declarator;
+    AstVariableDeclarator* variable_declarator = variable -> declarator;
     assert(variable_declarator && variable -> ACC_FINAL());
     if (! variable -> IsInitialized())
     {
@@ -188,23 +172,24 @@ void Semantic::ComputeFinalValue(VariableSymbol *variable)
         // Later, we will issue the errors for real when processing the field
         // initializer when we get to its source file.
         //
-        assert(variable -> owner -> TypeCast());
-        TypeSymbol *type = (TypeSymbol *) variable -> owner;
-        Semantic *sem = type -> semantic_environment -> sem;
+        TypeSymbol* type = variable -> ContainingType();
+        Semantic* sem = type -> semantic_environment -> sem;
 
         if (! sem -> error)
             sem -> error =
                 new SemanticError(control, sem -> source_file_symbol);
         sem -> error -> EnteringClone();
         sem -> state_stack.Push(type -> semantic_environment);
-        MethodSymbol *calling_method = sem -> ThisMethod();
-        VariableSymbol *calling_var = sem -> ThisVariable();
+        MethodSymbol* calling_method = sem -> ThisMethod();
+        VariableSymbol* calling_var = sem -> ThisVariable();
         sem -> ThisMethod() = NULL;
         sem -> ThisVariable() = variable;
         variable_declarator -> pending = true;
 
-        AstVariableDeclarator *clone = (AstVariableDeclarator *)
-            variable_declarator -> Clone(sem -> compilation_unit -> ast_pool);
+        StoragePool pool(variable_declarator -> RightToken() -
+                         variable_declarator -> LeftToken());
+        AstVariableDeclarator* clone = (AstVariableDeclarator*)
+            variable_declarator -> Clone(&pool);
         clone -> symbol = variable;
         sem -> ProcessVariableInitializer(clone);
         assert(variable -> IsInitialized());

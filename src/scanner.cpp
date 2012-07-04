@@ -1,10 +1,9 @@
-// $Id: scanner.cpp,v 1.35 2002/10/10 19:40:39 ericb Exp $
+// $Id: scanner.cpp,v 1.40 2004/01/26 06:07:17 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -20,7 +19,7 @@
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-int (*Scanner::scan_keyword[13]) (wchar_t *p1) =
+int (*Scanner::scan_keyword[13]) (const wchar_t* p1) =
 {
     ScanKeyword0,
     ScanKeyword0,
@@ -41,8 +40,10 @@ int (*Scanner::scan_keyword[13]) (wchar_t *p1) =
 //
 // The constructor initializes all utility variables.
 //
-Scanner::Scanner(Control &control_) : control(control_),
-                                      dollar_warning_given(false)
+Scanner::Scanner(Control& control_)
+    : control(control_),
+      dollar_warning_given(false),
+      deprecated(false)
 {
     //
     // If this assertion fails, the Token structure in stream.h must be
@@ -78,9 +79,11 @@ Scanner::Scanner(Control &control_) : control(control_),
     for (int c = 0; c < 128; c++)
     {
         if (Code::IsAlpha(c))
-             classify_token[c] = &Scanner::ClassifyId;
+            classify_token[c] = &Scanner::ClassifyId;
         else if (Code::IsDigit(c))
-             classify_token[c] = &Scanner::ClassifyNumericLiteral;
+            classify_token[c] = &Scanner::ClassifyNumericLiteral;
+        else if (Code::IsSpace(c))
+            classify_token[c] = &Scanner::SkipSpaces;
         else classify_token[c] = &Scanner::ClassifyBadToken;
     }
     classify_token[128] = &Scanner::ClassifyNonAsciiUnicode;
@@ -102,33 +105,34 @@ Scanner::Scanner(Control &control_) : control(control_),
     classify_token[U_v] = &Scanner::ClassifyIdOrKeyword;
     classify_token[U_w] = &Scanner::ClassifyIdOrKeyword;
 
-    classify_token[U_SINGLE_QUOTE]       = &Scanner::ClassifyCharLiteral;
-    classify_token[U_DOUBLE_QUOTE]       = &Scanner::ClassifyStringLiteral;
+    classify_token[U_SINGLE_QUOTE] = &Scanner::ClassifyCharLiteral;
+    classify_token[U_DOUBLE_QUOTE] = &Scanner::ClassifyStringLiteral;
 
-    classify_token[U_PLUS]               = &Scanner::ClassifyPlus;
-    classify_token[U_MINUS]              = &Scanner::ClassifyMinus;
-    classify_token[U_EXCLAMATION]        = &Scanner::ClassifyNot;
-    classify_token[U_PERCENT]            = &Scanner::ClassifyMod;
-    classify_token[U_CARET]              = &Scanner::ClassifyXor;
-    classify_token[U_AMPERSAND]          = &Scanner::ClassifyAnd;
-    classify_token[U_STAR]               = &Scanner::ClassifyStar;
-    classify_token[U_BAR]                = &Scanner::ClassifyOr;
-    classify_token[U_TILDE]              = &Scanner::ClassifyComplement;
-    classify_token[U_SLASH]              = &Scanner::ClassifySlash;
-    classify_token[U_GREATER]            = &Scanner::ClassifyGreater;
-    classify_token[U_LESS]               = &Scanner::ClassifyLess;
-    classify_token[U_LEFT_PARENTHESIS]   = &Scanner::ClassifyLparen;
-    classify_token[U_RIGHT_PARENTHESIS]  = &Scanner::ClassifyRparen;
-    classify_token[U_LEFT_BRACE]         = &Scanner::ClassifyLbrace;
-    classify_token[U_RIGHT_BRACE]        = &Scanner::ClassifyRbrace;
-    classify_token[U_LEFT_BRACKET]       = &Scanner::ClassifyLbracket;
-    classify_token[U_RIGHT_BRACKET]      = &Scanner::ClassifyRbracket;
-    classify_token[U_SEMICOLON]          = &Scanner::ClassifySemicolon;
-    classify_token[U_QUESTION]           = &Scanner::ClassifyQuestion;
-    classify_token[U_COLON]              = &Scanner::ClassifyColon;
-    classify_token[U_COMMA]              = &Scanner::ClassifyComma;
-    classify_token[U_DOT]                = &Scanner::ClassifyPeriod;
-    classify_token[U_EQUAL]              = &Scanner::ClassifyEqual;
+    classify_token[U_PLUS] = &Scanner::ClassifyPlus;
+    classify_token[U_MINUS] = &Scanner::ClassifyMinus;
+    classify_token[U_EXCLAMATION] = &Scanner::ClassifyNot;
+    classify_token[U_PERCENT] = &Scanner::ClassifyMod;
+    classify_token[U_CARET] = &Scanner::ClassifyXor;
+    classify_token[U_AMPERSAND] = &Scanner::ClassifyAnd;
+    classify_token[U_STAR] = &Scanner::ClassifyStar;
+    classify_token[U_BAR] = &Scanner::ClassifyOr;
+    classify_token[U_TILDE] = &Scanner::ClassifyComplement;
+    classify_token[U_SLASH] = &Scanner::ClassifySlash;
+    classify_token[U_GREATER] = &Scanner::ClassifyGreater;
+    classify_token[U_LESS] = &Scanner::ClassifyLess;
+    classify_token[U_LEFT_PARENTHESIS] = &Scanner::ClassifyLparen;
+    classify_token[U_RIGHT_PARENTHESIS] = &Scanner::ClassifyRparen;
+    classify_token[U_LEFT_BRACE] = &Scanner::ClassifyLbrace;
+    classify_token[U_RIGHT_BRACE] = &Scanner::ClassifyRbrace;
+    classify_token[U_LEFT_BRACKET] = &Scanner::ClassifyLbracket;
+    classify_token[U_RIGHT_BRACKET] = &Scanner::ClassifyRbracket;
+    classify_token[U_SEMICOLON] = &Scanner::ClassifySemicolon;
+    classify_token[U_QUESTION] = &Scanner::ClassifyQuestion;
+    classify_token[U_COLON] = &Scanner::ClassifyColon;
+    classify_token[U_COMMA] = &Scanner::ClassifyComma;
+    classify_token[U_DOT] = &Scanner::ClassifyPeriod;
+    classify_token[U_EQUAL] = &Scanner::ClassifyEqual;
+    classify_token[U_AT] = &Scanner::ClassifyAt;
 }
 
 
@@ -137,12 +141,10 @@ Scanner::Scanner(Control &control_) : control(control_),
 // to start with \n so that we always start on a whitespace token, and so that
 // the first source code line is line 1.
 //
-void Scanner::Initialize(FileSymbol *file_symbol)
+void Scanner::Initialize(FileSymbol* file_symbol)
 {
     lex = new LexStream(control, file_symbol);
-    lex -> Reset();
-
-    current_token_index = lex -> GetNextToken(0); // Get 0th token.
+    current_token_index = lex -> GetNextToken(); // Get 0th token.
     current_token = &(lex -> token_stream[current_token_index]);
     current_token -> SetKind(0);
 
@@ -150,11 +152,10 @@ void Scanner::Initialize(FileSymbol *file_symbol)
     if (control.option.debug_comments)
     {
         // Add 0th comment.
-        LexStream::Comment *current_comment = &(lex -> comment_stream.Next());
+        LexStream::Comment* current_comment = &(lex -> comment_stream.Next());
         current_comment -> string = NULL;
         current_comment -> length = 0;
-        // No token precedes this comment.
-        current_comment -> previous_token = -1;
+        current_comment -> previous_token = LexStream::BadToken();
         current_comment -> location = 0;
     }
 #endif // JIKES_DEBUG
@@ -167,7 +168,7 @@ void Scanner::Initialize(FileSymbol *file_symbol)
 // This is one of the main entry point for the Java lexical analyser. Its
 // input is the name of a regular text file. Its output is a stream of tokens.
 //
-void Scanner::SetUp(FileSymbol *file_symbol)
+void Scanner::SetUp(FileSymbol* file_symbol)
 {
     Initialize(file_symbol);
     lex -> CompressSpace();
@@ -179,24 +180,22 @@ void Scanner::SetUp(FileSymbol *file_symbol)
 // This is one of the main entry point for the Java lexical analyser. Its
 // input is the name of a regular text file. Its output is a stream of tokens.
 //
-void Scanner::Scan(FileSymbol *file_symbol)
+void Scanner::Scan(FileSymbol* file_symbol)
 {
     Initialize(file_symbol);
-
     lex -> ReadInput();
-
     cursor = lex -> InputBuffer();
     if (cursor)
     {
         Scan();
-
         lex -> CompressSpace();
 
         if (control.option.dump_errors)
         {
             lex -> SortMessages();
-            for (int i = 0; i < lex -> bad_tokens.Length(); i++)
-                JikesAPI::getInstance()->reportError(&(lex->bad_tokens[i]));
+            for (unsigned i = 0; i < lex -> bad_tokens.Length(); i++)
+                JikesAPI::getInstance() ->
+                    reportError(&(lex -> bad_tokens[i]));
         }
         lex -> DestroyInput(); // get rid of input buffer
     }
@@ -205,7 +204,6 @@ void Scanner::Scan(FileSymbol *file_symbol)
         delete lex;
         lex = NULL;
     }
-
     file_symbol -> lex_stream = lex;
 }
 
@@ -225,15 +223,25 @@ void Scanner::Scan()
     //
     do
     {
-        SkipSpaces();
-
         //
         // Allocate space for next token and set its location.
         //
-        current_token_index = lex -> GetNextToken(cursor -
-                                                  lex -> InputBuffer());
-        current_token = &(lex -> token_stream[current_token_index]);
-
+        if (! current_token_index || current_token -> Kind())
+        {
+            current_token_index =
+                lex -> GetNextToken(cursor - lex -> InputBuffer());
+            current_token = &(lex -> token_stream[current_token_index]);
+        }
+        else
+        {
+            current_token -> ResetInfoAndSetLocation(cursor -
+                                                     lex -> InputBuffer());
+        }
+        if (deprecated)
+        {
+            current_token -> SetDeprecated();
+            deprecated = false;
+        }
         (this ->* classify_token[*cursor < 128 ? *cursor : 128])();
     } while (cursor < input_buffer_tail);
 
@@ -241,13 +249,14 @@ void Scanner::Scan()
     // Add a a gate after the last line.
     //
     lex -> line_location.Next() = input_buffer_tail - lex -> InputBuffer();
+    current_token -> SetKind(TK_EOF);
 
     //
     // If the brace_stack is not empty, then there are unmatched left
     // braces in the input. Each unmatched left brace should point to
     // the EOF token as a substitute for a matching right brace.
     //
-    assert(current_token_index == lex -> token_stream.Length() - 1);
+    assert(current_token_index == (unsigned) (lex -> token_stream.Length()) - 1);
 
     for (LexStream::TokenIndex left_brace = brace_stack.Top();
          left_brace; left_brace = brace_stack.Top())
@@ -259,24 +268,22 @@ void Scanner::Scan()
 
 
 //
-// CURSOR points to the starting position of a comment.  Scan the
-// the comment and return the location of the character immediately
-// following it. CURSOR is advanced accordingly.
+// CURSOR points to the first '*' in a /**/ comment.
 //
 void Scanner::ScanStarComment()
 {
-    unsigned location = cursor - lex -> InputBuffer();
+    const wchar_t* start = cursor - 1;
+    current_token -> SetKind(0);
 #ifdef JIKES_DEBUG
-    LexStream::Comment *current_comment = (control.option.debug_comments
-                                           ? &(lex -> comment_stream.Next())
-                                           : new LexStream::Comment());
-    current_comment -> string = NULL;
-    // The token that precedes this comment.
-    current_comment -> previous_token = current_token_index;
-    current_comment -> location = location;
+    LexStream::Comment* current_comment = NULL;
+    if (control.option.debug_comments)
+    {
+        current_comment = &(lex -> comment_stream.Next());
+        current_comment -> string = NULL;
+        current_comment -> previous_token = current_token_index - 1;
+        current_comment -> location = start - lex -> InputBuffer();
+    }
 #endif // JIKES_DEBUG
-
-    cursor += 2;
 
     //
     // If this comment starts with the prefix "/**" then it is a document
@@ -293,7 +300,7 @@ void Scanner::ScanStarComment()
     // end in U_CARRIAGE_RETURN, U_NULL; and that we changed all CR to LF
     // within the file.
     //
-    if (*cursor == U_STAR)
+    if (*++cursor == U_STAR)
     {
         enum
         {
@@ -301,8 +308,6 @@ void Scanner::ScanStarComment()
             STAR,
             REMAINDER
         } state = HEADER;
-        // Only the most recent doc comment applies to a section.
-        current_token -> ResetDeprecated();
         while (*cursor != U_CARRIAGE_RETURN)
         {
             switch (*cursor++)
@@ -326,11 +331,8 @@ void Scanner::ScanStarComment()
                 if (state == STAR)
                 {
 #ifdef JIKES_DEBUG
-                    current_comment -> length = ((cursor -
-                                                  lex -> InputBuffer()) -
-                                                 current_comment -> location);
-                    if (! control.option.debug_comments)
-                        delete current_comment;
+                    if (control.option.debug_comments)
+                        current_comment -> length = cursor - start;
 #endif // JIKES_DEBUG
                     return;
                 }
@@ -353,8 +355,8 @@ void Scanner::ScanStarComment()
                         (Code::IsWhitespace(cursor[10]) ||
                          cursor[10] == U_STAR))
                     {
-                        // Mark the token that precedes this comment.
-                        current_token -> SetDeprecated();
+                        deprecated = true;
+                        cursor += 9;
                     }
                 }
             }
@@ -362,6 +364,9 @@ void Scanner::ScanStarComment()
     }
     else // normal /* */ comment
     {
+        // Normal comments do not affect deprecation.
+        if (current_token -> Deprecated())
+            deprecated = true;
         while (*cursor != U_CARRIAGE_RETURN)
         {
             if (*cursor == U_STAR) // Potential comment closer.
@@ -372,11 +377,8 @@ void Scanner::ScanStarComment()
                 {
                     cursor++;
 #ifdef JIKES_DEBUG
-                    current_comment -> length = ((cursor -
-                                                  lex -> InputBuffer()) -
-                                                 current_comment -> location);
-                    if (! control.option.debug_comments)
-                        delete current_comment;
+                    if (control.option.debug_comments)
+                        current_comment -> length = cursor - start;
 #endif // JIKES_DEBUG
                     return;
                 }
@@ -395,63 +397,39 @@ void Scanner::ScanStarComment()
     // U_CARRIAGE_RETURN that ends the stream.
     //
     lex -> ReportMessage(StreamError::UNTERMINATED_COMMENT,
-                         location,
-                         (unsigned) (cursor - lex -> InputBuffer()) - 1);
+                         start - lex -> InputBuffer(),
+                         cursor - lex -> InputBuffer() - 1);
 
 #ifdef JIKES_DEBUG
-    current_comment -> length = ((cursor - 1 - lex -> InputBuffer()) -
-                                 current_comment -> location);
-    if (! control.option.debug_comments)
-        delete current_comment;
+    if (control.option.debug_comments)
+        current_comment -> length = cursor - 1 - start;
 #endif // JIKES_DEBUG
 }
 
 
 //
-// CURSOR points to the starting position of a comment.  Scan the
-// the comment and return the location of the character immediately
-// following it. CURSOR is advanced accordingly.
-//
-// Even if the grammar rule in JLS2 3.7 is changed to omit the LineTerminator
-// at the end of the comment, it is harmless to consume it here, since it
-// ends up ignored whether as a comment or as whitespace.
+// CURSOR points to the second '/' in a // comment.
 //
 void Scanner::ScanSlashComment()
 {
     //
     // Note that we exploit the fact that the stream is doctored to always
     // end in U_CARRIAGE_RETURN, U_NULL; and that we changed all CR to LF
-    // within the file.
+    // within the file. Normal comments do not affect deprecation.
     //
-    // unsigned location = cursor - lex -> InputBuffer();
-#ifdef JIKES_DEBUG
-    LexStream::Comment *current_comment = NULL;
-    if (control.option.debug_comments)
-    {
-        current_comment = &(lex -> comment_stream.Next());
-        current_comment -> string = NULL;
-        // The token that precedes this comment.
-        current_comment -> previous_token = current_token_index;
-        current_comment -> location = cursor - lex -> InputBuffer();
-    }
-#endif // JIKES_DEBUG
+    if (current_token -> Deprecated())
+        deprecated = true;
+    current_token -> SetKind(0);
     while (! Code::IsNewline(*++cursor));  // Skip all until \n or EOF
-    //
-    // TODO: Verify that JLS3 allows this check to be skipped. While JLS2 3.7
-    // strictly requires that all // comments end in \n, Sun bug 4386773 claims
-    // that no compiler ever enforced it, so the grammar should be changed.
-    //
-    // if (*cursor == U_CARRIAGE_RETURN)
-    // {
-    //     lex -> ReportMessage(StreamError::UNTERMINATED_COMMENT,
-    //                          location,
-    //                          (unsigned) (cursor - lex -> InputBuffer()) - 1);
-    // }
 #ifdef JIKES_DEBUG
     if (control.option.debug_comments)
     {
-        current_comment -> length = ((cursor - lex -> InputBuffer()) -
-                                     current_comment -> location);
+        LexStream::Comment* current_comment = &(lex -> comment_stream.Next());
+        current_comment -> string = NULL;
+        current_comment -> previous_token = current_token_index - 1;
+        current_comment -> location = current_token -> Location();
+        current_comment -> length = (cursor - lex -> InputBuffer()) -
+            current_comment -> location;
     }
 #endif // JIKES_DEBUG
 }
@@ -468,28 +446,16 @@ inline void Scanner::SkipSpaces()
     //
     // We exploit the fact that the stream was doctored to end in
     // U_CARRIAGE_RETURN, U_NULL; and that all internal CR were changed to LF.
+    // Normal comments do not affect deprecation.
     //
+    if (current_token -> Deprecated())
+        deprecated = true;
+    current_token -> SetKind(0);
     do
     {
-        while (Code::IsSpaceButNotNewline(*cursor))
-            cursor++;
-        while (Code::IsNewline(*cursor))  // Starting a new line?
-        {
-            cursor++;
-            lex -> line_location.Next() = cursor - lex -> InputBuffer();
-            while (Code::IsSpaceButNotNewline(*cursor))
-                cursor++;
-        }
-
-        while (*cursor == U_SLASH)
-        {
-            if (cursor[1] == U_STAR)
-                 ScanStarComment();
-            else if (cursor[1] == U_SLASH)
-                 ScanSlashComment();
-            else break;
-        }
-    } while (Code::IsSpace(*cursor));
+        if (Code::IsNewline(*cursor))  // Starting a new line?
+            lex -> line_location.Next() = cursor + 1 - lex -> InputBuffer();
+    } while (Code::IsSpace(*++cursor));
 }
 
 
@@ -497,308 +463,291 @@ inline void Scanner::SkipSpaces()
 // scan_keyword(i):
 // Scan an identifier of length I and determine if it is a keyword.
 //
-int Scanner::ScanKeyword0(wchar_t *p1)
+int Scanner::ScanKeyword0(const wchar_t*)
 {
     return TK_Identifier;
 }
 
-int Scanner::ScanKeyword2(wchar_t *p1)
+int Scanner::ScanKeyword2(const wchar_t* p1)
 {
     if (p1[0] == U_d && p1[1] == U_o)
         return TK_do;
-    else if (p1[0] == U_i && p1[1] == U_f)
+    if (p1[0] == U_i && p1[1] == U_f)
         return TK_if;
-
     return TK_Identifier;
 }
 
-int Scanner::ScanKeyword3(wchar_t *p1)
+int Scanner::ScanKeyword3(const wchar_t* p1)
 {
     switch (*p1)
     {
-        case U_f:
-            if (p1[1] == U_o && p1[2] == U_r)
-                return TK_for;
-            break;
-        case U_i:
-            if (p1[1] == U_n && p1[2] == U_t)
-                return TK_int;
-            break;
-        case U_n:
-            if (p1[1] == U_e && p1[2] == U_w)
-                return TK_new;
-            break;
-        case U_t:
-            if (p1[1] == U_r && p1[2] == U_y)
-                return TK_try;
-            break;
+    case U_f:
+        if (p1[1] == U_o && p1[2] == U_r)
+            return TK_for;
+        break;
+    case U_i:
+        if (p1[1] == U_n && p1[2] == U_t)
+            return TK_int;
+        break;
+    case U_n:
+        if (p1[1] == U_e && p1[2] == U_w)
+            return TK_new;
+        break;
+    case U_t:
+        if (p1[1] == U_r && p1[2] == U_y)
+            return TK_try;
+        break;
     }
-
     return TK_Identifier;
 }
 
-int Scanner::ScanKeyword4(wchar_t *p1)
+int Scanner::ScanKeyword4(const wchar_t* p1)
 {
     switch (*p1)
     {
-        case U_b:
-            if (p1[1] == U_y && p1[2] == U_t && p1[3] == U_e)
-                return TK_byte;
-            break;
-        case U_c:
-            if (p1[1] == U_a && p1[2] == U_s && p1[3] == U_e)
-                return TK_case;
-            else if (p1[1] == U_h && p1[2] == U_a && p1[3] == U_r)
-                return TK_char;
-            break;
-        case U_e:
-            if (p1[1] == U_l && p1[2] == U_s && p1[3] == U_e)
-                return TK_else;
-            break;
-        case U_g:
-            if (p1[1] == U_o && p1[2] == U_t && p1[3] == U_o)
-                return TK_goto;
-            break;
-        case U_l:
-            if (p1[1] == U_o && p1[2] == U_n && p1[3] == U_g)
-                return TK_long;
-            break;
-        case U_n:
-            if (p1[1] == U_u && p1[2] == U_l && p1[3] == U_l)
-                return TK_null;
-            break;
-        case U_t:
-            if (p1[1] == U_h && p1[2] == U_i && p1[3] == U_s)
-                return TK_this;
-            else if (p1[1] == U_r && p1[2] == U_u && p1[3] == U_e)
-                return TK_true;
-            break;
-        case U_v:
-            if (p1[1] == U_o && p1[2] == U_i && p1[3] == U_d)
-                return TK_void;
-            break;
+    case U_b:
+        if (p1[1] == U_y && p1[2] == U_t && p1[3] == U_e)
+            return TK_byte;
+        break;
+    case U_c:
+        if (p1[1] == U_a && p1[2] == U_s && p1[3] == U_e)
+            return TK_case;
+        if (p1[1] == U_h && p1[2] == U_a && p1[3] == U_r)
+            return TK_char;
+        break;
+    case U_e:
+        if (p1[1] == U_l && p1[2] == U_s && p1[3] == U_e)
+            return TK_else;
+        if (p1[1] == U_n && p1[2] == U_u && p1[3] == U_m)
+            return TK_enum;
+        break;
+    case U_g:
+        if (p1[1] == U_o && p1[2] == U_t && p1[3] == U_o)
+            return TK_goto;
+        break;
+    case U_l:
+        if (p1[1] == U_o && p1[2] == U_n && p1[3] == U_g)
+            return TK_long;
+        break;
+    case U_n:
+        if (p1[1] == U_u && p1[2] == U_l && p1[3] == U_l)
+            return TK_null;
+        break;
+    case U_t:
+        if (p1[1] == U_h && p1[2] == U_i && p1[3] == U_s)
+            return TK_this;
+        if (p1[1] == U_r && p1[2] == U_u && p1[3] == U_e)
+            return TK_true;
+        break;
+    case U_v:
+        if (p1[1] == U_o && p1[2] == U_i && p1[3] == U_d)
+            return TK_void;
+        break;
     }
-
     return TK_Identifier;
 }
 
-int Scanner::ScanKeyword5(wchar_t *p1)
+int Scanner::ScanKeyword5(const wchar_t* p1)
 {
     switch (*p1)
     {
-        case U_b:
-            if (p1[1] == U_r && p1[2] == U_e &&
-                p1[3] == U_a && p1[4] == U_k)
-                return TK_break;
-            break;
-        case U_c:
-            if (p1[1] == U_a && p1[2] == U_t &&
-                p1[3] == U_c && p1[4] == U_h)
-                return TK_catch;
-            else if (p1[1] == U_l && p1[2] == U_a &&
-                     p1[3] == U_s && p1[4] == U_s)
-                return TK_class;
-            else if (p1[1] == U_o && p1[2] == U_n &&
-                     p1[3] == U_s && p1[4] == U_t)
-                return TK_const;
-            break;
-        case U_f:
-            if (p1[1] == U_a && p1[2] == U_l &&
-                p1[3] == U_s && p1[4] == U_e)
-                return TK_false;
-            else if (p1[1] == U_i && p1[2] == U_n &&
-                     p1[3] == U_a && p1[4] == U_l)
-                return TK_final;
-            else if (p1[1] == U_l && p1[2] == U_o &&
-                     p1[3] == U_a && p1[4] == U_t)
-                return TK_float;
-            break;
-        case U_s:
-            if (p1[1] == U_h && p1[2] == U_o &&
-                p1[3] == U_r && p1[4] == U_t)
-                return TK_short;
-            else if (p1[1] == U_u && p1[2] == U_p &&
-                     p1[3] == U_e && p1[4] == U_r)
-                return TK_super;
-            break;
-        case U_t:
-            if (p1[1] == U_h && p1[2] == U_r &&
-                p1[3] == U_o && p1[4] == U_w)
-                return TK_throw;
-            break;
-        case U_w:
-            if (p1[1] == U_h && p1[2] == U_i &&
-                p1[3] == U_l && p1[4] == U_e)
-                return TK_while;
-            break;
+    case U_b:
+        if (p1[1] == U_r && p1[2] == U_e && p1[3] == U_a && p1[4] == U_k)
+            return TK_break;
+        break;
+    case U_c:
+        if (p1[1] == U_a && p1[2] == U_t && p1[3] == U_c && p1[4] == U_h)
+            return TK_catch;
+        if (p1[1] == U_l && p1[2] == U_a && p1[3] == U_s && p1[4] == U_s)
+            return TK_class;
+        if (p1[1] == U_o && p1[2] == U_n && p1[3] == U_s && p1[4] == U_t)
+            return TK_const;
+        break;
+    case U_f:
+        if (p1[1] == U_a && p1[2] == U_l && p1[3] == U_s && p1[4] == U_e)
+            return TK_false;
+        if (p1[1] == U_i && p1[2] == U_n && p1[3] == U_a && p1[4] == U_l)
+            return TK_final;
+        if (p1[1] == U_l && p1[2] == U_o && p1[3] == U_a && p1[4] == U_t)
+            return TK_float;
+        break;
+    case U_s:
+        if (p1[1] == U_h && p1[2] == U_o && p1[3] == U_r && p1[4] == U_t)
+            return TK_short;
+        if (p1[1] == U_u && p1[2] == U_p && p1[3] == U_e && p1[4] == U_r)
+            return TK_super;
+        break;
+    case U_t:
+        if (p1[1] == U_h && p1[2] == U_r && p1[3] == U_o && p1[4] == U_w)
+            return TK_throw;
+        break;
+    case U_w:
+        if (p1[1] == U_h && p1[2] == U_i && p1[3] == U_l && p1[4] == U_e)
+            return TK_while;
+        break;
     }
-
     return TK_Identifier;
 }
 
-int Scanner::ScanKeyword6(wchar_t *p1)
+int Scanner::ScanKeyword6(const wchar_t* p1)
 {
     switch (*p1)
     {
-        case U_a:
-            if (p1[1] == U_s && p1[2] == U_s &&
-                p1[3] == U_e && p1[4] == U_r && p1[5] == U_t)
-                return TK_assert;
-            break;
-        case U_d:
-            if (p1[1] == U_o && p1[2] == U_u &&
-                     p1[3] == U_b && p1[4] == U_l && p1[5] == U_e)
-                return TK_double;
-            break;
-        case U_i:
-            if (p1[1] == U_m && p1[2] == U_p &&
-                p1[3] == U_o && p1[4] == U_r && p1[5] == U_t)
-                return TK_import;
-            break;
-        case U_n:
-            if (p1[1] == U_a && p1[2] == U_t &&
-                p1[3] == U_i && p1[4] == U_v && p1[5] == U_e)
-                return TK_native;
-            break;
-        case U_p:
-            if (p1[1] == U_u && p1[2] == U_b &&
-                p1[3] == U_l && p1[4] == U_i && p1[5] == U_c)
-                return TK_public;
-            break;
-        case U_r:
-            if (p1[1] == U_e && p1[2] == U_t &&
-                p1[3] == U_u && p1[4] == U_r && p1[5] == U_n)
-                return TK_return;
-            break;
-        case U_s:
-            if (p1[1] == U_t && p1[2] == U_a &&
-                p1[3] == U_t && p1[4] == U_i && p1[5] == U_c)
-                    return TK_static;
-            else if (p1[1] == U_w && p1[2] == U_i &&
-                     p1[3] == U_t && p1[4] == U_c && p1[5] == U_h)
-                return TK_switch;
-            break;
-        case U_t:
-            if (p1[1] == U_h && p1[2] == U_r &&
-                p1[3] == U_o && p1[4] == U_w && p1[5] == U_s)
-                return TK_throws;
-            break;
+    case U_a:
+        if (p1[1] == U_s && p1[2] == U_s &&
+            p1[3] == U_e && p1[4] == U_r && p1[5] == U_t)
+            return TK_assert;
+        break;
+    case U_d:
+        if (p1[1] == U_o && p1[2] == U_u &&
+            p1[3] == U_b && p1[4] == U_l && p1[5] == U_e)
+            return TK_double;
+        break;
+    case U_i:
+        if (p1[1] == U_m && p1[2] == U_p &&
+            p1[3] == U_o && p1[4] == U_r && p1[5] == U_t)
+            return TK_import;
+        break;
+    case U_n:
+        if (p1[1] == U_a && p1[2] == U_t &&
+            p1[3] == U_i && p1[4] == U_v && p1[5] == U_e)
+            return TK_native;
+        break;
+    case U_p:
+        if (p1[1] == U_u && p1[2] == U_b &&
+            p1[3] == U_l && p1[4] == U_i && p1[5] == U_c)
+            return TK_public;
+        break;
+    case U_r:
+        if (p1[1] == U_e && p1[2] == U_t &&
+            p1[3] == U_u && p1[4] == U_r && p1[5] == U_n)
+            return TK_return;
+        break;
+    case U_s:
+        if (p1[1] == U_t && p1[2] == U_a &&
+            p1[3] == U_t && p1[4] == U_i && p1[5] == U_c)
+            return TK_static;
+        if (p1[1] == U_w && p1[2] == U_i &&
+            p1[3] == U_t && p1[4] == U_c && p1[5] == U_h)
+            return TK_switch;
+        break;
+    case U_t:
+        if (p1[1] == U_h && p1[2] == U_r &&
+            p1[3] == U_o && p1[4] == U_w && p1[5] == U_s)
+            return TK_throws;
+        break;
     }
-
     return TK_Identifier;
 }
 
-int Scanner::ScanKeyword7(wchar_t *p1)
+int Scanner::ScanKeyword7(const wchar_t* p1)
 {
     switch (*p1)
     {
-        case U_b:
-            if (p1[1] == U_o && p1[2] == U_o && p1[3] == U_l &&
-                p1[4] == U_e && p1[5] == U_a && p1[6] == U_n)
-                return TK_boolean;
-            break;
-        case U_d:
-            if (p1[1] == U_e && p1[2] == U_f && p1[3] == U_a &&
-                p1[4] == U_u && p1[5] == U_l && p1[6] == U_t)
-                return TK_default;
-            break;
-        case U_e:
-            if (p1[1] == U_x && p1[2] == U_t && p1[3] == U_e &&
-                p1[4] == U_n && p1[5] == U_d && p1[6] == U_s)
-                return TK_extends;
-            break;
-        case U_f:
-            if (p1[1] == U_i && p1[2] == U_n && p1[3] == U_a &&
-                p1[4] == U_l && p1[5] == U_l && p1[6] == U_y)
-                return TK_finally;
-            break;
-        case U_p:
-            if (p1[1] == U_a && p1[2] == U_c && p1[3] == U_k &&
-                p1[4] == U_a && p1[5] == U_g && p1[6] == U_e)
-                return TK_package;
-            else if (p1[1] == U_r && p1[2] == U_i && p1[3] == U_v &&
-                     p1[4] == U_a && p1[5] == U_t && p1[6] == U_e)
-                return TK_private;
-            break;
+    case U_b:
+        if (p1[1] == U_o && p1[2] == U_o && p1[3] == U_l &&
+            p1[4] == U_e && p1[5] == U_a && p1[6] == U_n)
+            return TK_boolean;
+        break;
+    case U_d:
+        if (p1[1] == U_e && p1[2] == U_f && p1[3] == U_a &&
+            p1[4] == U_u && p1[5] == U_l && p1[6] == U_t)
+            return TK_default;
+        break;
+    case U_e:
+        if (p1[1] == U_x && p1[2] == U_t && p1[3] == U_e &&
+            p1[4] == U_n && p1[5] == U_d && p1[6] == U_s)
+            return TK_extends;
+        break;
+    case U_f:
+        if (p1[1] == U_i && p1[2] == U_n && p1[3] == U_a &&
+            p1[4] == U_l && p1[5] == U_l && p1[6] == U_y)
+            return TK_finally;
+        break;
+    case U_p:
+        if (p1[1] == U_a && p1[2] == U_c && p1[3] == U_k &&
+            p1[4] == U_a && p1[5] == U_g && p1[6] == U_e)
+            return TK_package;
+        if (p1[1] == U_r && p1[2] == U_i && p1[3] == U_v &&
+            p1[4] == U_a && p1[5] == U_t && p1[6] == U_e)
+            return TK_private;
+        break;
     }
-
     return TK_Identifier;
 }
 
-int Scanner::ScanKeyword8(wchar_t *p1)
+int Scanner::ScanKeyword8(const wchar_t* p1)
 {
     switch (*p1)
     {
-        case U_a:
-            if (p1[1] == U_b && p1[2] == U_s &&
-                p1[3] == U_t && p1[4] == U_r &&
-                p1[5] == U_a && p1[6] == U_c && p1[7] == U_t)
-                 return TK_abstract;
-            break;
-        case U_c:
-            if (p1[1] == U_o && p1[2] == U_n &&
-                p1[3] == U_t && p1[4] == U_i &&
-                p1[5] == U_n && p1[6] == U_u && p1[7] == U_e)
-                 return TK_continue;
-            break;
-        case U_s:
-            if (p1[1] == U_t && p1[2] == U_r &&
-                p1[3] == U_i && p1[4] == U_c &&
-                p1[5] == U_t && p1[6] == U_f && p1[7] == U_p)
-                 return TK_strictfp;
-            break;
-        case U_v:
-            if (p1[1] == U_o && p1[2] == U_l &&
-                p1[3] == U_a && p1[4] == U_t &&
-                p1[5] == U_i && p1[6] == U_l && p1[7] == U_e)
-                 return TK_volatile;
-            break;
+    case U_a:
+        if (p1[1] == U_b && p1[2] == U_s &&
+            p1[3] == U_t && p1[4] == U_r &&
+            p1[5] == U_a && p1[6] == U_c && p1[7] == U_t)
+            return TK_abstract;
+        break;
+    case U_c:
+        if (p1[1] == U_o && p1[2] == U_n &&
+            p1[3] == U_t && p1[4] == U_i &&
+            p1[5] == U_n && p1[6] == U_u && p1[7] == U_e)
+            return TK_continue;
+        break;
+    case U_s:
+        if (p1[1] == U_t && p1[2] == U_r &&
+            p1[3] == U_i && p1[4] == U_c &&
+            p1[5] == U_t && p1[6] == U_f && p1[7] == U_p)
+            return TK_strictfp;
+        break;
+    case U_v:
+        if (p1[1] == U_o && p1[2] == U_l &&
+            p1[3] == U_a && p1[4] == U_t &&
+            p1[5] == U_i && p1[6] == U_l && p1[7] == U_e)
+            return TK_volatile;
+        break;
     }
-
     return TK_Identifier;
 }
 
-int Scanner::ScanKeyword9(wchar_t *p1)
+int Scanner::ScanKeyword9(const wchar_t* p1)
 {
     if (p1[0] == U_i && p1[1] == U_n && p1[2] == U_t &&
         p1[3] == U_e && p1[4] == U_r && p1[5] == U_f &&
         p1[6] == U_a && p1[7] == U_c && p1[8] == U_e)
         return TK_interface;
-    else if (p1[0] == U_p && p1[1] == U_r && p1[2] == U_o &&
-             p1[3] == U_t && p1[4] == U_e && p1[5] == U_c &&
-             p1[6] == U_t && p1[7] == U_e && p1[8] == U_d)
+    if (p1[0] == U_p && p1[1] == U_r && p1[2] == U_o &&
+        p1[3] == U_t && p1[4] == U_e && p1[5] == U_c &&
+        p1[6] == U_t && p1[7] == U_e && p1[8] == U_d)
         return TK_protected;
-    else if (p1[0] == U_t && p1[1] == U_r && p1[2] == U_a &&
-             p1[3] == U_n && p1[4] == U_s && p1[5] == U_i &&
-             p1[6] == U_e && p1[7] == U_n && p1[8] == U_t)
+    if (p1[0] == U_t && p1[1] == U_r && p1[2] == U_a &&
+        p1[3] == U_n && p1[4] == U_s && p1[5] == U_i &&
+        p1[6] == U_e && p1[7] == U_n && p1[8] == U_t)
         return TK_transient;
-
     return TK_Identifier;
 }
 
-int Scanner::ScanKeyword10(wchar_t *p1)
+int Scanner::ScanKeyword10(const wchar_t* p1)
 {
     if (p1[0] == U_i)
+    {
         if (p1[1] == U_m && p1[2] == U_p && p1[3] == U_l &&
             p1[4] == U_e && p1[5] == U_m && p1[6] == U_e &&
             p1[7] == U_n && p1[8] == U_t && p1[9] == U_s)
             return TK_implements;
-        else if (p1[1] == U_n && p1[2] == U_s && p1[3] == U_t &&
-                 p1[4] == U_a && p1[5] == U_n && p1[6] == U_c &&
-                 p1[7] == U_e && p1[8] == U_o && p1[9] == U_f)
+        if (p1[1] == U_n && p1[2] == U_s && p1[3] == U_t &&
+            p1[4] == U_a && p1[5] == U_n && p1[6] == U_c &&
+            p1[7] == U_e && p1[8] == U_o && p1[9] == U_f)
             return TK_instanceof;
-
+    }
     return TK_Identifier;
 }
 
-int Scanner::ScanKeyword12(wchar_t *p1)
+int Scanner::ScanKeyword12(const wchar_t* p1)
 {
     if (p1[0] == U_s && p1[1] == U_y && p1[2] == U_n &&
         p1[3] == U_c && p1[4] == U_h && p1[5] == U_r &&
         p1[6] == U_o && p1[7] == U_n && p1[8] == U_i &&
         p1[9] == U_z && p1[10] == U_e&& p1[11] == U_d)
         return TK_synchronized;
-
     return TK_Identifier;
 }
 
@@ -816,7 +765,7 @@ void Scanner::ClassifyCharLiteral()
     //
     current_token -> SetKind(TK_CharacterLiteral);
     bool bad = false;
-    wchar_t *ptr = cursor + 1;
+    const wchar_t* ptr = cursor + 1;
     switch (*ptr)
     {
     case U_SINGLE_QUOTE:
@@ -917,7 +866,7 @@ void Scanner::ClassifyCharLiteral()
                                   ? StreamError::UNTERMINATED_CHARACTER_CONSTANT
                                   : StreamError::MULTI_CHARACTER_CONSTANT),
                                  current_token -> Location(),
-                                 (unsigned) (ptr - lex -> InputBuffer()));
+                                 ptr - lex -> InputBuffer());
         }
     }
 
@@ -942,7 +891,7 @@ void Scanner::ClassifyStringLiteral()
     //
     current_token -> SetKind(TK_StringLiteral);
 
-    wchar_t *ptr = cursor + 1;
+    const wchar_t* ptr = cursor + 1;
 
     while (*ptr != U_DOUBLE_QUOTE && ! Code::IsNewline(*ptr))
     {
@@ -975,9 +924,8 @@ void Scanner::ClassifyStringLiteral()
             default:
                 ptr--;
                 lex -> ReportMessage(StreamError::INVALID_ESCAPE_SEQUENCE,
-                                     ((unsigned) (ptr - lex -> InputBuffer()) -
-                                      1),
-                                     ((unsigned) (ptr - lex -> InputBuffer()) -
+                                     ptr - lex -> InputBuffer() - 1,
+                                     (ptr - lex -> InputBuffer() -
                                       (Code::IsNewline(*ptr) ? 1 : 0)));
             }
         }
@@ -988,7 +936,7 @@ void Scanner::ClassifyStringLiteral()
         ptr--;
         lex -> ReportMessage(StreamError::UNTERMINATED_STRING_CONSTANT,
                              current_token -> Location(),
-                             (unsigned) (ptr - lex -> InputBuffer()));
+                             ptr - lex -> InputBuffer());
     }
 
     ptr++;
@@ -1007,7 +955,7 @@ void Scanner::ClassifyStringLiteral()
 //
 void Scanner::ClassifyIdOrKeyword()
 {
-    wchar_t *ptr = cursor + 1;
+    const wchar_t* ptr = cursor + 1;
     bool has_dollar = false;
 
     while (Code::IsAlnum(*ptr))
@@ -1025,7 +973,15 @@ void Scanner::ClassifyIdOrKeyword()
     {
         lex -> ReportMessage(StreamError::DEPRECATED_IDENTIFIER_ASSERT,
                              current_token -> Location(),
-                             (unsigned) (current_token -> Location() + len - 1));
+                             current_token -> Location() + len - 1);
+        current_token -> SetKind(TK_Identifier);
+    }
+    if (current_token -> Kind() == TK_enum &&
+        control.option.source < JikesOption::SDK1_5)
+    {
+        lex -> ReportMessage(StreamError::DEPRECATED_IDENTIFIER_ENUM,
+                             current_token -> Location(),
+                             current_token -> Location() + len - 1);
         current_token -> SetKind(TK_Identifier);
     }
     if (has_dollar && ! dollar_warning_given)
@@ -1033,13 +989,13 @@ void Scanner::ClassifyIdOrKeyword()
         dollar_warning_given = true;
         lex -> ReportMessage(StreamError::DOLLAR_IN_IDENTIFIER,
                              current_token -> Location(),
-                             (unsigned) (current_token -> Location() + len - 1));
+                             current_token -> Location() + len - 1);
     }
 
     if (current_token -> Kind() == TK_Identifier)
     {
         current_token -> SetSymbol(control.FindOrInsertName(cursor, len));
-        for (int i = 0; i < control.option.keyword_map.Length(); i++)
+        for (unsigned i = 0; i < control.option.keyword_map.Length(); i++)
         {
             if (control.option.keyword_map[i].length == len &&
                 wcsncmp(cursor, control.option.keyword_map[i].name, len) == 0)
@@ -1070,7 +1026,7 @@ void Scanner::ClassifyIdOrKeyword()
 void Scanner::ClassifyId()
 {
     bool has_dollar = (*cursor == U_DS);
-    wchar_t *ptr = cursor + 1;
+    const wchar_t* ptr = cursor + 1;
 
     while (Code::IsAlnum(*ptr))
     {
@@ -1085,13 +1041,13 @@ void Scanner::ClassifyId()
         dollar_warning_given = true;
         lex -> ReportMessage(StreamError::DOLLAR_IN_IDENTIFIER,
                              current_token -> Location(),
-                             (unsigned) (current_token -> Location() + len - 1));
+                             current_token -> Location() + len - 1);
     }
 
     current_token -> SetKind(TK_Identifier);
     current_token -> SetSymbol(control.FindOrInsertName(cursor, len));
 
-    for (int i = 0; i < control.option.keyword_map.Length(); i++)
+    for (unsigned i = 0; i < control.option.keyword_map.Length(); i++)
     {
         if (control.option.keyword_map[i].length == len &&
             wcsncmp(cursor, control.option.keyword_map[i].name, len) == 0)
@@ -1114,7 +1070,7 @@ void Scanner::ClassifyNumericLiteral()
     //
     // Scan the initial sequence of digits, if any.
     //
-    wchar_t *ptr = cursor - 1;
+    const wchar_t* ptr = cursor - 1;
     while (Code::IsDigit(*++ptr));
 
     //
@@ -1153,7 +1109,7 @@ void Scanner::ClassifyNumericLiteral()
                 }
                 else lex -> ReportMessage(StreamError::INVALID_HEX_CONSTANT,
                                           current_token -> Location(),
-                                          (unsigned) (ptr - lex -> InputBuffer()));
+                                          ptr - lex -> InputBuffer());
             }
             else if (! (((*ptr == U_e || *ptr == U_E) &&
                          (Code::IsDigit(ptr[1]) ||
@@ -1221,6 +1177,13 @@ void Scanner::ClassifyNumericLiteral()
     {
         if (*ptr == U_l || *ptr == U_L)
         {
+            if (*ptr == U_l && control.option.pedantic)
+            {
+                lex -> ReportMessage(StreamError::FAVOR_CAPITAL_L_SUFFIX,
+                                     current_token -> Location(),
+                                     ptr - lex -> InputBuffer());
+            }
+            
             len = ++ptr - cursor;
             current_token ->
                 SetSymbol(control.long_table.FindOrInsertLiteral(cursor, len));
@@ -1240,7 +1203,6 @@ void Scanner::ClassifyNumericLiteral()
             SetSymbol(control.double_table.FindOrInsertLiteral(cursor, len));
         current_token -> SetKind(TK_DoubleLiteral);
     }
-
     cursor = ptr;
 }
 
@@ -1248,7 +1210,6 @@ void Scanner::ClassifyNumericLiteral()
 void Scanner::ClassifyColon()
 {
     current_token -> SetKind(TK_COLON);
-
     cursor++;
 }
 
@@ -1256,7 +1217,6 @@ void Scanner::ClassifyColon()
 void Scanner::ClassifyPlus()
 {
     cursor++;
-
     if (*cursor == U_PLUS)
     {
         cursor++;
@@ -1274,7 +1234,6 @@ void Scanner::ClassifyPlus()
 void Scanner::ClassifyMinus()
 {
     cursor++;
-
     if (*cursor == U_MINUS)
     {
         cursor++;
@@ -1292,7 +1251,6 @@ void Scanner::ClassifyMinus()
 void Scanner::ClassifyStar()
 {
     cursor++;
-
     if (*cursor == U_EQUAL)
     {
         cursor++;
@@ -1305,12 +1263,15 @@ void Scanner::ClassifyStar()
 void Scanner::ClassifySlash()
 {
     cursor++;
-
     if (*cursor == U_EQUAL)
     {
         cursor++;
         current_token -> SetKind(TK_DIVIDE_EQUAL);
     }
+    else if (*cursor == U_SLASH)
+        ScanSlashComment();
+    else if (*cursor == U_STAR)
+        ScanStarComment();
     else current_token -> SetKind(TK_DIVIDE);
 }
 
@@ -1318,7 +1279,6 @@ void Scanner::ClassifySlash()
 void Scanner::ClassifyLess()
 {
     cursor++;
-
     if (*cursor == U_EQUAL)
     {
         cursor++;
@@ -1327,7 +1287,6 @@ void Scanner::ClassifyLess()
     else if (*cursor == U_LESS)
     {
         cursor++;
-
         if (*cursor == U_EQUAL)
         {
             cursor++;
@@ -1342,7 +1301,7 @@ void Scanner::ClassifyLess()
 void Scanner::ClassifyGreater()
 {
     cursor++;
-
+    current_token -> SetKind(TK_GREATER);
     if (*cursor == U_EQUAL)
     {
         cursor++;
@@ -1351,7 +1310,6 @@ void Scanner::ClassifyGreater()
     else if (*cursor == U_GREATER)
     {
         cursor++;
-
         if (*cursor == U_EQUAL)
         {
             cursor++;
@@ -1360,7 +1318,6 @@ void Scanner::ClassifyGreater()
         else if (*cursor == U_GREATER)
         {
             cursor++;
-
             if (*cursor == U_EQUAL)
             {
                 cursor++;
@@ -1370,14 +1327,12 @@ void Scanner::ClassifyGreater()
         }
         else current_token -> SetKind(TK_RIGHT_SHIFT);
     }
-    else current_token -> SetKind(TK_GREATER);
 }
 
 
 void Scanner::ClassifyAnd()
 {
     cursor++;
-
     if (*cursor == U_AMPERSAND)
     {
         cursor++;
@@ -1395,7 +1350,6 @@ void Scanner::ClassifyAnd()
 void Scanner::ClassifyOr()
 {
     cursor++;
-
     if (*cursor == U_BAR)
     {
         cursor++;
@@ -1413,7 +1367,6 @@ void Scanner::ClassifyOr()
 void Scanner::ClassifyXor()
 {
     cursor++;
-
     if (*cursor == U_EQUAL)
     {
         cursor++;
@@ -1426,7 +1379,6 @@ void Scanner::ClassifyXor()
 void Scanner::ClassifyNot()
 {
     cursor++;
-
     if (*cursor == U_EQUAL)
     {
         cursor++;
@@ -1439,7 +1391,6 @@ void Scanner::ClassifyNot()
 void Scanner::ClassifyEqual()
 {
     cursor++;
-
     if (*cursor == U_EQUAL)
     {
         cursor++;
@@ -1452,7 +1403,6 @@ void Scanner::ClassifyEqual()
 void Scanner::ClassifyMod()
 {
     cursor++;
-
     if (*cursor == U_EQUAL)
     {
         cursor++;
@@ -1466,10 +1416,15 @@ void Scanner::ClassifyPeriod()
 {
     if (Code::IsDigit(cursor[1])) // Is period immediately followed by digit?
         ClassifyNumericLiteral();
+    else if (cursor[1] == U_DOT && cursor[2] == U_DOT)
+    {
+        // Added for Java 1.5, varargs, by JSR 201.
+        current_token -> SetKind(TK_ELLIPSIS);
+        cursor += 3;
+    }
     else
     {
         current_token -> SetKind(TK_DOT);
-
         cursor++;
     }
 }
@@ -1478,7 +1433,6 @@ void Scanner::ClassifyPeriod()
 void Scanner::ClassifySemicolon()
 {
     current_token -> SetKind(TK_SEMICOLON);
-
     cursor++;
 }
 
@@ -1486,7 +1440,6 @@ void Scanner::ClassifySemicolon()
 void Scanner::ClassifyComma()
 {
     current_token -> SetKind(TK_COMMA);
-
     cursor++;
 }
 
@@ -1499,9 +1452,7 @@ void Scanner::ClassifyLbrace()
     // to identify its counterpart.
     //
     brace_stack.Push(current_token_index);
-
     current_token -> SetKind(TK_LBRACE);
-
     cursor++;
 }
 
@@ -1519,9 +1470,7 @@ void Scanner::ClassifyRbrace()
         lex -> token_stream[left_brace].SetRightBrace(current_token_index);
         brace_stack.Pop();
     }
-
     current_token -> SetKind(TK_RBRACE);
-
     cursor++;
 }
 
@@ -1529,7 +1478,6 @@ void Scanner::ClassifyRbrace()
 void Scanner::ClassifyLparen()
 {
     current_token -> SetKind(TK_LPAREN);
-
     cursor++;
 }
 
@@ -1537,7 +1485,6 @@ void Scanner::ClassifyLparen()
 void Scanner::ClassifyRparen()
 {
     current_token -> SetKind(TK_RPAREN);
-
     cursor++;
 }
 
@@ -1545,7 +1492,6 @@ void Scanner::ClassifyRparen()
 void Scanner::ClassifyLbracket()
 {
     current_token -> SetKind(TK_LBRACKET);
-
     cursor++;
 }
 
@@ -1553,7 +1499,6 @@ void Scanner::ClassifyLbracket()
 void Scanner::ClassifyRbracket()
 {
     current_token -> SetKind(TK_RBRACKET);
-
     cursor++;
 }
 
@@ -1561,37 +1506,44 @@ void Scanner::ClassifyRbracket()
 void Scanner::ClassifyComplement()
 {
     current_token -> SetKind(TK_TWIDDLE);
+    cursor++;
+}
 
+
+void Scanner::ClassifyAt()
+{
+    // Added for Java 1.5, attributes, by JSR 175.
+    current_token -> SetKind(TK_AT);
     cursor++;
 }
 
 
 //
-// Anything that doesn't fit above.
+// Anything that doesn't fit above. Note that the lex stream already stripped
+// any concluding ctrl-z, so we don't need to worry about seeing that as a
+// bad token. For fewer error messages, we scan until the next valid
+// character, issue the error message, then treat this token as whitespace.
 //
 void Scanner::ClassifyBadToken()
 {
-    // Not the terminating character?
-    if (++cursor < &lex -> InputBuffer()[lex -> InputBufferLength()])
+    while (++cursor < input_buffer_tail)
     {
-         current_token -> SetKind(0);
-         current_token -> SetSymbol(control.FindOrInsertName(cursor - 1, 1));
-
-         lex -> ReportMessage(StreamError::BAD_TOKEN,
-                              current_token -> Location(),
-                              current_token -> Location());
+        if ((*cursor < 128 &&
+             classify_token[*cursor] != &Scanner::ClassifyBadToken) ||
+            Code::IsAlpha(*cursor))
+        {
+            break;
+        }
     }
-    else
-    {
-        current_token -> SetKind(TK_EOF);
-    }
+    current_token -> SetKind(0);
+    lex -> ReportMessage(StreamError::BAD_TOKEN, current_token -> Location(),
+                         cursor - lex -> InputBuffer() - 1);
 }
 
 
 void Scanner::ClassifyQuestion()
 {
     current_token -> SetKind(TK_QUESTION);
-
     cursor++;
 }
 
@@ -1600,8 +1552,7 @@ void Scanner::ClassifyNonAsciiUnicode()
 {
     if (Code::IsAlpha(*cursor)) // Some kind of non-ascii unicode letter
         ClassifyId();
-    else
-        ClassifyBadToken();
+    else ClassifyBadToken();
 }
 
 #ifdef HAVE_JIKES_NAMESPACE

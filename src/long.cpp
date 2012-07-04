@@ -1,4 +1,4 @@
-// $Id: long.cpp,v 1.26 2002/07/30 16:30:02 ericb Exp $
+// $Id: long.cpp,v 1.27 2002/11/27 00:18:32 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -167,7 +167,7 @@ BaseLong &BaseLong::operator+= (const BaseLong op)
     return *this = *this + op;
 }
 
-BaseLong BaseLong::operator++ (int dummy)
+BaseLong BaseLong::operator++ (int)
 {
     BaseLong temp = *this;
     *this += 1;
@@ -199,7 +199,7 @@ BaseLong &BaseLong::operator-= (const BaseLong op)
     return *this = *this - op;
 }
 
-BaseLong BaseLong::operator-- (int dummy)
+BaseLong BaseLong::operator-- (int)
 {
     BaseLong temp = *this;
     *this -= 1;

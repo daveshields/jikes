@@ -1,4 +1,4 @@
-// $Id: unzip.cpp,v 1.11 2002/07/30 16:30:03 ericb Exp $
+// $Id: unzip.cpp,v 1.12 2002/11/27 00:18:32 ericb Exp $
 
 //
 // NOTE: Jikes incorporates compression code from the Info-ZIP
@@ -798,126 +798,53 @@ int Unzip::inflate_free()
 
 
 #ifdef UNIX_FILE_SYSTEM
-    int Unzip::UncompressFile0(FILE *zipfile, char *buffer, long buffer_length)
-    {
-        SystemFread(buffer, sizeof(char), buffer_length, zipfile);
-        return 1;
-    }
+int Unzip::UncompressFile0(FILE* zipfile, char* buffer, long buffer_length)
+{
+    SystemFread(buffer, sizeof(char), buffer_length, zipfile);
+    return 1;
+}
 
+int Unzip::UncompressFile1(FILE*, char*, long) { return 0; }
+int Unzip::UncompressFile2(FILE*, char*, long) { return 0; }
+int Unzip::UncompressFile3(FILE*, char*, long) { return 0; }
+int Unzip::UncompressFile4(FILE*, char*, long) { return 0; }
+int Unzip::UncompressFile5(FILE*, char*, long) { return 0; }
+int Unzip::UncompressFile6(FILE*, char*, long) { return 0; }
+int Unzip::UncompressFile7(FILE*, char*, long) { return 0; }
 
-    int Unzip::UncompressFile1(FILE *zipfile, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
+int Unzip::UncompressFile8(FILE* zipfile, char* buffer, long)
+{
+    int rc = Unzip::unzip8(zipfile, buffer); /* Use Unzip routine to unpack */
+    return (rc == 0);
+}
 
+int Unzip::UncompressFile9(FILE*, char*, long) { return 0; }
 
-    int Unzip::UncompressFile2(FILE *zipfile, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-
-    int Unzip::UncompressFile3(FILE *zipfile, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-
-    int Unzip::UncompressFile4(FILE *zipfile, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-
-    int Unzip::UncompressFile5(FILE *zipfile, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-
-    int Unzip::UncompressFile6(FILE *zipfile, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-
-    int Unzip::UncompressFile7(FILE *zipfile, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-    int Unzip::UncompressFile8(FILE *zipfile, char *buffer, long buffer_length)
-    {
-        int rc = Unzip::unzip8(zipfile, buffer); /* Use Unzip routine to unpack */
-        return (rc == 0);
-    }
-
-
-    int Unzip::UncompressFile9(FILE *zipfile, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
 #elif defined(WIN32_FILE_SYSTEM)
-    int Unzip::UncompressFile0(char *zipfile_buffer, char *buffer, long buffer_length)
-    {
-        memmove(buffer, zipfile_buffer, buffer_length * sizeof(char));
-        return 1;
-    }
+int Unzip::UncompressFile0(char* zipfile_buffer, char* buffer,
+                           long buffer_length)
+{
+    memmove(buffer, zipfile_buffer, buffer_length * sizeof(char));
+    return 1;
+}
 
+int Unzip::UncompressFile1(char*, char*, long) { return 0; }
+int Unzip::UncompressFile2(char*, char*, long) { return 0; }
+int Unzip::UncompressFile3(char*, char*, long) { return 0; }
+int Unzip::UncompressFile4(char*, char*, long) { return 0; }
+int Unzip::UncompressFile5(char*, char*, long) { return 0; }
+int Unzip::UncompressFile6(char*, char*, long) { return 0; }
+int Unzip::UncompressFile7(char*, char*, long) { return 0; }
 
-    int Unzip::UncompressFile1(char *zipfile_buffer, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
+int Unzip::UncompressFile8(char* zipfile_buffer, char* buffer, long)
+{
+    /* Use Unzip routine to unpack */
+    int rc = Unzip::unzip8(zipfile_buffer, buffer);
+    return (rc == 0);
+}
 
-
-    int Unzip::UncompressFile2(char *zipfile_buffer, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-
-    int Unzip::UncompressFile3(char *zipfile_buffer, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-
-    int Unzip::UncompressFile4(char *zipfile_buffer, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-
-    int Unzip::UncompressFile5(char *zipfile_buffer, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-
-    int Unzip::UncompressFile6(char *zipfile_buffer, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-
-    int Unzip::UncompressFile7(char *zipfile_buffer, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-
-    int Unzip::UncompressFile8(char *zipfile_buffer, char *buffer, long buffer_length)
-    {
-        int rc = Unzip::unzip8(zipfile_buffer, buffer); /* Use Unzip routine to unpack */
-        return (rc == 0);
-    }
-
-
-    int Unzip::UncompressFile9(char *zipfile_buffer, char *buffer, long buffer_length)
-    {
-        return 0;
-    }
-#endif
+int Unzip::UncompressFile9(char*, char*, long) { return 0; }
+#endif // WIN32_FILE_SYSTEM
 
 
 #ifdef HAVE_JIKES_NAMESPACE

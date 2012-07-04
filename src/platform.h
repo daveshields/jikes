@@ -1,10 +1,9 @@
-// $Id: platform.h,v 1.38 2002/10/07 22:06:16 ericb Exp $ -*- c++ -*-
+// $Id: platform.h,v 1.46 2004/01/26 06:07:17 cabbey Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 2000, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 //
@@ -50,6 +49,12 @@
 #undef PACKAGE_NAME
 #undef VERSION
 
+// A macro for generating <cname> vs. <name.h> as appropriate.
+#ifdef HAVE_STD
+# define STD_LIB_NAME(name) <c ## name>
+#else
+# define STD_LIB_NAME(name) <name.h>
+#endif // ! HAVE_STD
 
 /* Boilerplate autoconf checking */
 
@@ -57,25 +62,26 @@
 //FIXME: all stat stuff should be included in the platform.cpp file!
 #include <sys/stat.h>
 #ifdef STDC_HEADERS
-# include <stdlib.h>
-# include <stddef.h>
-#else
+# include STD_LIB_NAME(stdlib)
+# include STD_LIB_NAME(stddef)
+#else // ! STDC_HEADERS
 # ifdef HAVE_STDLIB_H
 #  include <stdlib.h>
 # endif
-#endif
+#endif // ! STDC_HEADERS
+
 #ifdef HAVE_STRING_H
 # ifndef STDC_HEADERS
 #  ifdef HAVE_MEMORY_H
 #   include <memory.h>
 #  endif
-# endif
-# include <string.h>
-#else
+# endif // ! STDC_HEADERS
+# include STD_LIB_NAME(string)
+#else // ! HAVE_STRING_H
 # ifdef HAVE_STRINGS_H
 #  include <strings.h>
 # endif
-#endif
+#endif // ! HAVE_STRING_H
 
 #ifdef HAVE_SYS_CYGWIN_H
 #include <sys/cygwin.h>
@@ -85,7 +91,7 @@
 # include <unicode/ucnv.h>
 #elif defined(HAVE_ICONV_H)
 # include <iconv.h>
-# include <errno.h>
+# include STD_LIB_NAME(errno)
 #endif
 
 #ifdef HAVE_UNISTD_H
@@ -110,35 +116,35 @@ typedef unsigned int wint_t;
 #endif
 
 #ifdef HAVE_WCHAR_H
-# include <wchar.h>
+# include STD_LIB_NAME(wchar)
 #endif
 
 #ifdef HAVE_CTYPE_H
-# include <ctype.h>
+# include STD_LIB_NAME(ctype)
 #endif
 
 #ifdef HAVE_ASSERT_H
-# include <assert.h>
+# include STD_LIB_NAME(assert)
 #endif
 
 #ifdef HAVE_STDIO_H
-# include <stdio.h>
+# include STD_LIB_NAME(stdio)
 #endif
 
 #ifdef HAVE_LIMITS_H
-# include <limits.h>
+# include STD_LIB_NAME(limits)
 #endif
 
 #ifdef HAVE_MATH_H
-# include <math.h>
+# include STD_LIB_NAME(math)
 #endif
 
 #ifdef HAVE_FLOAT_H
-# include <float.h>
+# include STD_LIB_NAME(float)
 #endif
 
 #ifdef HAVE_TIME_H
-# include <time.h>
+# include STD_LIB_NAME(time)
 #endif
 
 // C++ standard support
@@ -149,7 +155,7 @@ typedef unsigned int wint_t;
 #else
 # include <iostream.h>
 # include <fstream.h>
-#endif
+#endif // ! HAVE_STD
 
 // VC++ pretends to support the C++ standard, but it does not.
 // The set_new_handler method in <new> is not implemented so
@@ -162,23 +168,12 @@ typedef unsigned int wint_t;
 #  include <new>
 # else
 #  include <new.h>
-# endif
-#endif
+# endif // ! HAVE_STD
+#endif // ! HAVE_VCPP_SET_NEW_HANDLER
 
 #ifdef HAVE_STD
 # ifdef HAVE_NAMESPACES
    using namespace std;
-# endif
-#endif
-
-
-#ifdef HAVE_BROKEN_USHRT_MAX
-    /* There is a bug in mingwin's limits.h file we need to work around */
-# undef USHRT_MAX
-# ifdef SHRT_MAX
-#  define USHRT_MAX (2U * SHRT_MAX + 1)
-# else
-#  define USHRT_MAX 0xFFFF
 # endif
 #endif
 
@@ -206,6 +201,11 @@ typedef uint64_t u8;
 typedef int64_t i8;
 #endif // HAVE_64BIT_TYPES
 
+// Rename for readability in double.h.
+#ifdef TYPE_INT32_T_IS_INT
+#define TYPE_I4_IS_INT TYPE_INT32_T_IS_INT
+#endif
+
 //
 // Some compilers do not correctly predefine the primitive type "bool"
 // and its possible values: "false" and "true"
@@ -222,9 +222,47 @@ enum { false = 0, true = 1 };
 #endif
 
 
+//
+// Define a templatized function for dynamic_cast<> operator.
+// This is slightly scary, but we need to do it so that we
+// can continue to support older compilers that don't implement
+// the dynamic_cast<> operator. We also do extra checking
+// of the result when RTTI is supported. This does add some
+// overhead, but if we catch a downcast bug as a result it
+// is worth it. Downcast bugs were to blame for a number of
+// core dumps in Jikes.
+//
+#ifdef HAVE_RTTI
+# include <typeinfo>
+#endif
+
 #ifdef HAVE_JIKES_NAMESPACE
 namespace Jikes { // Open namespace Jikes block
 #endif
+
+template <typename TO, typename FROM>
+inline TO DYNAMIC_CAST(FROM f)
+{
+#ifndef HAVE_DYNAMIC_CAST
+    return (TO) f;
+#else
+    // If NULL, return NULL to support dynamic_cast semantics
+    if (!f)
+        return (TO) NULL;
+    TO ptr = dynamic_cast<TO> (f);
+
+    if (! ptr)
+    {
+# ifdef HAVE_RTTI
+        const type_info& t = typeid(f);
+        const char* name = t.name();
+        fprintf(stderr, "DYNAMIC_CAST argument type was \"%s\"\n", name);
+# endif // HAVE_RTTI
+        assert(ptr && "Failed dynamic_cast<> in DYNAMIC_CAST");
+    }
+    return ptr;
+#endif // HAVE_DYNAMIC_CAST
+}
 
 //
 // The configure scripts check each of these to see if we need our own
@@ -477,275 +515,292 @@ public:
     //
     // Symbols and operators.
     //
-    static wchar_t US_AND[], // L"&"
-                   US_AND_AND[], // L"&&"
-                   US_AND_EQUAL[], // L"&="
-                   US_COLON[], // L":"
-                   US_COMMA[], // L","
-                   US_DIVIDE[], // L"/"
-                   US_DIVIDE_EQUAL[], // L"/="
-                   US_DOT[], // L"."
-                   US_EMPTY[], // L""
-                   US_EQUAL[], // L"="
-                   US_EQUAL_EQUAL[], // L"=="
-                   US_GREATER[], // L">"
-                   US_GREATER_EQUAL[], // L">="
-                   US_LBRACE[], // L"{"
-                   US_LBRACKET[], // L"["
-                   US_LEFT_SHIFT[], // L"<<"
-                   US_LEFT_SHIFT_EQUAL[], // L"<<="
-                   US_LESS[], // L"<"
-                   US_LESS_EQUAL[], // L"<="
-                   US_LPAREN[], // L"("
-                   US_MINUS[], // L"-"
-                   US_MINUS_EQUAL[], // L"-="
-                   US_MINUS_MINUS[], // L"--"
-                   US_MULTIPLY[], // L"*"
-                   US_MULTIPLY_EQUAL[], // L"*="
-                   US_NOT[], // L"!"
-                   US_NOT_EQUAL[], // L"!="
-                   US_OR[], // L"|"
-                   US_OR_EQUAL[], // L"|="
-                   US_OR_OR[], // L"||"
-                   US_PLUS[], // L"+"
-                   US_PLUS_EQUAL[], // L"+="
-                   US_PLUS_PLUS[], // L"++"
-                   US_QUESTION[], // L"?"
-                   US_RBRACE[], // L"}"
-                   US_RBRACKET[], // L"]"
-                   US_REMAINDER[], // L"%"
-                   US_REMAINDER_EQUAL[], // L"%="
-                   US_RIGHT_SHIFT[], // L">>"
-                   US_RIGHT_SHIFT_EQUAL[], // L">>="
-                   US_RPAREN[], // L")"
-                   US_SEMICOLON[], // L";"
-                   US_TWIDDLE[], // L"~"
-                   US_UNSIGNED_RIGHT_SHIFT[], // L">>>"
-                   US_UNSIGNED_RIGHT_SHIFT_EQUAL[], // L">>>="
-                   US_XOR[], // L"^"
-                   US_XOR_EQUAL[]; // L"^="
+    static const wchar_t US_AND[], // L"&"
+        US_AND_AND[], // L"&&"
+        US_AND_EQUAL[], // L"&="
+        US_AT[], // L"@"
+        US_COLON[], // L":"
+        US_COMMA[], // L","
+        US_DIVIDE[], // L"/"
+        US_DIVIDE_EQUAL[], // L"/="
+        US_DOT[], // L"."
+        US_DOT_DOT_DOT[], // L"..."
+        US_EMPTY[], // L""
+        US_EQUAL[], // L"="
+        US_EQUAL_EQUAL[], // L"=="
+        US_GREATER[], // L">"
+        US_GREATER_EQUAL[], // L">="
+        US_LBRACE[], // L"{"
+        US_LBRACKET[], // L"["
+        US_LEFT_SHIFT[], // L"<<"
+        US_LEFT_SHIFT_EQUAL[], // L"<<="
+        US_LESS[], // L"<"
+        US_LESS_EQUAL[], // L"<="
+        US_LPAREN[], // L"("
+        US_MINUS[], // L"-"
+        US_MINUS_EQUAL[], // L"-="
+        US_MINUS_MINUS[], // L"--"
+        US_MULTIPLY[], // L"*"
+        US_MULTIPLY_EQUAL[], // L"*="
+        US_NOT[], // L"!"
+        US_NOT_EQUAL[], // L"!="
+        US_OR[], // L"|"
+        US_OR_EQUAL[], // L"|="
+        US_OR_OR[], // L"||"
+        US_PLUS[], // L"+"
+        US_PLUS_EQUAL[], // L"+="
+        US_PLUS_PLUS[], // L"++"
+        US_QUESTION[], // L"?"
+        US_RBRACE[], // L"}"
+        US_RBRACKET[], // L"]"
+        US_REMAINDER[], // L"%"
+        US_REMAINDER_EQUAL[], // L"%="
+        US_RIGHT_SHIFT[], // L">>"
+        US_RIGHT_SHIFT_EQUAL[], // L">>="
+        US_RPAREN[], // L")"
+        US_SEMICOLON[], // L";"
+        US_TWIDDLE[], // L"~"
+        US_UNSIGNED_RIGHT_SHIFT[], // L">>>"
+        US_UNSIGNED_RIGHT_SHIFT_EQUAL[], // L">>>="
+        US_XOR[], // L"^"
+        US_XOR_EQUAL[]; // L"^="
 
     //
     // Library classes and methods.
     //
-    static wchar_t US_AssertionError[], // L"AssertionError"
-                   US_Boolean[], // L"Boolean"
-                   US_Byte[], // L"Byte"
-                   US_Character[], // L"Character"
-                   US_Class[], // L"Class"
-                   US_ClassNotFoundException[], // L"ClassNotFoundException"
-                   US_Cloneable[], // L"Cloneable"
-                   US_Comparable[], // L"Comparable"
-                   US_Double[], // L"Double"
-                   US_Error[], // L"Error"
-                   US_Exception[], // L"Exception"
-                   US_Float[],  // L"Float"
-                   US_Integer[], // L"Integer"
-                   US_L[], // L"L"
-                   US_Long[], // L"Long"
-                   US_NoClassDefFoundError[], // L"NoClassDefFoundError"
-                   US_Object[], // L"Object"
-                   US_PObject[], // L"PObject"
-                   US_RuntimeException[], // L"RuntimeException"
-                   US_Serializable[], // L"Serializable"
-                   US_Short[], // L"Short"
-                   US_String[], // L"String"
-                   US_StringBuffer[], // L"StringBuffer"
-                   US_TYPE[], // L"TYPE"
-                   US_Throwable[], // L"Throwable"
-                   US_Void[], // L"Void"
-                   US_DO[], // L"."
-                   US_DO_DO[], // L".."
-                   US_DS[], // L"$"
-                   US_LB_RB[], // L"[]"
-                   US_LT_clinit_GT[], // L"<clinit>"
-                   US_LT_init_GT[], // L"<init>"
-                   US_QU_QU[],  // L"??"
-                   US_SC[], // L";"
-                   US_SL[], // L"/"
-                   US_zip[], // L"zip"
-                   US_jar[]; // L"jar"
+    static const wchar_t US_AssertionError[], // L"AssertionError"
+        US_Boolean[], // L"Boolean"
+        US_Byte[], // L"Byte"
+        US_Character[], // L"Character"
+        US_Class[], // L"Class"
+        US_ClassNotFoundException[], // L"ClassNotFoundException"
+        US_Cloneable[], // L"Cloneable"
+        US_Comparable[], // L"Comparable"
+        US_Double[], // L"Double"
+        US_equals[], // L"equals"
+        US_Error[], // L"Error"
+        US_Exception[], // L"Exception"
+        US_Float[],  // L"Float"
+        US_hashCode[], // L"hashCode"
+        US_Integer[], // L"Integer"
+        US_L[], // L"L"
+        US_Long[], // L"Long"
+        US_NoClassDefFoundError[], // L"NoClassDefFoundError"
+        US_Object[], // L"Object"
+        US_PObject[], // L"PObject"
+        US_RuntimeException[], // L"RuntimeException"
+        US_Serializable[], // L"Serializable"
+        US_serialVersionUID[], // L"serialVersionUID"
+        US_Short[], // L"Short"
+        US_String[], // L"String"
+        US_StringBuffer[], // L"StringBuffer"
+        US_TYPE[], // L"TYPE"
+        US_Throwable[], // L"Throwable"
+        US_Void[], // L"Void"
+        US_DO[], // L"."
+        US_DO_DO[], // L".."
+        US_DS[], // L"$"
+        US_LB_RB[], // L"[]"
+        US_LT_clinit_GT[], // L"<clinit>"
+        US_LT_init_GT[], // L"<init>"
+        US_QU_QU[],  // L"??"
+        US_SC[], // L";"
+        US_SL[], // L"/"
+        US_zip[], // L"zip"
+        US_jar[]; // L"jar"
 
     //
     // Used in synthetic (compiler-generated) code.
     //
-    static wchar_t US_DOLLAR_noassert[], // L"$noassert"
-                   US_append[], // L"append"
-                   US_array[], // L"array"
-                   US_access_DOLLAR[], // L"access$"
-                   US_class_DOLLAR[], // L"class$"
-                   US_clone[], // L"clone"
-                   US_constructor_DOLLAR[], // L"constructor$"
-                   US_desiredAssertionStatus[], // L"desiredAssertionStatus"
-                   US_forName[], // L"forName"
-                   US_getClass[], // L"getClass"
-                   US_getComponentType[], // L"getComponentType"
-                   US_getMessage[], // L"getMessage"
-                   US_initCause[], // L"initCause"
-                   US_java_SL_io[], // L"java/io"
-                   US_java_SL_lang[], // L"java/lang"
-                   US_length[], // L"length"
-                   US_this_DOLLAR[], // L"this$"
-                   US_this0[], // L"this$0"
-                   US_toString[], // L"toString"
-                   US_val_DOLLAR[]; // L"val$"
+    static const wchar_t US_DOLLAR_noassert[], // L"$noassert"
+        US_append[], // L"append"
+        US_array[], // L"array"
+        US_access_DOLLAR[], // L"access$"
+        US_class_DOLLAR[], // L"class$"
+        US_clone[], // L"clone"
+        US_constructor_DOLLAR[], // L"constructor$"
+        US_desiredAssertionStatus[], // L"desiredAssertionStatus"
+        US_forName[], // L"forName"
+        US_getClass[], // L"getClass"
+        US_getComponentType[], // L"getComponentType"
+        US_getMessage[], // L"getMessage"
+        US_initCause[], // L"initCause"
+        US_java_SL_io[], // L"java/io"
+        US_java_SL_lang[], // L"java/lang"
+        US_length[], // L"length"
+        US_this_DOLLAR[], // L"this$"
+        US_this0[], // L"this$0"
+        US_toString[], // L"toString"
+        US_val_DOLLAR[]; // L"val$"
 
     //
     // Java keywords.
     //
-    static wchar_t US_abstract[], // L"abstract"
-                   US_assert[], // L"assert"
-                   US_boolean[], // L"boolean"
-                   US_break[], // L"break"
-                   US_byte[], // L"byte"
-                   US_case[], // L"case"
-                   US_catch[], // L"catch"
-                   US_char[], // L"char"
-                   US_class[], // L"class"
-                   US_const[], // L"const"
-                   US_continue[], // L"continue"
-                   US_default[], // L"default"
-                   US_do[], // L"do"
-                   US_double[], // L"double"
-                   US_else[], // L"else"
-                   US_extends[], // L"extends"
-                   US_false[], // L"false"
-                   US_final[], // L"final"
-                   US_finally[], // L"finally"
-                   US_float[], // L"float"
-                   US_for[], // L"for"
-                   US_goto[], // L"goto"
-                   US_if[], // L"if"
-                   US_implements[], // L"implements"
-                   US_import[], // L"import"
-                   US_instanceof[], // L"instanceof"
-                   US_int[], // L"int"
-                   US_interface[], // L"interface"
-                   US_long[], // L"long"
-                   US_native[], // L"native"
-                   US_new[], // L"new"
-                   US_null[], // L"null"
-                   US_package[], // L"package"
-                   US_private[], // L"private"
-                   US_protected[], // L"protected"
-                   US_public[], // L"public"
-                   US_return[], // L"return"
-                   US_short[], // L"short"
-                   US_static[], // L"static"
-                   US_strictfp[], // L"strictfp"
-                   US_super[], // L"super"
-                   US_switch[], // L"switch"
-                   US_synchronized[], // L"synchronized"
-                   US_this[], // L"this"
-                   US_throw[], // L"throw"
-                   US_throws[], // L"throws"
-                   US_transient[], // L"transient"
-                   US_true[], // L"true"
-                   US_try[], // L"try"
-                   US_void[], // L"void"
-                   US_volatile[], // L"volatile"
-                   US_while[]; // L"while"
+    static const wchar_t US_abstract[], // L"abstract"
+        US_assert[], // L"assert"
+        US_boolean[], // L"boolean"
+        US_break[], // L"break"
+        US_byte[], // L"byte"
+        US_case[], // L"case"
+        US_catch[], // L"catch"
+        US_char[], // L"char"
+        US_class[], // L"class"
+        US_const[], // L"const"
+        US_continue[], // L"continue"
+        US_default[], // L"default"
+        US_do[], // L"do"
+        US_double[], // L"double"
+        US_else[], // L"else"
+        US_enum[], // L"enum"
+        US_extends[], // L"extends"
+        US_false[], // L"false"
+        US_final[], // L"final"
+        US_finally[], // L"finally"
+        US_float[], // L"float"
+        US_for[], // L"for"
+        US_goto[], // L"goto"
+        US_if[], // L"if"
+        US_implements[], // L"implements"
+        US_import[], // L"import"
+        US_instanceof[], // L"instanceof"
+        US_int[], // L"int"
+        US_interface[], // L"interface"
+        US_long[], // L"long"
+        US_native[], // L"native"
+        US_new[], // L"new"
+        US_null[], // L"null"
+        US_package[], // L"package"
+        US_private[], // L"private"
+        US_protected[], // L"protected"
+        US_public[], // L"public"
+        US_return[], // L"return"
+        US_short[], // L"short"
+        US_static[], // L"static"
+        US_strictfp[], // L"strictfp"
+        US_super[], // L"super"
+        US_switch[], // L"switch"
+        US_synchronized[], // L"synchronized"
+        US_this[], // L"this"
+        US_throw[], // L"throw"
+        US_throws[], // L"throws"
+        US_transient[], // L"transient"
+        US_true[], // L"true"
+        US_try[], // L"try"
+        US_void[], // L"void"
+        US_volatile[], // L"volatile"
+        US_while[]; // L"while"
 
     //
     // Miscellaneous strings.
     //
-    static wchar_t US_EOF[]; // L"EOF"
+    static const wchar_t US_EOF[]; // L"EOF"
 
-    static wchar_t US_smallest_int[]; // L"-2147483648"
-
-    static char U8S_help_header[];
-    static char U8S_command_format[];
+    static const char U8S_help_header[];
+    static const char U8S_command_format[];
 
     //
     // Constant pool entries.
     //
-    static int U8S_ConstantValue_length,
-               U8S_Exceptions_length,
-               U8S_InnerClasses_length,
-               U8S_Synthetic_length,
-               U8S_Deprecated_length,
-               U8S_LineNumberTable_length,
-               U8S_LocalVariableTable_length,
-               U8S_Code_length,
-               U8S_SourceFile_length,
+    static const int U8S_ConstantValue_length,
+        U8S_Exceptions_length,
+        U8S_InnerClasses_length,
+        U8S_Synthetic_length,
+        U8S_Deprecated_length,
+        U8S_LineNumberTable_length,
+        U8S_LocalVariableTable_length,
+        U8S_Code_length,
+        U8S_SourceFile_length,
+        U8S_null_length,
+        U8S_this_length;
 
-               U8S_null_length,
-               U8S_this_length;
+    static const char U8S_AnnotationDefault[], // "AnnotationDefault"
+        U8S_B[], // "B"
+        U8S_C[], // "C"
+        U8S_Code[], // "Code"
+        U8S_ConstantValue[], // "ConstantValue"
+        U8S_D[], // "D"
+        U8S_Deprecated[], // "Deprecated"
+        U8S_EnclosingMethod[], // "EnclosingMethod"
+        U8S_Exceptions[], // "Exceptions"
+        U8S_F[], // "F"
+        U8S_I[], // "I"
+        U8S_InnerClasses[], // "InnerClasses"
+        U8S_J[],  // "J"
+        U8S_LP_C_RP_V[], // "(C)V"
+        U8S_LP_D_RP_V[], // "(D)V"
+        U8S_LP_F_RP_V[], // "(F)V"
+        U8S_LP_I_RP_V[], // "(I)V"
+        U8S_LP_J_RP_V[], // "(J)V"
+        U8S_LP_Object_RP_V[], // "(Ljava/lang/Object;)V"
+        U8S_LP_String_RP_Class[], // "(Ljava/lang/String;)Ljava/lang/Class;"
+        U8S_LP_String_RP_V[], // "(Ljava/lang/String;)V"
+        // "(Ljava/lang/Throwable;)Ljava/lang/Throwable;"
+        U8S_LP_Throwable_RP_Throwable[],
+        U8S_LP_RP_Class[], // "()Ljava/lang/Class;"
+        U8S_LP_RP_String[], // "()Ljava/lang/String;"
+        U8S_LP_RP_V[], // "()V"
+        U8S_LP_RP_Z[], // "()Z"
+        U8S_LP_Z_RP_V[], // "(Z)V"
+        U8S_LineNumberTable[], // "LineNumberTable"
+        U8S_LocalVariableTable[], // "LocalVariableTable"
+        U8S_LocalVariableTypeTable[], // "LocalVariableTypeTable"
+        U8S_RuntimeInvisibleAnnotations[], // "RuntimeInvisibleAnnotations"
+        // "RuntimeInvisibleParameterAnnotations"
+        U8S_RuntimeInvisibleParameterAnnotations[],
+        U8S_RuntimeVisibleAnnotations[], // "RuntimeVisibleAnnotations"
+        // "RuntimeVisibleParameterAnnotations"
+        U8S_RuntimeVisibleParameterAnnotations[],
+        U8S_S[], // "S"
+        U8S_Signature[], // "Signature"
+        U8S_SourceFile[], // "SourceFile"
+        U8S_StackMap[], // "StackMap"
+        U8S_Synthetic[], // "Synthetic"
+        U8S_V[], // "V"
+        U8S_Z[], // "Z"
 
-    static char U8S_B[], // "B"
-                U8S_C[], // "C"
-                U8S_Code[], // "Code"
-                U8S_ConstantValue[], // "ConstantValue"
-                U8S_D[], // "D"
-                U8S_Exceptions[], // "Exceptions"
-                U8S_F[], // "F"
-                U8S_I[], // "I"
-                U8S_InnerClasses[], // "InnerClasses"
-                U8S_J[],  // "J"
-                U8S_LP_C_RP_V[], // "(C)V"
-                U8S_LP_D_RP_V[], // "(D)V"
-                U8S_LP_F_RP_V[], // "(F)V"
-                U8S_LP_I_RP_V[], // "(I)V"
-                U8S_LP_J_RP_V[], // "(J)V"
-                U8S_LP_Object_RP_V[], // "(Ljava/lang/Object;)V"
-                U8S_LP_String_RP_Class[], // "(Ljava/lang/String;)Ljava/lang/Class;"
-                U8S_LP_String_RP_V[], // "(Ljava/lang/String;)V"
-                U8S_LP_Throwable_RP_Throwable[], // "(Ljava/lang/Throwable;)Ljava/lang/Throwable;"
-                U8S_LP_RP_Class[], // "()Ljava/lang/Class;"
-                U8S_LP_RP_String[], // "()Ljava/lang/String;"
-                U8S_LP_RP_V[], // "()V"
-                U8S_LP_RP_Z[], // "()Z"
-                U8S_LP_Z_RP_V[], // "(Z)V"
-                U8S_LineNumberTable[], // "LineNumberTable"
-                U8S_LocalVariableTable[], // "LocalVariableTable"
-                U8S_S[], // "S"
-                U8S_SourceFile[], // "SourceFile"
-                U8S_Synthetic[], // "Synthetic"
-                U8S_Deprecated[], // "Deprecated"
-                U8S_V[], // "V"
-                U8S_Z[], // "Z"
+        U8S_DO[], // "."
+        U8S_DO_DO[], // ".."
+        U8S_DO_class[], // ".class"
+        U8S_DO_java[], // ".java"
+        U8S_DO_tok[], // ".tok"
+        U8S_DO_u[], // ".u"
+        U8S_LP[], // "("
+        U8S_RP[], // ")"
+        U8S_SL[], // "/"
+        U8S_ST[], // "*"
 
-                U8S_DO[], // "."
-                U8S_DO_DO[], // ".."
-                U8S_DO_class[], // ".class"
-                U8S_DO_java[], // ".java"
-                U8S_DO_tok[], // ".tok"
-                U8S_DO_u[], // ".u"
-                U8S_LP[], // "("
-                U8S_RP[], // ")"
-                U8S_SL[], // "/"
-                U8S_ST[], // "*"
+        U8S_class[], // "class"
+        U8S_java[], // "java"
+        // "java/lang/ClassNotFoundException"
+        U8S_java_SL_lang_SL_ClassNotFoundException[],
+        U8S_java_SL_lang_SL_Class[], // "java/lang/Class"
+        U8S_java_SL_lang_SL_InternalError[], // "java/lang/InternalError"
+        // "java/lang/NoClassDefFoundError"
+        U8S_java_SL_lang_SL_NoClassDefFoundError[],
+        U8S_java_SL_lang_SL_StringBuffer[], // "java/lang/StringBuffer"
+        U8S_java_SL_lang_SL_Throwable[], // "java/lang/Throwable"
+        U8S_false[], // "false"
+        U8S_null[], // "null"
+        U8S_quit[], // "quit"
+        U8S_this[], // "this"
+        U8S_true[], // "true"
 
-                U8S_class[], // "class"
-                U8S_java[], // "java"
-                U8S_java_SL_lang_SL_ClassNotFoundException[], // "java/lang/ClassNotFoundException"
-                U8S_java_SL_lang_SL_Class[], // "java/lang/Class"
-                U8S_java_SL_lang_SL_InternalError[], // "java/lang/InternalError"
-                U8S_java_SL_lang_SL_NoClassDefFoundError[], // "java/lang/NoClassDefFoundError"
-                U8S_java_SL_lang_SL_StringBuffer[], // "java/lang/StringBuffer"
-                U8S_java_SL_lang_SL_Throwable[], // "java/lang/Throwable"
-                U8S_false[], // "false"
-                U8S_null[], // "null"
-                U8S_quit[], // "quit"
-                U8S_this[], // "this"
-                U8S_true[], // "true"
+        U8S_LP_C_RP_StringBuffer[], // "(C)Ljava/lang/StringBuffer;"
+        U8S_LP_Z_RP_StringBuffer[], // "(Z)Ljava/lang/StringBuffer;"
+        U8S_LP_I_RP_StringBuffer[], // "(I)Ljava/lang/StringBuffer;"
+        U8S_LP_J_RP_StringBuffer[], // "(J)Ljava/lang/StringBuffer;"
+        U8S_LP_F_RP_StringBuffer[], // "(F)Ljava/lang/StringBuffer;"
+        U8S_LP_D_RP_StringBuffer[], // "(D)Ljava/lang/StringBuffer;"
+        // "(Ljava/lang/String;)Ljava/lang/StringBuffer;"
+        U8S_LP_String_RP_StringBuffer[],
+        // "(Ljava/lang/Object;)Ljava/lang/StringBuffer;"
+        U8S_LP_Object_RP_StringBuffer[];
 
-                U8S_LP_C_RP_StringBuffer[], // "(C)Ljava/lang/StringBuffer;"
-                U8S_LP_Z_RP_StringBuffer[], // "(Z)Ljava/lang/StringBuffer;"
-                U8S_LP_I_RP_StringBuffer[], // "(I)Ljava/lang/StringBuffer;"
-                U8S_LP_J_RP_StringBuffer[], // "(J)Ljava/lang/StringBuffer;"
-                U8S_LP_F_RP_StringBuffer[], // "(F)Ljava/lang/StringBuffer;"
-                U8S_LP_D_RP_StringBuffer[], // "(D)Ljava/lang/StringBuffer;"
-                U8S_LP_String_RP_StringBuffer[], // "(Ljava/lang/String;)Ljava/lang/StringBuffer;"
-                U8S_LP_Object_RP_StringBuffer[]; // "(Ljava/lang/Object;)Ljava/lang/StringBuffer;"
-
-    static char U8S_smallest_int[],      // "-2147483648"
-                U8S_smallest_long_int[], // "-9223372036854775808"
-                U8S_NaN[],               // "NaN"
-                U8S_pos_Infinity[],      // "Infinity"
-                U8S_neg_Infinity[],      // "-Infinity"
-                U8S_pos_Zero[],          // "0.0"
-                U8S_neg_Zero[];          // "-0.0"
+    static const char U8S_NaN[], // "NaN"
+        U8S_pos_Infinity[], // "Infinity"
+        U8S_neg_Infinity[], // "-Infinity"
+        U8S_pos_Zero[], // "0.0"
+        U8S_neg_Zero[]; // "-0.0"
 };
 
 
@@ -755,122 +810,65 @@ public:
 class IntToString
 {
 public:
-    IntToString(int);
+    IntToString(i4); // Signed decimal conversion.
+    IntToString(u4, int width); // Unsigned zero-padded hexadecimal.
 
-    char *String() { return str; }
-    int Length()   { return (&info[TAIL_INDEX]) - str; }
+    const char* String() { return str; }
+    int Length() { return (&info[TAIL_INDEX]) - str; }
 
 private:
     enum { TAIL_INDEX = 1 + 10 }; // 1 for sign, +10 significant digits
 
-    char info[TAIL_INDEX + 1], // +1 for '\0'
-         *str;
+    char info[TAIL_INDEX + 1]; // +1 for '\0'
+    char* str;
 };
 
 
 //
-// Same as IntToString for wide strings
+// Same as IntToString for wide strings.
 //
 class IntToWstring
 {
 public:
-    IntToWstring(int);
+    IntToWstring(i4);
 
-    wchar_t *String() { return wstr; }
-    int Length()      { return (&winfo[TAIL_INDEX]) - wstr; }
+    const wchar_t* String() { return wstr; }
+    int Length() { return (&winfo[TAIL_INDEX]) - wstr; }
 
 private:
     enum { TAIL_INDEX = 1 + 10 }; // 1 for sign, +10 significant digits
 
-    wchar_t winfo[TAIL_INDEX + 1], // 1 for sign, +10 significant digits + '\0'
-            *wstr;
+    wchar_t winfo[TAIL_INDEX + 1]; // 1 for sign, +10 significant digits + '\0'
+    wchar_t* wstr;
 };
 
 
 //
-// Convert an unsigned Long integer to its character string representation in
-// decimal.
-//
-class ULongInt;
-class ULongToDecString
-{
-public:
-    ULongToDecString(ULongInt &);
-
-    char *String() { return str; }
-    int Length()   { return (&info[TAIL_INDEX]) - str; }
-
-private:
-    enum { TAIL_INDEX = 20 }; // 20 significant digits
-
-    char info[TAIL_INDEX + 1], // +1 for '\0'
-         *str;
-};
-
-
-//
-// Convert a signed or unsigned Long integer to its character string
-// representation in octal.
+// Convert a Long integer to its character string representation.
 //
 class BaseLong;
-class LongToOctString
-{
-public:
-    LongToOctString(BaseLong &);
-
-    char *String() { return str + 1; } // +1 to skip initial '0'
-    char *StringWithBase() { return str; }
-    int Length()   { return (&info[TAIL_INDEX]) - str; }
-
-private:
-    enum { TAIL_INDEX = 1 + 22 }; // 1 for initial '0', +22 significant digits
-
-    char info[TAIL_INDEX + 1], // + 1 for '\0'
-         *str;
-};
-
-
-//
-// Convert a signed or unsigned Long integer to its character string
-// representation in hexadecimal.
-//
-class LongToHexString
-{
-public:
-    LongToHexString(BaseLong &);
-
-    char *String() { return str + 2; } // +2 to skip initial "0x"
-    char *StringWithBase() { return str; }
-    int Length()   { return (&info[TAIL_INDEX]) - str; }
-
-private:
-    // 1 for initial '0', +1 for 'x', + 16 significant digits
-    enum { TAIL_INDEX = 1 + 1 + 16 };
-
-    char info[TAIL_INDEX + 1], // +1 for '\0'
-         *str;
-};
-
-
-//
-// Convert a signed Long integer to its character string representation in
-// decimal.
-//
+class ULongInt;
 class LongInt;
-class LongToDecString
+class LongToString
 {
 public:
-    LongToDecString(LongInt &);
+    LongToString(const LongInt&); // Signed decimal conversion.
+    LongToString(const ULongInt&); // Unsigned decimal conversion.
+    // Unsigned hexadecimal or octal, with optional base designator.
+    LongToString(const BaseLong&, bool octal = false);
 
-    char *String() { return str; }
-    int Length()   { return (&info[TAIL_INDEX]) - str; }
+    const char* String() { return str; }
+    const char* StringWithBase() { return base; }
+    int Length() { return (&info[TAIL_INDEX]) - str; }
 
 private:
-    enum { TAIL_INDEX = 1 + 19 }; // 1 for sign, +19 significant digits
+    enum { TAIL_INDEX = 23 }; // 22 octal digits + base designator
 
-    char info[TAIL_INDEX + 1], // + 1 for '\0'
-         *str;
+    char info[TAIL_INDEX + 1]; // +1 for '\0'
+    char* str;
+    char* base;
 };
+
 
 //
 // Convert an double to its character string representation.
@@ -1048,6 +1046,18 @@ public:
     }
 
     Ostream &operator<<(unsigned int a)
+    {
+        *os << a;
+        return *this;
+    }
+
+    Ostream &operator<<(long a)
+    {
+        *os << a;
+        return *this;
+    }
+
+    Ostream &operator<<(unsigned long a)
     {
         *os << a;
         return *this;

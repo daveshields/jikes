@@ -1,9 +1,9 @@
-// $Id: segment.h,v 1.9 2002/08/05 23:56:28 ericb Exp $ -*- c++ -*-
+// $Id: segment.h,v 1.10 2002/12/11 00:55:04 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -21,10 +21,12 @@ namespace Jikes { // Open namespace Jikes block
 class SegmentPool;
 
 
+//
+// A portion of the implementation of Pair.
+//
 class PairSegment
 {
 public:
-
     enum
     {
         LIST_LIMIT = 5,
@@ -34,23 +36,18 @@ public:
     };
 
 private:
-
-    class TargetValuePair
+    struct TargetValuePair
     {
-    public:
         int target;
         u2 value;
     };
 
     TargetValuePair list[LIST_LIMIT];
-    int top;
-    u2 *array;
+    unsigned top;
+    u2* array;
 
 public:
-
-    PairSegment() : top(0),
-                    array(NULL)
-    {}
+    PairSegment() : top(0), array(NULL) {}
 
     ~PairSegment()
     {
@@ -61,15 +58,20 @@ public:
         }
     }
 
-    u2 &Image(int);
+    //
+    // Returns the modifiable value associated with the integer key.
+    //
+    u2& Image(int);
 };
 
 
+//
+// A map of int -> u2 pairs.
+//
 class Pair
 {
 public:
-
-    Pair(SegmentPool &segment_pool_, int estimate = 0)
+    Pair(SegmentPool& segment_pool_, unsigned estimate = 0)
         : segment_pool(segment_pool_)
     {
         //
@@ -77,34 +79,30 @@ public:
         // There appears to be a bug in the xlC compiler that causes base to
         // not be initialized properly !!!
         //
-        base_size = (estimate > 0
-                     ? (estimate >> PairSegment::LOG_BLKSIZE) + 1 : 0);
-        base = (PairSegment **) (estimate > 0
-                                 ? memset(new PairSegment*[base_size], 0,
-                                          base_size * sizeof(PairSegment *))
-                                 : NULL);
+        base_size = estimate ? (estimate >> PairSegment::LOG_BLKSIZE) + 1 : 0;
+        base = (PairSegment**) (estimate
+                                ? memset(new PairSegment*[base_size], 0,
+                                         base_size * sizeof(PairSegment*))
+                                : NULL);
     }
 
-    ~Pair()
-    {
-        delete [] base;
-    }
+    ~Pair() { delete [] base; }
 
-    u2 &operator[](const int);
+    u2& operator[](const int);
 
 private:
-
-    SegmentPool &segment_pool;
-
-    PairSegment **base;
-    int base_size;
+    SegmentPool& segment_pool;
+    PairSegment** base;
+    unsigned base_size;
 };
 
 
+//
+// A portion of the implementation of Triplet.
+//
 class TripletSegment
 {
 public:
-
     enum
     {
         LIST_LIMIT = 5,
@@ -114,25 +112,23 @@ public:
     };
 
 private:
-
-    class TargetValuePair
+    struct TargetValuePair
     {
-    public:
         int target;
-        Pair *value;
+        Pair* value;
     };
 
-    SegmentPool &segment_pool;
+    SegmentPool& segment_pool;
 
     TargetValuePair list[LIST_LIMIT];
-    int top;
-    Pair **array;
+    unsigned top;
+    Pair** array;
 
 public:
-
-    TripletSegment(SegmentPool &segment_pool_) : segment_pool(segment_pool_),
-                                                 top(0),
-                                                 array(NULL)
+    TripletSegment(SegmentPool& segment_pool_)
+        : segment_pool(segment_pool_),
+          top(0),
+          array(NULL)
     {}
 
     ~TripletSegment()
@@ -144,15 +140,17 @@ public:
         }
     }
 
-    Pair &Image(int);
+    Pair& Image(int);
 };
 
 
+//
+// A map of (int, int) -> u2 triplets.
+//
 class Triplet
 {
 public:
-
-    Triplet(SegmentPool &segment_pool_, int estimate = 0)
+    Triplet(SegmentPool& segment_pool_, unsigned estimate = 0)
         : segment_pool(segment_pool_)
     {
         //
@@ -160,51 +158,47 @@ public:
         // There appears to be a bug in the xlC compiler that causes base to
         // not be initialized properly !!!
         //
-        base_size = (estimate > 0
-                     ? (estimate >> TripletSegment::LOG_BLKSIZE) + 1 : 0);
-        base = (TripletSegment **)
-            (estimate > 0
-             ? memset(new TripletSegment*[base_size], 0,
-                      base_size * sizeof(TripletSegment *))
+        base_size = estimate
+            ? (estimate >> TripletSegment::LOG_BLKSIZE) + 1 : 0;
+        base = (TripletSegment**)
+            (estimate ? memset(new TripletSegment*[base_size], 0,
+                               base_size * sizeof(TripletSegment*))
              : NULL);
     }
 
-    ~Triplet()
-    {
-        delete [] base;
-    }
+    ~Triplet() { delete [] base; }
 
-    u2 &Image(const int, const int);
+    u2& Image(const int, const int);
 
 private:
-
-    SegmentPool &segment_pool;
-
-    TripletSegment **base;
-    int base_size;
+    SegmentPool& segment_pool;
+    TripletSegment** base;
+    unsigned base_size;
 };
 
 
+//
+// Manages the memory used by Pairs and Triplets.
+//
 class SegmentPool
 {
-    Tuple<TripletSegment *> triplet_segment_pool;
-    Tuple<PairSegment *> pair_segment_pool;
-    Tuple<Pair *> pair_pool;
+    Tuple<TripletSegment*> triplet_segment_pool;
+    Tuple<PairSegment*> pair_segment_pool;
+    Tuple<Pair*> pair_pool;
 
 public:
     SegmentPool();
-
     ~SegmentPool();
 
-    Pair *AllocatePair(int estimate = 0)
+    Pair* AllocatePair(unsigned estimate = 0)
     {
         return pair_pool.Next() = new Pair(*this, estimate);
     }
-    PairSegment *AllocatePairSegment()
+    PairSegment* AllocatePairSegment()
     {
         return pair_segment_pool.Next() = new PairSegment();
     }
-    TripletSegment *AllocateTripletSegment()
+    TripletSegment* AllocateTripletSegment()
     {
         return triplet_segment_pool.Next() = new TripletSegment(*this);
     }

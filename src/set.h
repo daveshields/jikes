@@ -1,9 +1,9 @@
-// $Id: set.h,v 1.25 2002/10/07 22:06:16 ericb Exp $ -*- c++ -*-
+// $Id: set.h,v 1.27 2003/04/10 13:25:36 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002, 2003 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -21,34 +21,35 @@ namespace Jikes { // Open namespace Jikes block
 class ShadowSymbol
 {
 public:
-    ShadowSymbol *next;
-    Symbol *symbol;
-    int pool_index;
+    ShadowSymbol* next;
+    Symbol* symbol;
+    unsigned pool_index;
 
-    inline NameSymbol *Identity() { return symbol -> Identity(); }
+    inline const NameSymbol* Identity() { return symbol -> Identity(); }
 
-    ShadowSymbol(Symbol *symbol_) : symbol(symbol_),
-                                    conflict(NULL)
+    ShadowSymbol(Symbol* symbol_)
+        : symbol(symbol_),
+          conflict(NULL)
     {}
 
     ~ShadowSymbol() { delete conflict; }
 
-    Symbol *Conflict(int i) { return (*conflict)[i]; }
+    Symbol* Conflict(unsigned i) { return (*conflict)[i]; }
 
-    inline int NumConflicts()
+    inline unsigned NumConflicts()
     {
-        return (conflict ? conflict -> Length() : 0);
+        return conflict ? conflict -> Length() : 0;
     }
 
-    inline void AddConflict(Symbol *conflict_symbol)
+    inline void AddConflict(Symbol* conflict_symbol)
     {
-        if ((symbol != conflict_symbol) && (! Find(conflict_symbol)))
+        if (symbol != conflict_symbol && ! Find(conflict_symbol))
             conflict -> Next() = conflict_symbol;
     }
 
     inline void RemoveConflict(int k)
     {
-        int last_index = conflict -> Length() - 1;
+        unsigned last_index = conflict -> Length() - 1;
         if (k < 0) // when k is negative, it identifies the main symbol
              symbol = (*conflict)[last_index];
         else (*conflict)[k] = (*conflict)[last_index];
@@ -56,13 +57,13 @@ public:
     }
 
 private:
-    Tuple<Symbol *> *conflict;
+    Tuple<Symbol*>* conflict;
 
-    bool Find(Symbol *conflict_symbol)
+    bool Find(Symbol* conflict_symbol)
     {
         if (! conflict)
-            conflict = new Tuple<Symbol *>(4);
-        for (int k = 0; k < conflict -> Length(); k++)
+            conflict = new Tuple<Symbol*>(4);
+        for (unsigned k = 0; k < conflict -> Length(); k++)
             if ((*conflict)[k] == conflict_symbol)
                 return true;
         return false;
@@ -79,9 +80,10 @@ public:
         MAX_HASH_SIZE = 1021
     };
 
-    SymbolSet(int hash_size_ = DEFAULT_HASH_SIZE) : symbol_pool(256),
-                                                    main_index(0),
-                                                    sub_index(0)
+    SymbolSet(unsigned hash_size_ = DEFAULT_HASH_SIZE)
+        : symbol_pool(256),
+          main_index(0),
+          sub_index(0)
     {
         hash_size = (hash_size_ <= 0 ? 1 : hash_size_);
 
@@ -93,8 +95,8 @@ public:
             prime_index++;
         } while (primes[prime_index] < MAX_HASH_SIZE);
 
-        base = (ShadowSymbol **) memset(new ShadowSymbol *[hash_size], 0,
-                                        hash_size * sizeof(ShadowSymbol *));
+        base = (ShadowSymbol**) memset(new ShadowSymbol*[hash_size], 0,
+                                       hash_size * sizeof(ShadowSymbol*));
     }
 
     ~SymbolSet();
@@ -102,22 +104,21 @@ public:
     //
     // Calculate the size of the set and return the value.
     //
-    inline int Size()
+    inline unsigned Size()
     {
-        int size = 0;
+        unsigned size = 0;
 
-        for (int i = 0; i < symbol_pool.Length(); i++)
+        for (unsigned i = 0; i < symbol_pool.Length(); i++)
         {
-            ShadowSymbol *shadow = symbol_pool[i];
-            Symbol *symbol = shadow -> symbol;
-            for (int k = 0; symbol;
-                 symbol = (Symbol *) (k < shadow -> NumConflicts()
-                                      ? shadow -> Conflict(k++) : NULL))
+            ShadowSymbol* shadow = symbol_pool[i];
+            Symbol* symbol = shadow -> symbol;
+            for (unsigned k = 0; symbol;
+                 symbol = (Symbol*) (k < shadow -> NumConflicts()
+                                     ? shadow -> Conflict(k++) : NULL))
             {
                 size++;
             }
         }
-
         return size;
     }
 
@@ -126,11 +127,11 @@ public:
     //
     inline void SetEmpty()
     {
-        for (int i = 0; i < symbol_pool.Length(); i++)
+        for (unsigned i = 0; i < symbol_pool.Length(); i++)
             delete symbol_pool[i];
         symbol_pool.Reset();
-        base = (ShadowSymbol **) memset(base, 0,
-                                        hash_size * sizeof(ShadowSymbol *));
+        base = (ShadowSymbol**) memset(base, 0,
+                                       hash_size * sizeof(ShadowSymbol*));
     }
 
     //
@@ -141,26 +142,25 @@ public:
     //
     // Assignment of a set to another.
     //
-    SymbolSet &operator=(SymbolSet &rhs)
+    SymbolSet& operator=(const SymbolSet& rhs)
     {
         if (this != &rhs)
         {
             this -> SetEmpty();
             this -> Union(rhs);
         }
-
         return *this;
     }
 
     //
     // Equality comparison of two sets
     //
-    bool operator==(SymbolSet &);
+    bool operator==(const SymbolSet&) const;
 
     //
     // NonEquality comparison of two sets
     //
-    inline bool operator!=(SymbolSet &rhs)
+    inline bool operator!=(const SymbolSet& rhs) const
     {
         return ! (*this == rhs);
     }
@@ -168,74 +168,71 @@ public:
     //
     // Union the set in question with the set passed as argument: "set"
     //
-    void Union(SymbolSet &);
+    void Union(const SymbolSet&);
 
     //
     // Intersect the set in question with the set passed as argument: "set"
     //
-    void Intersection(SymbolSet &);
+    void Intersection(const SymbolSet&);
 
     //
     // Return a bolean value indicating whether or not the set in question
     // intersects the set passed as argument; i.e., is there at least one
     // element of set that is also an element of "this" set.
     //
-    bool Intersects(SymbolSet &);
+    bool Intersects(const SymbolSet&) const;
 
     //
     // How many elements with this name symbol do we have?
     //
-    inline int NameCount(Symbol *element)
+    inline unsigned NameCount(const Symbol* element) const
     {
-        NameSymbol *name_symbol = element -> Identity();
-        for (ShadowSymbol *shadow = base[name_symbol -> index % hash_size];
+        const NameSymbol* name_symbol = element -> Identity();
+        for (ShadowSymbol* shadow = base[name_symbol -> index % hash_size];
              shadow; shadow = shadow -> next)
         {
             if (shadow -> Identity() == name_symbol)
                 return shadow -> NumConflicts() + 1;
         }
-
         return 0;
     }
 
     //
     // Is "element" an element of the set in question ?
     //
-    inline bool IsElement(Symbol *element)
+    inline bool IsElement(const Symbol* element) const
     {
         assert(element);
 
-        NameSymbol *name_symbol = element -> Identity();
-        for (ShadowSymbol *shadow = base[name_symbol -> index % hash_size];
+        const NameSymbol* name_symbol = element -> Identity();
+        for (ShadowSymbol* shadow = base[name_symbol -> index % hash_size];
              shadow; shadow = shadow -> next)
         {
             if (shadow -> Identity() == name_symbol)
             {
-                Symbol *symbol = shadow -> symbol;
-                for (int k = 0; symbol;
-                     symbol = (Symbol *) (k < shadow -> NumConflicts()
-                                          ? shadow -> Conflict(k++) : NULL))
+                Symbol* symbol = shadow -> symbol;
+                for (unsigned k = 0; symbol;
+                     symbol = (Symbol*) (k < shadow -> NumConflicts()
+                                         ? shadow -> Conflict(k++) : NULL))
                 {
                     if (symbol == element)
                         return true;
                 }
-
                 return false;
             }
         }
-
         return false;
     }
 
     //
     // Add element to the set in question if was not already there.
     //
-    inline void AddElement(Symbol *element)
+    inline void AddElement(Symbol* element)
     {
-        NameSymbol *name_symbol = element -> Identity();
-        int i = name_symbol -> index % hash_size;
+        const NameSymbol* name_symbol = element -> Identity();
+        unsigned i = name_symbol -> index % hash_size;
 
-        ShadowSymbol *shadow;
+        ShadowSymbol* shadow;
         for (shadow = base[i]; shadow; shadow = shadow -> next)
         {
             if (shadow -> Identity() == name_symbol)
@@ -266,48 +263,46 @@ public:
     }
 
 
-    void RemoveElement(Symbol *);
+    void RemoveElement(const Symbol*);
 
     Symbol* FirstElement()
     {
         main_index = 0;
         sub_index = 0;
-        return (main_index < symbol_pool.Length()
-                ? symbol_pool[main_index] -> symbol : (Symbol *) NULL);
+        return main_index < symbol_pool.Length()
+            ? symbol_pool[main_index] -> symbol : (Symbol*) NULL;
     }
 
     Symbol* NextElement()
     {
-        Symbol *symbol = NULL;
+        Symbol* symbol = NULL;
 
         if (main_index < symbol_pool.Length())
         {
              if (sub_index < symbol_pool[main_index] -> NumConflicts())
-                  symbol = symbol_pool[main_index] -> Conflict(sub_index++);
+                 symbol = symbol_pool[main_index] -> Conflict(sub_index++);
              else
              {
                  main_index++;
                  sub_index = 0;
                  symbol = (main_index < symbol_pool.Length()
                            ? symbol_pool[main_index] -> symbol
-                           : (Symbol *) NULL);
+                           : (Symbol*) NULL);
              }
         }
-
         return symbol;
     }
 
 protected:
+    Tuple<ShadowSymbol*> symbol_pool;
 
-    Tuple<ShadowSymbol *> symbol_pool;
+    unsigned main_index;
+    unsigned sub_index;
 
-    int main_index,
-        sub_index;
+    ShadowSymbol** base;
+    unsigned hash_size;
 
-    ShadowSymbol **base;
-    int hash_size;
-
-    static int primes[];
+    static unsigned primes[];
     int prime_index;
 
     void Rehash();
@@ -320,34 +315,34 @@ protected:
 class NameSymbolMap : public SymbolSet
 {
 public:
-    NameSymbolMap(int hash_size_ = DEFAULT_HASH_SIZE) : SymbolSet(hash_size_)
+    NameSymbolMap(unsigned hash_size_ = DEFAULT_HASH_SIZE)
+        : SymbolSet(hash_size_)
     {}
 
     //
     // Is there an element with this name in the map ?
     //
-    inline Symbol *Image(NameSymbol *name_symbol)
+    inline Symbol* Image(const NameSymbol* name_symbol)
     {
         assert(name_symbol);
 
-        for (ShadowSymbol *shadow = base[name_symbol -> index % hash_size];
+        for (ShadowSymbol* shadow = base[name_symbol -> index % hash_size];
              shadow; shadow = shadow -> next)
         {
             if (shadow -> Identity() == name_symbol)
                 return shadow -> symbol;
         }
-
         return NULL;
     }
 
     //
     // Add element to the set in question if was not already there.
     //
-    inline void AddElement(Symbol *element)
+    inline void AddElement(Symbol* element)
     {
         assert(element);
 
-        ShadowSymbol *shadow = NULL;
+        ShadowSymbol* shadow = NULL;
         for (shadow = base[element -> Identity() -> index % hash_size];
              shadow; shadow = shadow -> next)
         {
@@ -360,7 +355,7 @@ public:
         // Otherwise, add the new element.
         //
         if (shadow)
-             shadow -> symbol = element;
+            shadow -> symbol = element;
         else SymbolSet::AddElement(element);
     }
 };
@@ -387,50 +382,45 @@ public:
     Map(unsigned hash_size_ = DEFAULT_HASH_SIZE);
     virtual ~Map()
     {
-        for (int i = 0; i < symbol_pool.Length(); i++)
+        for (unsigned i = 0; i < symbol_pool.Length(); i++)
             delete symbol_pool[i];
-
         delete [] base;
     }
-
 
 
     //
     // Has key been mapped to an image, yet? If so, return the image.
     //
-    inline Value *Image(Key *key)
+    inline Value* Image(Key* key)
     {
         assert(key);
 
         // Unsigned math prevents negative indices.
         unsigned k = key -> HashCode() % hash_size;
-        for (Element *element = base[k]; element; element = element -> next)
+        for (Element* element = base[k]; element; element = element -> next)
         {
             if (element -> key == key)
                 return element -> value;
         }
-
-        return (Value *) NULL;
+        return NULL;
     }
 
     //
     // Map or remap key to a given image.
     //
-    void Add(Key *, Value *);
+    void Add(Key*, Value*);
 
 private:
-
-    class Element
+    struct Element
     {
-    public:
-        Element *next;
-        Key *key;
-        Value *value;
+        Element* next;
+        Key* key;
+        Value* value;
     };
 
-    Tuple<Element *> symbol_pool;
+    Tuple<Element*> symbol_pool;
 
-    Element **base;
+    Element** base;
     unsigned hash_size;
 
     void Rehash();
@@ -450,47 +440,44 @@ public:
         MAX_HASH_SIZE = 1021
     };
 
-    SymbolMap(int hash_size_ = DEFAULT_HASH_SIZE);
+    SymbolMap(unsigned hash_size_ = DEFAULT_HASH_SIZE);
     ~SymbolMap();
 
     //
     // Has symbol been mapped to an image, yet? If so, return the image.
     //
-    inline Symbol *Image(Symbol *symbol)
+    inline Symbol* Image(Symbol* symbol)
     {
         assert(symbol);
 
-        int k = symbol -> Identity() -> index % hash_size;
-        for (Element *element = base[k]; element; element = element -> next)
+        unsigned k = symbol -> Identity() -> index % hash_size;
+        for (Element* element = base[k]; element; element = element -> next)
         {
             if (element -> domain_element == symbol)
                 return element -> image;
         }
-
         return NULL;
     }
 
     //
     // Map or remap symbol to a given image.
     //
-    void Map(Symbol *, Symbol *);
+    void Map(Symbol*, Symbol*);
 
 private:
-
-    class Element
+    struct Element
     {
-    public:
-        Element *next;
-        Symbol  *domain_element,
-                *image;
+        Element* next;
+        Symbol* domain_element;
+        Symbol* image;
     };
 
-    Tuple<Element *> symbol_pool;
+    Tuple<Element*> symbol_pool;
 
-    Element **base;
-    int hash_size;
+    Element** base;
+    unsigned hash_size;
 
-    static int primes[];
+    static unsigned primes[];
     int prime_index;
 
     void Rehash();
@@ -510,7 +497,7 @@ class BitSet
 {
     typedef unsigned CELL;
 
-    CELL *s;
+    CELL* s;
     unsigned set_size;
     unsigned max_set_size;
 
@@ -541,13 +528,12 @@ public:
     // Note that a set's hash value changes when its bits change, so be careful
     // that only constant sets are used as hash keys.
     //
-    int Hash(int table_size) const
+    unsigned Hash(int table_size) const
     {
         unsigned long hash_address = 0;
 
         for (int i = ((int) set_size - 1) / cell_size; i >= 0; i--)
             hash_address += s[i];
-
         return hash_address % table_size;
     }
 
@@ -557,7 +543,8 @@ public:
     BitSet& operator=(const BitSet& rhs)
     {
         assert(set_size == rhs.set_size);
-        memcpy(s, rhs.s, (set_size + cell_size - 1) / cell_size * sizeof(CELL));
+        memcpy(s, rhs.s,
+               (set_size + cell_size - 1) / cell_size * sizeof(CELL));
         return *this;
     }
 
@@ -757,7 +744,7 @@ public:
             if (new_cell_count > old_cell_count && new_cell_count > 1)
             {
                 // Must grow the storage for the set.
-                CELL *tmp = s;
+                CELL* tmp = s;
                 s = new CELL[new_cell_count];
                 memcpy(s, tmp, old_cell_count * sizeof(CELL));
                 delete [] tmp;
@@ -795,29 +782,33 @@ public:
 class DefinitePair
 {
 public:
-    BitSet da_set,
-           du_set;
+    BitSet da_set;
+    BitSet du_set;
 
     //
     // Constructor to clone a definite pair.
     //
-    inline DefinitePair(const DefinitePair& rhs) : da_set(rhs.da_set),
-                                                   du_set(rhs.du_set)
+    inline DefinitePair(const DefinitePair& rhs)
+        : da_set(rhs.da_set),
+          du_set(rhs.du_set)
     {}
 
     //
     // Other useful constructors.
     //
-    inline DefinitePair(unsigned size = 0) : da_set(size, BitSet::EMPTY),
-                                             du_set(size, BitSet::UNIVERSE)
+    inline DefinitePair(unsigned size = 0)
+        : da_set(size, BitSet::EMPTY),
+          du_set(size, BitSet::UNIVERSE)
     {}
 
-    inline DefinitePair(unsigned size, int init) : da_set(size, init),
-                                                   du_set(size, init)
+    inline DefinitePair(unsigned size, int init)
+        : da_set(size, init),
+          du_set(size, init)
     {}
 
-    inline DefinitePair(const BitSet da, const BitSet du) : da_set(da),
-                                                            du_set(du)
+    inline DefinitePair(const BitSet da, const BitSet du)
+        : da_set(da),
+          du_set(du)
     {
         assert(da.Size() == du.Size());
     }
@@ -825,7 +816,7 @@ public:
     //
     // Set to the results when true * results when false
     //
-    inline DefinitePair(const DefiniteAssignmentSet &set);
+    inline DefinitePair(const DefiniteAssignmentSet& set);
 
     //
     // Set both bitsets.
@@ -959,21 +950,23 @@ public:
 class DefiniteAssignmentSet
 {
 public:
-    DefinitePair true_pair,
-                 false_pair;
+    DefinitePair true_pair;
+    DefinitePair false_pair;
 
-    inline DefiniteAssignmentSet(unsigned set_size) : true_pair(set_size),
-                                                      false_pair(set_size)
+    inline DefiniteAssignmentSet(unsigned set_size)
+        : true_pair(set_size),
+          false_pair(set_size)
     {}
 
-    inline DefiniteAssignmentSet(DefinitePair &true_pair_,
-                                 DefinitePair &false_pair_)
+    inline DefiniteAssignmentSet(DefinitePair& true_pair_,
+                                 DefinitePair& false_pair_)
         : true_pair(true_pair_),
           false_pair(false_pair_)
     {}
 
-    inline DefiniteAssignmentSet(DefinitePair &pair) : true_pair(pair),
-                                                       false_pair(pair)
+    inline DefiniteAssignmentSet(DefinitePair& pair)
+        : true_pair(pair),
+          false_pair(pair)
     {}
 
     inline BitSet DASet() const
@@ -1012,9 +1005,9 @@ void Map<Key, Value>::Rehash()
 {
     Resize();
 
-    for (int i = 0; i < symbol_pool.Length(); i++)
+    for (unsigned i = 0; i < symbol_pool.Length(); i++)
     {
-        Element *element = symbol_pool[i];
+        Element* element = symbol_pool[i];
         unsigned k = element -> key -> HashCode() % hash_size;
         element -> next = base[k];
         base[k] = element;
@@ -1023,11 +1016,11 @@ void Map<Key, Value>::Rehash()
 
 
 template<typename Key, typename Value>
-void Map<Key, Value>::Add(Key *key, Value *value)
+void Map<Key, Value>::Add(Key* key, Value* value)
 {
     assert(key);
 
-    Element *element;
+    Element* element;
     unsigned k = key -> HashCode() % hash_size;
     for (element = base[k]; element; element = element -> next)
     {
@@ -1053,7 +1046,7 @@ void Map<Key, Value>::Add(Key *key, Value *value)
         // allowable size for a base, reallocate a larger base and rehash
         // the elements.
         //
-        if ((unsigned) symbol_pool.Length() > (hash_size << 1) &&
+        if (symbol_pool.Length() > (hash_size << 1) &&
             hash_size < (unsigned) MAX_HASH_SIZE)
         {
             Rehash();
@@ -1064,7 +1057,6 @@ void Map<Key, Value>::Add(Key *key, Value *value)
         assert(false &&
                "WARNING: Attempt to remap a key, unsupported operation !!!");
     }
-
     element -> value = value;
 }
 
@@ -1089,8 +1081,8 @@ void Map<Key, Value>::Resize()
         hash_size = primes[++prime_index];
     }
     delete [] base;
-    base = (Element **) memset(new Element *[hash_size], 0,
-                               hash_size * sizeof(Element *));
+    base = new Element*[hash_size];
+    memset(base, 0, hash_size * sizeof(Element*));
 }
 
 

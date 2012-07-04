@@ -31,7 +31,7 @@ form \fB\+T\=n\fP, it can also be specified as \fB\+T n\fP or even
 \fB\-\-bootclasspath\fP \fIpath\fP
 Use path for the bootclasspath. This path is searched first for
 library class files, and is usually set to \fBjava/lib/classes.zip\fP
-or \fBjava/jre/lib/rt.jar\fP.
+or \fBjava/jre/lib/rt.jar\fP.  This defaults to an empty path.
 
 .TP
 \fB\-classpath\fP \fIpath\fP
@@ -40,7 +40,7 @@ or \fBjava/jre/lib/rt.jar\fP.
 .TP
 \fB\-\-classpath\fP \fIpath\fP
 Use path for CLASSPATH. This path is searched for both user source and
-compiled class files.
+compiled class files. This defaults to the current directory.
 .\" Someone should better document the search algorithm used.
 
 .TP
@@ -48,7 +48,8 @@ compiled class files.
 .TP
 \fB\-\-target\-directory\fP \fIdirectory\fP
 Write class files in the specified directory. Note that this directory is
-NOT in your classpath unless you list it there as well.
+NOT in your classpath unless you list it there as well. This defaults
+to the current directory.
 
 .TP
 \fB\-debug
@@ -74,19 +75,22 @@ Report uses of deprecated features.
 \fB\-\-encoding\fP \fIencoding\fP
 Use specified encoding to read source files. This is not available in
 some builds, because it requires a working iconv or ICU encoder.
-\fBNote:\fP in particular that the Windows binary provided for
-download does NOT include support for the encoding option as there
-is not a transcoding library on windows by default. You can tell if
-a binary has encoding support or not, but running \fIjikes \-\-help\fP
-and looking for the \-\-encoding option: if it is not listed, then
-this binary does NOT include support for encoding.
+\fBNote\fP that binary distributions for some platforms (such as
+Windows) do NOT include support for the encoding option, as there
+is not an adequate transcoding library available on all platforms by
+default. You can tell if a binary has encoding support or not by
+running \fIjikes \-\-help\fP and looking for the \-\-encoding option:
+if it is not listed, then this binary does NOT include support for
+encoding. This defaults to a platform-dependent encoding (such as
+ASCII).
 
 .TP
 \fB\-extdirs\fP \fIpath\fP
 .TP
 \fB\-\-extdirs\fP \fIpath\fP
 Use path for extensions directories. This is typically set to grab jar
-and zip extension files located in \fBjava/jre/lib/ext\fP.
+and zip extension files located in \fBjava/jre/lib/ext\fP. This
+defaults to an empty path.
 
 .TP
 \fB\-g
@@ -100,7 +104,8 @@ this is not specified, the default is
 file in the class file, \fBlines\fP adds line number tracking to tie
 bytecodes to their location in the source file, and \fBvars\fP adds a
 table in the class file which stores the name of local variables and
-parameters, as well as their scope.
+parameters, as well as their scope. This defaults to line and source
+information, but not vars.
 
 .TP
 \fB\-help
@@ -146,29 +151,49 @@ nothing.
 .TP
 \fB\-\-source\fP \fIrelease\fP
 Specify which Java SDK release the source syntax obeys. For example,
-to compile code with the \fIassert\fP keyword, you would specify
-\fB\-source 1.4\fP. Recognized releases are \fB1.1\fP through
-\fB1.4\fP. If unspecified, this defaults to \fB1.3\fP.
+to treat the \fIassert\fP keyword as a normal identifier, you can use
+\fB\-source 1.3\fP. Setting a lower target results in backward
+compatibility compilation of old source files.  Valid releases are 1.3
+(Java Language Specification, 2nd edition), and 1.4 (addition of the
+assert statement, JSR 41).  Plans are underway to eventually support
+1.5 (addition of generics: JSR 14; autoboxing, enhanced for-loop,
+static import, enums, and varargs: JSR 201; metadata: JSR 175; and
+updated .class file format: JSR 202; ultimately the Java Language
+Specification, 3rd edition). If not specified, this defaults to the
+valid value closest to the one specified or defaulted for
+\fB-target\fP (typically 1.4).
 
 .TP
 \fB\-sourcepath\fP path
 .TP
 \fB\-\-sourcepath\fP path
 Use path for specifying user "source only" directories. Class files in
-this path are ignored unless listed in other paths.
+this path are ignored unless listed in other paths. This defaults to
+the empty path.
 
 .TP
 \fB\-target\fP \fIrelease\fP
 .TP
 \fB\-\-target\fP \fIrelease\fP
-Specify which Java SDK release the bytecode should target. For
-example, in Java 1.4, exception chaining was introduced, so a failed
-class literal can chain the NoClassDefFoundError to its original
-ClassNotFoundException, rather than the old behavior in Java 1.3 where
-the original exception is just discarded. You would get the new
-behavior by specifying \fB\-target 1.4\fP. Recognized releases are
-\fB1.1\fP through \fB1.4\fP. If unspecified, this defaults to whatever
-\fB\-source\fP level is in force.
+Specify which Java SDK release the bytecode should target.  For
+example, exception chaining was introduced in the 1.4 release, so a
+failed class literal can chain the NoClassDefFoundError to its
+original ClassNotFoundException; while the behavior in the 1.3 release
+simply discards the original exception.  To get the old behavior, you
+can use \fB\-target 1.3\fP.  Setting a lower target results in forward
+compatibility to older virtual machines, and some source constructs
+will be compiled to less efficient workarounds in order to avoid known
+virtual machine bugs or deficiencies.  However, a lower target may
+occaisionally produce incorrect semantic behavior.  Furthermore, some
+language features require virtual machine support, where there are no
+known workarounds in earlier releases: the assert statement requires
+1.4 (unless you also use \fB\-noassert\fP), and the planned addition
+of typesafe enumerations will require 1.5. The planned addition of
+type parameterization (also known as generics) will work with 1.1.
+Valid releases are 1.1, 1.2, 1.3, 1.4, and 1.4.2; plans are underway
+to support 1.5.  If not specified, this defaults to the value
+specified for \fB-source\fP, and if that is not specified, this
+defaults to 1.4.2.
 
 .TP
 \fB\-verbose
@@ -194,18 +219,41 @@ Write error messages to standard output, not stderr. At the moment,
 this is incompatible with javac, which takes an argument as the name
 of the file where it will direct compiler message output.
 
-.\" We ought to give the enhanced versions long names...
+.TP
+\fB\-Xswitchcheck
+Synonym to \fB+Pswitchcheck\fP. Warns about fallthrough switch cases.
 
 .TP
 \fB\+\+
-Compile in incremental mode.
+.TP
+\fB\-\-incremental
+Compile in incremental mode.  In this mode, jikes stays resident, and
+every keypress of \fIEnter\fP will trigger a recompilation of every
+source file rendered out\-of\-date by file modifications since the
+last compilation phase.  To exit this mode, type \fIq\fP then
+\fIEnter\fP.
+
+.TP
+\fB\+a
+.TP
+\fB\-\-noassert
+Do not emit assert statements.  This option is not recommended for
+disabling asserts, because asserts are compiled to have minimal
+overhead when disabled through the virtual machine.  Rather, it is
+intended for reducing classfile size, and to allow the use of
+\fB-target 1.3\fP or earlier virtual machine targets that do not
+support the assert statement.
 
 .TP
 \fB\+B
-Do not invoke bytecode generator.
+.TP
+\fB\-\-nobytecode
+Do not invoke bytecode generator. Perform semantic checks only.
 
 .TP
 \fB\+D
+.TP
+\fB\-\-dump-errors
 Report errors immediately in emacs-form without buffering.
 
 .TP
@@ -215,10 +263,14 @@ Write report of dependencies to specified file.
 
 .TP
 \fB\+E
+.TP
+\fB\-\-emacs
 List errors in emacs-form.
 
 .TP
 \fB\+F
+.TP
+\fB\-\-full-dependence
 Do full dependence check except for Zip and Jar files.
 
 .TP
@@ -228,6 +280,8 @@ than one type keyword.
 
 .TP
 \fB\+M
+.TP
+\fB\-\-makefile
 Generate makefile dependencies.
 
 .TP
@@ -244,24 +298,38 @@ turns on the default set of pedantic warnings. Specifying a flag will
 then turn on or off a particular warning, depending on the presence of
 the \fIno-\fP prefix. At present, the recognized flags are
 \fBmodifier-order\fP, which warns about the recommended ordering of
-multiple modifiers; and \fBredundant-modifiers\fP, which warns about
-explicitly mentioning an implied modifier.  Both are turned on by
-default in pedantic compilation mode. Multiple \fB\+P\fP options are
-cumulative in effect. For example, to get all pedantic warnings except
-modifier ordering, use \fB\+P \+Pno-modifier-order\fP. To get just
-warnings about redundant modifiers, without other pedantic warnings,
-use \fB\+Predundant-modifiers\fP.
+multiple modifiers; \fBredundant-modifiers\fP, which warns about
+explicitly mentioning an implied modifier; \fBswitchcheck\fP, which
+warns about fallthrough between cases of switch statements; and
+\fBnaming-convention\fP, which warns about names that violate Java
+naming conventions.  Only switchcheck and naming-convention are
+included in plain \fB\+P\fP; the others must be asked for by
+name. Multiple \fB\+P\fP options are cumulative in effect. For
+example, to get all pedantic warnings except modifier ordering, use
+\fB\+P \+Pno-modifier-order\fP. To get just warnings about redundant
+modifiers, without other pedantic warnings, use
+\fB\+Predundant-modifiers\fP.
 
 .TP
-\fB\+T\f\=In\fP
+\fB\-\-pedantic
+Synonym for \fB+P\fP, but does not accept flags.
+
+.TP
+\fB\+T\=\fIn\fP
+.TP
+\fB\-\-tab\=\fIn\fP
 Set value of tab to \fIn\fP spaces. If not specified, the default is 8.
 
 .TP
 \fB\+U
+.TP
+\fB\-\-unzip-dependence
 Do full dependence check including Zip and Jar files.
 
 .TP
 \fB\+Z
+.TP
+\fB\-\-zero-cautions
 Treat cautions as errors. Unfortunately, at the moment, this will not
 promote warnings, just cautions.
 
@@ -287,8 +355,8 @@ and \fBCLASSPATH\fP coexist, preference will be given to
 \fBJIKESPATH\fP.  A value specified on the command line will be always
 be given preference over the value of any environment variable.  All
 the directories and files specified in these options or environment
-variables must be in a colon-separated list, e.g.,
-".:$HOME/java/jre/lib/rt.jar".
+variables must be in the platform path format (usually a
+colon-separated list, e.g., ".:$HOME/java/jre/lib/rt.jar").
 
 .SH "SEE ALSO"
 Jikes Project homepage 
@@ -297,8 +365,7 @@ for news of recent developments, to download new versions, to report
 bugs, or to learn how to participate in the development process.
 
 .SH COPYRIGHT
-Copyright \(co 1996, 1997, 1998, 1999, 2000, 2001, 2002
-International Business Machines Corporation and others. All Rights Reserved.
+Copyright \(co 1996-2003, 2004 IBM Corporation and others. All Rights Reserved.
 
 .PP
 \fBJikes\fP is licensed under the \fIIBM Public License\fP, included

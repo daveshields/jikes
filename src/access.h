@@ -1,10 +1,9 @@
-// $Id: access.h,v 1.18 2002/11/02 15:54:26 ericb Exp $ -*- c++ -*-
+// $Id: access.h,v 1.20 2004/01/20 04:10:20 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
-// Machines Corporation and others.  All Rights Reserved.
+// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
@@ -99,6 +98,12 @@ public:
                 : ACC_PROTECTED() ? StringConstant::US_protected
                 : ACC_PRIVATE() ? StringConstant::US_private
                 : StringConstant::US_default);
+    }
+
+    inline bool LegalAccess()
+    {
+        u2 acc = access_flags & ACCESS_ACCESS;
+        return (acc & - acc) == acc;
     }
 
     //
