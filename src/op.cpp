@@ -1,9 +1,9 @@
-// $Id: op.cpp,v 1.16 2001/09/14 05:31:34 ericb Exp $
+// $Id: op.cpp,v 1.20 2002/02/01 06:46:19 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -15,15 +15,15 @@ namespace Jikes { // Open namespace Jikes block
 #endif
 
 
-void Operators::opdesc(int opc, const char **name, const char **desc)
+void Operators::OpDesc(Opcode opc, const char **name, const char **desc)
 {
     struct op_entry
     {
-        const char *op_name,
-                   *op_desc;
+        const char *op_name;
+        const char *op_desc;
     };
 
-    struct op_entry table[] =
+    static struct op_entry table[] =
     {
         {"nop",  "do nothing"},
         {"aconst_null",  "push null"},
@@ -207,8 +207,8 @@ void Operators::opdesc(int opc, const char **name, const char **desc)
         {"putstatic",  "set static field in class"},
         {"getfield",  "fetch field from object"},
         {"putfield",  "set field in object"},
-        {"invokevirtual",  "invoke instance method; dispatch based on runtime type"},
-        {"invokenonvirtual",  "invoke instance method; dispatch based on compile-time type"},
+        {"invokevirtual",  "invoke polymorphic instance method; dispatch based on runtime type"},
+        {"invokespecial",  "invoke constructor, private, or superclass instance method; dispatch based on compile-time type"},
         {"invokestatic",  "invoke a class (static) method"},
         {"invokeinterface",  "invoke interface method"},
         {"xxxunusedxxx",  "xxxunusedxxx"},
@@ -229,22 +229,38 @@ void Operators::opdesc(int opc, const char **name, const char **desc)
         {"jsr_w",  "jump subroutine (wide index)"}
     };
 
-    if (opc == OP_SOFTWARE)                 // software
-         *name = *desc = "software";
-    else if (opc == OP_HARDWARE)           // hardware
-         *name = *desc = "hardware";
-    else if (opc >=0 && opc <= 0xc9)
+    if (opc == OP_SOFTWARE)
     {
-         *name = table[opc].op_name;
-         *desc = table[opc].op_desc;
+        if (name)
+            *name = "software";
+        if (desc)
+            *desc = "software";
     }
-    else *name = *desc = "illegal";
-
-     return;
+    else if (opc == OP_HARDWARE)
+    {
+        if (name)
+            *name = "hardware";
+        if (desc)
+            *desc = "hardware";
+    }
+    else if (opc >= 0 && opc <= 0xc9)
+    {
+        if (name)
+            *name = table[opc].op_name;
+        if (desc)
+            *desc = table[opc].op_desc;
+    }
+    else
+    {
+        if (name)
+            *name = "illegal";
+        if (desc)
+            *desc = "illegal";
+    }
 }
 
-void Operators::opline(Tuple<cp_info *> &constant_pool, const char *hdr,
-                       int pc, int opc, const char *name, char *args,
+void Operators::OpLine(Tuple<cp_info *> &constant_pool, const char *hdr,
+                       int pc, Opcode opc, const char *name, char *args,
                        const char *desc, int info_kind, int info_index)
 {
     // generate line of opcode dump, info is extra info
@@ -280,16 +296,14 @@ void Operators::opline(Tuple<cp_info *> &constant_pool, const char *hdr,
             break;
     }
 //
-// DS (17 jun) - skip desc for now: it's too long and shoud only
+// DS (17 jun) - skip desc for now: it's too long and should only
 // be written at user request.
 //  Coutput << " " << desc;
 //
     Coutput << endl;
-
-    return;
 }
 
-void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
+void Operators::OpDmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
 {
     int pc = 0;
     while (pc < code.Length())
@@ -297,9 +311,9 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
         int info_kind = INFO_NONE; // assume no extra info
         int info_index = 0;
         int pc_start = pc;
-        unsigned opc = get_u1(code, pc);
+        Opcode opc = (Opcode) GetU1(code, pc);
         const char *name, *desc; // set to name (mnemonic) and description of opcode.
-        opdesc(code[pc_start], &name, &desc);
+        OpDesc((Opcode) code[pc_start], &name, &desc);
         pc++;
 
         char argdesc[100];
@@ -312,21 +326,21 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
         switch (opc)
         {
             case OP_BIPUSH:
-                 ai1 = get_i1(code, pc); pc++;
+                 ai1 = GetI1(code, pc); pc++;
                  sprintf(argdesc, "%d", ai1);
                  break;
             case OP_SIPUSH:
-                 ai2 = get_i2(code, pc); pc +=2;
+                 ai2 = GetI2(code, pc); pc +=2;
                  sprintf(argdesc, "%d", ai2);
                  break;
             case OP_LDC:
-                 info_index = get_u1(code, pc); pc++;
+                 info_index = GetU1(code, pc); pc++;
                  sprintf(argdesc,"%d", info_index);
                  info_kind = INFO_CONST;
                  break;
             case OP_LDC_W:
             case OP_LDC2_W:
-                 info_index = get_u2(code, pc);pc +=2;
+                 info_index = GetU2(code, pc);pc +=2;
                  sprintf(argdesc, "%u", info_index);
                  info_kind = INFO_CONST;
                  break;
@@ -340,7 +354,7 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
             case OP_FSTORE:
             case OP_DSTORE:
             case OP_ASTORE:
-                 info_index = get_u1(code, pc);pc++;
+                 info_index = GetU1(code, pc);pc++;
                  sprintf(argdesc, "%u", info_index);
                  info_kind = INFO_LOCAL;
                  break;
@@ -397,9 +411,9 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
                  info_index = 3;
                  break;
             case OP_IINC:
-                 info_index = get_u1(code, pc); pc++;
-                 au1 = get_u1(code, pc); pc++;
-                 ai1 = get_i1(code, pc); pc++;
+                 info_index = GetU1(code, pc); pc++;
+                 au1 = GetU1(code, pc); pc++;
+                 ai1 = GetI1(code, pc); pc++;
                  info_kind = INFO_LOCAL;
                  sprintf(argdesc, "%d %d", au1, ai1);
                  break;
@@ -421,12 +435,12 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
             case OP_JSR:
             case OP_IFNULL:
             case OP_IFNONNULL:
-                 ai2 = get_i2(code, pc);
+                 ai2 = GetI2(code, pc);
                  sprintf(argdesc, "%d", (int) ( ai2+pc_start)); // compute branch target
                  pc +=2;
                  break;
             case OP_RET:
-                 au1 = get_u1(code, pc);
+                 au1 = GetU1(code, pc);
                  pc++;
                  sprintf(argdesc, "%d", (int) au1);
                  break;
@@ -437,28 +451,32 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
                          high,
                          len,
                          val,
-                         pc_this,
-                         op_this;
+                         pc_this;
+                     Opcode op_this;
                      unsigned iu1;
                      op_this = OP_TABLESWITCH;
                      // account for padding
                      while (pc % 4)
                      {
-                         iu1 = get_u1(code, pc);
+                         iu1 = GetU1(code, pc);
                          pc++;
                      }
-                     def = get_i4(code, pc); pc += 4;
-                     low = get_i4(code, pc); pc +=4;
-                     high = get_i4(code, pc); pc += 4;
-                     sprintf(argdesc, "default:%d low:%d high:%d", def + pc_start, low, high);
-                     opline(constant_pool, " ", pc_start, opc, name, argdesc, desc, info_kind, info_index);
+                     def = GetI4(code, pc); pc += 4;
+                     low = GetI4(code, pc); pc +=4;
+                     high = GetI4(code, pc); pc += 4;
+                     sprintf(argdesc, "default:%d low:%d high:%d",
+                             def + pc_start, low, high);
+                     OpLine(constant_pool, " ", pc_start, opc, name,
+                            argdesc, desc, info_kind, info_index);
                      len =  high - low + 1;
                      while (len)
                      {
                          pc_this = pc;
-                         val = get_i4(code, pc);
-                         sprintf(argdesc, "match:%d offset:%d", low++, val + pc_start);
-                         opline(constant_pool,"*",pc_this, op_this,name,argdesc,desc,INFO_NONE,0);
+                         val = GetI4(code, pc);
+                         sprintf(argdesc, "match:%d offset:%d",
+                                 low++, val + pc_start);
+                         OpLine(constant_pool,"*",pc_this, op_this, name,
+                                argdesc, desc, INFO_NONE, 0);
                          pc += 4;
                          len--;
                      }
@@ -471,29 +489,33 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
                          npairs,
                          len,
                          match,
-                         offset,
-                         op_this;
+                         offset;
+                     Opcode op_this;
 
                      // account for padding
                      unsigned iu1;
                      op_this = OP_LOOKUPSWITCH;
                      while (pc % 4)
                      {
-                         iu1 = get_u1(code, pc);
+                         iu1 = GetU1(code, pc);
                          pc++;
                      }
-                     def = get_i4(code, pc); pc += 4;
-                     npairs = get_i4(code, pc); pc +=4;
-                     sprintf(argdesc, "default:%d npairs:%d", (def + pc_start), npairs);
-                     opline(constant_pool, " ", pc_start, op_this, name, argdesc, desc, info_kind, info_index);
+                     def = GetI4(code, pc); pc += 4;
+                     npairs = GetI4(code, pc); pc +=4;
+                     sprintf(argdesc, "default:%d npairs:%d",
+                             def + pc_start, npairs);
+                     OpLine(constant_pool, " ", pc_start, op_this, name,
+                            argdesc, desc, info_kind, info_index);
                      len = npairs;
                      while (npairs)
                      {
                          int pcb = pc;
-                         match = get_i4(code, pc); pc +=4 ;
-                         offset = get_i4(code, pc); pc +=4;
-                         sprintf(argdesc, "match:%d offset:%d ", match,offset + pc_start);
-                         opline(constant_pool, "*", pcb, op_this, name, argdesc, desc, INFO_NONE, 0);
+                         match = GetI4(code, pc); pc +=4 ;
+                         offset = GetI4(code, pc); pc +=4;
+                         sprintf(argdesc, "match:%d offset:%d ",
+                                 match, offset + pc_start);
+                         OpLine(constant_pool, "*", pcb, op_this, name,
+                                argdesc, desc, INFO_NONE, 0);
                          npairs--;
                      }
                      info_kind = INFO_DONE;
@@ -504,23 +526,23 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
             case OP_GETFIELD:
             case OP_PUTFIELD:
             case OP_INVOKEVIRTUAL:
-            case OP_INVOKENONVIRTUAL:
+            case OP_INVOKESPECIAL:
             case OP_INVOKESTATIC:
             case OP_NEW:
             case OP_ANEWARRAY:
             case OP_CHECKCAST:
             case OP_INSTANCEOF:
-                 info_index = get_u2(code, pc); pc += 2;
+                 info_index = GetU2(code, pc); pc += 2;
                  sprintf(argdesc, "%d", info_index);
                  info_kind = INFO_CONST;
                  break;
             case OP_INVOKEINTERFACE:
                  {
                      int nargs;
-                     info_index = get_u2(code, pc); pc += 2;
-                     au1 = get_u1(code, pc); pc++;
+                     info_index = GetU2(code, pc); pc += 2;
+                     au1 = GetU1(code, pc); pc++;
                      nargs = au1;
-                     au1 = get_u1(code, pc); pc++;
+                     au1 = GetU1(code, pc); pc++;
 
                      assert((! au1) && "...zero byte required in this position");
 
@@ -529,7 +551,7 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
                  }
                  break;
             case OP_NEWARRAY:
-                 au1 = get_u1(code, pc); pc++;
+                 au1 = GetU1(code, pc); pc++;
                  switch (au1)
                  {
                      case 4: sprintf(argdesc, "%s", "BOOLEAN");break;
@@ -548,15 +570,15 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
                  assert(false && "dmp for op_wide not supported yet");
                  break;
             case OP_MULTIANEWARRAY:
-                 info_index = get_u2(code, pc); pc += 2;
-                 au1 = get_u1(code, pc); pc++;
+                 info_index = GetU2(code, pc); pc += 2;
+                 au1 = GetU1(code, pc); pc++;
                  info_kind = INFO_CONST;
                  // au1 gives dimensions
                  sprintf(argdesc, "%u", au1);
                  break;
             case OP_GOTO_W:
             case OP_JSR_W:
-                 ai4 = get_i4(code, pc); pc += 4;
+                 ai4 = GetI4(code, pc); pc += 4;
                  // ai4 gives offset (wide) of branch target
                  sprintf(argdesc, "%d", pc_start + ai4);
                  break;
@@ -566,10 +588,9 @@ void Operators::opdmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
 
         // output first part of description
         if (info_kind != INFO_DONE)
-            opline(constant_pool, " ", pc_start, opc, name, argdesc, desc, info_kind, info_index);
+            OpLine(constant_pool, " ", pc_start, opc, name,
+                   argdesc, desc, info_kind, info_index);
     }
-
-    return;
 }
 
 
@@ -746,7 +767,7 @@ int Operators::stack_effect[] =
    -2,  // OP_IF_ACMPEQ
    -2,  // OP_IF_ACMPNE
     0,  // OP_GOTO
-    1,  // OP_JSR
+    0,  // OP_JSR, caller must adjust stack by +1 at jsr target
     0,  // OP_RET
    -1,  // OP_TABLESWITCH
    -1,  // OP_LOOKUPSWITCH
@@ -756,30 +777,30 @@ int Operators::stack_effect[] =
    -2,  // OP_DRETURN
    -1,  // OP_ARETURN
     0,  // OP_RETURN
-    0,  // OP_GETSTATIC, caller must adjust if long or double
-    0,  // OP_PUTSTATIC, caller must adjust if long or double
-    0,  // OP_GETFIELD, caller must adjust if long or double
-    0,  // OP_PUTFIELD, caller must adjust if long or double
-   -1,  // OP_INVOKEVIRTUAL,   actually  -1-args_length
-   -1,  // OP_INVOKENONVIRTUAL,    actually  -1-args_length
-    0,  // OP_INVOKESTATIC, actually -args_length
-   -1,  // OP_INVOKEINTERFACE, actually -1 -args_length
+    1,  // OP_GETSTATIC, caller must adjust +1 if long or double
+   -1,  // OP_PUTSTATIC, caller must adjust -1 if long or double
+    0,  // OP_GETFIELD,  caller must adjust +1 if long or double
+   -2,  // OP_PUTFIELD,  caller must adjust -1 if long or double
+   -1,  // OP_INVOKEVIRTUAL,   caller must adjust +return-args_length
+   -1,  // OP_INVOKESPECIAL,   caller must adjust +return-args_length
+    0,  // OP_INVOKESTATIC,    caller must adjust +return-args_length
+   -1,  // OP_INVOKEINTERFACE, caller must adjust +return-args_length
     0,  // OP_XXXUNUSEDXXX
     1,  // OP_NEW
     0,  // OP_NEWARRAY
     0,  // OP_ANEWARRAY
     0,  // OP_ARRAYLENGTH
-    0,  // OP_ATHROW
+   -1,  // OP_ATHROW
     0,  // OP_CHECKCAST
     0,  // OP_INSTANCEOF
    -1,  // OP_MONITORENTER
    -1,  // OP_MONITOREXIT
     0,  // OP_WIDE
-    0,  // OP_MULTIANEWARRAY, actually dims-1
+    0,  // OP_MULTIANEWARRAY, caller must adjust 1-dims
    -1,  // OP_IFNULL
    -1,  // OP_IFNONNULL
     0,  // OP_GOTO_W
-    1,  // OP_JSR_W
+    0,  // OP_JSR_W, caller must adjust stack by +1 at jsr target
     0,  // OP_SOFTWARE
     0   // OP_HARDWARE
 };

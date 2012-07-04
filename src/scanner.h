@@ -1,9 +1,9 @@
-// $Id: scanner.h,v 1.10 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
+// $Id: scanner.h,v 1.13 2002/03/06 17:12:27 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -43,6 +43,8 @@ private:
 
     LexStream* lex;
     wchar_t *cursor;
+    wchar_t *input_buffer_tail;
+    bool dollar_warning_given;
 
     LexStream::Token *current_token;
     LexStream::TokenIndex current_token_index;
@@ -63,7 +65,6 @@ private:
     static int ScanKeyword10(wchar_t *p1);
     static int ScanKeyword12(wchar_t *p1);
 
-    inline void CheckOctalLiteral(wchar_t *, wchar_t *);
     inline void SkipSpaces();
     void ScanSlashComment();
     void ScanStarComment();

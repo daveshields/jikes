@@ -1,9 +1,9 @@
-// $Id: stream.cpp,v 1.57 2001/09/14 05:31:34 ericb Exp $
+// $Id: stream.cpp,v 1.65 2002/07/07 20:37:54 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -21,16 +21,18 @@ namespace Jikes { // Open namespace Jikes block
 
 // Class StreamError
 
-JikesError::JikesErrorSeverity StreamError::getSeverity        () 
+JikesError::JikesErrorSeverity StreamError::getSeverity() 
 { 
-    //All Lexical errors are ERRORs.
-    return JikesError::JIKES_ERROR; 
+    // Most Lexical errors are ERRORs.
+    return kind >= StreamError::DEPRECATED_IDENTIFIER_ASSERT
+        ? JikesError::JIKES_WARNING
+        : JikesError::JIKES_ERROR; 
 }
 
-int StreamError::getLeftLineNo      () { return left_line_no    ; }
-int StreamError::getLeftColumnNo    () { return left_column_no  ; }
-int StreamError::getRightLineNo     () { return right_line_no   ; }
-int StreamError::getRightColumnNo   () { return right_column_no ; }
+int StreamError::getLeftLineNo() { return left_line_no; }
+int StreamError::getLeftColumnNo() { return left_column_no; }
+int StreamError::getRightLineNo() { return right_line_no; }
+int StreamError::getRightColumnNo() { return right_column_no; }
 
 const char *StreamError::getFileName() 
 { 
@@ -43,32 +45,30 @@ const wchar_t *StreamError::getErrorMessage()
     switch (kind)
     {
     case StreamError::BAD_TOKEN:
-        return L"Illegal token";
-        break;
-    case StreamError::BAD_OCTAL_CONSTANT:
-        return L"Octal constant contains invalid digit";
-        break;
+        return L"Illegal token.";
     case StreamError::EMPTY_CHARACTER_CONSTANT:
-        return L"Empty character constant";
-        break;
+        return L"Empty character constant.";
     case StreamError::UNTERMINATED_CHARACTER_CONSTANT:
-        return L"Character constant not properly terminated";
-        break;
+        return L"Character constant not properly terminated.";
     case StreamError::UNTERMINATED_COMMENT:
-        return L"Comment not properly terminated";
-        break;
+        return L"Comment not properly terminated.";
     case StreamError::UNTERMINATED_STRING_CONSTANT:
-        return L"String constant not properly terminated";
-        break;
+        return L"String constant not properly terminated.";
     case StreamError::INVALID_HEX_CONSTANT:
-        return L"The prefix 0x must be followed by at least one hex digit";
-        break;
-    case StreamError::INVALID_FLOATING_CONSTANT_EXPONENT:
-        return L"floating-constant exponent has no digit";
-        break;
+        return L"The prefix 0x must be followed by at least one hex digit.";
     case StreamError::INVALID_UNICODE_ESCAPE:
-        return L"Invalid unicode escape character";
-        break;
+        return L"Invalid unicode escape character.";
+    case StreamError::INVALID_ESCAPE_SEQUENCE:
+        return L"Invalid escape sequence.";
+    case StreamError::DEPRECATED_IDENTIFIER_ASSERT:
+        return L"The use of \"assert\" as an identifier is deprecated,"
+            L" as it is now a keyword. Use -source 1.4 if you intended "
+            L" to make use of assertions.";
+    case StreamError::DOLLAR_IN_IDENTIFIER:
+        return L"The use of \"$\" in an identifier, while legal, is strongly "
+            L"discouraged, since it can conflict with compiler-generated "
+            L"names. If you are trying to access a nested type, use \".\" "
+            L"instead of \"$\".";
     default:
         assert(false);
     }
@@ -124,7 +124,7 @@ wchar_t *StreamError::regularErrorString()
     else 
         PrintLargeSource(s);
     
-    s << "\n*** Lexical Error: "
+    s << "\n*** Lexical " << getSeverityString() << ": "
       << getErrorMessage();
         
     return s.Array();
@@ -439,7 +439,7 @@ Stream::DecodeNextCharacter() {
 
 LexStream::LexStream(Control &control_, FileSymbol *file_symbol_) : file_symbol(file_symbol_),
 #ifdef JIKES_DEBUG
-    file_read(0),
+    file_read(false),
 #endif
     tokens(NULL),
     columns(NULL),
@@ -460,9 +460,10 @@ wchar_t *LexStream::KeywordName(int kind)
     switch (kind)
     {
         case TK_abstract:     return StringConstant::US_abstract; break;
-        case TK_boolean:      return StringConstant::US_boolean;  break;
-        case TK_break:        return StringConstant::US_break;    break;
-        case TK_byte:         return StringConstant::US_byte;     break;
+        case TK_assert:       return StringConstant::US_assert; break;
+        case TK_boolean:      return StringConstant::US_boolean; break;
+        case TK_break:        return StringConstant::US_break; break;
+        case TK_byte:         return StringConstant::US_byte; break;
         case TK_case:         return StringConstant::US_case; break;
         case TK_catch:        return StringConstant::US_catch; break;
         case TK_char:         return StringConstant::US_char; break;
@@ -569,7 +570,8 @@ wchar_t *LexStream::KeywordName(int kind)
 LexStream::~LexStream()
 {
 #ifdef JIKES_DEBUG
-    control.line_count += (file_read * (line_location.Length() - 3));
+    if (file_read)
+        control.line_count += (line_location.Length() - 3);
 #endif
 
     DestroyInput();
@@ -852,7 +854,7 @@ void LexStream::ProcessInput(const char *buffer, long filesize)
 void LexStream::ProcessInputAscii(const char *buffer, long filesize)
 {
 #ifdef JIKES_DEBUG
-    file_read++;
+    file_read = true;
 #endif
 
     wchar_t *input_ptr = AllocateInputBuffer( filesize );
@@ -917,9 +919,9 @@ void LexStream::ProcessInputAscii(const char *buffer, long filesize)
                     if (i != 4)
                     {
                         if (initial_reading_of_input)
-                            bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
-                                                         (unsigned) (input_ptr - input_buffer),
-                                                         (unsigned) (input_ptr - input_buffer) + (source_ptr - u_ptr), this);
+                            ReportMessage(StreamError::INVALID_UNICODE_ESCAPE,
+                                          (unsigned) (input_ptr - input_buffer),
+                                          (unsigned) (input_ptr - input_buffer) + (source_ptr - u_ptr));
 
                         source_ptr = u_ptr;
                         *input_ptr = U_BACKSLASH;
@@ -979,7 +981,7 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
 {
     //fprintf(stderr,"LexStream::ProcessInputUnicode called.\n");
 #ifdef JIKES_DEBUG
-    file_read++;
+    file_read = true;
 #endif
 
     wchar_t *input_ptr = AllocateInputBuffer( filesize );
@@ -988,12 +990,16 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
 
     if (buffer)
     {
-        int      escape_value;
-        wchar_t *escape_ptr;
+        int escape_value = 0;
+        wchar_t *escape_ptr = NULL;
 
         UnicodeLexerState saved_state = START;
         UnicodeLexerState state = START;
         bool oncemore = false;
+
+        // If oncemore is true, ch holds the current character, otherwise
+        // it is updated to the next character
+        wchar_t ch = 0;
 
         if (control.option.encoding)
         {
@@ -1007,38 +1013,39 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
 
         while (HasMoreData() || oncemore)
         {
-            // On each iteration we advance input_ptr maximun 2 postions.
-            // Here we check if we are close to the end of input_buffer
-            if (input_ptr>=input_tail)
+            // On each iteration we advance input_ptr maximun 2 positions.
+            // Here we check if we are close to the end of input_buffer.
+            if (input_ptr >= input_tail)
             {
-                // If this happen, reallocate it with some more space.
+                // If this happens, reallocate it with some more space.
                 // This is very rare case, which could happen if
-                // one code page character is represened by several 
+                // one code page character is represented by several 
                 // unicode characters. One of exaples of such
                 // situation is unicode "surrogates".
                 //
                 // If such reallocation will be required, it will indeed
                 // slow down compilation a bit.
-                size_t cursize = input_ptr-input_buffer;
-                size_t newsize = cursize+cursize/10+4; // add 10%
+                size_t cursize = input_ptr - input_buffer;
+                size_t newsize = cursize + cursize / 10 + 4; // add 10%
                 wchar_t *tmp   = new wchar_t[newsize]; 
-                memcpy (tmp, input_buffer, cursize*sizeof(wchar_t));
+                memcpy (tmp, input_buffer, cursize * sizeof(wchar_t));
                 delete [] input_buffer;
                 input_buffer = tmp;
                 input_tail = input_buffer + newsize - 1;
                 input_ptr  = input_buffer + cursize;
             }
             
-            wchar_t ch;
-            
-            if (!oncemore)
+            if (! oncemore)
             {
-                ch=DecodeNextCharacter();
+                ch = DecodeNextCharacter();
 
-                if (ErrorDecodeNextCharacter()) {
+                if (ErrorDecodeNextCharacter())
+                {
                     break;
                 }
-            } else {
+            }
+            else
+            {
                 oncemore = false;
             }
 
@@ -1066,58 +1073,62 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
             case UNICODE_ESCAPE:
                 if (isxdigit(ch))
                 {
-                    state=UNICODE_ESCAPE_DIGIT_0;
-                    escape_value=hexvalue(ch)*16*16*16;
-                } else if (ch!=U_u)
+                    state = UNICODE_ESCAPE_DIGIT_0;
+                    escape_value = hexvalue(ch) << 12;
+                }
+                else if (ch != U_u)
                 {
                     if (initial_reading_of_input)
-                        bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
-                                                     (unsigned) (escape_ptr - input_buffer),
-                                                     (unsigned) (input_ptr - input_buffer), this);
+                        ReportMessage(StreamError::INVALID_UNICODE_ESCAPE,
+                                      (unsigned) (escape_ptr - input_buffer),
+                                      (unsigned) (input_ptr - input_buffer));
                 }
                 break;
 
             case UNICODE_ESCAPE_DIGIT_0:
                 if (isxdigit(ch))
                 {
-                    state=UNICODE_ESCAPE_DIGIT_1;
-                    escape_value+=hexvalue(ch)*16*16;
-                } else  
+                    state = UNICODE_ESCAPE_DIGIT_1;
+                    escape_value += hexvalue(ch) << 8;
+                }
+                else
                 {
                     if (initial_reading_of_input)
-                        bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
-                                                     (unsigned) (escape_ptr - input_buffer),
-                                                     (unsigned) (input_ptr - input_buffer), this);
+                        ReportMessage(StreamError::INVALID_UNICODE_ESCAPE,
+                                      (unsigned) (escape_ptr - input_buffer),
+                                      (unsigned) (input_ptr - input_buffer));
                 }
                 break;
 
             case UNICODE_ESCAPE_DIGIT_1:
                 if (isxdigit(ch))
                 {
-                    state=UNICODE_ESCAPE_DIGIT_2;
-                    escape_value+=hexvalue(ch)*16;
-                } else  
+                    state = UNICODE_ESCAPE_DIGIT_2;
+                    escape_value += hexvalue(ch) << 4;
+                }
+                else
                 {
                     if (initial_reading_of_input)
-                        bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
-                                                     (unsigned) (escape_ptr - input_buffer),
-                                                     (unsigned) (input_ptr - input_buffer), this);
+                        ReportMessage(StreamError::INVALID_UNICODE_ESCAPE,
+                                      (unsigned) (escape_ptr - input_buffer),
+                                      (unsigned) (input_ptr - input_buffer));
                 }
                 break;
 
             case UNICODE_ESCAPE_DIGIT_2:
                 if (isxdigit(ch))
                 {
-                    ch       = escape_value+hexvalue(ch);
+                    ch       = escape_value + hexvalue(ch);
                     state    = saved_state;
                     saved_state = UNICODE_ESCAPE_DIGIT_2;
                     oncemore = true;
-                } else  
+                }
+                else
                 {
                     if (initial_reading_of_input)
-                        bad_tokens.Next().Initialize(StreamError::INVALID_UNICODE_ESCAPE,
-                                                     (unsigned) (escape_ptr - input_buffer),
-                                                     (unsigned) (input_ptr - input_buffer), this);
+                        ReportMessage(StreamError::INVALID_UNICODE_ESCAPE,
+                                      (unsigned) (escape_ptr - input_buffer),
+                                      (unsigned) (input_ptr - input_buffer));
                 }
                 break;
 
@@ -1139,17 +1150,17 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
                 } else
                 {
                     state = RAW;
-                    *(++input_ptr)=ch;                    
+                    *(++input_ptr) = ch;                    
                 }
-               // clear saved_state == UNICODE_ESCAPE_DIGIT_2 status
-               saved_state = CR;
+                // clear saved_state == UNICODE_ESCAPE_DIGIT_2 status
+                saved_state = CR;
                 break;
 
             case START:
                 // if for some reason converter produced or passed
                 // byte order mark, it have to be ignored.
                 state = RAW;
-                if (ch==U_BOM || ch==U_REVERSE_BOM)
+                if (ch == U_BOM || ch == U_REVERSE_BOM)
                     break; //ignore
                     
             case RAW:
@@ -1162,7 +1173,7 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
                     *(++input_ptr) = U_LINE_FEED;
                 } else
                 {
-                    *(++input_ptr)=ch;                    
+                    *(++input_ptr) = ch;
                 }
                 saved_state = RAW;
                 break;
@@ -1186,6 +1197,17 @@ void LexStream::ProcessInputUnicode(const char *buffer, long filesize)
     return;
 }
 #endif // defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
+
+void LexStream::ReportMessage(StreamError::StreamErrorKind kind,
+                              unsigned start_location,
+                              unsigned end_location)
+{
+    if (! control.option.nowarn ||
+        kind < StreamError::DEPRECATED_IDENTIFIER_ASSERT)
+    {
+        bad_tokens.Next().Initialize(kind, start_location, end_location, this);
+    }
+}
 
 //
 // This procedure uses a  quick sort algorithm to sort the stream ERRORS
@@ -1277,10 +1299,24 @@ void LexStream::PrintMessages()
         {
             char *file_name = FileName();
 
-            Coutput << "\nFound " << NumBadTokens() << " lexical error" << (NumBadTokens() == 1 ? "" : "s")
-                    << " in \""
-                    << file_name
-                    << "\":";
+            int error_count = NumBadTokens(),
+                warning_count = NumWarnTokens();
+            if (error_count)
+            {
+                Coutput << endl << "Found " << error_count << " lexical error"
+                        << (error_count == 1 ? "" : "s");
+            }
+            if (warning_count)
+            {
+                if (error_count)
+                    Coutput << "and issued ";
+                else
+                    Coutput << endl << "Issued ";
+                Coutput << warning_count << " lexical warning"
+                        << (warning_count == 1 ? "" : "s");
+            }
+            if (error_count || warning_count)
+                Coutput << " in \"" << file_name << "\":";
 
             if (! input_buffer)
             {

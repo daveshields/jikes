@@ -1,4 +1,4 @@
-*** TBD for Jikes 1.15 release:
+*** TBD for Jikes future releases:
 
 Fix problem with debug line number tables. Newer
 versions of java don't like our line numbers.
@@ -21,7 +21,9 @@ Also, would it be better to convert a bunch
 of chars in a buffer instead of doing them
 one at a time?
 
-(it would, this is part of the stream changes I'm working on)
+(it would, this is part of the stream changes cabbey was
+working on before he lost his raid, just got access back,
+and will continue to investigate.)
 
 
 command line UI issues, including the classpath
@@ -87,7 +89,7 @@ is "invalid" (implies it was corrupted).
 
 
 
-*** Things that will not be done in 1.14
+*** Things that have not been done yet
 but should be done at some point....
 
 
@@ -175,5 +177,3 @@ Found 2 semantic errors compiling "unicode_1.java":
 Is it just me, or is this error message really misleading?
 The Sun error message seems a whole lot better.
 
-
-Run in circles, scream and shout...

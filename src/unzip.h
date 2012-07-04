@@ -1,11 +1,12 @@
-// $Id: unzip.h,v 1.7 2001/01/05 09:13:21 mdejong Exp $
+// $Id: unzip.h,v 1.8 2001/09/14 05:31:34 ericb Exp $
+
 #ifndef unzip_INCLUDED
 #define unzip_INCLUDED
 
 #include "platform.h"
 
-#ifdef	HAVE_JIKES_NAMESPACE
-namespace Jikes {	// Open namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+namespace Jikes { // Open namespace Jikes block
 #endif
 
 //
@@ -41,10 +42,6 @@ namespace Jikes {	// Open namespace Jikes block
 //
 
 #define DFUNZIP /* needed for unzip compilation*/
-//FIXME: need to move to platform.h
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <string.h>
 
 //
 // inflate.c -- put in the public domain by Mark Adler
@@ -235,9 +232,15 @@ namespace Jikes {	// Open namespace Jikes block
 #endif
 
 #ifndef CHECK_EOF
-#  define NEEDBITS(n) {while(k<(n)){b|=((unsigned long)NEXTBYTE)<<k;k+=8;}}
+#  define NEEDBITS(n) {while (k<(n)) { \
+                         b |= ((unsigned long) NEXTBYTE) << k; \
+                         k+=8;}}
 #else
-#  define NEEDBITS(n) {while(k<(n)){int c=NEXTBYTE;if(c==EOF)return 1; b|=((unsigned long)c)<<k;k+=8;}}
+#  define NEEDBITS(n) {while (k<(n)) { \
+                         int c = NEXTBYTE; \
+                         if (c == EOF) return 1; \
+                         b |= ((unsigned long) c) << k; \
+                         k+=8;}}
 #endif                      /* Piet Plomp:  change "return 1" to "break" */
 
 #define DUMPBITS(n) {b>>=(n);k-=(n);}
@@ -375,9 +378,9 @@ public:
 #endif
 }; // end class unzip
 
-#ifdef	HAVE_JIKES_NAMESPACE
-}			// Close namespace Jikes block
+#ifdef HAVE_JIKES_NAMESPACE
+} // Close namespace Jikes block
 #endif
 
-#endif /* unzip_INCLUDED */
+#endif // unzip_INCLUDED
 

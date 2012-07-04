@@ -1,10 +1,10 @@
-// $Id: javaprs.h,v 1.19 2001/09/14 05:31:33 ericb Exp $
+// $Id: javaprs.h,v 1.23 2002/05/22 06:56:45 ericb Exp $
 // DO NOT MODIFY THIS FILE - it is generated using jikespg on java.g.
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1997, 1998, 1999, 2001, International
+// Copyright (C) 1996, 1997, 1998, 1999, 2001, 2002 International
 // Business Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //

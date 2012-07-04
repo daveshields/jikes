@@ -1,4 +1,4 @@
-// $Id: diagnose.cpp,v 1.23 2001/09/14 05:31:33 ericb Exp $
+// $Id: diagnose.cpp,v 1.26 2001/12/09 01:27:36 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -1464,7 +1464,7 @@ RepairCandidate DiagnoseParser::SecondaryPhase(TokenObject error_token)
         j,
         k,
         top,
-        next_last_index,
+        next_last_index = 0,
         last_index;
 
     candidate.symbol = 0;
@@ -1491,7 +1491,7 @@ RepairCandidate DiagnoseParser::SecondaryPhase(TokenObject error_token)
         for (k = 3; k < BUFF_UBOUND; k++)
             buffer[k] = lex_stream -> Next(buffer[k - 1]);
 
-        buffer[BUFF_UBOUND] = lex_stream -> Badtoken();/* elmt not available */
+        buffer[BUFF_UBOUND] = lex_stream -> BadToken();/* elmt not available */
 
         /*********************************************************/
         /* If we are at the end of the input stream, compute the */
@@ -1590,7 +1590,7 @@ RepairCandidate DiagnoseParser::SecondaryPhase(TokenObject error_token)
         for (k = 3; k < BUFF_UBOUND; k++)
             buffer[k] = lex_stream -> Next(buffer[k - 1]);
 
-        buffer[BUFF_UBOUND] = lex_stream -> Badtoken();/* elmt not available */
+        buffer[BUFF_UBOUND] = lex_stream -> BadToken();/* elmt not available */
 
         location_stack[next_stack_top] = Loc(buffer[2]);
         last_index = next_last_index;
@@ -2055,7 +2055,7 @@ const char *ParseErrorInfo::getFileName()
 const wchar_t *ParseErrorInfo::getErrorMessage() 
 {
     ErrorString s;
-    const char *name;
+    const char *name = NULL;
     int i, len = 0;
 
 #if defined(FULL_DIAGNOSIS)

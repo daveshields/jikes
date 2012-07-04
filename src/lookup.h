@@ -1,9 +1,9 @@
-// $Id: lookup.h,v 1.27 2001/09/14 05:31:33 ericb Exp $ -*- c++ -*-
+// $Id: lookup.h,v 1.30 2002/02/08 22:37:35 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -291,6 +291,7 @@ public:
     virtual wchar_t *Name()   { return (wchar_t *) NULL; }
     virtual size_t NameLength() { return 0; }
     virtual NameSymbol *Identity() { return (NameSymbol *) NULL; }
+    inline unsigned HashCode();
 
     //
     // These cannot be inline without including symbol.h, because they
@@ -801,8 +802,9 @@ public:
 private:
 
     Tuple<Utf8LiteralValue *> *utf8_literals;
-    void EvaluateConstant(AstExpression *, int, int);
-    bool IsConstant(AstExpression *, TypeSymbol *);
+    AstExpression *leftmost_constant_expr;
+    void CollectStrings();
+    bool EndsInKnownString(AstExpression *);
 
     enum
     {
@@ -822,6 +824,12 @@ private:
 
     void Rehash();
 };
+
+
+inline unsigned Symbol::HashCode()
+{
+    return (unsigned) Identity() -> index;
+}
 
 #ifdef HAVE_JIKES_NAMESPACE
 } // Close namespace Jikes block

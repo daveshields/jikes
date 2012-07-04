@@ -1,10 +1,10 @@
-// $Id: code.h,v 1.18 2001/09/14 05:31:32 ericb Exp $ -*- c++ -*-
+// $Id: code.h,v 1.20 2002/03/06 17:12:24 ericb Exp $ -*- c++ -*-
 // DO NOT MODIFY THIS FILE - it is generated using gencode.java.
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://www.ibm.com/research/jikes.
-// Copyright (C) 1999, 2000, 2001, International Business
+// Copyright (C) 1999, 2000, 2001, 2002, International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -22,42 +22,35 @@ class Code
 {
     //
     // To facilitate the scanning, the character set is partitioned into
-    // 8 classes using the array CODE. The classes are described below
+    // 8 categories using the array CODE. These are described below
     // together with some self-explanatory functions defined on CODE.
     //
     enum {
-             LOG_BASE_SIZE       = 9,
-             LOG_COMPLEMENT_SIZE = 7,
-             BASE_SIZE           = 512,
-             SLOT_SIZE           = 128,
-             SLOT_MASK           = 127,
+        SHIFT = 6,
+        NEWLINE_CODE = 0,
+        SPACE_CODE = 1,
+        BAD_CODE = 2,
+        DIGIT_CODE = 3,
+        OTHER_DIGIT_CODE = 4,
+        LOWER_CODE = 5,
+        UPPER_CODE = 6,
+        OTHER_LETTER_CODE = 7
+    };
 
-             NEWLINE_CODE        = 1,
-             SPACE_CODE          = 2,
-             BAD_CODE            = 3,
-             DIGIT_CODE          = 4,
-             OTHER_DIGIT_CODE    = 5,
-             LOWER_CODE          = 6,
-             UPPER_CODE          = 7,
-             OTHER_LETTER_CODE   = 8
-         };
-
-    static char code[7912];
-    static char *base[512];
+    static char codes[4485];
+    static u2 blocks[1024];
 
 
 public:
 
     static inline void SetBadCode(wchar_t c)
     {
-        base[c >> LOG_COMPLEMENT_SIZE][c] = BAD_CODE;
+        codes[(u2) (blocks[c >> SHIFT] + c)] = BAD_CODE;
     }
 
     static inline void CodeCheck(wchar_t c)
     {
-        assert(c >> LOG_COMPLEMENT_SIZE < BASE_SIZE);
-        assert(base[c >> LOG_COMPLEMENT_SIZE] + c >= (&code[0]));
-        assert(base[c >> LOG_COMPLEMENT_SIZE] + c < (&code[7912]));
+        assert((u2) (blocks[c >> SHIFT] + c) < 4485);
     }
 
     static inline bool CodeCheck(void)
@@ -67,46 +60,60 @@ public:
         return true;
     }
 
-    static inline bool IsNewline(wchar_t c) // \r characters are replaced by \x0a in Stream::ProcessInput().
+    //
+    // \r characters are replaced by \x0a in Stream::ProcessInput().
+    //
+    static inline bool IsNewline(wchar_t c)
     {
         return c == '\x0a';
     }
 
     static inline bool IsSpaceButNotNewline(wchar_t c)
     {
-        return base[c >> LOG_COMPLEMENT_SIZE][c] == SPACE_CODE;
+        return codes[(u2) (blocks[c >> SHIFT] + c)] == SPACE_CODE;
     }
 
     static inline bool IsSpace(wchar_t c)
     {
-        return base[c >> LOG_COMPLEMENT_SIZE][c] <= SPACE_CODE;
+        return codes[(u2) (blocks[c >> SHIFT] + c)] <= SPACE_CODE;
     }
 
     static inline bool IsDigit(wchar_t c)
     {
-        return base[c >> LOG_COMPLEMENT_SIZE][c] == DIGIT_CODE;
+        return codes[(u2) (blocks[c >> SHIFT] + c)] == DIGIT_CODE;
+    }
+
+    static inline bool IsOctalDigit(wchar_t c)
+    {
+        return c >= U_0 && c <= U_7;
+    }
+
+    static inline bool IsHexDigit(wchar_t c)
+    {
+        return c <= U_f && (c >= U_a ||
+                            (c >= U_A && c <= U_F) ||
+                            (c >= U_0 && c <= U_9));
     }
 
     static inline bool IsUpper(wchar_t c)
     {
-        return base[c >> LOG_COMPLEMENT_SIZE][c] == UPPER_CODE;
+        return codes[(u2) (blocks[c >> SHIFT] + c)] == UPPER_CODE;
     }
 
     static inline bool IsLower(wchar_t c)
     {
-        return base[c >> LOG_COMPLEMENT_SIZE][c] == LOWER_CODE;
+        return codes[(u2) (blocks[c >> SHIFT] + c)] == LOWER_CODE;
     }
 
     static inline bool IsAlpha(wchar_t c)
     {
-        return base[c >> LOG_COMPLEMENT_SIZE][c] >= LOWER_CODE;
+        return codes[(u2) (blocks[c >> SHIFT] + c)] >= LOWER_CODE;
     }
 
     static inline bool IsAlnum(wchar_t c)
     {
-        return base[c >> LOG_COMPLEMENT_SIZE][c] >= DIGIT_CODE;
+        return codes[(u2) (blocks[c >> SHIFT] + c)] >= DIGIT_CODE;
     }
-
 
 };
 

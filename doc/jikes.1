@@ -2,167 +2,291 @@
 .SH NAME
 jikes \- java source to bytecode compiler
 .SH SYNOPSIS
-\fBjikes\fP
-[\fB\-bootclasspath\fP path]
-[\fB\-classpath\fP path]
-[\fB\-d\fP directory]
-[\fB\-debug\fP]
-[\fB\-depend\fP]
-[\fB\-deprecation\fP]
-[\fB\-encoding\fP encoding]
-[\fB\-extdirs\fP path]
-[\fB\-g\fP]
-[\fB\-nowarn\fP]
-[\fB\-nowrite\fP]
-[\fB\-O\fP]
-[\fB\-verbose\fP]
-[\fB\-sourcepath\fP path]
-[\fB\-Xdepend\fP]
-[\fB\-Xstdout\fP]
-[\fB\+\+\fP]
-[\fB\+B\fP]
-[\fB\+OLDCSO\fP]
-[\fB\+D\fP]
-[\fB\+DR=\fPfilename]
-[\fB\+E\fP]
-[\fB\+F\fP]
-[\fB\+K\fP]
-[\fB\+M\fP]
-[\fB\+P\fP]
-[\fB\+T\fPnn]
-[\fB\+U\fP]
-[\fB\+Z\fP]
-[\fB\+c\fP]
-file.java
-\&.\|.\|.
+jikes [\fI\-options\fP] [\fI\+options\fP] [\fI\@files\fP]
+      \fIfile.java\fP\&.\|.\|.
+
+Options, @files, and filenames may be intermixed. Individual options
+should not be repeated, unless noted below.
+
 .SH DESCRIPTION
 \fBJikes\fP translates Java(TM) source files to bytecode. Features
 include strict adherence to the language specification, automatic
 makefile generation and incremental compilation. It is maintained
 by the Jikes Project.
 
+At this time, jikes only recognizes the full name of options; you
+cannot abbreviate or group them. You can give different argument types
+in any order. Options are global, so they affect compilation of files
+listed earlier on the command line.
+
 .SH OPTIONS
 \fBJikes\fP may be invoked with the following command-line options:
+
 .TP
-\fB\-bootclasspath\fP path
-use path for the bootclasspath
+\fB\-bootclasspath\fP \fIpath\fP
 .TP
-\fB\-classpath\fP path
-use path for CLASSPATH
+\fB\-\-bootclasspath\fP \fIpath\fP
+Use path for the bootclasspath. This path is searched first for
+library class files, and is usually set to \fBjava/lib/classes.zip\fP
+or \fBjava/jre/lib/rt.jar\fP.
+
 .TP
-\fB\-d\fP directory
-write class files in specified directory
+\fB\-classpath\fP \fIpath\fP
+.TP
+\fB\-cp\fP \fIpath\fP
+.TP
+\fB\-\-classpath\fP \fIpath\fP
+Use path for CLASSPATH. This path is searched for both user source and
+compiled class files.
+.\" Someone should better document the search algorithm used.
+
+.TP
+\fB\-d\fP \fIdirectory\fP
+.TP
+\fB\-\-target\-directory\fP \fIdirectory\fP
+Write class files in the specified directory. Note that this directory is
+NOT in your classpath unless you list it there as well.
+
 .TP
 \fB\-debug
-no effect (recognized for compatibility)
+No effect (recognized for compatibility).
+
 .TP
 \fB\-depend
-recompile all used classes
 .TP
-\fB\-deprecation
-report uses of deprecated features
-.TP
-\fB\-encoding
-use specified encoding to read source files
-.TP
-\fB\-extdirs\fP path
-use path for extensions directories
-.TP
-\fB\-g
-debug (generate LocalVariableTable attribute)
-.TP
-\fB\-nowarn
-do not issue warning messages
-.TP
-\fB\-nowrite
-do not write any class files
-.TP
-\fB\-O
-do not write LineNumberTable
-.TP
-\fB\-sourcepath\fP path
-use path for specifying "source only" directories
-.TP
-\fB\-verbose
-list files read and written
+\fB\-\-depend
 .TP
 \fB\-Xdepend
-same as -depend
+Recompile all used classes.
+
+.TP
+\fB\-deprecation
+.TP
+\fB\-\-deprecation
+Report uses of deprecated features.
+
+.TP
+\fB\-encoding\fP \fIencoding\fP
+.TP
+\fB\-\-encoding\fP \fIencoding\fP
+Use specified encoding to read source files. This is not available in
+some builds, because it requires a working iconv or ICU encoder.
+\fBNote:\fP in particular that the Windows binary provided for
+download does NOT include support for the encoding option as there
+is not a transcoding library on windows by default. You can tell if
+a binary has encoding support or not, but running \fIjikes \-\-help\fP
+and looking for the \-\-encoding option: if it is not listed, then
+this binary does NOT include support for encoding.
+
+.TP
+\fB\-extdirs\fP \fIpath\fP
+.TP
+\fB\-\-extdirs\fP \fIpath\fP
+Use path for extensions directories. This is typically set to grab jar
+and zip extension files located in \fBjava/jre/lib/ext\fP.
+
+.TP
+\fB\-g
+Equivalent to \fB\-g\:source\|,lines\|,vars\fP.
+
+.TP
+\fB\-g\:none\fP\||\|{\fBsource\|,lines\|,vars\fP\|}
+Specify which of three classfile debug options should be enabled. If
+this is not specified, the default is
+\fBsource\|,lines\fP. \fBsource\fP stores the filename of the source
+file in the class file, \fBlines\fP adds line number tracking to tie
+bytecodes to their location in the source file, and \fBvars\fP adds a
+table in the class file which stores the name of local variables and
+parameters, as well as their scope.
+
+.TP
+\fB\-help
+.TP
+\fB\-\-help
+.TP
+\fB\-h
+.TP
+\fB\-\|?
+Prints a helpful summary of options, then exit.
+
+.TP
+\fB\-J\fP\&.\|.\|.
+No effect, since jikes is native code, and does not need a Virtual
+Machine (ignored for compatibility).
+
+.TP
+\fB\-nowarn
+.TP
+\fB\-\-nowarn
+.TP
+\fB\-q
+Do not issue warning messages.
+
+.TP
+\fB\-nowrite
+.TP
+\fB\-\-nowrite
+Do not write any class files, but list which ones would be written if
+used with \fB\-verbose\fP.
+
+.TP
+\fB\-O
+.TP
+\fB\-\-optimize
+Optimize the bytecode. Technically, this means jikes should inline
+private and final methods where appropriate, but currently it does
+nothing.
+
+.TP
+\fB\-source\fP \fIrelease\fP
+.TP
+\fB\-\-source\fP \fIrelease\fP
+Specify which Java SDK release the source syntax obeys. For example,
+to compile code with the \fIassert\fP keyword, you would specify
+\fB\-source 1.4\fP. Recognized releases are \fB1.1\fP through
+\fB1.4\fP. If unspecified, this defaults to \fB1.3\fP.
+
+.TP
+\fB\-sourcepath\fP path
+.TP
+\fB\-\-sourcepath\fP path
+Use path for specifying user "source only" directories. Class files in
+this path are ignored unless listed in other paths.
+
+.TP
+\fB\-target\fP \fIrelease\fP
+.TP
+\fB\-\-target\fP \fIrelease\fP
+Specify which Java SDK release the bytecode should target. For
+example, in Java 1.4, exception chaining was introduced, so a failed
+class literal can chain the NoClassDefFoundError to its original
+ClassNotFoundException, rather than the old behavior in Java 1.3 where
+the original exception is just discarded. You would get the new
+behavior by specifying \fB\-target 1.4\fP. Recognized releases are
+\fB1.1\fP through \fB1.4\fP. If unspecified, this defaults to whatever
+\fB\-source\fP level is in force.
+
+.TP
+\fB\-verbose
+.TP
+\fB\-\-verbose
+.TP
+\fB\-v
+List files read and written. Also useful with \fB\-nowrite\fP for a
+dry run to track dependencies.
+
+.TP
+\fB\-version
+.TP
+\fB\-\-version
+.TP
+\fB\-V
+Print a version message, and contact information, then exit.
+
 .TP
 \fB\-Xstdout
-write error messages to standard output, not stderr
+Write error messages to standard output, not stderr. At the moment,
+this is incompatible with javac, which takes an argument as the name
+of the file where it will direct compiler message output.
+
 .TP
 \fB\+\+
-compile in incremental mode
+Compile in incremental mode.
+
 .TP
 \fB\+B
-do not invoke bytecode generator
-.TP
-\fB\+OLDCSO
-Select to use same classpath search order as in older versions of Jikes (for compatibility). 
+Do not invoke bytecode generator.
+
 .TP
 \fB\+D
-report errors immediately in emacs-form without buffering
+Report errors immediately in emacs-form without buffering.
+
 .TP
-\fB\+DR\fP\=filename
-write report of dependencies to specified file
+\fB\+DR\=\fIfilename\fP
+Write report of dependencies to specified file.
+
 .TP
 \fB\+E
-list errors in emacs-form
+List errors in emacs-form.
+
 .TP
 \fB\+F
-do full dependence check except for Zip and Jar files
+Do full dependence check except for Zip and Jar files.
+
 .TP
-\fB\+K\fPname\=TypeKeyWord
-map name to type keyword
+\fB\+K\fIname\fB\=\fITypeKeyWord\fP
+Map name to type keyword.
+
 .TP
 \fB\+M
-generate makefile dependencies
+Generate makefile dependencies.
+
 .TP
-\fB\+P
-Pedantic compilation - issues lots of warnings
+\fB\+OLDCSO
+Select to use same classpath search order as in older versions of
+Jikes (for compatibility).
+.\" Someone should document how this differs from regular search order.
+
 .TP
-\fB\+T\fPnn
-set value of tab to nn spaces
+\fB\+P\fP[\fIflags\fP]
+Pedantic compilation - issues lots of warnings. This option may be
+listed multiple times, with cumulative effect. With no flags, this
+turns on the default set of pedantic warnings. Specifying a flag will
+then turn on or off a particular warning, depending on the presence of
+the \fIno-\fP prefix. At present, the only recognized flag is
+\fBmodifier-order\fP, which warns about the recommended ordering of
+multiple modifiers, and is turned on by default in pedantic
+compilation mode. Thus, to get all pedantic warnings except this, use
+\fB\+P \+Pno-modifier-order\fP.
+
+.TP
+\fB\+T\fInn\fP
+Set value of tab to \fInn\fP spaces.
+
 .TP
 \fB\+U
-do full dependence check including Zip and Jar files
+Do full dependence check including Zip and Jar files.
+
 .TP
 \fB\+Z
-treat cautions as errors
-.TP
-\fB\+c
-do not discard comments from lexer output
+Treat cautions as errors. Unfortunately, at the moment, this will not
+promote warnings, just cautions.
+
 .PP
-An argument may have the form \fI@file\fP; each line of \fIfile\fP is
-then interpreted as an argument, except that lines beginning with
-\fI@\fP are not expanded recursively.
+An argument may have the form \fI@file\fP, which names a \fIfile\fP
+holding additional command-line arguments.  Each line in that file is
+treated as an argument, except that lines beginning with \fI@\fP are
+not expanded recursively.  Lines may optionally be quoted using either
+single or double quotes.  There are no escape characters (\fI'\\'\fP
+is not treated as special).
 
 .SH FILES
 \fBJikes\fP has several options related to classpath searching.
 The -bootclasspath, -extdirs, and -sourcepath options are the same
 as in javac.  In addition to being specified on the command line, the
-environment variables BOOTCLASSPATH, EXTDIRS, and SOURCEPATH may also be
-used to specify values for these options, respectively.  \fBJikes\fP also
-has the -classpath option as in javac, with the corresponding environment
-variable CLASSPATH.  The classpath may also be specified in the environment
-variable JIKESPATH.  If JIKESPATH and CLASSPATH coexist, preference will be
-given to JIKESPATH.  A value specified on the command line will be always
-be given preference over the value of any environment variable.  All the
-directories and files specified in these options or environment variables
-must be in a colon-separated list, e.g., ".:$HOME/java/jre/lib/rt.jar".
+environment variables \fBBOOTCLASSPATH\fP, \fBEXTDIRS\fP, and
+\fBSOURCEPATH\fP may also be used to specify values for these options,
+respectively.  \fBJikes\fP also has the -classpath option as in javac,
+with the corresponding environment variable \fBCLASSPATH\fP.  The
+classpath may also be specified in the environment variable
+\fBJIKESPATH\fP, although this use is discouraged.  If \fBJIKESPATH\fP
+and \fBCLASSPATH\fP coexist, preference will be given to
+\fBJIKESPATH\fP.  A value specified on the command line will be always
+be given preference over the value of any environment variable.  All
+the directories and files specified in these options or environment
+variables must be in a colon-separated list, e.g.,
+".:$HOME/java/jre/lib/rt.jar".
+
 .SH "SEE ALSO"
-.TP
 Jikes Project homepage 
 \fIhttp://ibm.com/developerworks/opensource/jikes/\fP
-for news of recent developments,
-to download new versions, 
-to report bugs, or 
-to learn how to participate in the development process.
+for news of recent developments, to download new versions, to report
+bugs, or to learn how to participate in the development process.
 
 .SH COPYRIGHT
-Copyright \(co 1996, 1997, 1998, 1999, 2000, 2001,
+Copyright \(co 1996, 1997, 1998, 1999, 2000, 2001, 2002
 International Business Machines Corporation and others. All Rights Reserved.
+
 .PP
 \fBJikes\fP is licensed under the \fIIBM Public License\fP, included
 in the file \fIlicense.htm\fP distributed with the program, and also

@@ -1,9 +1,9 @@
-// $Id: platform.h,v 1.25 2001/09/21 05:06:07 ericb Exp $ -*- c++ -*-
+// $Id: platform.h,v 1.35 2002/05/22 06:56:45 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 2000, 2001 International Business
+// Copyright (C) 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -43,10 +43,11 @@
 
 /*
    undefine any symbols defined by the autotools
-   build process that can conflict with out symbols
+   build process that can conflict with our symbols
 */
 
 #undef PACKAGE
+#undef PACKAGE_NAME
 #undef VERSION
 
 
@@ -157,12 +158,9 @@ typedef unsigned int wint_t;
 # include <fstream.h>
 #endif
 
-// VC++ pretends to support the
-// C++ standard, but it does not.
-// The set_new_handler method in
-// <new> is not implemented so
-// the _set_new_handler method
-// in <new.h> must be used.
+// VC++ pretends to support the C++ standard, but it does not.
+// The set_new_handler method in <new> is not implemented so
+// the _set_new_handler method in <new.h> must be used.
 
 #ifdef HAVE_VCPP_SET_NEW_HANDLER
 # include <new.h>
@@ -267,7 +265,8 @@ namespace Jikes { // Open namespace Jikes block
 #endif
 
 //
-// The configure scripts check each of these to see if we need our own implementation
+// The configure scripts check each of these to see if we need our own
+// implementation
 //
 
 #ifndef HAVE_WCSLEN
@@ -321,16 +320,19 @@ extern void FloatingPointCheck();
 //
 extern int SystemStat(const char *name, struct stat *stat_struct);
 extern FILE *SystemFopen(const char *name, const char *mode);
-extern size_t SystemFread(char *ptr, size_t element_size, size_t count, FILE *stream);
+extern size_t SystemFread(char *ptr, size_t element_size, size_t count,
+                          FILE *stream);
 extern int SystemIsDirectory(char *name);
 
 //
-// The symbol used in this environment for separating argument in a system string. E.g., in a unix system
-// directories specified in the CLASSPATH are separated by a ':', whereas in win95 it is ';'.
+// The symbol used in this environment for separating argument in a system
+// string. E.g., in a unix system directories specified in the CLASSPATH
+// are separated by a ':', whereas in win95 it is ';'.
 //
 extern char PathSeparator();
 extern int SystemMkdir(char *);
 extern int SystemMkdirhier(char *);
+extern int SystemMkdirhierForFile(char *);
 
 extern char * strcat3(const char *, const char *, const char *);
 extern char * wstring2string(wchar_t * in);
@@ -347,34 +349,42 @@ extern char * wstring2string(wchar_t * in);
 
 
 
-// The following comment was part of the original config.h, it explains why some parts of the
-// guts of the compiler are written the way they are. This comment was removed when the ifdef'd
-// EBCDIC code was initially removed. I've added it back for it's "why do they do it that way"
-// value, hopefully it's presence will help prevent people from making assumptions and breaking
-// the code for non-ascii platforms. At some point we'll want to be able to compile on EBCDIC
-// systems again, using the API and iconv/ICU instead of ifdefs scattered all over creation,
-// if the core code hasn't been compromised this should be easier. For those that have no idea
-// what EBCDIC is... it is like ASCII in that it is an encoding system, but it predates ASCII
-// by a number of years (think punchcards). It is still the default encoding on some mainframes
-// and minicomputers such as the IBM zSeries and iSeries (aka the 390 and the 400). To see what
-// the old EBCDIC code looked like, pull a cvs tree with the tag v1-06.
+// The following comment was part of the original config.h, it explains why
+// some parts of the guts of the compiler are written the way they are. This
+// comment was removed when the ifdef'd EBCDIC code was initially removed.
+// I've added it back for its "why do they do it that way" value, hopefully
+// its presence will help prevent people from making assumptions and breaking
+// the code for non-ascii platforms. At some point we'll want to be able to
+// compile on EBCDIC systems again, using the API and iconv/ICU instead of
+// ifdefs scattered all over creation, if the core code hasn't been
+// compromised this should be easier. For those that have no idea what EBCDIC
+// is... it is like ASCII in that it is an encoding system, but it predates
+// ASCII by a number of years (think punchcards). It is still the default
+// encoding on some mainframes and minicomputers such as the IBM zSeries and
+// iSeries (aka the 390 and the 400). To see what the old EBCDIC code looked
+// like, pull a cvs tree with the tag v1-06.
 //
 //
-// Jikes can be compiled on systems using the EBCDIC character set, for which character and string
-// literals are translated by the compiler to EBCDIC and not ASCII, and so cannot be used to represent
-// ASCII/UNICODE values. Such values are constructed using the U_ values defined below. Thus
-// 'a' is represented using U_a, and ".java" is represented by an explicit literal:
+// Jikes can be compiled on systems using the EBCDIC character set, for which
+// character and string literals are translated by the compiler to EBCDIC and
+// not ASCII, and so cannot be used to represent ASCII/UNICODE values. Such
+// values are constructed using the U_ values defined below. Thus 'a' is
+// represented using U_a, and ".java" is represented by an explicit literal:
 //    {U_DOT, U_j, U_a, U_v, U_a, U_NULL}
-// Variables associated with such literals have names beginning with US_ if the value are 16-bits
-// or U8S_ for 8 bits. The initial underscore is followed by the characters being represented, with
-// letters and digits representing themselves, and other values, all of which have a two character code,
-// surrounded by underscore. Thus the name used for the literal above is US__DO_java.
+// Variables associated with such literals have names beginning with US_ if
+// the value are 16-bits or U8S_ for 8 bits. The initial underscore is
+// followed by the characters being represented, with letters and digits
+// representing themselves, and other values, all of which have a two
+// character code, surrounded by underscore. Thus the name used for the
+// literal above is US_DO_java.
 //
-// All string-related values are represented internally in ASCII/UNICODE using the U_ values defined
-// below. EBCDIC systems also require that arguments to system functions representing file names be
-// converted from the internal form used by Jikes to EBCDIC, and such functions are referred to using
-// their usual name prefixed with "system_"; for example, a call to "fopen(..." is written "system_fopen(..."
-// The "system_" procedures are define in the file code.cpp.
+// All string-related values are represented internally in ASCII/UNICODE
+// using the U_ values defined below. EBCDIC systems also require that
+// arguments to system functions representing file names be converted from
+// the internal form used by Jikes to EBCDIC, and such functions are referred
+// to using their usual name prefixed with "system_"; for example, a call to
+// "fopen(..." is written "system_fopen(..." The "system_" procedures are
+// define in the file code.cpp.
 //
 
 enum U_chars
@@ -496,172 +506,197 @@ enum U_chars
 
 
 //
-// Constant strings used in the program.
+// Constant strings used in the program. Those prefixed with US_ are
+// Unicode strings in wchar_t, and those with U8S are UTF8 strings in char.
 //
 class StringConstant
 {
 public:
-    static wchar_t US_AND[], // "&"
-                   US_AND_AND[], // "&&"
-                   US_AND_EQUAL[], // "&="
-                   US_COLON[], // ":"
-                   US_COMMA[], // ","
-                   US_DIVIDE[], // "/"
-                   US_DIVIDE_EQUAL[], // "/="
-                   US_DOT[], // "."
-                   US_EMPTY[], // ""
-                   US_EQUAL[], // "="
-                   US_EQUAL_EQUAL[], // "=="
-                   US_GREATER[], // ">"
-                   US_GREATER_EQUAL[], // ">="
-                   US_LBRACE[], // "{"
-                   US_LBRACKET[], // "["
-                   US_LEFT_SHIFT[], // "<<"
-                   US_LEFT_SHIFT_EQUAL[], // "<<="
-                   US_LESS[], // "<"
-                   US_LESS_EQUAL[], // "<="
-                   US_LPAREN[], // "("
-                   US_MINUS[], // "-"
-                   US_MINUS_EQUAL[], // "-="
-                   US_MINUS_MINUS[], // "--"
-                   US_MULTIPLY[], // "*"
-                   US_MULTIPLY_EQUAL[], // "*="
-                   US_NOT[], // "!"
-                   US_NOT_EQUAL[], // "!="
-                   US_OR[], // "|"
-                   US_OR_EQUAL[], // "|="
-                   US_OR_OR[], // "||"
-                   US_PLUS[], // "+"
-                   US_PLUS_EQUAL[], // "+="
-                   US_PLUS_PLUS[], // "++"
-                   US_QUESTION[], // "?"
-                   US_RBRACE[], // "}"
-                   US_RBRACKET[], // "]"
-                   US_REMAINDER[], // "%"
-                   US_REMAINDER_EQUAL[], // "%="
-                   US_RIGHT_SHIFT[], // ">>"
-                   US_RIGHT_SHIFT_EQUAL[], // ">>="
-                   US_RPAREN[], // ")"
-                   US_SEMICOLON[], // ";"
-                   US_TWIDDLE[], // "~"
-                   US_UNSIGNED_RIGHT_SHIFT[], // ">>>"
-                   US_UNSIGNED_RIGHT_SHIFT_EQUAL[], // ">>>="
-                   US_XOR[], // "^"
-                   US_XOR_EQUAL[], // "^="
+    //
+    // Symbols and operators.
+    //
+    static wchar_t US_AND[], // L"&"
+                   US_AND_AND[], // L"&&"
+                   US_AND_EQUAL[], // L"&="
+                   US_COLON[], // L":"
+                   US_COMMA[], // L","
+                   US_DIVIDE[], // L"/"
+                   US_DIVIDE_EQUAL[], // L"/="
+                   US_DOT[], // L"."
+                   US_EMPTY[], // L""
+                   US_EQUAL[], // L"="
+                   US_EQUAL_EQUAL[], // L"=="
+                   US_GREATER[], // L">"
+                   US_GREATER_EQUAL[], // L">="
+                   US_LBRACE[], // L"{"
+                   US_LBRACKET[], // L"["
+                   US_LEFT_SHIFT[], // L"<<"
+                   US_LEFT_SHIFT_EQUAL[], // L"<<="
+                   US_LESS[], // L"<"
+                   US_LESS_EQUAL[], // L"<="
+                   US_LPAREN[], // L"("
+                   US_MINUS[], // L"-"
+                   US_MINUS_EQUAL[], // L"-="
+                   US_MINUS_MINUS[], // L"--"
+                   US_MULTIPLY[], // L"*"
+                   US_MULTIPLY_EQUAL[], // L"*="
+                   US_NOT[], // L"!"
+                   US_NOT_EQUAL[], // L"!="
+                   US_OR[], // L"|"
+                   US_OR_EQUAL[], // L"|="
+                   US_OR_OR[], // L"||"
+                   US_PLUS[], // L"+"
+                   US_PLUS_EQUAL[], // L"+="
+                   US_PLUS_PLUS[], // L"++"
+                   US_QUESTION[], // L"?"
+                   US_RBRACE[], // L"}"
+                   US_RBRACKET[], // L"]"
+                   US_REMAINDER[], // L"%"
+                   US_REMAINDER_EQUAL[], // L"%="
+                   US_RIGHT_SHIFT[], // L">>"
+                   US_RIGHT_SHIFT_EQUAL[], // L">>="
+                   US_RPAREN[], // L")"
+                   US_SEMICOLON[], // L";"
+                   US_TWIDDLE[], // L"~"
+                   US_UNSIGNED_RIGHT_SHIFT[], // L">>>"
+                   US_UNSIGNED_RIGHT_SHIFT_EQUAL[], // L">>>="
+                   US_XOR[], // L"^"
+                   US_XOR_EQUAL[]; // L"^="
 
-                   US_Boolean[], // "Boolean"
-                   US_Byte[], // "Byte"
-                   US_Character[], // "Character"
-                   US_Class[], // "Class"
-                   US_ClassNotFoundException[], // "ClassNotFoundException"
-                   US_Cloneable[], // "Cloneable"
-                   US_Double[], // "Double"
-                   US_Error[], // "Error"
-                   US_Exception[], // "Exception"
-                   US_Float[],  // "Float"
-                   US_Integer[], // "Integer"
-                   US_L[], // "L"
-                   US_Long[], // "Long"
-                   US_NoClassDefFoundError[], // "NoClassDefFoundError"
-                   US_Object[], // "Object"
-                   US_PObject[], // "PObject"
-                   US_RuntimeException[], // "RuntimeException"
-                   US_Serializable[], // "Serializable"
-                   US_Short[], // "Short"
-                   US_String[], // "String"
-                   US_StringBuffer[], // "StringBuffer"
-                   US_TYPE[], // "TYPE"
-                   US_Throwable[], // "Throwable"
-                   US_Void[], // "Void"
-                   US__DO[], // "."
-                   US__DO__DO[], // ".."
-                   US__DS[], // "$"
-                   US__LB__RB[], // "[]"
-                   US__LT_clinit_GT[], // "<clinit>"
-                   US__LT_init_GT[], // "<init>"
-                   US__QU__QU[],  // "??"
-                   US__SC[], // ";"
-                   US__SL[], // "/"
+    //
+    // Library classes and methods.
+    //
+    static wchar_t US_AssertionError[], // L"AssertionError"
+                   US_Boolean[], // L"Boolean"
+                   US_Byte[], // L"Byte"
+                   US_Character[], // L"Character"
+                   US_Class[], // L"Class"
+                   US_ClassNotFoundException[], // L"ClassNotFoundException"
+                   US_Cloneable[], // L"Cloneable"
+                   US_Comparable[], // L"Comparable"
+                   US_Double[], // L"Double"
+                   US_Error[], // L"Error"
+                   US_Exception[], // L"Exception"
+                   US_Float[],  // L"Float"
+                   US_Integer[], // L"Integer"
+                   US_L[], // L"L"
+                   US_Long[], // L"Long"
+                   US_NoClassDefFoundError[], // L"NoClassDefFoundError"
+                   US_Object[], // L"Object"
+                   US_PObject[], // L"PObject"
+                   US_RuntimeException[], // L"RuntimeException"
+                   US_Serializable[], // L"Serializable"
+                   US_Short[], // L"Short"
+                   US_String[], // L"String"
+                   US_StringBuffer[], // L"StringBuffer"
+                   US_TYPE[], // L"TYPE"
+                   US_Throwable[], // L"Throwable"
+                   US_Void[], // L"Void"
+                   US_DO[], // L"."
+                   US_DO_DO[], // L".."
+                   US_DS[], // L"$"
+                   US_LB_RB[], // L"[]"
+                   US_LT_clinit_GT[], // L"<clinit>"
+                   US_LT_init_GT[], // L"<init>"
+                   US_QU_QU[],  // L"??"
+                   US_SC[], // L";"
+                   US_SL[], // L"/"
+                   US_zip[], // L"zip"
+                   US_jar[]; // L"jar"
 
-                   US__zip[], // "zip"
-                   US__jar[], // "jar"
+    //
+    // Used in synthetic (compiler-generated) code.
+    //
+    static wchar_t US_DOLLAR_noassert[], // L"$noassert"
+                   US_append[], // L"append"
+                   US_array[], // L"array"
+                   US_access_DOLLAR[], // L"access$"
+                   US_class_DOLLAR[], // L"class$"
+                   US_clone[], // L"clone"
+                   US_constructor_DOLLAR[], // L"constructor$"
+                   US_desiredAssertionStatus[], // L"desiredAssertionStatus"
+                   US_forName[], // L"forName"
+                   US_getClass[], // L"getClass"
+                   US_getComponentType[], // L"getComponentType"
+                   US_getMessage[], // L"getMessage"
+                   US_initCause[], // L"initCause"
+                   US_java_SL_io[], // L"java/io"
+                   US_java_SL_lang[], // L"java/lang"
+                   US_length[], // L"length"
+                   US_this_DOLLAR[], // L"this$"
+                   US_this0[], // L"this$0"
+                   US_toString[], // L"toString"
+                   US_val_DOLLAR[]; // L"val$"
 
-                   US__array[], // "array"
-                   US__access_DOLLAR[], // "access$"
-                   US__class_DOLLAR[], // "class$"
-                   US__constructor_DOLLAR[], // "constructor$"
-                   US__this_DOLLAR[], // "this$"
-                   US__val_DOLLAR[], // "val$"
+    //
+    // Java keywords.
+    //
+    static wchar_t US_abstract[], // L"abstract"
+                   US_assert[], // L"assert"
+                   US_boolean[], // L"boolean"
+                   US_break[], // L"break"
+                   US_byte[], // L"byte"
+                   US_case[], // L"case"
+                   US_catch[], // L"catch"
+                   US_char[], // L"char"
+                   US_class[], // L"class"
+                   US_const[], // L"const"
+                   US_continue[], // L"continue"
+                   US_default[], // L"default"
+                   US_do[], // L"do"
+                   US_double[], // L"double"
+                   US_else[], // L"else"
+                   US_extends[], // L"extends"
+                   US_false[], // L"false"
+                   US_final[], // L"final"
+                   US_finally[], // L"finally"
+                   US_float[], // L"float"
+                   US_for[], // L"for"
+                   US_goto[], // L"goto"
+                   US_if[], // L"if"
+                   US_implements[], // L"implements"
+                   US_import[], // L"import"
+                   US_instanceof[], // L"instanceof"
+                   US_int[], // L"int"
+                   US_interface[], // L"interface"
+                   US_long[], // L"long"
+                   US_native[], // L"native"
+                   US_new[], // L"new"
+                   US_null[], // L"null"
+                   US_package[], // L"package"
+                   US_private[], // L"private"
+                   US_protected[], // L"protected"
+                   US_public[], // L"public"
+                   US_return[], // L"return"
+                   US_short[], // L"short"
+                   US_static[], // L"static"
+                   US_strictfp[], // L"strictfp"
+                   US_super[], // L"super"
+                   US_switch[], // L"switch"
+                   US_synchronized[], // L"synchronized"
+                   US_this[], // L"this"
+                   US_throw[], // L"throw"
+                   US_throws[], // L"throws"
+                   US_transient[], // L"transient"
+                   US_true[], // L"true"
+                   US_try[], // L"try"
+                   US_void[], // L"void"
+                   US_volatile[], // L"volatile"
+                   US_while[]; // L"while"
 
-                   US_abstract[], // "abstract"
-                   US_append[], // "append"
-                   US_block_DOLLAR[], // "block$"
-                   US_boolean[], // "boolean"
-                   US_break[], // "break"
-                   US_byte[], // "byte"
-                   US_case[], // "case"
-                   US_catch[], // "catch"
-                   US_char[], // "char"
-                   US_class[], // "class"
-                   US_clone[], // "clone"
-                   US_const[], // "const"
-                   US_continue[], // "continue"
-                   US_default[], // "default"
-                   US_do[], // "do"
-                   US_double[], // "double"
-                   US_else[], // "else"
-                   US_extends[], // "extends"
-                   US_false[], // "false"
-                   US_final[], // "final"
-                   US_finally[], // "finally"
-                   US_float[], // "float"
-                   US_for[], // "for"
-                   US_forName[], // "forName"
-                   US_getMessage[], // "getMessage"
-                   US_goto[], // "goto"
-                   US_if[], // "if"
-                   US_implements[], // "implements"
-                   US_import[], // "import"
-                   US_instanceof[], // "instanceof"
-                   US_int[], // "int"
-                   US_interface[], // "interface"
-                   US_java_SL_io[], // "java/io"
-                   US_java_SL_lang[], // "java/lang"
-                   US_java_SL_util[], // "java/util"
-                   US_length[], // "length"
-                   US_long[], // "long"
-                   US_native[], // "native"
-                   US_new[], // "new"
-                   US_null[], // "null"
-                   US_package[], // "package"
-                   US_private[], // "private"
-                   US_protected[], // "protected"
-                   US_public[], // "public"
-                   US_return[], // "return"
-                   US_short[], // "short"
-                   US_static[], // "static"
-                   US_strictfp[], // "strictfp"
-                   US_super[], // "super"
-                   US_switch[], // "switch"
-                   US_synchronized[], // "synchronized"
-                   US_this0[], // "this$0"
-                   US_this[], // "this"
-                   US_throw[], // "throw"
-                   US_throws[], // "throws"
-                   US_toString[], // "toString"
-                   US_transient[], // "transient"
-                   US_true[], // "true"
-                   US_try[], // "try"
-                   US_void[], // "void"
-                   US_volatile[], // "volatile"
-                   US_while[], // "while"
+    //
+    // Miscellaneous strings.
+    //
+    static wchar_t US_EOF[]; // L"EOF"
 
-                   US_EOF[]; // "EOF"
+    static wchar_t US_smallest_int[]; // L"-2147483648"
 
-    static wchar_t US_smallest_int[]; // "-2147483648"
-
+    static char U8S_help_header[];
     static char U8S_command_format[];
 
+    //
+    // Constant pool entries.
+    //
     static int U8S_ConstantValue_length,
                U8S_Exceptions_length,
                U8S_InnerClasses_length,
@@ -670,7 +705,7 @@ public:
                U8S_LineNumberTable_length,
                U8S_LocalVariableTable_length,
                U8S_Code_length,
-               U8S_Sourcefile_length,
+               U8S_SourceFile_length,
 
                U8S_null_length,
                U8S_this_length;
@@ -685,28 +720,39 @@ public:
                 U8S_I[], // "I"
                 U8S_InnerClasses[], // "InnerClasses"
                 U8S_J[],  // "J"
-                U8S_LP_Ljava_SL_lang_SL_String_SC_RP_Ljava_SL_lang_SL_Class_SC[], // "(Ljava/lang/String;)Ljava/lang/Class;"
-                U8S_LP_Ljava_SL_lang_SL_String_SC_RP_V[], // "(Ljava/lang/String;)V"
-                U8S_LP_RP_Ljava_SL_lang_SL_String_SC[], // "()Ljava/lang/String;"
+                U8S_LP_C_RP_V[], // "(C)V"
+                U8S_LP_D_RP_V[], // "(D)V"
+                U8S_LP_F_RP_V[], // "(F)V"
+                U8S_LP_I_RP_V[], // "(I)V"
+                U8S_LP_J_RP_V[], // "(J)V"
+                U8S_LP_Object_RP_V[], // "(Ljava/lang/Object;)V"
+                U8S_LP_String_RP_Class[], // "(Ljava/lang/String;)Ljava/lang/Class;"
+                U8S_LP_String_RP_V[], // "(Ljava/lang/String;)V"
+                U8S_LP_Throwable_RP_Throwable[], // "(Ljava/lang/Throwable;)Ljava/lang/Throwable;"
+                U8S_LP_RP_Class[], // "()Ljava/lang/Class;"
+                U8S_LP_RP_String[], // "()Ljava/lang/String;"
                 U8S_LP_RP_V[], // "()V"
+                U8S_LP_RP_Z[], // "()Z"
+                U8S_LP_Z_RP_V[], // "(Z)V"
                 U8S_LineNumberTable[], // "LineNumberTable"
                 U8S_LocalVariableTable[], // "LocalVariableTable"
                 U8S_S[], // "S"
-                U8S_Sourcefile[], // "Sourcefile"
+                U8S_SourceFile[], // "SourceFile"
                 U8S_Synthetic[], // "Synthetic"
                 U8S_Deprecated[], // "Deprecated"
                 U8S_V[], // "V"
                 U8S_Z[], // "Z"
 
-                U8S__DO[], // "."
-                U8S__DO_class[], // ".class"
-                U8S__DO_java[], // ".java"
-                U8S__DO_tok[], // ".tok"
-                U8S__DO_u[], // ".u"
-                U8S__LP[], // "("
-                U8S__RP[], // ")"
-                U8S__SL[], // "/"
-                U8S__ST[], // "*"
+                U8S_DO[], // "."
+                U8S_DO_DO[], // ".."
+                U8S_DO_class[], // ".class"
+                U8S_DO_java[], // ".java"
+                U8S_DO_tok[], // ".tok"
+                U8S_DO_u[], // ".u"
+                U8S_LP[], // "("
+                U8S_RP[], // ")"
+                U8S_SL[], // "/"
+                U8S_ST[], // "*"
 
                 U8S_class[], // "class"
                 U8S_java[], // "java"
@@ -716,19 +762,20 @@ public:
                 U8S_java_SL_lang_SL_NoClassDefFoundError[], // "java/lang/NoClassDefFoundError"
                 U8S_java_SL_lang_SL_StringBuffer[], // "java/lang/StringBuffer"
                 U8S_java_SL_lang_SL_Throwable[], // "java/lang/Throwable"
+                U8S_false[], // "false"
                 U8S_null[], // "null"
                 U8S_quit[], // "quit"
                 U8S_this[], // "this"
+                U8S_true[], // "true"
 
-                U8S_LP_LB_C_RP_Ljava_SL_lang_SL_StringBuffer_SC[], // "([C)Ljava/lang/StringBuffer;"
-                U8S_LP_C_RP_Ljava_SL_lang_SL_StringBuffer_SC[], // "(C)Ljava/lang/StringBuffer;"
-                U8S_LP_Z_RP_Ljava_SL_lang_SL_StringBuffer_SC[], // "(Z)Ljava/lang/StringBuffer;"
-                U8S_LP_I_RP_Ljava_SL_lang_SL_StringBuffer_SC[], // "(I)Ljava/lang/StringBuffer;"
-                U8S_LP_J_RP_Ljava_SL_lang_SL_StringBuffer_SC[], // "(J)Ljava/lang/StringBuffer;"
-                U8S_LP_F_RP_Ljava_SL_lang_SL_StringBuffer_SC[], // "(F)Ljava/lang/StringBuffer;"
-                U8S_LP_D_RP_Ljava_SL_lang_SL_StringBuffer_SC[], // "(D)Ljava/lang/StringBuffer;"
-                U8S_LP_Ljava_SL_lang_SL_String_SC_RP_Ljava_SL_lang_SL_StringBuffer_SC[], // "(Ljava/lang/String;)Ljava/lang/StringBuffer;"
-                U8S_LP_Ljava_SL_lang_SL_Object_SC_RP_Ljava_SL_lang_SL_StringBuffer_SC[]; // "(Ljava/lang/Object;)Ljava/lang/StringBuffer;"
+                U8S_LP_C_RP_StringBuffer[], // "(C)Ljava/lang/StringBuffer;"
+                U8S_LP_Z_RP_StringBuffer[], // "(Z)Ljava/lang/StringBuffer;"
+                U8S_LP_I_RP_StringBuffer[], // "(I)Ljava/lang/StringBuffer;"
+                U8S_LP_J_RP_StringBuffer[], // "(J)Ljava/lang/StringBuffer;"
+                U8S_LP_F_RP_StringBuffer[], // "(F)Ljava/lang/StringBuffer;"
+                U8S_LP_D_RP_StringBuffer[], // "(D)Ljava/lang/StringBuffer;"
+                U8S_LP_String_RP_StringBuffer[], // "(Ljava/lang/String;)Ljava/lang/StringBuffer;"
+                U8S_LP_Object_RP_StringBuffer[]; // "(Ljava/lang/Object;)Ljava/lang/StringBuffer;"
 
     static char U8S_smallest_int[],      // "-2147483648"
                 U8S_smallest_long_int[], // "-9223372036854775808"
@@ -779,7 +826,8 @@ private:
 
 
 //
-// Convert an unsigned Long integer to its character string representation in decimal.
+// Convert an unsigned Long integer to its character string representation in
+// decimal.
 //
 class ULongInt;
 class ULongToDecString
@@ -799,7 +847,8 @@ private:
 
 
 //
-// Convert a signed or unsigned Long integer to its character string representation in octal.
+// Convert a signed or unsigned Long integer to its character string
+// representation in octal.
 //
 class BaseLong;
 class LongToOctString
@@ -820,7 +869,8 @@ private:
 
 
 //
-// Convert a signed or unsigned Long integer to its character string representation in hexadecimal.
+// Convert a signed or unsigned Long integer to its character string
+// representation in hexadecimal.
 //
 class LongToHexString
 {
@@ -832,7 +882,8 @@ public:
     int Length()   { return (&info[TAIL_INDEX]) - str; }
 
 private:
-    enum { TAIL_INDEX = 1 + 1 + 16 }; // 1 for initial '0', +1 for 'x', + 16 significant digits
+    // 1 for initial '0', +1 for 'x', + 16 significant digits
+    enum { TAIL_INDEX = 1 + 1 + 16 };
 
     char info[TAIL_INDEX + 1], // +1 for '\0'
          *str;
@@ -840,7 +891,8 @@ private:
 
 
 //
-// Convert a signed Long integer to its character string representation in decimal.
+// Convert a signed Long integer to its character string representation in
+// decimal.
 //
 class LongInt;
 class LongToDecString
@@ -876,7 +928,8 @@ private:
     enum
     {
         MAXIMUM_PRECISION = 17,
-        MAXIMUM_STR_LENGTH = 1 + MAXIMUM_PRECISION + 1 + 5 // +1 for sign, +17 significant digits +1 for ".", +5 for exponent
+        // +1 for sign, +17 significant digits +1 for ".", +5 for exponent
+        MAXIMUM_STR_LENGTH = 1 + MAXIMUM_PRECISION + 1 + 5
     };
 
     char str[MAXIMUM_STR_LENGTH + 1]; // +1 for '\0'
@@ -901,7 +954,8 @@ private:
     enum
     {
         MAXIMUM_PRECISION = 9,
-        MAXIMUM_STR_LENGTH = 1 + MAXIMUM_PRECISION + 1 + 4 // +1 for sign, +9 significant digits +1 for ".", +4 for exponent
+        // +1 for sign, +9 significant digits +1 for ".", +4 for exponent
+        MAXIMUM_STR_LENGTH = 1 + MAXIMUM_PRECISION + 1 + 4
     };
 
     char str[MAXIMUM_STR_LENGTH + 1]; // +1 for '\0'
@@ -1110,27 +1164,32 @@ extern Ostream Coutput;
 // In future basic_ostringstream<wchar_t> will be used.
 // But now it is not supported by libg++.
 // (lord).
-class ErrorString: public ConvertibleArray<wchar_t> 
-{ 
+class ErrorString: public ConvertibleArray<wchar_t>
+{
  public:
-    ErrorString(); 
-    
+    ErrorString();
+
     ErrorString &operator<<(const wchar_t *s);
-    ErrorString &operator<<(const wchar_t c );
-    ErrorString &operator<<(const char    *s);
-    ErrorString &operator<<(const char    c );
+    ErrorString &operator<<(const wchar_t c);
+    ErrorString &operator<<(const char *s);
+    ErrorString &operator<<(const char c);
     ErrorString &operator<<(int n);
+    ErrorString &operator<<(ostream &(*f)(ostream&))
+    {
+        assert(f == (ostream &(*)(ostream&)) endl);
+        return *this << '\n';
+    }
 
     void width(int w);
     void fill(const char c);
-    
+
     wchar_t *Array();
 
  private:
 
     void do_fill(int n);
-    char fill_char   ;
-    int  field_width ;
+    char fill_char;
+    int  field_width;
 };
 
 #ifdef HAVE_JIKES_NAMESPACE

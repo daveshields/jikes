@@ -1,9 +1,9 @@
-// $Id: option.h,v 1.32 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
+// $Id: option.h,v 1.39 2002/05/12 03:19:42 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -20,16 +20,17 @@
 namespace Jikes { // Open namespace Jikes block
 #endif
 
+class OptionError;
+class Ostream;
+
 class ArgumentExpander
 {
 public:
 
     int argc;
-    char **argv;
+    char** argv;
 
-    ArgumentExpander(int, char **);
-
-    ArgumentExpander(Tuple<char> &);
+    ArgumentExpander(int, char **, Tuple<OptionError *>& bad_options);
 
     ~ArgumentExpander()
     {
@@ -38,7 +39,8 @@ public:
         delete [] argv;
     }
 
-    bool ExpandAtFileArgument(Tuple<char *> & arguments, char * file_name);
+    void ExpandAtFileArgument(Tuple<char *>& arguments, char* file_name,
+                              Tuple<OptionError *>& bad_options);
 };
 
 
@@ -54,30 +56,43 @@ public:
 class OptionError
 {
 public:
-    int kind;
-    wchar_t *name;
-
-    OptionError(int kind_, char *str) : kind(kind_)
+    enum OptionErrorKind
     {
-        int length = strlen(str);
-        name = new wchar_t[length + 1];
-        for (int i = 0; i < length; i++)
-            name[i] = str[i];
-        name[length] = U_NULL;
+        INVALID_OPTION,
+        MISSING_OPTION_ARGUMENT,
+        INVALID_SDK_ARGUMENT,
+        INVALID_K_OPTION,
+        INVALID_K_TARGET,
+        INVALID_TAB_VALUE,
+        INVALID_P_ARGUMENT,
+        INVALID_DIRECTORY,
+        INVALID_AT_FILE,
+        NESTED_AT_FILE,
+        UNSUPPORTED_ENCODING,
+        UNSUPPORTED_OPTION,
+        DISABLED_OPTION
+    };
 
+    OptionError(OptionErrorKind kind_, const char *str) : kind(kind_)
+    {
+        name = new char[strlen(str) + 1];
+        strcpy(name, str);
         return;
     }
 
     ~OptionError() { delete [] name; }
+
+    wchar_t* GetErrorMessage();
+
+private:
+    OptionErrorKind kind;
+    char *name;
 };
 
-class Ostream;
-
 class Option: public JikesOption
- {
+{
 
 #ifdef WIN32_FILE_SYSTEM
-
     char main_disk, *current_directory[128];
 
 public:
@@ -96,7 +111,7 @@ public:
     {
         SetCurrentDirectory(current_directory[main_disk]);
     }
-    
+
     char *GetMainCurrentDirectory()
     {
         return current_directory[main_disk];
@@ -104,23 +119,27 @@ public:
 
     void SaveCurrentDirectoryOnDisk(char c);
 
-#endif
+#endif // WIN32_FILE_SYSTEM
 
 public:
-         
+
     Tuple<KeywordMap> keyword_map;
-    Tuple<OptionError *> bad_options;
 
     int first_file_index;
 
+#ifdef JIKES_DEBUG
     int debug_trap_op;
 
     bool debug_dump_lex,
          debug_dump_ast,
          debug_unparse_ast,
          debug_unparse_ast_debug,
+         debug_comments,
          debug_dump_class,
-         nocleanup,
+         debug_trace_stack_change;
+#endif // JIKES_DEBUG
+
+    bool nocleanup,
          incremental,
          makefile,
          dependence_report,
@@ -128,13 +147,20 @@ public:
          full_check,
          unzip,
          dump_errors,
-         errors,
-         comments,
-         pedantic;
+         errors;
+
+    //
+    // This next section covers pedantic warnings. Named warnings are
+    // specified by flags to the +P command-line option; the last variable
+    // covers all unnamed warnings. This list is designed to grow when new
+    // pedantic warning categories are added (often from user complaints).
+    //
+    bool pedantic_modifier_order, // suggested modifier ordering
+         pedantic; // all other warnings
 
     char *dependence_report_name;
 
-    Option(ArgumentExpander &);
+    Option(ArgumentExpander &, Tuple<OptionError *>&);
 
     ~Option();
 };

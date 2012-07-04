@@ -1,4 +1,4 @@
-// $Id: zip.cpp,v 1.17 2001/09/14 05:31:34 ericb Exp $
+// $Id: zip.cpp,v 1.21 2001/12/14 06:52:12 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -16,62 +16,62 @@
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-//************************************************************************************************
+//************************************************************
 //
 // The ZipFile methods follow
 //
-//************************************************************************************************
+//************************************************************
 #ifdef UNIX_FILE_SYSTEM
-    int (*ZipFile::uncompress_file[10]) (FILE *, char *, long) =
-    {
-        UncompressFile0,
-        UncompressFile1,
-        UncompressFile2,
-        UncompressFile3,
-        UncompressFile4,
-        UncompressFile5,
-        UncompressFile6,
-        UncompressFile7,
-        UncompressFile8,
-        UncompressFile9
-    };
+int (*ZipFile::uncompress_file[10]) (FILE *, char *, long) =
+{
+    UncompressFile0,
+    UncompressFile1,
+    UncompressFile2,
+    UncompressFile3,
+    UncompressFile4,
+    UncompressFile5,
+    UncompressFile6,
+    UncompressFile7,
+    UncompressFile8,
+    UncompressFile9
+};
 
-    inline u1 ZipFile::GetU1()
-    {
-        return getc(zipfile);
-    }
+inline u1 ZipFile::GetU1()
+{
+    return getc(zipfile);
+}
 
-    inline void ZipFile::Skip(u4 length)
-    {
-        for (u4 i = 0; i < length; i++)
-             getc(zipfile);
-    }
+inline void ZipFile::Skip(u4 length)
+{
+    for (u4 i = 0; i < length; i++)
+        getc(zipfile);
+}
 
 #elif defined(WIN32_FILE_SYSTEM) // ! UNIX_FILE_SYSTEM
 
-    int (*ZipFile::uncompress_file[10]) (char *, char *, long) =
-    {
-        UncompressFile0,
-        UncompressFile1,
-        UncompressFile2,
-        UncompressFile3,
-        UncompressFile4,
-        UncompressFile5,
-        UncompressFile6,
-        UncompressFile7,
-        UncompressFile8,
-        UncompressFile9
-    };
+int (*ZipFile::uncompress_file[10]) (char *, char *, long) =
+{
+    UncompressFile0,
+    UncompressFile1,
+    UncompressFile2,
+    UncompressFile3,
+    UncompressFile4,
+    UncompressFile5,
+    UncompressFile6,
+    UncompressFile7,
+    UncompressFile8,
+    UncompressFile9
+};
 
-    inline u1 ZipFile::GetU1()
-    {
-        return *file_buffer++;
-    }
+inline u1 ZipFile::GetU1()
+{
+    return *file_buffer++;
+}
 
-    inline void ZipFile::Skip(u4 length)
-    {
-        file_buffer += length;
-    }
+inline void ZipFile::Skip(u4 length)
+{
+    file_buffer += length;
+}
 #endif // WIN32_FILE_SYSTEM
 
 
@@ -145,8 +145,6 @@ ZipFile::ZipFile(FileSymbol *file_symbol) : buffer(NULL)
         }
     }
 #endif
-
-    return;
 }
 
 
@@ -156,11 +154,11 @@ ZipFile::~ZipFile()
 }
 
 
-//************************************************************************************************
+//********************************************************************
 //
 // The Zip methods follow:
 //
-//************************************************************************************************
+//********************************************************************
 inline u1 Zip::GetU1()
 {
     return *buffer_ptr++;
@@ -253,15 +251,22 @@ inline void Zip::ProcessDirectoryEntry()
     Skip(file_name_length + extra_field_length + file_comment_length);
 
     //
-    // Note that we need to process all subdirectory entries that appear in the zip file, and not
-    // just the ones that contain java and class files. Recall that in java the dot notation is
-    // used in specifying a package. Therefore, in processing a qualified-name that represents
-    // a package, we need to recognize each name as a subpackage. E.g., when processing
-    // "java.lang", we need to recognize "java" as a package before looking for "lang"...
-    //
-    DirectorySymbol *directory_symbol = root_directory; // start at the "." directory.
+    // Note that we need to process all subdirectory entries
+    // that appear in the zip file, and not just the ones that
+    // contain java and class files. Recall that in java the
+    // dot notation is used in specifying a package. Therefore,
+    // in processing a qualified-name that represents a package,
+    // we need to recognize each name as a subpackage. E.g.,
+    // when processing "java.lang", we need to recognize "java"
+    // as a package before looking for "lang"...
+
+    // start at the "." directory.
+    DirectorySymbol *directory_symbol = root_directory;
+    // -1 to remove last '/'
     if (name[file_name_length - 1] == U_SLASH)
-        ProcessSubdirectoryEntries(directory_symbol, name, file_name_length - 1);  // -1 to remove last '/'
+        ProcessSubdirectoryEntries(directory_symbol,
+                                   name,
+                                   file_name_length - 1);
     else
     {
         bool java_file = (file_name_length >= FileSymbol::java_suffix_length &&
@@ -276,16 +281,22 @@ inline void Zip::ProcessDirectoryEntry()
             for (i = name_length - 1; i >= 0 && name[i] != U_SLASH; i--)
                 ;
             if (i > 0) // directory specified?
-                directory_symbol = ProcessSubdirectoryEntries(directory_symbol, name, i);
-            NameSymbol *name_symbol = ProcessFilename(&name[i + 1], name_length - (i + 1));
+                directory_symbol = ProcessSubdirectoryEntries(directory_symbol,
+                                                              name, i);
+            NameSymbol *name_symbol = ProcessFilename(&name[i + 1],
+                                                      name_length - (i + 1));
 
             //
-            // Search for a file of that name in the directory. If one is not found, then insert ...
-            // Otherwise, either a class file of that name was previously processed and now we found
-            // a java file with the same name or vice-versa... In that case keep (or replace with ) the
-            // the file with the most recent date stamp.
+            // Search for a file of that name in the directory.
+            // If one is not found, then insert ... Otherwise,
+            // either a class file of that name was previously
+            // processed and now we found a java file with the
+            // same name or vice-versa... In that case keep
+            // (or replace with) the file with the most recent
+            // date stamp.
             //
-            FileSymbol *file_symbol = directory_symbol -> FindFileSymbol(name_symbol);
+            FileSymbol *file_symbol = directory_symbol ->
+                FindFileSymbol(name_symbol);
             if (! file_symbol)
             {
                 file_symbol = directory_symbol -> InsertFileSymbol(name_symbol);
@@ -311,8 +322,6 @@ inline void Zip::ProcessDirectoryEntry()
             }
         }
     }
-
-    return;
 }
 
 
@@ -324,33 +333,181 @@ Zip::Zip(Control &control_, char *zipfile_name) : control(control_),
     zipfile = SystemFopen(zipfile_name, "rb");
     if (zipfile)
     {
-        int rc = fseek(zipfile, -22, SEEK_END);
+        int rc = fseek(zipfile, -END_SIZE, SEEK_END);
         if (rc == 0)
         {
-            zipbuffer = new char[22];
+            zipbuffer = new char[END_SIZE];
             buffer_ptr = zipbuffer;
-            SystemFread(buffer_ptr, sizeof(char), 22, zipfile);
+            SystemFread(buffer_ptr, sizeof(char), END_SIZE, zipfile);
 
             magic = GetU4();
         }
     }
 #elif defined(WIN32_FILE_SYSTEM)
-    zipfile = CreateFile(zipfile_name, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
+    zipfile = CreateFile(zipfile_name,
+                         GENERIC_READ,
+                         FILE_SHARE_READ,
+                         NULL,
+                         OPEN_EXISTING,
+                         FILE_ATTRIBUTE_READONLY,
+                         NULL);
     if (zipfile != INVALID_HANDLE_VALUE)
     {
         mapfile = CreateFileMapping(zipfile, NULL, PAGE_READONLY, 0, 0, NULL);
-        zipbuffer = (mapfile == INVALID_HANDLE_VALUE ? NULL : (char *) MapViewOfFile(mapfile, FILE_MAP_READ, 0, 0, 0));
+        zipbuffer = (mapfile == INVALID_HANDLE_VALUE ?
+                     NULL :
+                     (char *) MapViewOfFile(mapfile,
+                                            FILE_MAP_READ,
+                                            0, 0, 0)
+                     );
         if (zipbuffer)
         {
-            buffer_ptr = &zipbuffer[GetFileSize(zipfile, NULL) - 22];
+            buffer_ptr = &zipbuffer[GetFileSize(zipfile, NULL) - END_SIZE];
             magic = GetU4();
         }
     }
 #endif
 
-    ReadDirectory();
+    // The following was posted to the dev list, but was just
+    // too good to not put in here, the next person to have to
+    // deal with this crap will appreciate it. -=Chris
+    //
+    // From: Mo DeJong <supermo@bayarea.net>
+    //
+    //   Ode to a zip file:
+    //
+    //   I can't read it forwards
+    //   I can't read it backwards
+    //   I must know where to begin
+    //   so I need to look in the middle
+    //   to find the middle, I must know the end
+    //   but I don't know where that is, so I guess
+    //
+    // -------------------------------------------------
 
-    return;
+
+    // This may or may not be a valid zip file. The zip file might have
+    // a file comment so we can't be sure where the END header is located.
+    // We check for the LOC header at byte 0 to make sure this is a valid
+    // zip file and then scan over the file backwards in search of the
+    // END header.
+
+    if (zipbuffer != NULL && ! IsValid()) {
+        u4 sig = 0;
+
+#ifdef UNIX_FILE_SYSTEM
+        int res = fseek(zipfile, 0, SEEK_SET);
+        assert(res == 0);
+
+        char *tmpbuffer = new char[LOC_SIZE];
+        buffer_ptr = tmpbuffer;
+        SystemFread(buffer_ptr, sizeof(char), LOC_SIZE, zipfile);
+        sig = GetU4();
+        delete [] tmpbuffer;
+        buffer_ptr = NULL;
+
+        if (sig == LOC_SIG)
+        {
+            int block_size = 8192;
+            tmpbuffer = new char[block_size];
+            char *holdbuffer = new char[8];
+            char *index_ptr;
+
+            res = fseek(zipfile, 0, SEEK_END);
+            assert(res == 0);
+
+            long zip_file_size = ftell(zipfile);
+            int num_loops = zip_file_size / block_size;
+            magic = 0;
+
+            for (; magic == 0 && num_loops >= 0 ; num_loops--) {
+
+                if ((ftell(zipfile) - block_size) < 0)
+                {
+                    block_size = ftell(zipfile);
+                    res = fseek(zipfile, 0L, SEEK_SET);
+                }
+                else
+                {
+                    res = fseek(zipfile, -block_size, SEEK_CUR);
+                }
+
+                assert(res == 0);
+                SystemFread(tmpbuffer, sizeof(char), block_size, zipfile);
+                res = fseek(zipfile, -block_size, SEEK_CUR); // undo fread
+                assert(res == 0);
+
+                for (index_ptr = tmpbuffer + block_size - 1;
+                     index_ptr >= tmpbuffer;
+                     index_ptr--)
+                {
+                    if (*index_ptr == 'P')
+                    {
+                        // Check for header signature that spans buffer
+                        int span = (tmpbuffer + block_size) - index_ptr;
+
+                        if (span < 4)
+                        {
+                            memmove(holdbuffer+span, holdbuffer, 3);
+                            memmove(holdbuffer, index_ptr, span);
+                            buffer_ptr = holdbuffer;
+                        }
+                        else
+                        {
+                            buffer_ptr = index_ptr;
+                        }
+
+                        sig = GetU4();
+
+                        if (sig == END_SIG)
+                        {
+                            // Found the END header, put it in zipbuffer.
+                            buffer_ptr = zipbuffer;
+                            fseek(zipfile, block_size-span, SEEK_CUR);
+                            SystemFread(buffer_ptr, sizeof(char),
+                                END_SIZE, zipfile);
+
+                            magic = GetU4();
+                            break;
+                        }
+                    }
+                }
+
+                // Copy first 3 bytes into holdbuffer in case sig spans
+                holdbuffer[0] = tmpbuffer[0];
+                holdbuffer[1] = tmpbuffer[1];
+                holdbuffer[2] = tmpbuffer[2];
+            }
+
+            delete [] tmpbuffer; 
+            delete [] holdbuffer;
+        }
+#elif defined(WIN32_FILE_SYSTEM)
+        buffer_ptr = &zipbuffer[0];
+        sig = GetU4();
+
+        if (sig == LOC_SIG)
+        {
+            buffer_ptr = &zipbuffer[GetFileSize(zipfile, NULL) - END_SIZE];
+            for ( ; buffer_ptr >= zipbuffer; buffer_ptr--)
+            {
+                if (*buffer_ptr == 'P')
+                {                
+                    sig = GetU4();
+                    if (sig == END_SIG)
+                    {
+                       magic = sig;
+                       break;
+                    }
+                    else
+                       buffer_ptr -= 4;
+                }
+            }
+        }
+#endif
+    }
+
+    ReadDirectory();
 }
 
 
@@ -379,7 +536,8 @@ Zip::~Zip()
 
 //
 // Upon successful termination of this function, IsValid() should yield true.
-// I.e., we should be able to assert that (magic == 0x06054b50)
+// Each CEN header would have been read so the magic number would get reset
+// when the END header is again read.
 //
 void Zip::ReadDirectory()
 {
@@ -395,22 +553,26 @@ void Zip::ReadDirectory()
         u4 central_directory_size                       = GetU4();
 
 #ifdef UNIX_FILE_SYSTEM
-        int rc = fseek(zipfile, -((int) central_directory_size + 22), SEEK_END);
+        u4 central_directory_offset                     = GetU4();
+        Skip(2); // u2 comment_length                   = GetU2();
+        int rc = fseek(zipfile, central_directory_offset, SEEK_SET);
 
         assert(rc == 0);
 
         delete [] zipbuffer;
-        zipbuffer = new char[central_directory_size + 22];
+        zipbuffer = new char[central_directory_size + END_SIZE];
         buffer_ptr = zipbuffer;
-        SystemFread(buffer_ptr, sizeof(char), central_directory_size + 22, zipfile);
+        SystemFread(buffer_ptr, sizeof(char),
+                    central_directory_size + END_SIZE,
+                    zipfile);
 #elif defined(WIN32_FILE_SYSTEM)
-        buffer_ptr -= (central_directory_size + 16);
+        Skip(6); // u4 central_directory_offset         = GetU4();
+                 // u2 comment_length                   = GetU2();
+        buffer_ptr -= END_SIZE + central_directory_size;
 #endif
-        for (magic = GetU4(); magic == 0x02014b50; magic = GetU4())
+        for (magic = GetU4(); magic == CEN_SIG; magic = GetU4())
              ProcessDirectoryEntry();
     }
-
-    return;
 }
 
 #ifdef HAVE_JIKES_NAMESPACE

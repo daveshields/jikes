@@ -2,11 +2,11 @@
 %options fp=java,escape=$,prefix=TK_,em,defer,output-size=125
 %options hblockb=\:,hblocke=:\,nogoto-default,single-productions
 %options la=2,names=max,jikes
--- $Id: java.g,v 1.22 2001/09/16 01:38:25 ericb Exp $
+-- $Id: java.g,v 1.31 2002/05/22 06:56:43 ericb Exp $
 -- This software is subject to the terms of the IBM Jikes Compiler
 -- License Agreement available at the following URL:
 -- http://ibm.com/developerworks/opensource/jikes.
--- Copyright (C) 1996, 1999, 2000, 2001 International Business
+-- Copyright (C) 1996, 1999, 2000, 2001, 2002 International Business
 -- Machines Corporation and others.  All Rights Reserved.
 -- You must accept the terms of that agreement to use this software.
 
@@ -17,9 +17,10 @@
 -- This Java grammar is almost identical to the grammar defined in
 -- chapter 19 of the first edition of the Java Language Specification
 -- manual.  It has been updated with additional rules added with the
--- 1.1. amendment and second edition JLS (chapter 18 of the second
--- edition is completely broken, so the grammar follows the
--- expository text within the remaining chapters). It is written here
+-- 1.1 amendment and second edition JLS (chapter 18 of the second
+-- edition is completely broken, so the grammar follows the expository
+-- text within the remaining chapters), as well as the addition of
+-- assert (JSR 41 in the Java Community Process). It is written here
 -- in JIKES PG format with semantic actions following each rule. In
 -- specifying the rules we enclosed all terminal symbols in single
 -- quotes so that they can be quickly distinguished from
@@ -117,10 +118,10 @@ $SetSym1ToSym2
 #endif
 ./
 
-$MakeEmptyStatement
+$MakeMethodDeclaration
 /.
 #ifndef HEADERS
-    rule_action[$rule_number] = &Parser::MakeEmptyStatement;
+    rule_action[$rule_number] = &Parser::MakeMethodDeclaration;
 #endif
 ./
 
@@ -156,6 +157,13 @@ $MakeForStatement
 /.
 #ifndef HEADERS
     rule_action[$rule_number] = &Parser::MakeForStatement;
+#endif
+./
+
+$MakeAssertStatement
+/.
+#ifndef HEADERS
+    rule_action[$rule_number] = &Parser::MakeAssertStatement;
 #endif
 ./
 
@@ -258,7 +266,7 @@ $Terminals
 
     Identifier
 
-    abstract boolean break byte case catch char class const
+    abstract assert boolean break byte case catch char class const
     continue default do double else extends false final finally float
     for goto if implements import instanceof int
     interface long native new null package private
@@ -268,7 +276,7 @@ $Terminals
 
     IntegerLiteral
     LongLiteral
-    FloatingPointLiteral
+    FloatLiteral
     DoubleLiteral
     CharacterLiteral
     StringLiteral
@@ -322,7 +330,6 @@ $Terminals
 
     ERROR
     EOF
-    EOL
 
 $Alias
 
@@ -377,8 +384,6 @@ $Alias
     $EOF   ::= EOF
     $ERROR ::= ERROR
 
-    $EOL   ::= ;
-
 $Start
 
     Goal
@@ -386,13 +391,13 @@ $Start
 $Rules
 
 \:
-// $Id: java.g,v 1.22 2001/09/16 01:38:25 ericb Exp $ -*- c++ -*-
+// $Id: java.g,v 1.31 2002/05/22 06:56:43 ericb Exp $ -*- c++ -*-
 // DO NOT MODIFY THIS FILE - it is generated using jikespg on java.g.
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 2001 International Business
+// Copyright (C) 1996, 1998, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -416,12 +421,13 @@ void Parser::InitRuleAction()
     void MakeQualifiedSuper(void);
     void MakeQualifiedNew(void);
     void SetSym1ToSym2(void);
-    void MakeEmptyStatement(void);
+    void MakeMethodDeclaration(void);
     void MakeLabeledStatement(void);
     void MakeExpressionStatement(void);
     void MakeIfThenElseStatement(void);
     void MakeWhileStatement(void);
     void MakeForStatement(void);
+    void MakeAssertStatement(void);
     void MakeArrayCreationExpression(void);
     void MakeSuperFieldAccess(void);
     void MakeSuperDoubleFieldAccess(void);
@@ -432,13 +438,13 @@ void Parser::InitRuleAction()
 :\
 
 /.#line $next_line "$input_file"
-// $Id: java.g,v 1.22 2001/09/16 01:38:25 ericb Exp $
+// $Id: java.g,v 1.31 2002/05/22 06:56:43 ericb Exp $
 // DO NOT MODIFY THIS FILE - it is generated using jikespg on java.g.
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 2001 International Business
+// Copyright (C) 1996, 1998, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -454,14 +460,14 @@ void Parser::InitRuleAction()
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-//****************************************************************************//
-//****************************************************************************//
-//*                                                                          *//
-//* Below, we show each rule of the Java grammar together with the semantic  *//
-//* action that is invoked when the parser performs a reduction by that rule.*//
-//*                                                                          *//
-//****************************************************************************//
-//****************************************************************************//
+//**************************************************************************//
+//**************************************************************************//
+//*                                                                        *//
+//* Below, we show each rule of the Java grammar together with the         *//
+//* semantic action that is invoked when the parser performs a reduction   *//
+//* by that rule.                                                          *//
+//**************************************************************************//
+//**************************************************************************//
 
 ./
 
@@ -479,7 +485,7 @@ void Parser::BadAction(void) { assert(false); }
 void Parser::NoAction(void) {}
 ./
 
-Goal ::= BodyMarker ConstructorBody
+Goal ::= BodyMarker MethodBody
 \:$action:\
 /.$location
 //
@@ -522,12 +528,12 @@ void Parser::Act$rule_number(void)
 }
 ./
 
-Literal ::= FloatingPointLiteral
+Literal ::= FloatLiteral
 \:$action:\
 /.$location
 void Parser::Act$rule_number(void)
 {
-    Sym(1) = ast_pool -> NewFloatingPointLiteral(Token(1));
+    Sym(1) = ast_pool -> NewFloatLiteral(Token(1));
 }
 ./
 
@@ -709,18 +715,18 @@ ArrayType ::= PrimitiveType Dims
 void Parser::MakeArrayType(void)
 {
     AstArrayType *p = ast_pool -> NewArrayType();
-    p -> type     = Sym(1);
+    p -> type = Sym(1);
     //
     // The list of modifiers is guaranteed not empty
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         p -> AllocateBrackets(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddBrackets((AstBrackets *) root -> element);
+            p -> AddBrackets(DYNAMIC_CAST<AstBrackets *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -768,7 +774,7 @@ QualifiedName ::= Name '.' 'Identifier'
 void Parser::MakeFieldAccess(void)
 {
     AstFieldAccess *p = ast_pool -> NewFieldAccess();
-    p -> base = (AstExpression *) Sym(1);
+    p -> base = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> dot_token = Token(2);
     p -> identifier_token = Token(3);
     Sym(1) = p;
@@ -783,22 +789,22 @@ CompilationUnit ::= PackageDeclarationopt ImportDeclarationsopt TypeDeclarations
 void Parser::Act$rule_number(void)
 {
     AstCompilationUnit *p = ast_pool -> NewCompilationUnit();
-    p -> package_declaration_opt = (AstPackageDeclaration *) Sym(1);
+    p -> package_declaration_opt = DYNAMIC_CAST<AstPackageDeclaration *> (Sym(1));
     if (Sym(2) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         p -> AllocateImportDeclarations(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddImportDeclaration((AstImportDeclaration *) root -> element);
+            p -> AddImportDeclaration(DYNAMIC_CAST<AstImportDeclaration *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
     if (Sym(3) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateTypeDeclarations(tail -> index + 1);
         AstListNode *root = tail;
         do
@@ -837,7 +843,7 @@ ImportDeclarations ::= ImportDeclarations ImportDeclaration
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(2);
@@ -875,7 +881,7 @@ TypeDeclarations ::= TypeDeclarations TypeDeclaration
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(2);
@@ -894,8 +900,8 @@ PackageDeclaration ::= 'package' Name PackageHeaderMarker ';'
 void Parser::Act$rule_number(void)
 {
     AstPackageDeclaration *p = ast_pool -> NewPackageDeclaration();
-    p -> package_token   = Token(1);
-    p -> name            = (AstExpression *) Sym(2);
+    p -> package_token = Token(1);
+    p -> name = DYNAMIC_CAST<AstExpression *> (Sym(2));
     p -> semicolon_token = Token(3);
     Sym(1) = p;
 }
@@ -915,9 +921,9 @@ SingleTypeImportDeclaration ::= 'import' Name ';'
 void Parser::Act$rule_number(void)
 {
     AstImportDeclaration *p = ast_pool -> NewImportDeclaration();
-    p -> import_token    = Token(1);
-    p -> name            = (AstExpression *) Sym(2);
-    p -> star_token_opt  = 0;
+    p -> import_token = Token(1);
+    p -> name = DYNAMIC_CAST<AstExpression *> (Sym(2));
+    p -> star_token_opt = 0;
     p -> semicolon_token = Token(3);
     Sym(1) = p;
 }
@@ -929,10 +935,10 @@ TypeImportOnDemandDeclaration ::= 'import' Name '.' '*' ';'
 void Parser::Act$rule_number(void)
 {
     AstImportDeclaration *p = ast_pool -> NewImportDeclaration();
-    p -> import_token         = Token(1);
-    p -> name                 = (AstExpression *) Sym(2);
-    p -> star_token_opt       = Token(4);
-    p -> semicolon_token      = Token(5);
+    p -> import_token = Token(1);
+    p -> name = DYNAMIC_CAST<AstExpression *> (Sym(2));
+    p -> star_token_opt = Token(4);
+    p -> semicolon_token = Token(5);
     Sym(1) = p;
 }
 ./
@@ -981,7 +987,7 @@ Modifiers ::= Modifiers Modifier
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(2);
@@ -1108,32 +1114,32 @@ void Parser::Act$rule_number(void)
     AstClassDeclaration *p = ast_pool -> NewClassDeclaration();
     if (Sym(1) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(1);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
         p -> AllocateClassModifiers(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddClassModifier((AstModifier *) root -> element);
+            p -> AddClassModifier(DYNAMIC_CAST<AstModifier *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> class_token          = Token(2);
-    p -> identifier_token     = Token(3);
-    p -> super_opt            = (AstExpression *) Sym(4);
+    p -> class_token = Token(2);
+    p -> identifier_token = Token(3);
+    p -> super_opt = DYNAMIC_CAST<AstExpression *> (Sym(4));
     if (Sym(5) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(5);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(5));
         p -> AllocateInterfaces(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddInterface((AstExpression *) root -> element);
+            p -> AddInterface(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> class_body = (AstClassBody *) Sym(6);
+    p -> class_body = DYNAMIC_CAST<AstClassBody *> (Sym(6));
     Sym(1) = p;
 }
 ./
@@ -1176,7 +1182,7 @@ InterfaceTypeList ::= InterfaceTypeList ',' InterfaceType
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(3);
@@ -1211,7 +1217,7 @@ void Parser::Act$rule_number(void)
             num_blocks = 0,
             num_empty_declarations = 0;
 
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         p -> AllocateClassBodyDeclarations(tail -> index + 1);
         AstListNode *root = tail;
         do
@@ -1268,7 +1274,7 @@ void Parser::Act$rule_number(void)
         p -> AllocateStaticInitializers(num_static_initializers);
         p -> AllocateNestedClasses(num_inner_classes);
         p -> AllocateNestedInterfaces(num_inner_interfaces);
-        p -> AllocateBlocks(num_blocks);
+        p -> AllocateInstanceInitializers(num_blocks);
         p -> AllocateEmptyDeclarations(num_empty_declarations);
 
         root = tail;
@@ -1282,7 +1288,7 @@ void Parser::Act$rule_number(void)
             AstStaticInitializer *static_initializer;
             AstClassDeclaration *class_declaration;
             AstInterfaceDeclaration *interface_declaration;
-            AstBlock *block;
+            AstMethodBody *block;
 
             if ((field_declaration = root -> element -> FieldDeclarationCast()))
             {
@@ -1310,13 +1316,13 @@ void Parser::Act$rule_number(void)
             {
                 p -> AddNestedInterface(interface_declaration);
             }
-            else if ((block = root -> element -> BlockCast()))
+            else if ((block = root -> element -> MethodBodyCast()))
             {
-                p -> AddBlock(block);
+                p -> AddInstanceInitializer(block);
             }
             else // assert(block = root -> element -> EmptyDeclarationCast())
             {
-                p -> AddEmptyDeclaration((AstEmptyDeclaration *) root -> element);
+                p -> AddEmptyDeclaration(DYNAMIC_CAST<AstEmptyDeclaration *> (root -> element));
             }
         } while (root != tail);
         FreeCircularList(tail);
@@ -1352,7 +1358,7 @@ ClassBodyDeclarations ::= ClassBodyDeclarations ClassBodyDeclaration
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(2);
@@ -1377,8 +1383,8 @@ ClassBodyDeclaration -> ConstructorDeclaration
 \:$NoAction:\
 /.$shared_NoAction./
 
---1.1 feature
-ClassBodyDeclaration ::= MethodHeaderMarker Block
+--1.1 feature: Instance initializer
+ClassBodyDeclaration ::= MethodHeaderMarker MethodBody
 \:$action:\
 /.$location
 void Parser::Act$rule_number(void)
@@ -1432,13 +1438,13 @@ void Parser::Act$rule_number(void)
     AstFieldDeclaration *p = ast_pool -> NewFieldDeclaration();
     if (Sym(1) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(1);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
         p -> AllocateVariableModifiers(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddVariableModifier((AstModifier *) root -> element);
+            p -> AddVariableModifier(DYNAMIC_CAST<AstModifier *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -1447,17 +1453,17 @@ void Parser::Act$rule_number(void)
     // The list of declarators is guaranteed not empty
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateVariableDeclarators(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddVariableDeclarator((AstVariableDeclarator *) root -> element);
+            p -> AddVariableDeclarator(DYNAMIC_CAST<AstVariableDeclarator *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> semicolon_token      = Token(4);
+    p -> semicolon_token = Token(4);
     Sym(1) = p;
 }
 ./
@@ -1487,7 +1493,7 @@ VariableDeclarators ::= VariableDeclarators ',' VariableDeclarator
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(3);
@@ -1506,7 +1512,7 @@ VariableDeclarator ::= VariableDeclaratorId
 void Parser::Act$rule_number(void)
 {
     AstVariableDeclarator *p = ast_pool -> NewVariableDeclarator();
-    p -> variable_declarator_name = (AstVariableDeclaratorId *) Sym(1);
+    p -> variable_declarator_name = DYNAMIC_CAST<AstVariableDeclaratorId *> (Sym(1));
     p -> variable_initializer_opt = NULL;
     Sym(1) = p;
 }
@@ -1518,7 +1524,7 @@ VariableDeclarator ::= VariableDeclaratorId '=' VariableInitializer
 void Parser::Act$rule_number(void)
 {
     AstVariableDeclarator *p = ast_pool -> NewVariableDeclarator();
-    p -> variable_declarator_name = (AstVariableDeclaratorId *) Sym(1);
+    p -> variable_declarator_name = DYNAMIC_CAST<AstVariableDeclaratorId *> (Sym(1));
     p -> variable_initializer_opt = Sym(3);
     Sym(1) = p;
 }
@@ -1533,13 +1539,13 @@ void Parser::Act$rule_number(void)
     p -> identifier_token = Token(1);
     if (Sym(2) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         p -> AllocateBrackets(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddBrackets((AstBrackets *) root -> element);
+            p -> AddBrackets(DYNAMIC_CAST<AstBrackets *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -1566,20 +1572,30 @@ VariableInitializer -> ArrayInitializer
 --    | 'native'
 --    | 'synchronized'
 --
--- The original rule does not contain the "MethodHeaderMarker.
+-- The original rule does not contain the "MethodHeaderMarker".
 -- See explanation above.
 --
 -- MethodDeclaration ::= MethodHeader MethodBody
 --
-
+-- We have expanded MethodBody inline to enable the sharing of
+-- MethodBody between methods, constructors, and initializers.
+--
 MethodDeclaration ::= MethodHeader MethodHeaderMarker MethodBody
-\:$action:\
-/.$location
-void Parser::Act$rule_number(void)
+\:$MakeMethodDeclaration:\
+/.$shared_function
+void Parser::MakeMethodDeclaration(void)
 {
-    ((AstMethodDeclaration *) Sym(1)) -> method_body = (AstStatement *) Sym(3);
+    DYNAMIC_CAST<AstMethodDeclaration *> (Sym(1)) -> method_body =
+        DYNAMIC_CAST<AstStatement *> (Sym(3));
 }
 ./
+
+MethodDeclaration ::= MethodHeader MethodHeaderMarker EmptyStatement
+\:$MakeMethodDeclaration:\
+/.$shared_function
+//
+// void MakeMethodDeclaration(void);
+//./
 
 MethodHeader ::= Modifiersopt Type MethodDeclarator Throwsopt
 \:$action:\
@@ -1589,27 +1605,27 @@ void Parser::Act$rule_number(void)
     AstMethodDeclaration *p = ast_pool -> NewMethodDeclaration();
     if (Sym(1) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(1);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
         p -> AllocateMethodModifiers(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddMethodModifier((AstModifier *) root -> element);
+            p -> AddMethodModifier(DYNAMIC_CAST<AstModifier *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> type              = Sym(2);
-    p -> method_declarator = (AstMethodDeclarator *) Sym(3);
+    p -> type = Sym(2);
+    p -> method_declarator = DYNAMIC_CAST<AstMethodDeclarator *> (Sym(3));
     if (Sym(4) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(4);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(4));
         p -> AllocateThrows(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddThrow((AstExpression *) root -> element);
+            p -> AddThrow(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -1625,27 +1641,27 @@ void Parser::Act$rule_number(void)
     AstMethodDeclaration *p = ast_pool -> NewMethodDeclaration();
     if (Sym(1) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(1);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
         p -> AllocateMethodModifiers(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddMethodModifier((AstModifier *) root -> element);
+            p -> AddMethodModifier(DYNAMIC_CAST<AstModifier *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> type              = ast_pool -> NewPrimitiveType(Ast::VOID_TYPE, Token(2));
-    p -> method_declarator = (AstMethodDeclarator *) Sym(3);
+    p -> type = ast_pool -> NewPrimitiveType(Ast::VOID_TYPE, Token(2));
+    p -> method_declarator = DYNAMIC_CAST<AstMethodDeclarator *> (Sym(3));
     if (Sym(4) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(4);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(4));
         p -> AllocateThrows(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddThrow((AstExpression *) root -> element);
+            p -> AddThrow(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -1659,30 +1675,30 @@ MethodDeclarator ::= 'Identifier' '(' FormalParameterListopt ')' Dimsopt
 void Parser::Act$rule_number(void)
 {
     AstMethodDeclarator *p = ast_pool -> NewMethodDeclarator();
-    p -> identifier_token        = Token(1);
-    p -> left_parenthesis_token  = Token(2);
+    p -> identifier_token = Token(1);
+    p -> left_parenthesis_token = Token(2);
     if (Sym(3) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateFormalParameters(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddFormalParameter((AstFormalParameter *) root -> element);
+            p -> AddFormalParameter(DYNAMIC_CAST<AstFormalParameter *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(4);
     if (Sym(5) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(5);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(5));
         p -> AllocateBrackets(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddBrackets((AstBrackets *) root -> element);
+            p -> AddBrackets(DYNAMIC_CAST<AstBrackets *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -1715,7 +1731,7 @@ FormalParameterList ::= FormalParameterList ',' FormalParameter
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(3);
@@ -1737,7 +1753,7 @@ void Parser::Act$rule_number(void)
     p -> type = Sym(1);
 
     AstVariableDeclarator *formal_declarator = ast_pool -> NewVariableDeclarator();
-    formal_declarator -> variable_declarator_name = (AstVariableDeclaratorId *) Sym(2);
+    formal_declarator -> variable_declarator_name = DYNAMIC_CAST<AstVariableDeclaratorId *> (Sym(2));
     formal_declarator -> variable_initializer_opt = NULL;
 
     p -> formal_declarator = formal_declarator;
@@ -1757,13 +1773,13 @@ void Parser::Act$rule_number(void)
     // The list of modifiers is guaranteed not empty
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(1);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
         p -> AllocateParameterModifiers(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddParameterModifier((AstModifier *) root -> element);
+            p -> AddParameterModifier(DYNAMIC_CAST<AstModifier *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -1771,7 +1787,7 @@ void Parser::Act$rule_number(void)
     p -> type = Sym(2);
 
     AstVariableDeclarator *formal_declarator = ast_pool -> NewVariableDeclarator();
-    formal_declarator -> variable_declarator_name = (AstVariableDeclaratorId *) Sym(3);
+    formal_declarator -> variable_declarator_name = DYNAMIC_CAST<AstVariableDeclaratorId *> (Sym(3));
     formal_declarator -> variable_initializer_opt = NULL;
 
     p -> formal_declarator = formal_declarator;
@@ -1812,7 +1828,7 @@ ClassTypeList ::= ClassTypeList ',' ClassType
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(3);
@@ -1825,29 +1841,58 @@ void Parser::Act$rule_number(void)
 }
 ./
 
-MethodBody -> Block
-\:$NoAction:\
-/.$shared_NoAction./
-
-MethodBody ::= ';'
-\:$MakeEmptyStatement:\
+--
+-- Notice that we filter out an initial explicit constructor invocation,
+-- since we have modified Statement to include this() and super(). Other
+-- explicit constructor calls are ignored now, and flagged as errors
+-- during semantic analysis.
+--
+MethodBody ::= '{' BlockStatementsopt '}'
+\:$action:\
 /.$location
-void Parser::MakeEmptyStatement(void)
+void Parser::Act$rule_number(void)
 {
-    Sym(1) = ast_pool -> NewEmptyStatement(Token(1));
+    AstMethodBody *p = ast_pool -> NewMethodBody();
+    p -> left_brace_token = Token(1);
+    p -> right_brace_token = Token(3);
+
+    if (Sym(2) != NULL)
+    {
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
+        p -> AllocateBlockStatements(tail -> index + 1);
+        AstListNode *root = tail -> next;
+        if (root -> element -> IsExplicitConstructorInvocation())
+            p -> explicit_constructor_opt = DYNAMIC_CAST<AstStatement *> (root -> element);
+        else
+            p -> AddStatement(DYNAMIC_CAST<AstStatement *> (root -> element));
+        while (root != tail)
+        {
+            root = root -> next;
+            p -> AddStatement(DYNAMIC_CAST<AstStatement *> (root -> element));
+        }
+        FreeCircularList(tail);
+    }
+
+    Sym(1) = p;
 }
 ./
 
+--
+-- Instead of directly including this rule, we have expanded it inline above.
+--
+--MethodBody ::= ';'
+--
+
 --18.8.4 Productions from 8.5: Static Initializers
 
-StaticInitializer ::= 'static' MethodHeaderMarker Block
+StaticInitializer ::= 'static' MethodHeaderMarker MethodBody
 \:$action:\
 /.$location
 void Parser::Act$rule_number(void)
 {
     AstStaticInitializer *p = ast_pool -> NewStaticInitializer();
     p -> static_token = Token(1);
-    p -> block        = (AstBlock *) Sym(3);
+    p -> block = DYNAMIC_CAST<AstMethodBody *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -1860,54 +1905,46 @@ void Parser::Act$rule_number(void)
 --
 --
 -- The original rule does not contain a "MethodHeaderMarker". See
--- explanation above.
+-- explanation above. Also, since ExplicitConstructorInvocation is
+-- treated as a Statement for error message purposes, there is no
+-- difference between MethodBody and ConstructorBody.
 --
 -- ConstructorDeclaration ::= Modifiersopt ConstructorDeclarator Throwsopt ConstructorBody
 --
 
-ConstructorDeclaration ::= Modifiersopt ConstructorDeclarator Throwsopt MethodHeaderMarker ConstructorBody
+ConstructorDeclaration ::= Modifiersopt ConstructorDeclarator Throwsopt MethodHeaderMarker MethodBody
 \:$action:\
 /.$location
 void Parser::Act$rule_number(void)
 {
-    AstConstructorBlock *block = Sym(5) -> ConstructorBlockCast();
-    if (! block)
-    {
-        block = ast_pool -> NewConstructorBlock();
-        block -> left_brace_token                    = Sym(5) -> LeftToken();
-        block -> explicit_constructor_invocation_opt = NULL;
-        block -> block                               = (AstBlock *) Sym(5);
-        block -> right_brace_token                   = Sym(5) -> RightToken();
-    }
-
     AstConstructorDeclaration *p = ast_pool -> NewConstructorDeclaration();
 
     if (Sym(1) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(1);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
         p -> AllocateConstructorModifiers(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddConstructorModifier((AstModifier *) root -> element);
+            p -> AddConstructorModifier(DYNAMIC_CAST<AstModifier *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> constructor_declarator = (AstMethodDeclarator *) Sym(2);
+    p -> constructor_declarator = DYNAMIC_CAST<AstMethodDeclarator *> (Sym(2));
     if (Sym(3) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateThrows(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddThrow((AstExpression *) root -> element);
+            p -> AddThrow(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> constructor_body       = block;
+    p -> constructor_body = DYNAMIC_CAST<AstMethodBody *> (Sym(5));
 
     Sym(1) = p;
 }
@@ -1927,17 +1964,17 @@ ConstructorDeclarator ::= 'Identifier' '(' FormalParameterListopt ')'
 void Parser::Act$rule_number(void)
 {
     AstMethodDeclarator *p = ast_pool -> NewMethodDeclarator();
-    p -> identifier_token        = Token(1);
-    p -> left_parenthesis_token  = Token(2);
+    p -> identifier_token = Token(1);
+    p -> left_parenthesis_token = Token(2);
     if (Sym(3) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateFormalParameters(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddFormalParameter((AstFormalParameter *) root -> element);
+            p -> AddFormalParameter(DYNAMIC_CAST<AstFormalParameter *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -1947,49 +1984,14 @@ void Parser::Act$rule_number(void)
 ./
 
 --
--- NOTE that the rules ExplicitConstructorInvocationopt has been expanded
--- in the rule below in order to make the grammar lalr(1).
+-- NOTE that for better error reporting, we have coalesced
+-- ExplicitConstructorInvocation into BlockStatement. Therefore, we
+-- do not need a rule for ConstructorBody, since MethodBody does the
+-- same amount of work. During semantic analysis, we then detect any
+-- time an explicit constructor invocation was called out of context.
 --
 -- ConstructorBody ::= '{' ExplicitConstructorInvocationopt BlockStatementsopt '}'
 --
-ConstructorBody -> Block
-\:$NoAction:\
-/.$shared_NoAction./
-
-ConstructorBody ::= '{' ExplicitConstructorInvocation BlockStatementsopt '}'
-\:$action:\
-/.$location
-void Parser::Act$rule_number(void)
-{
-    AstBlock *block = ast_pool -> NewBlock();
-    if (Sym(3) != NULL)
-    {
-        AstListNode *tail = (AstListNode *) Sym(3);
-        block -> AllocateBlockStatements(tail -> index + 1);
-        AstListNode *root = tail;
-        block -> left_brace_token  = root -> element -> LeftToken();
-        block -> right_brace_token = tail -> element -> RightToken();
-        do
-        {
-            root = root -> next;
-            block -> AddStatement((AstStatement *) root -> element);
-        } while (root != tail);
-        FreeCircularList(tail);
-    }
-    else
-    {
-        block -> left_brace_token  = Token(4);
-        block -> right_brace_token = Token(4);
-    }
-
-    AstConstructorBlock *p = ast_pool -> NewConstructorBlock();
-    p -> left_brace_token                    = Token(1);
-    p -> explicit_constructor_invocation_opt = Sym(2);
-    p -> block                               = block;
-    p -> right_brace_token                   = Token(4);
-    Sym(1) = p;
-}
-./
 
 ExplicitConstructorInvocation ::= 'this' '(' ArgumentListopt ')' ';'
 \:$action:\
@@ -1997,22 +1999,22 @@ ExplicitConstructorInvocation ::= 'this' '(' ArgumentListopt ')' ';'
 void Parser::Act$rule_number(void)
 {
     AstThisCall *p = ast_pool -> NewThisCall();
-    p -> this_token              = Token(1);
-    p -> left_parenthesis_token  = Token(2);
+    p -> this_token = Token(1);
+    p -> left_parenthesis_token = Token(2);
     if (Sym(3) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateArguments(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddArgument((AstExpression *) root -> element);
+            p -> AddArgument(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(4);
-    p -> semicolon_token         = Token(5);
+    p -> semicolon_token = Token(5);
     Sym(1) = p;
 }
 ./
@@ -2023,24 +2025,24 @@ ExplicitConstructorInvocation ::= 'super' '(' ArgumentListopt ')' ';'
 void Parser::Act$rule_number(void)
 {
     AstSuperCall *p = ast_pool -> NewSuperCall();
-    p -> base_opt                = NULL;
-    p -> dot_token_opt           = 0;
-    p -> super_token             = Token(1);
-    p -> left_parenthesis_token  = Token(2);
+    p -> base_opt = NULL;
+    p -> dot_token_opt = 0;
+    p -> super_token = Token(1);
+    p -> left_parenthesis_token = Token(2);
     if (Sym(3) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateArguments(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddArgument((AstExpression *) root -> element);
+            p -> AddArgument(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(4);
-    p -> semicolon_token         = Token(5);
+    p -> semicolon_token = Token(5);
     Sym(1) = p;
 }
 ./
@@ -2052,24 +2054,24 @@ ExplicitConstructorInvocation ::= Primary '.' 'super' '(' ArgumentListopt ')' ';
 void Parser::MakeQualifiedSuper(void)
 {
     AstSuperCall *p = ast_pool -> NewSuperCall();
-    p -> base_opt                = (AstExpression *) Sym(1);
-    p -> dot_token_opt           = Token(2);
-    p -> super_token             = Token(3);
-    p -> left_parenthesis_token  = Token(4);
+    p -> base_opt = DYNAMIC_CAST<AstExpression *> (Sym(1));
+    p -> dot_token_opt = Token(2);
+    p -> super_token = Token(3);
+    p -> left_parenthesis_token = Token(4);
     if (Sym(5) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(5);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(5));
         p -> AllocateArguments(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddArgument((AstExpression *) root -> element);
+            p -> AddArgument(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(6);
-    p -> semicolon_token         = Token(7);
+    p -> semicolon_token = Token(7);
     Sym(1) = p;
 }
 ./
@@ -2094,30 +2096,30 @@ InterfaceDeclaration ::= Modifiersopt 'interface' 'Identifier' ExtendsInterfaces
 /.$location
 void Parser::Act$rule_number(void)
 {
-    AstInterfaceDeclaration *p = (AstInterfaceDeclaration *) Sym(5);
+    AstInterfaceDeclaration *p = DYNAMIC_CAST<AstInterfaceDeclaration *> (Sym(5));
     if (Sym(1) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(1);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
         p -> AllocateInterfaceModifiers(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddInterfaceModifier((AstModifier *) root -> element);
+            p -> AddInterfaceModifier(DYNAMIC_CAST<AstModifier *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> interface_token  = Token(2);
+    p -> interface_token = Token(2);
     p -> identifier_token = Token(3);
     if (Sym(4) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(4);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(4));
         p -> AllocateExtendsInterfaces(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddExtendsInterface((AstExpression *) root -> element);
+            p -> AddExtendsInterface(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -2150,7 +2152,7 @@ void Parser::Act$rule_number(void)
             num_inner_interfaces = 0,
             num_empty_declarations = 0;
 
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         p -> AllocateInterfaceMemberDeclarations(tail -> index + 1);
         AstListNode *root = tail;
         do
@@ -2213,7 +2215,7 @@ void Parser::Act$rule_number(void)
             }
             else // assert(interface_declaration = root -> element -> EmptyDeclarationCast())
             {
-                p -> AddEmptyDeclaration((AstEmptyDeclaration *) root -> element);
+                p -> AddEmptyDeclaration(DYNAMIC_CAST<AstEmptyDeclaration *> (root -> element));
             }
         } while (root != tail);
         FreeCircularList(tail);
@@ -2249,7 +2251,7 @@ InterfaceMemberDeclarations ::= InterfaceMemberDeclarations InterfaceMemberDecla
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(2);
@@ -2298,7 +2300,8 @@ AbstractMethodDeclaration ::= MethodHeader ';'
 /.$location
 void Parser::Act$rule_number(void)
 {
-    ((AstMethodDeclaration *) Sym(1)) -> method_body = ast_pool -> NewEmptyStatement(Token(2));
+    DYNAMIC_CAST<AstMethodDeclaration *> (Sym(1)) -> method_body =
+        ast_pool -> NewEmptyStatement(Token(2));
 }
 ./
 
@@ -2316,8 +2319,8 @@ ArrayInitializer ::= '{' ,opt '}'
 void Parser::Act$rule_number(void)
 {
     AstArrayInitializer *p = ast_pool -> NewArrayInitializer();
-    p -> left_brace_token      = Token(1);
-    p -> right_brace_token     = Token(3);
+    p -> left_brace_token = Token(1);
+    p -> right_brace_token = Token(3);
     Sym(1) = p;
 }
 ./
@@ -2328,10 +2331,10 @@ ArrayInitializer ::= '{' VariableInitializers '}'
 void Parser::Act$rule_number(void)
 {
     AstArrayInitializer *p = ast_pool -> NewArrayInitializer();
-    p -> left_brace_token      = Token(1);
+    p -> left_brace_token = Token(1);
     if (Sym(2) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         p -> AllocateVariableInitializers(tail -> index + 1);
         AstListNode *root = tail;
         do
@@ -2341,7 +2344,7 @@ void Parser::Act$rule_number(void)
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> right_brace_token     = Token(3);
+    p -> right_brace_token = Token(3);
     Sym(1) = p;
 }
 ./
@@ -2352,10 +2355,10 @@ ArrayInitializer ::= '{' VariableInitializers , '}'
 void Parser::Act$rule_number(void)
 {
     AstArrayInitializer *p = ast_pool -> NewArrayInitializer();
-    p -> left_brace_token      = Token(1);
+    p -> left_brace_token = Token(1);
     if (Sym(2) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         p -> AllocateVariableInitializers(tail -> index + 1);
         AstListNode *root = tail;
         do
@@ -2365,7 +2368,7 @@ void Parser::Act$rule_number(void)
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> right_brace_token     = Token(4);
+    p -> right_brace_token = Token(4);
     Sym(1) = p;
 }
 ./
@@ -2395,7 +2398,7 @@ VariableInitializers ::= VariableInitializers ',' VariableInitializer
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(3);
@@ -2416,16 +2419,16 @@ Block ::= '{' BlockStatementsopt '}'
 void Parser::Act$rule_number(void)
 {
     AstBlock *p = ast_pool -> NewBlock();
-    p -> left_brace_token  = Token(1);
+    p -> left_brace_token = Token(1);
     if (Sym(2) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         p -> AllocateBlockStatements(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddStatement((AstStatement *) root -> element);
+            p -> AddStatement(DYNAMIC_CAST<AstStatement *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -2459,7 +2462,7 @@ BlockStatements ::= BlockStatements BlockStatement
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(2);
@@ -2485,12 +2488,21 @@ BlockStatement -> ClassDeclaration
 \:$NoAction:\
 /.$shared_NoAction./
 
+--
+-- NOTE: This rule is not in the original grammar. We added it, and changed
+-- the rule for ConstructorBody, in order to issue a nicer error message
+-- when this() or super() is encountered out of context.
+--
+BlockStatement -> ExplicitConstructorInvocation
+\:$NoAction:\
+/.$shared_NoAction./
+
 LocalVariableDeclarationStatement ::= LocalVariableDeclaration ';'
 \:$action:\
 /.$location
 void Parser::Act$rule_number(void)
 {
-    ((AstLocalVariableDeclarationStatement *) Sym(1)) -> semicolon_token_opt = Token(2);
+    DYNAMIC_CAST<AstLocalVariableDeclarationStatement *> (Sym(1)) -> semicolon_token_opt = Token(2);
 }
 ./
 
@@ -2500,22 +2512,22 @@ LocalVariableDeclaration ::= Type VariableDeclarators
 void Parser::Act$rule_number(void)
 {
     AstLocalVariableDeclarationStatement *p = ast_pool -> NewLocalVariableDeclarationStatement();
-    p -> type                 = Sym(1);
+    p -> type = Sym(1);
     //
     // The list of declarators is guaranteed not empty
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         p -> AllocateVariableDeclarators(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddVariableDeclarator((AstVariableDeclarator *) root -> element);
+            p -> AddVariableDeclarator(DYNAMIC_CAST<AstVariableDeclarator *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> semicolon_token_opt  = 0;
+    p -> semicolon_token_opt = 0;
     Sym(1) = p;
 }
 ./
@@ -2531,13 +2543,13 @@ void Parser::Act$rule_number(void)
     // The list of modifiers is guaranteed not empty
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(1);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
         p -> AllocateLocalModifiers(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddLocalModifier((AstModifier *) root -> element);
+            p -> AddLocalModifier(DYNAMIC_CAST<AstModifier *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -2546,17 +2558,17 @@ void Parser::Act$rule_number(void)
     // The list of declarators is guaranteed not empty
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateVariableDeclarators(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddVariableDeclarator((AstVariableDeclarator *) root -> element);
+            p -> AddVariableDeclarator(DYNAMIC_CAST<AstVariableDeclarator *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> semicolon_token_opt  = 0;
+    p -> semicolon_token_opt = 0;
     Sym(1) = p;
 }
 ./
@@ -2649,12 +2661,18 @@ StatementWithoutTrailingSubstatement -> TryStatement
 \:$NoAction:\
 /.$shared_NoAction./
 
+StatementWithoutTrailingSubstatement -> AssertStatement
+\:$NoAction:\
+/.$shared_NoAction./
+
 EmptyStatement ::= ';'
-\:$MakeEmptyStatement:\
-/.$shared_function
-//
-// void MakeEmptyStatement(void);
-//./
+\:$action:\
+/.$location
+void Parser::Act$rule_number(void)
+{
+    Sym(1) = ast_pool -> NewEmptyStatement(Token(1));
+}
+./
 
 LabeledStatement ::= 'Identifier' ':' Statement
 \:$MakeLabeledStatement:\
@@ -2663,10 +2681,7 @@ void Parser::MakeLabeledStatement(void)
 {
     AstBlock *p = Sym(3) -> BlockCast();
 
-    if (! (p && p -> NumStatements() == 1 &&
-           (p -> Statement(0) -> kind == Ast::FOR   ||
-            p -> Statement(0) -> kind == Ast::WHILE ||
-            p -> Statement(0) -> kind == Ast::DO)))
+    if (! p || p -> label_opt)
     {
         //
         // When a statement is labeled, it is enclosed in a block.
@@ -2676,12 +2691,13 @@ void Parser::MakeLabeledStatement(void)
         //
         p = ast_pool -> NewBlock();
         p -> AllocateBlockStatements(1); // allocate 1 element
-        p -> left_brace_token  = Token(1);
-        p -> AddStatement((AstStatement *) Sym(3));
+        p -> left_brace_token = Token(1);
+        p -> AddStatement(DYNAMIC_CAST<AstStatement *> (Sym(3)));
         p -> right_brace_token = Sym(3) -> RightToken();
+        p -> no_braces = true;
     }
 
-    p -> AddLabel(Token(1)); // add label to statement
+    p -> label_opt = Token(1); // add label to statement
     Sym(1) = p; // The final result is a block containing the labeled-statement
 }
 ./
@@ -2698,7 +2714,7 @@ ExpressionStatement ::= StatementExpression ';'
 /.$location
 void Parser::Act$rule_number(void)
 {
-    ((AstExpressionStatement *) Sym(1)) -> semicolon_token_opt = Token(2);
+    DYNAMIC_CAST<AstExpressionStatement *> (Sym(1)) -> semicolon_token_opt = Token(2);
 }
 ./
 
@@ -2708,7 +2724,7 @@ StatementExpression ::= Assignment
 void Parser::MakeExpressionStatement(void)
 {
     AstExpressionStatement *p = ast_pool -> NewExpressionStatement();
-    p -> expression          = (AstExpression *) Sym(1);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> semicolon_token_opt = 0;
     Sym(1) = p;
 }
@@ -2756,7 +2772,7 @@ StatementExpression ::= ClassInstanceCreationExpression
 // void MakeExpressionStatement(void);
 //./
 
-IfThenStatement ::=  'if' '(' Expression ')' Statement
+IfThenStatement ::= 'if' '(' Expression ')' Statement
 \:$action:\
 /.$location
 void Parser::Act$rule_number(void)
@@ -2766,21 +2782,22 @@ void Parser::Act$rule_number(void)
     {
         block = ast_pool -> NewBlock();
         block -> AllocateBlockStatements(1); // allocate 1 element
-        block -> left_brace_token  = Token(5);
-        block -> AddStatement((AstStatement *) Sym(5));
+        block -> left_brace_token = Token(5);
+        block -> AddStatement(DYNAMIC_CAST<AstStatement *> (Sym(5)));
         block -> right_brace_token = Sym(5) -> RightToken();
+        block -> no_braces = true;
     }
 
     AstIfStatement *p = ast_pool -> NewIfStatement();
-    p -> if_token            = Token(1);
-    p -> expression          = (AstExpression *) Sym(3);
-    p -> true_statement      = block;
+    p -> if_token = Token(1);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
+    p -> true_statement = block;
     p -> false_statement_opt = NULL;
     Sym(1) = p;
 }
 ./
 
-IfThenElseStatement ::=  'if' '(' Expression ')' StatementNoShortIf 'else' Statement
+IfThenElseStatement ::= 'if' '(' Expression ')' StatementNoShortIf 'else' Statement
 \:$MakeIfThenElseStatement:\
 /.$location
 void Parser::MakeIfThenElseStatement(void)
@@ -2790,9 +2807,10 @@ void Parser::MakeIfThenElseStatement(void)
     {
         true_block = ast_pool -> NewBlock();
         true_block -> AllocateBlockStatements(1); // allocate 1 element
-        true_block -> left_brace_token  = Token(5);
-        true_block -> AddStatement((AstStatement *) Sym(5));
+        true_block -> left_brace_token = Token(5);
+        true_block -> AddStatement(DYNAMIC_CAST<AstStatement *> (Sym(5)));
         true_block -> right_brace_token = Sym(5) -> RightToken();
+        true_block -> no_braces = true;
     }
 
     AstBlock *false_block = Sym(7) -> BlockCast();
@@ -2800,21 +2818,22 @@ void Parser::MakeIfThenElseStatement(void)
     {
         false_block = ast_pool -> NewBlock();
         false_block -> AllocateBlockStatements(1); // allocate 1 element
-        false_block -> left_brace_token  = Token(7);
-        false_block -> AddStatement((AstStatement *) Sym(7));
+        false_block -> left_brace_token = Token(7);
+        false_block -> AddStatement(DYNAMIC_CAST<AstStatement *> (Sym(7)));
         false_block -> right_brace_token = Sym(7) -> RightToken();
+        false_block -> no_braces = true;
     }
 
     AstIfStatement *p = ast_pool -> NewIfStatement();
-    p -> if_token            = Token(1);
-    p -> expression          = (AstExpression *) Sym(3);
-    p -> true_statement      = true_block;
+    p -> if_token = Token(1);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
+    p -> true_statement = true_block;
     p -> false_statement_opt = false_block;
     Sym(1) = p;
 }
 ./
 
-IfThenElseStatementNoShortIf ::=  'if' '(' Expression ')' StatementNoShortIf 'else' StatementNoShortIf
+IfThenElseStatementNoShortIf ::= 'if' '(' Expression ')' StatementNoShortIf 'else' StatementNoShortIf
 \:$MakeIfThenElseStatement:\
 /.$shared_function
 //
@@ -2826,9 +2845,9 @@ SwitchStatement ::= 'switch' '(' Expression ')' SwitchBlock
 /.$location
 void Parser::Act$rule_number(void)
 {
-    AstSwitchStatement *p = (AstSwitchStatement *) Sym(5);
+    AstSwitchStatement *p = DYNAMIC_CAST<AstSwitchStatement *> (Sym(5));
     p -> switch_token = Token(1);
-    p -> expression   = (AstExpression *) Sym(3);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -2841,8 +2860,9 @@ void Parser::Act$rule_number(void)
     AstSwitchStatement *p = ast_pool -> NewSwitchStatement();
 
     AstBlock *block = ast_pool -> NewBlock();
-    block -> left_brace_token  = Token(1);
+    block -> left_brace_token = Token(1);
     block -> right_brace_token = Token(2);
+    block -> block_tag = AstBlock::SWITCH;
 
     p -> switch_block = block;
 
@@ -2858,22 +2878,23 @@ void Parser::Act$rule_number(void)
     AstSwitchStatement *p = ast_pool -> NewSwitchStatement();
 
     AstBlock *block = ast_pool -> NewBlock();
-    block -> left_brace_token  = Token(1);
+    block -> left_brace_token = Token(1);
     if (Sym(2) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         block -> AllocateBlockStatements(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            block -> AddStatement((AstStatement *) root -> element);
+            block -> AddStatement(DYNAMIC_CAST<AstStatement *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
     block -> right_brace_token = Token(3);
+    block -> block_tag = AstBlock::SWITCH;
 
-    p -> switch_block  = block;
+    p -> switch_block = block;
 
     Sym(1) = p;
 }
@@ -2893,24 +2914,25 @@ void Parser::Act$rule_number(void)
     // The list of SwitchBlockStatements is never null
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         q -> AllocateSwitchLabels(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            q -> AddSwitchLabel((AstStatement *) root -> element);
+            q -> AddSwitchLabel(root -> element);
         } while (root != tail);
         FreeCircularList(tail);
     }
 
     AstBlock *block = ast_pool -> NewBlock();
     block -> AllocateBlockStatements(1); // allocate 1 element
-    block -> left_brace_token  = Token(1);
+    block -> left_brace_token = Token(1);
     block -> AddStatement(q);
     block -> right_brace_token = Token(3);
+    block -> block_tag = AstBlock::SWITCH;
 
-    p -> switch_block  = block;
+    p -> switch_block = block;
 
     Sym(1) = p;
 }
@@ -2924,18 +2946,18 @@ void Parser::Act$rule_number(void)
     AstSwitchStatement *p = ast_pool -> NewSwitchStatement();
 
     AstBlock *block = ast_pool -> NewBlock();
-    block -> left_brace_token  = Token(1);
+    block -> left_brace_token = Token(1);
     //
     // The list of SwitchBlockStatements is never null
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         block -> AllocateBlockStatements(tail -> index + 2); // +1 because of extra statement for additional SwithLabels
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            block -> AddStatement((AstStatement *) root -> element);
+            block -> AddStatement(DYNAMIC_CAST<AstStatement *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -2947,7 +2969,7 @@ void Parser::Act$rule_number(void)
     // The list of SwitchLabels is never null
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         q -> AllocateSwitchLabels(tail -> index + 1);
         AstListNode *root = tail;
         do
@@ -2960,8 +2982,9 @@ void Parser::Act$rule_number(void)
 
     block -> AddStatement(q);
     block -> right_brace_token = Token(4);
+    block -> block_tag = AstBlock::SWITCH;
 
-    p -> switch_block  = block;
+    p -> switch_block = block;
 
     Sym(1) = p;
 }
@@ -2992,7 +3015,7 @@ SwitchBlockStatements ::= SwitchBlockStatements SwitchBlockStatement
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(2);
@@ -3015,7 +3038,7 @@ void Parser::Act$rule_number(void)
     // The list of SwitchLabels is never null
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(1);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
         p -> AllocateSwitchLabels(tail -> index + 1);
         AstListNode *root = tail;
         do
@@ -3030,13 +3053,13 @@ void Parser::Act$rule_number(void)
     // The list of SwitchBlockStatements is never null
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(2);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(2));
         p -> AllocateBlockStatements(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddStatement((AstStatement *) root -> element);
+            p -> AddStatement(DYNAMIC_CAST<AstStatement *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -3069,7 +3092,7 @@ SwitchLabels ::= SwitchLabels SwitchLabel
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(2);
@@ -3088,8 +3111,8 @@ SwitchLabel ::= 'case' ConstantExpression ':'
 void Parser::Act$rule_number(void)
 {
     AstCaseLabel *p = ast_pool -> NewCaseLabel();
-    p -> case_token  = Token(1);
-    p -> expression  = (AstExpression *) Sym(2);
+    p -> case_token = Token(1);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(2));
     p -> colon_token = Token(3);
     Sym(1) = p;
 }
@@ -3102,7 +3125,7 @@ void Parser::Act$rule_number(void)
 {
     AstDefaultLabel *p = ast_pool -> NewDefaultLabel();
     p -> default_token = Token(1);
-    p -> colon_token   = Token(2);
+    p -> colon_token = Token(2);
     Sym(1) = p;
 }
 ./
@@ -3114,14 +3137,15 @@ void Parser::MakeWhileStatement(void)
 {
     AstWhileStatement *p = ast_pool -> NewWhileStatement();
     p -> while_token = Token(1);
-    p -> expression  = (AstExpression *) Sym(3);
-    p -> statement   = (AstStatement *) Sym(5);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
+    p -> statement = DYNAMIC_CAST<AstStatement *> (Sym(5));
 
     AstBlock *block = ast_pool -> NewBlock();
     block -> AllocateBlockStatements(1); // allocate 1 element
-    block -> left_brace_token  = Token(1); // point to 'WHILE keyword
+    block -> left_brace_token = Token(1); // point to 'WHILE' keyword
     block -> AddStatement(p);
     block -> right_brace_token = Sym(5) -> RightToken(); // point to last token in statement
+    block -> no_braces = true;
 
     Sym(1) = block;
 }
@@ -3140,17 +3164,18 @@ DoStatement ::= 'do' Statement 'while' '(' Expression ')' ';'
 void Parser::Act$rule_number(void)
 {
     AstDoStatement *p = ast_pool -> NewDoStatement();
-    p -> do_token        = Token(1);
-    p -> statement       = (AstStatement *) Sym(2);
-    p -> while_token     = Token(3);
-    p -> expression      = (AstExpression *) Sym(5);
+    p -> do_token = Token(1);
+    p -> statement = DYNAMIC_CAST<AstStatement *> (Sym(2));
+    p -> while_token = Token(3);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(5));
     p -> semicolon_token = Token(7);
 
     AstBlock *block = ast_pool -> NewBlock();
     block -> AllocateBlockStatements(1); // allocate 1 element
-    block -> left_brace_token  = Token(1);
+    block -> left_brace_token = Token(1);
     block -> AddStatement(p);
     block -> right_brace_token = Token(7);
+    block -> no_braces = true;
 
     Sym(1) = block;
 }
@@ -3165,36 +3190,37 @@ void Parser::MakeForStatement(void)
     p -> for_token = Token(1);
     if (Sym(3) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateForInitStatements(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddForInitStatement((AstStatement *) root -> element);
+            p -> AddForInitStatement(DYNAMIC_CAST<AstStatement *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> end_expression_opt = (AstExpression *) Sym(5);
+    p -> end_expression_opt = DYNAMIC_CAST<AstExpression *> (Sym(5));
     if (Sym(7) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(7);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(7));
         p -> AllocateForUpdateStatements(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddForUpdateStatement((AstExpressionStatement *) root -> element);
+            p -> AddForUpdateStatement(DYNAMIC_CAST<AstExpressionStatement *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
-    p -> statement = (AstStatement *) Sym(9);
+    p -> statement = DYNAMIC_CAST<AstStatement *> (Sym(9));
 
     AstBlock *block = ast_pool -> NewBlock();
     block -> AllocateBlockStatements(1); // allocate 1 element
-    block -> left_brace_token  = Token(1);
+    block -> left_brace_token = Token(1);
     block -> AddStatement(p);
     block -> right_brace_token = Sym(9) -> RightToken();
+    block -> no_braces = true;
 
     Sym(1) = block;
 }
@@ -3257,7 +3283,7 @@ StatementExpressionList ::= StatementExpressionList ',' StatementExpression
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(3);
@@ -3271,6 +3297,38 @@ void Parser::Act$rule_number(void)
 ./
 
 --
+-- Assert statements were added in JDK 1.4, as part of JSR 41.
+--
+AssertStatement ::= 'assert' Expression ';'
+\:$action:\
+/.$location
+void Parser::Act$rule_number(void)
+{
+    AstAssertStatement *p = ast_pool -> NewAssertStatement();
+    p -> assert_token = Token(1);
+    p -> condition = DYNAMIC_CAST<AstExpression *> (Sym(2));
+    p -> message_opt = NULL;
+    p -> semicolon_token = Token(3);
+    Sym(1) = p;
+}
+./
+
+AssertStatement ::= 'assert' Expression ':' Expression ';'
+\:$action:\
+/.$location
+void Parser::Act$rule_number(void)
+{
+    AstAssertStatement *p = ast_pool -> NewAssertStatement();
+    p -> assert_token = Token(1);
+    p -> condition = DYNAMIC_CAST<AstExpression *> (Sym(2));
+    p -> message_opt = DYNAMIC_CAST<AstExpression *> (Sym(4));
+    p -> semicolon_token = Token(5);
+    Sym(1) = p;
+}
+./
+
+
+--
 -- NOTE that the rule Identifieropt was expanded in line in the two
 -- contexts where it appeared: Break and Continue statements.
 -- This was done because there is no straightforward way of passing
@@ -3282,9 +3340,9 @@ BreakStatement ::= 'break' ';'
 void Parser::Act$rule_number(void)
 {
     AstBreakStatement *p = ast_pool -> NewBreakStatement();
-    p -> break_token          = Token(1);
+    p -> break_token = Token(1);
     p -> identifier_token_opt = 0;
-    p -> semicolon_token      = Token(2);
+    p -> semicolon_token = Token(2);
     Sym(1) = p;
 }
 ./
@@ -3295,9 +3353,9 @@ BreakStatement ::= 'break' 'Identifier' ';'
 void Parser::Act$rule_number(void)
 {
     AstBreakStatement *p = ast_pool -> NewBreakStatement();
-    p -> break_token          = Token(1);
+    p -> break_token = Token(1);
     p -> identifier_token_opt = Token(2);
-    p -> semicolon_token      = Token(3);
+    p -> semicolon_token = Token(3);
     Sym(1) = p;
 }
 ./
@@ -3308,9 +3366,9 @@ ContinueStatement ::= 'continue' ';'
 void Parser::Act$rule_number(void)
 {
     AstContinueStatement *p = ast_pool -> NewContinueStatement();
-    p -> continue_token       = Token(1);
+    p -> continue_token = Token(1);
     p -> identifier_token_opt = 0;
-    p -> semicolon_token      = Token(2);
+    p -> semicolon_token = Token(2);
     Sym(1) = p;
 }
 ./
@@ -3321,9 +3379,9 @@ ContinueStatement ::= 'continue' 'Identifier' ';'
 void Parser::Act$rule_number(void)
 {
     AstContinueStatement *p = ast_pool -> NewContinueStatement();
-    p -> continue_token       = Token(1);
+    p -> continue_token = Token(1);
     p -> identifier_token_opt = Token(2);
-    p -> semicolon_token      = Token(3);
+    p -> semicolon_token = Token(3);
     Sym(1) = p;
 }
 ./
@@ -3334,8 +3392,8 @@ ReturnStatement ::= 'return' Expressionopt ';'
 void Parser::Act$rule_number(void)
 {
     AstReturnStatement *p = ast_pool -> NewReturnStatement();
-    p -> return_token    = Token(1);
-    p -> expression_opt  = (AstExpression *) Sym(2);
+    p -> return_token = Token(1);
+    p -> expression_opt = DYNAMIC_CAST<AstExpression *> (Sym(2));
     p -> semicolon_token = Token(3);
     Sym(1) = p;
 }
@@ -3347,8 +3405,8 @@ ThrowStatement ::= 'throw' Expression ';'
 void Parser::Act$rule_number(void)
 {
     AstThrowStatement *p = ast_pool -> NewThrowStatement();
-    p -> throw_token     = Token(1);
-    p -> expression      = (AstExpression *) Sym(2);
+    p -> throw_token = Token(1);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(2));
     p -> semicolon_token = Token(3);
     Sym(1) = p;
 }
@@ -3361,8 +3419,8 @@ void Parser::Act$rule_number(void)
 {
     AstSynchronizedStatement *p = ast_pool -> NewSynchronizedStatement();
     p -> synchronized_token = Token(1);
-    p -> expression         = (AstExpression *) Sym(3);
-    p -> block              = (AstBlock *) Sym(5);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
+    p -> block = DYNAMIC_CAST<AstBlock *> (Sym(5));
     p -> block -> block_tag = AstBlock::SYNCHRONIZED;
 
     Sym(1) = p;
@@ -3375,20 +3433,20 @@ TryStatement ::= 'try' Block Catches
 void Parser::Act$rule_number(void)
 {
     AstTryStatement *p = ast_pool -> NewTryStatement();
-    p -> try_token          = Token(1);
-    p -> block              = (AstBlock *) Sym(2);
+    p -> try_token = Token(1);
+    p -> block = DYNAMIC_CAST<AstBlock *> (Sym(2));
 
     //
     // The list of modifiers is guaranteed not empty
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateCatchClauses(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddCatchClause((AstCatchClause *) root -> element);
+            p -> AddCatchClause(DYNAMIC_CAST<AstCatchClause *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -3403,19 +3461,19 @@ TryStatement ::= 'try' Block Catchesopt Finally
 void Parser::Act$rule_number(void)
 {
     AstTryStatement *p = ast_pool -> NewTryStatement();
-    p -> try_token      = Token(1);
-    p -> block          = (AstBlock *) Sym(2);
+    p -> try_token = Token(1);
+    p -> block = DYNAMIC_CAST<AstBlock *> (Sym(2));
     p -> block -> block_tag = AstBlock::TRY_CLAUSE_WITH_FINALLY;
 
     if (Sym(3) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateCatchClauses(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddCatchClause((AstCatchClause *) root -> element);
+            p -> AddCatchClause(DYNAMIC_CAST<AstCatchClause *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -3423,7 +3481,7 @@ void Parser::Act$rule_number(void)
     for (int i = 0; i < p -> NumCatchClauses(); i++)
         p -> CatchClause(i) -> block -> block_tag = AstBlock::TRY_CLAUSE_WITH_FINALLY;
 
-    p -> finally_clause_opt = (AstFinallyClause *) Sym(4);
+    p -> finally_clause_opt = DYNAMIC_CAST<AstFinallyClause *> (Sym(4));
 
     Sym(1) = p;
 }
@@ -3454,7 +3512,7 @@ Catches ::= Catches CatchClause
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(2);
@@ -3473,9 +3531,9 @@ CatchClause ::= 'catch' '(' FormalParameter ')' Block
 void Parser::Act$rule_number(void)
 {
     AstCatchClause *p = ast_pool -> NewCatchClause();
-    p -> catch_token      = Token(1);
-    p -> formal_parameter = (AstFormalParameter *) Sym(3);
-    p -> block            = (AstBlock *) Sym(5);
+    p -> catch_token = Token(1);
+    p -> formal_parameter = DYNAMIC_CAST<AstFormalParameter *> (Sym(3));
+    p -> block = DYNAMIC_CAST<AstBlock *> (Sym(5));
 
     Sym(1) = p;
 }
@@ -3486,9 +3544,9 @@ Finally ::= 'finally' Block
 /.$location
 void Parser::Act$rule_number(void)
 {
-    AstFinallyClause *p     = ast_pool -> NewFinallyClause();
-    p -> finally_token      = Token(1);
-    p -> block              = (AstBlock *) Sym(2);
+    AstFinallyClause *p = ast_pool -> NewFinallyClause();
+    p -> finally_token = Token(1);
+    p -> block = DYNAMIC_CAST<AstBlock *> (Sym(2));
     p -> block -> block_tag = AstBlock::FINALLY;
 
     Sym(1) = p;
@@ -3538,7 +3596,7 @@ void Parser::Act$rule_number(void)
 {
     AstParenthesizedExpression *p = ast_pool -> NewParenthesizedExpression();
     p -> left_parenthesis_token = Token(1);
-    p -> expression = (AstExpression *) Sym(2);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(2));
     p -> right_parenthesis_token = Token(3);
     Sym(1) = p;
 }
@@ -3553,13 +3611,15 @@ PrimaryNoNewArray -> FieldAccess
 /.$shared_NoAction./
 
 --1.1 feature
+-- Technically, only ClassType is allowed instead of Name, but that would be
+-- ambiguous with qualified names
 PrimaryNoNewArray ::= Name '.' 'this'
 \:$action:\
 /.$location
 void Parser::Act$rule_number(void)
 {
     AstFieldAccess *p = ast_pool -> NewFieldAccess(AstFieldAccess::THIS_TAG);
-    p -> base = (AstExpression *) Sym(1);
+    p -> base = ast_pool -> NewTypeExpression(Sym(1));
     p -> dot_token = Token(2);
     p -> identifier_token = Token(3);
     Sym(1) = p;
@@ -3613,25 +3673,25 @@ ClassInstanceCreationExpression ::= 'new' ClassType '(' ArgumentListopt ')' Clas
 void Parser::Act$rule_number(void)
 {
     AstClassInstanceCreationExpression *p = ast_pool -> NewClassInstanceCreationExpression();
-    p -> base_opt                = NULL;
-    p -> dot_token_opt           = 0;
-    p -> new_token               = Token(1);
-    p -> class_type              = ast_pool -> NewTypeExpression(Sym(2));
-    p -> left_parenthesis_token  = Token(3);
+    p -> base_opt = NULL;
+    p -> dot_token_opt = 0;
+    p -> new_token = Token(1);
+    p -> class_type = ast_pool -> NewTypeExpression(Sym(2));
+    p -> left_parenthesis_token = Token(3);
     if (Sym(4) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(4);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(4));
         p -> AllocateArguments(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddArgument((AstExpression *) root -> element);
+            p -> AddArgument(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(5);
-    p -> class_body_opt          = (AstClassBody *) Sym(6);
+    p -> class_body_opt = DYNAMIC_CAST<AstClassBody *> (Sym(6));
     Sym(1) = p;
 }
 ./
@@ -3643,25 +3703,25 @@ ClassInstanceCreationExpression ::= Primary '.' 'new' SimpleName '(' ArgumentLis
 void Parser::MakeQualifiedNew(void)
 {
     AstClassInstanceCreationExpression *p = ast_pool -> NewClassInstanceCreationExpression();
-    p -> base_opt                = (AstExpression *) Sym(1);
-    p -> dot_token_opt           = Token(2);
-    p -> new_token               = Token(3);
-    p -> class_type              = ast_pool -> NewTypeExpression(Sym(4));
-    p -> left_parenthesis_token  = Token(5);
+    p -> base_opt = DYNAMIC_CAST<AstExpression *> (Sym(1));
+    p -> dot_token_opt = Token(2);
+    p -> new_token = Token(3);
+    p -> class_type = ast_pool -> NewTypeExpression(Sym(4));
+    p -> left_parenthesis_token = Token(5);
     if (Sym(6) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(6);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(6));
         p -> AllocateArguments(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddArgument((AstExpression *) root -> element);
+            p -> AddArgument(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token = Token(7);
-    p -> class_body_opt          = (AstClassBody *) Sym(8);
+    p -> class_body_opt = DYNAMIC_CAST<AstClassBody *> (Sym(8));
     Sym(1) = p;
 }
 ./
@@ -3699,7 +3759,7 @@ ArgumentList ::= ArgumentList ',' Expression
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(3);
@@ -3726,32 +3786,32 @@ ArrayCreationUninitialized ::= 'new' PrimitiveType DimExprs Dimsopt
 void Parser::MakeArrayCreationExpression(void)
 {
     AstArrayCreationExpression *p = ast_pool -> NewArrayCreationExpression();
-    p -> new_token             = Token(1);
-    p -> array_type            = Sym(2);
+    p -> new_token = Token(1);
+    p -> array_type = Sym(2);
     //
     // The list of DimExprs is never null
     //
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateDimExprs(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddDimExpr((AstDimExpr *) root -> element);
+            p -> AddDimExpr(DYNAMIC_CAST<AstDimExpr *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
 
     if (Sym(4) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(4);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(4));
         p -> AllocateBrackets(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddBrackets((AstBrackets *) root -> element);
+            p -> AddBrackets(DYNAMIC_CAST<AstBrackets *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -3780,9 +3840,9 @@ ArrayCreationInitialized ::= 'new' ArrayType ArrayInitializer
 void Parser::Act$rule_number(void)
 {
     AstArrayCreationExpression *p = ast_pool -> NewArrayCreationExpression();
-    p -> new_token             = Token(1);
-    p -> array_type            = Sym(2);
-    p -> array_initializer_opt = (AstArrayInitializer *) Sym(3);
+    p -> new_token = Token(1);
+    p -> array_type = Sym(2);
+    p -> array_initializer_opt = DYNAMIC_CAST<AstArrayInitializer *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -3812,7 +3872,7 @@ DimExprs ::= DimExprs DimExpr
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = Sym(2);
@@ -3831,8 +3891,8 @@ DimExpr ::= '[' Expression ']'
 void Parser::Act$rule_number(void)
 {
     AstDimExpr *p = ast_pool -> NewDimExpr();
-    p -> left_bracket_token  = Token(1);
-    p -> expression          = (AstExpression *) Sym(2);
+    p -> left_bracket_token = Token(1);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(2));
     p -> right_bracket_token = Token(3);
     Sym(1) = p;
 }
@@ -3863,7 +3923,7 @@ Dims ::= Dims '[' ']'
 //
 void Parser::Act$rule_number(void)
 {
-    AstListNode *tail = (AstListNode *) Sym(1);
+    AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(1));
 
     AstListNode *p = AllocateListNode();
     p -> element = ast_pool -> NewBrackets(Token(2), Token(3));
@@ -3895,6 +3955,8 @@ void Parser::MakeSuperFieldAccess(void)
 ./
 
 --1.2 feature
+-- Technically, only ClassType is allowed instead of Name, but that would be
+-- ambiguous with qualified names
 FieldAccess ::= Name '.' 'super' '.' 'Identifier'
 \:$MakeSuperDoubleFieldAccess:\
 /.$location
@@ -3903,7 +3965,7 @@ void Parser::MakeSuperDoubleFieldAccess(void)
     AstFieldAccess *p = ast_pool -> NewFieldAccess();
 
          AstFieldAccess *q = ast_pool -> NewFieldAccess(AstFieldAccess::SUPER_TAG);
-         q -> base = (AstExpression *) Sym(1);
+         q -> base = ast_pool -> NewTypeExpression(Sym(1));
          q -> dot_token = Token(2);
          q -> identifier_token = Token(3);
 
@@ -3921,17 +3983,17 @@ MethodInvocation ::= Name '(' ArgumentListopt ')'
 void Parser::Act$rule_number(void)
 {
     AstMethodInvocation *p = ast_pool -> NewMethodInvocation();
-    p -> method                  = (AstExpression *) Sym(1);
-    p -> left_parenthesis_token  = Token(2);
+    p -> method = DYNAMIC_CAST<AstExpression *> (Sym(1));
+    p -> left_parenthesis_token = Token(2);
     if (Sym(3) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateArguments(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddArgument((AstExpression *) root -> element);
+            p -> AddArgument(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -3948,17 +4010,17 @@ void Parser::Act$rule_number(void)
     MakeFieldAccess();
 
     AstMethodInvocation *p = ast_pool -> NewMethodInvocation();
-    p -> method                  = (AstExpression *) Sym(1);
-    p -> left_parenthesis_token  = Token(4);
+    p -> method = DYNAMIC_CAST<AstExpression *> (Sym(1));
+    p -> left_parenthesis_token = Token(4);
     if (Sym(5) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(5);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(5));
         p -> AllocateArguments(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddArgument((AstExpression *) root -> element);
+            p -> AddArgument(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -3975,17 +4037,17 @@ void Parser::Act$rule_number(void)
     MakeSuperFieldAccess();
 
     AstMethodInvocation *p = ast_pool -> NewMethodInvocation();
-    p -> method                  = (AstExpression *) Sym(1);
-    p -> left_parenthesis_token  = Token(4);
+    p -> method = DYNAMIC_CAST<AstExpression *> (Sym(1));
+    p -> left_parenthesis_token = Token(4);
     if (Sym(5) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(5);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(5));
         p -> AllocateArguments(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddArgument((AstExpression *) root -> element);
+            p -> AddArgument(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -3995,6 +4057,8 @@ void Parser::Act$rule_number(void)
 ./
 
 --1.2 feature
+-- Technically, only ClassType is allowed instead of Name, but that would be
+-- ambiguous with qualified names
 MethodInvocation ::= Name '.' 'super' '.' 'Identifier' '(' ArgumentListopt ')'
 \:$action:\
 /.$location
@@ -4003,17 +4067,17 @@ void Parser::Act$rule_number(void)
     MakeSuperDoubleFieldAccess();
 
     AstMethodInvocation *p = ast_pool -> NewMethodInvocation();
-    p -> method                  = (AstExpression *) Sym(1);
-    p -> left_parenthesis_token  = Token(6);
+    p -> method = DYNAMIC_CAST<AstExpression *> (Sym(1));
+    p -> left_parenthesis_token = Token(6);
     if (Sym(7) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(7);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(7));
         p -> AllocateArguments(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddArgument((AstExpression *) root -> element);
+            p -> AddArgument(DYNAMIC_CAST<AstExpression *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
@@ -4028,9 +4092,9 @@ ArrayAccess ::= Name '[' Expression ']'
 void Parser::MakeArrayAccess(void)
 {
     AstArrayAccess *p = ast_pool -> NewArrayAccess();
-    p -> base                = (AstExpression *) Sym(1);
-    p -> left_bracket_token  = Token(2);
-    p -> expression          = (AstExpression *) Sym(3);
+    p -> base = DYNAMIC_CAST<AstExpression *> (Sym(1));
+    p -> left_bracket_token = Token(2);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     p -> right_bracket_token = Token(4);
     Sym(1) = p;
 }
@@ -4076,7 +4140,7 @@ PostIncrementExpression ::= PostfixExpression '++'
 void Parser::Act$rule_number(void)
 {
     AstPostUnaryExpression *p = ast_pool -> NewPostUnaryExpression(AstPostUnaryExpression::PLUSPLUS);
-    p -> expression          = (AstExpression *) Sym(1);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> post_operator_token = Token(2);
     Sym(1) = p;
 }
@@ -4088,7 +4152,7 @@ PostDecrementExpression ::= PostfixExpression '--'
 void Parser::Act$rule_number(void)
 {
     AstPostUnaryExpression *p = ast_pool -> NewPostUnaryExpression(AstPostUnaryExpression::MINUSMINUS);
-    p -> expression          = (AstExpression *) Sym(1);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> post_operator_token = Token(2);
     Sym(1) = p;
 }
@@ -4109,7 +4173,7 @@ void Parser::Act$rule_number(void)
 {
     AstPreUnaryExpression *p = ast_pool -> NewPreUnaryExpression(AstPreUnaryExpression::PLUS);
     p -> pre_operator_token = Token(1);
-    p -> expression         = (AstExpression *) Sym(2);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(2));
     Sym(1) = p;
 }
 ./
@@ -4121,7 +4185,7 @@ void Parser::Act$rule_number(void)
 {
     AstPreUnaryExpression *p = ast_pool -> NewPreUnaryExpression(AstPreUnaryExpression::MINUS);
     p -> pre_operator_token = Token(1);
-    p -> expression         = (AstExpression *) Sym(2);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(2));
     Sym(1) = p;
 }
 ./
@@ -4137,7 +4201,7 @@ void Parser::Act$rule_number(void)
 {
     AstPreUnaryExpression *p = ast_pool -> NewPreUnaryExpression(AstPreUnaryExpression::PLUSPLUS);
     p -> pre_operator_token = Token(1);
-    p -> expression         = (AstExpression *) Sym(2);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(2));
     Sym(1) = p;
 }
 ./
@@ -4149,7 +4213,7 @@ void Parser::Act$rule_number(void)
 {
     AstPreUnaryExpression *p = ast_pool -> NewPreUnaryExpression(AstPreUnaryExpression::MINUSMINUS);
     p -> pre_operator_token = Token(1);
-    p -> expression         = (AstExpression *) Sym(2);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(2));
     Sym(1) = p;
 }
 ./
@@ -4165,7 +4229,7 @@ void Parser::Act$rule_number(void)
 {
     AstPreUnaryExpression *p = ast_pool -> NewPreUnaryExpression(AstPreUnaryExpression::TWIDDLE);
     p -> pre_operator_token = Token(1);
-    p -> expression         = (AstExpression *) Sym(2);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(2));
     Sym(1) = p;
 }
 ./
@@ -4177,7 +4241,7 @@ void Parser::Act$rule_number(void)
 {
     AstPreUnaryExpression *p = ast_pool -> NewPreUnaryExpression(AstPreUnaryExpression::NOT);
     p -> pre_operator_token = Token(1);
-    p -> expression         = (AstExpression *) Sym(2);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(2));
     Sym(1) = p;
 }
 ./
@@ -4192,22 +4256,22 @@ CastExpression ::= '(' PrimitiveType Dimsopt ')' UnaryExpression
 void Parser::MakeCastExpression(void)
 {
     AstCastExpression *p = ast_pool -> NewCastExpression();
-    p -> left_parenthesis_token_opt  = Token(1);
-    p -> type_opt                    = Sym(2);
+    p -> left_parenthesis_token_opt = Token(1);
+    p -> type_opt = Sym(2);
     if (Sym(3) != NULL)
     {
-        AstListNode *tail = (AstListNode *) Sym(3);
+        AstListNode *tail = DYNAMIC_CAST<AstListNode *> (Sym(3));
         p -> AllocateBrackets(tail -> index + 1);
         AstListNode *root = tail;
         do
         {
             root = root -> next;
-            p -> AddBrackets((AstBrackets *) root -> element);
+            p -> AddBrackets(DYNAMIC_CAST<AstBrackets *> (root -> element));
         } while (root != tail);
         FreeCircularList(tail);
     }
     p -> right_parenthesis_token_opt = Token(4);
-    p -> expression                  = (AstExpression *) Sym(5);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(5));
     Sym(1) = p;
 }
 ./
@@ -4223,10 +4287,10 @@ void Parser::Act$rule_number(void)
     // semantic processing.
     //
     AstCastExpression *p = ast_pool -> NewCastExpression();
-    p -> left_parenthesis_token_opt  = Token(1);
-    p -> type_opt                    = Sym(2);
+    p -> left_parenthesis_token_opt = Token(1);
+    p -> type_opt = Sym(2);
     p -> right_parenthesis_token_opt = Token(3);
-    p -> expression                  = (AstExpression *) Sym(4);
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(4));
     Sym(1) = p;
 }
 ./
@@ -4248,9 +4312,9 @@ MultiplicativeExpression ::= MultiplicativeExpression '*' UnaryExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::STAR);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4261,9 +4325,9 @@ MultiplicativeExpression ::= MultiplicativeExpression '/' UnaryExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::SLASH);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4274,9 +4338,9 @@ MultiplicativeExpression ::= MultiplicativeExpression '%' UnaryExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::MOD);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4291,9 +4355,9 @@ AdditiveExpression ::= AdditiveExpression '+' MultiplicativeExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::PLUS);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4304,9 +4368,9 @@ AdditiveExpression ::= AdditiveExpression '-' MultiplicativeExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::MINUS);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4321,9 +4385,9 @@ ShiftExpression ::= ShiftExpression '<<'  AdditiveExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::LEFT_SHIFT);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4334,9 +4398,9 @@ ShiftExpression ::= ShiftExpression '>>'  AdditiveExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::RIGHT_SHIFT);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4347,9 +4411,9 @@ ShiftExpression ::= ShiftExpression '>>>' AdditiveExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::UNSIGNED_RIGHT_SHIFT);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4364,9 +4428,9 @@ RelationalExpression ::= RelationalExpression '<'  ShiftExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::LESS);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4377,9 +4441,9 @@ RelationalExpression ::= RelationalExpression '>'  ShiftExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::GREATER);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4390,9 +4454,9 @@ RelationalExpression ::= RelationalExpression '<=' ShiftExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::LESS_EQUAL);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4403,9 +4467,9 @@ RelationalExpression ::= RelationalExpression '>=' ShiftExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::GREATER_EQUAL);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4416,9 +4480,9 @@ RelationalExpression ::= RelationalExpression 'instanceof' ReferenceType
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::INSTANCEOF);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = ast_pool -> NewTypeExpression(Sym(3));
+    p -> right_expression = ast_pool -> NewTypeExpression(Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4433,9 +4497,9 @@ EqualityExpression ::= EqualityExpression '==' RelationalExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::EQUAL_EQUAL);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4446,9 +4510,9 @@ EqualityExpression ::= EqualityExpression '!=' RelationalExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::NOT_EQUAL);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4464,9 +4528,9 @@ AndExpression ::= AndExpression '&' EqualityExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::AND);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4481,9 +4545,9 @@ ExclusiveOrExpression ::= ExclusiveOrExpression '^' AndExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::XOR);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4498,9 +4562,9 @@ InclusiveOrExpression ::= InclusiveOrExpression '|' ExclusiveOrExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::IOR);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4515,9 +4579,9 @@ ConditionalAndExpression ::= ConditionalAndExpression '&&' InclusiveOrExpression
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::AND_AND);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4532,9 +4596,9 @@ ConditionalOrExpression ::= ConditionalOrExpression '||' ConditionalAndExpressio
 void Parser::Act$rule_number(void)
 {
     AstBinaryExpression *p = ast_pool -> NewBinaryExpression(AstBinaryExpression::OR_OR);
-    p -> left_expression       = (AstExpression *) Sym(1);
+    p -> left_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
     p -> binary_operator_token = Token(2);
-    p -> right_expression      = (AstExpression *) Sym(3);
+    p -> right_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
@@ -4549,11 +4613,11 @@ ConditionalExpression ::= ConditionalOrExpression '?' Expression ':' Conditional
 void Parser::Act$rule_number(void)
 {
     AstConditionalExpression *p = ast_pool -> NewConditionalExpression();
-    p -> test_expression  = (AstExpression *) Sym(1);
-    p -> question_token   = Token(2);
-    p -> true_expression  = (AstExpression *) Sym(3);
-    p -> colon_token      = Token(4);
-    p -> false_expression = (AstExpression *) Sym(5);
+    p -> test_expression = DYNAMIC_CAST<AstExpression *> (Sym(1));
+    p -> question_token = Token(2);
+    p -> true_expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
+    p -> colon_token = Token(4);
+    p -> false_expression = DYNAMIC_CAST<AstExpression *> (Sym(5));
     Sym(1) = p;
 }
 ./
@@ -4566,29 +4630,38 @@ AssignmentExpression -> Assignment
 \:$NoAction:\
 /.$shared_NoAction./
 
-Assignment ::= LeftHandSide AssignmentOperator AssignmentExpression
+--
+-- The original grammar uses LeftHandSide, instead of PostfixExpression.
+-- However, parenthesized variables were added in JLS 2, and the
+-- grammar is ambiguous unless we include all non-assignment
+-- expressions. The semantic pass will filter out bad left-hand sides.
+--
+Assignment ::= PostfixExpression AssignmentOperator AssignmentExpression
 \:$action:\
 /.$location
 void Parser::Act$rule_number(void)
 {
-    AstAssignmentExpression *p = (AstAssignmentExpression *) Sym(2);
-    p -> left_hand_side = (AstExpression *) Sym(1);
-    p -> expression     = (AstExpression *) Sym(3);
+    AstAssignmentExpression *p = DYNAMIC_CAST<AstAssignmentExpression *> (Sym(2));
+    p -> left_hand_side = DYNAMIC_CAST<AstExpression *> (Sym(1));
+    p -> expression = DYNAMIC_CAST<AstExpression *> (Sym(3));
     Sym(1) = p;
 }
 ./
 
-LeftHandSide -> Name
-\:$NoAction:\
-/.$shared_NoAction./
-
-LeftHandSide -> FieldAccess
-\:$NoAction:\
-/.$shared_NoAction./
-
-LeftHandSide -> ArrayAccess
-\:$NoAction:\
-/.$shared_NoAction./
+--
+-- See comments above for Assignment - LeftHandSide is now a useless rule.
+--
+--LeftHandSide -> Name
+--\:$NoAction:\
+--/.$shared_NoAction./
+--
+--LeftHandSide -> FieldAccess
+--\:$NoAction:\
+--/.$shared_NoAction./
+--
+--LeftHandSide -> ArrayAccess
+--\:$NoAction:\
+--/.$shared_NoAction./
 
 AssignmentOperator ::= '='
 \:$action:\
@@ -4706,11 +4779,11 @@ ConstantExpression -> Expression
 \:$NoAction:\
 /.$shared_NoAction./
 
----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------
 --
 -- The following rules are for optional nonterminals.
 --
----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------
 
 PackageDeclarationopt ::= $empty
 \:$NullAction:\
@@ -4753,7 +4826,7 @@ ClassBodyopt -> ClassBody
 \:$NoAction:\
 /.$shared_NoAction./
 
----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------
 --
 -- The rules below are for optional terminal symbols.  An optional comma,
 -- is only used in the context of an array initializer - It is a
@@ -4763,7 +4836,7 @@ ClassBodyopt -> ClassBody
 -- is produced. When the identifier is present, the user should use the
 -- corresponding Token(i) method. See break statement as an example.
 --
----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------
 
 ,opt ::= $empty
 \:$NullAction:\
@@ -4940,7 +5013,7 @@ void Parser::Act$rule_number(void)
 #endif
 ./
 
----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------
 
 \:
 #ifndef HEADERS
@@ -4960,52 +5033,52 @@ BodyMarker ::= '"class Identifier { ... MethodHeader "'
 
 void ::= ResultType
 
-PLUS_PLUS ::=    '++'
-MINUS_MINUS ::=    '--'
-EQUAL_EQUAL ::=    '=='
-LESS_EQUAL ::=    '<='
-GREATER_EQUAL ::=    '>='
-NOT_EQUAL ::=    '!='
-LEFT_SHIFT ::=    '<<'
-RIGHT_SHIFT ::=    '>>'
-UNSIGNED_RIGHT_SHIFT ::=    '>>>'
-PLUS_EQUAL ::=    '+='
-MINUS_EQUAL ::=    '-='
-MULTIPLY_EQUAL ::=    '*='
-DIVIDE_EQUAL ::=    '/='
-AND_EQUAL ::=    '&='
-OR_EQUAL ::=    '|='
-XOR_EQUAL ::=    '^='
-REMAINDER_EQUAL ::=    '%='
-LEFT_SHIFT_EQUAL ::=    '<<='
-RIGHT_SHIFT_EQUAL ::=    '>>='
-UNSIGNED_RIGHT_SHIFT_EQUAL ::=    '>>>='
-OR_OR ::=    '||'
-AND_AND ::=    '&&'
+PLUS_PLUS ::= '++'
+MINUS_MINUS ::= '--'
+EQUAL_EQUAL ::= '=='
+LESS_EQUAL ::= '<='
+GREATER_EQUAL ::= '>='
+NOT_EQUAL ::= '!='
+LEFT_SHIFT ::= '<<'
+RIGHT_SHIFT ::= '>>'
+UNSIGNED_RIGHT_SHIFT ::= '>>>'
+PLUS_EQUAL ::= '+='
+MINUS_EQUAL ::= '-='
+MULTIPLY_EQUAL ::= '*='
+DIVIDE_EQUAL ::= '/='
+AND_EQUAL ::= '&='
+OR_EQUAL ::= '|='
+XOR_EQUAL ::= '^='
+REMAINDER_EQUAL ::= '%='
+LEFT_SHIFT_EQUAL ::= '<<='
+RIGHT_SHIFT_EQUAL ::= '>>='
+UNSIGNED_RIGHT_SHIFT_EQUAL ::= '>>>='
+OR_OR ::= '||'
+AND_AND ::= '&&'
 
-PLUS ::=    '+'
-MINUS ::=    '-'
-NOT ::=    '!'
-REMAINDER ::=    '%'
-XOR ::=    '^'
-AND ::=    '&'
-MULTIPLY ::=    '*'
-OR ::=    '|'
-TWIDDLE ::=    '~'
-DIVIDE ::=    '/'
-GREATER ::=    '>'
-LESS ::=    '<'
-LPAREN ::=    '('
-RPAREN ::=    ')'
-LBRACE ::=    '{'
-RBRACE ::=    '}'
-LBRACKET ::=    '['
-RBRACKET ::=    ']'
-SEMICOLON ::=    ';'
-QUESTION ::=    '?'
-COLON ::=    ':'
-COMMA ::=    ','
-DOT ::=    '.'
-EQUAL ::=    '='
+PLUS ::= '+'
+MINUS ::= '-'
+NOT ::= '!'
+REMAINDER ::= '%'
+XOR ::= '^'
+AND ::= '&'
+MULTIPLY ::= '*'
+OR ::= '|'
+TWIDDLE ::= '~'
+DIVIDE ::= '/'
+GREATER ::= '>'
+LESS ::= '<'
+LPAREN ::= '('
+RPAREN ::= ')'
+LBRACE ::= '{'
+RBRACE ::= '}'
+LBRACKET ::= '['
+RBRACKET ::= ']'
+SEMICOLON ::= ';'
+QUESTION ::= '?'
+COLON ::= ':'
+COMMA ::= ','
+DOT ::= '.'
+EQUAL ::= '='
 
 $end

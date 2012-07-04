@@ -1,9 +1,9 @@
-// $Id: control.h,v 1.36 2001/09/14 05:31:32 ericb Exp $ -*- c++ -*-
+// $Id: control.h,v 1.43 2002/05/22 06:56:41 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -37,7 +37,6 @@ public:
                 external_table;
 
     PackageSymbol *system_package,
-                  *java_util_package,
                   *unnamed_package;
     int dot_classpath_index;
     Tuple<PathSymbol *> classpath;
@@ -93,7 +92,11 @@ public:
                *toString_name_symbol,
                *append_name_symbol,
                *forName_name_symbol,
-               *getMessage_name_symbol;
+               *getMessage_name_symbol,
+               *desiredAssertionStatus_name_symbol,
+               *getClass_name_symbol,
+               *getComponentType_name_symbol,
+               *initCause_name_symbol;
 
     //
     //
@@ -117,9 +120,10 @@ public:
     {
         if (! Serializable_type)
         {
-            PackageSymbol *io_package = ProcessPackage(StringConstant::US_java_SL_io);
+            PackageSymbol *io_package =
+                ProcessPackage(US_java_SL_io);
             FindPathsToDirectory(io_package);
-            Serializable_type = GetType(io_package, StringConstant::US_Serializable);
+            Serializable_type = GetType(io_package, US_Serializable);
         }
 
         return Serializable_type;
@@ -127,62 +131,159 @@ public:
 
     inline TypeSymbol *Object()
     {
-        return (Object_type ? Object_type : Object_type = GetType(system_package, StringConstant::US_Object));
+        return (Object_type ? Object_type
+                : Object_type = GetType(system_package, US_Object));
     }
+
+    MethodSymbol *Object_getClassMethod();
 
     inline TypeSymbol *Cloneable()
     {
-        return (Cloneable_type ? Cloneable_type : Cloneable_type = GetType(system_package, StringConstant::US_Cloneable));
+        return (Cloneable_type ? Cloneable_type
+                : Cloneable_type = GetType(system_package, US_Cloneable));
     }
 
     inline TypeSymbol *String()
     {
-        return (String_type ? String_type : String_type = GetType(system_package, StringConstant::US_String));
+        return (String_type ? String_type
+                : String_type = GetType(system_package, US_String));
     }
 
     inline TypeSymbol *Void()
     {
-        return (Void_type ? Void_type : Void_type = GetType(system_package, StringConstant::US_Void));
+        return (Void_type ? Void_type
+                : Void_type = GetType(system_package, US_Void));
     }
 
     inline TypeSymbol *Boolean()
     {
-        return (Boolean_type ? Boolean_type : Boolean_type = GetType(system_package, StringConstant::US_Boolean));
+        return (Boolean_type ? Boolean_type
+                : Boolean_type = GetType(system_package, US_Boolean));
     }
 
     inline TypeSymbol *Byte()
     {
-        return (Byte_type ? Byte_type : Byte_type = GetType(system_package, StringConstant::US_Byte));
+        return (Byte_type ? Byte_type
+                : Byte_type = GetType(system_package, US_Byte));
     }
 
     inline TypeSymbol *Short()
     {
-        return (Short_type ? Short_type : Short_type = GetType(system_package, StringConstant::US_Short));
+        return (Short_type ? Short_type
+                : Short_type = GetType(system_package, US_Short));
     }
 
     inline TypeSymbol *Character()
     {
-        return (Character_type ? Character_type : Character_type = GetType(system_package, StringConstant::US_Character));
+        return (Character_type ? Character_type
+                : Character_type = GetType(system_package, US_Character));
     }
 
     inline TypeSymbol *Integer()
     {
-        return (Integer_type ? Integer_type : Integer_type = GetType(system_package, StringConstant::US_Integer));
+        return (Integer_type ? Integer_type
+                : Integer_type = GetType(system_package, US_Integer));
     }
 
     inline TypeSymbol *Long()
     {
-        return (Long_type ? Long_type : Long_type = GetType(system_package, StringConstant::US_Long));
+        return (Long_type ? Long_type
+                : Long_type = GetType(system_package, US_Long));
     }
 
     inline TypeSymbol *Float()
     {
-        return (Float_type ? Float_type : Float_type = GetType(system_package, StringConstant::US_Float));
+        return (Float_type ? Float_type
+                : Float_type = GetType(system_package, US_Float));
     }
 
     inline TypeSymbol *Double()
     {
-        return (Double_type ? Double_type : Double_type = GetType(system_package, StringConstant::US_Double));
+        return (Double_type ? Double_type
+                : Double_type = GetType(system_package, US_Double));
+    }
+
+    inline TypeSymbol *Comparable()
+    {
+        return (Comparable_type ? Comparable_type
+                : Comparable_type = GetType(system_package, US_Comparable));
+    }
+
+    void InitAssertionErrorInfo();
+    inline TypeSymbol *AssertionError()
+    {
+        assert(option.source >= JikesOption::SDK1_4);
+        if (! AssertionError_type)
+        {
+            AssertionError_type = GetType(system_package, US_AssertionError);
+            InitAssertionErrorInfo();
+        }
+
+        return AssertionError_type;
+    }
+
+    MethodSymbol *AssertionError_InitMethod()
+    {
+        assert(option.source >= JikesOption::SDK1_4);
+        if (! AssertionError_Init_method)
+            (void) AssertionError();
+        return AssertionError_Init_method;
+    }
+
+    MethodSymbol *AssertionError_InitWithCharMethod()
+    {
+        assert(option.source >= JikesOption::SDK1_4);
+        if (! AssertionError_InitWithChar_method)
+            (void) AssertionError();
+        return AssertionError_InitWithChar_method;
+    }
+
+    MethodSymbol *AssertionError_InitWithBooleanMethod()
+    {
+        assert(option.source >= JikesOption::SDK1_4);
+        if (! AssertionError_InitWithBoolean_method)
+            (void) AssertionError();
+        return AssertionError_InitWithBoolean_method;
+    }
+
+    MethodSymbol *AssertionError_InitWithIntMethod()
+    {
+        assert(option.source >= JikesOption::SDK1_4);
+        if (! AssertionError_InitWithInt_method)
+            (void) AssertionError();
+        return AssertionError_InitWithInt_method;
+    }
+
+    MethodSymbol *AssertionError_InitWithLongMethod()
+    {
+        assert(option.source >= JikesOption::SDK1_4);
+        if (! AssertionError_InitWithLong_method)
+            (void) AssertionError();
+        return AssertionError_InitWithLong_method;
+    }
+
+    MethodSymbol *AssertionError_InitWithFloatMethod()
+    {
+        assert(option.source >= JikesOption::SDK1_4);
+        if (! AssertionError_InitWithFloat_method)
+            (void) AssertionError();
+        return AssertionError_InitWithFloat_method;
+    }
+
+    MethodSymbol *AssertionError_InitWithDoubleMethod()
+    {
+        assert(option.source >= JikesOption::SDK1_4);
+        if (! AssertionError_InitWithDouble_method)
+            (void) AssertionError();
+        return AssertionError_InitWithDouble_method;
+    }
+
+    MethodSymbol *AssertionError_InitWithObjectMethod()
+    {
+        assert(option.source >= JikesOption::SDK1_4);
+        if (! AssertionError_InitWithObject_method)
+            (void) AssertionError();
+        return AssertionError_InitWithObject_method;
     }
 
     void InitClassInfo();
@@ -190,7 +291,7 @@ public:
     {
         if (! Class_type)
         {
-            Class_type = GetType(system_package, StringConstant::US_Class);
+            Class_type = GetType(system_package, US_Class);
             InitClassInfo();
         }
 
@@ -204,13 +305,27 @@ public:
         return Class_forName_method;
     }
 
+    MethodSymbol *Class_getComponentTypeMethod()
+    {
+        if (! Class_getComponentType_method)
+            (void) Class();
+        return Class_getComponentType_method;
+    }
+
+    MethodSymbol *Class_desiredAssertionStatusMethod()
+    {
+        if (! Class_desiredAssertionStatus_method)
+            (void) Class();
+        return Class_desiredAssertionStatus_method;
+    }
+
 
     void InitThrowableInfo();
     inline TypeSymbol *Throwable()
     {
         if (! Throwable_type)
         {
-            Throwable_type = GetType(system_package, StringConstant::US_Throwable);
+            Throwable_type = GetType(system_package, US_Throwable);
             InitThrowableInfo();
         }
 
@@ -224,30 +339,38 @@ public:
         return Throwable_getMessage_method;
     }
 
+    MethodSymbol *Throwable_initCauseMethod()
+    {
+        assert(option.source >= JikesOption::SDK1_4);
+        if (! Throwable_initCause_method)
+            (void) Throwable();
+        return Throwable_initCause_method;
+    }
+
     inline TypeSymbol *Exception()
     {
-        return (Exception_type
-                       ? Exception_type
-                       : Exception_type = GetType(system_package, StringConstant::US_Exception));
+        return (Exception_type ? Exception_type
+                : Exception_type = GetType(system_package, US_Exception));
     }
 
     inline TypeSymbol *RuntimeException()
     {
-        return (RuntimeException_type
-                       ? RuntimeException_type
-                       : RuntimeException_type = GetType(system_package, StringConstant::US_RuntimeException));
+        return (RuntimeException_type ? RuntimeException_type
+                : RuntimeException_type = GetType(system_package,
+                                                  US_RuntimeException));
     }
 
     inline TypeSymbol *ClassNotFoundException()
     {
-        return (ClassNotFoundException_type
-                       ? ClassNotFoundException_type
-                       : ClassNotFoundException_type = GetType(system_package, StringConstant::US_ClassNotFoundException));
+        return (ClassNotFoundException_type ? ClassNotFoundException_type
+                : (ClassNotFoundException_type =
+                   GetType(system_package, US_ClassNotFoundException)));
     }
 
     inline TypeSymbol *Error()
     {
-        return (Error_type ? Error_type : Error_type = GetType(system_package, StringConstant::US_Error));
+        return (Error_type ? Error_type
+                : Error_type = GetType(system_package, US_Error));
     }
 
     void InitNoClassDefFoundErrorInfo();
@@ -255,27 +378,35 @@ public:
     {
         if (! NoClassDefFoundError_type)
         {
-            NoClassDefFoundError_type = GetType(system_package, StringConstant::US_NoClassDefFoundError);
+            NoClassDefFoundError_type =
+                GetType(system_package, US_NoClassDefFoundError);
             InitNoClassDefFoundErrorInfo();
         }
 
         return NoClassDefFoundError_type;
     }
 
-    MethodSymbol *NoClassDefFoundError_InitMethod()
+    MethodSymbol *NoClassDefFoundError_InitStringMethod()
     {
-        if (! NoClassDefFoundError_InitWithString_method)
+        if (! NoClassDefFoundError_InitString_method)
             (void) NoClassDefFoundError();
-        return NoClassDefFoundError_InitWithString_method;
+        return NoClassDefFoundError_InitString_method;
     }
 
+    MethodSymbol *NoClassDefFoundError_InitMethod()
+    {
+        if (! NoClassDefFoundError_Init_method)
+            (void) NoClassDefFoundError();
+        return NoClassDefFoundError_Init_method;
+    }
 
     void InitStringBufferInfo();
     inline TypeSymbol *StringBuffer()
     {
         if (! StringBuffer_type)
         {
-            StringBuffer_type = GetType(system_package, StringConstant::US_StringBuffer);
+            StringBuffer_type =
+                GetType(system_package, US_StringBuffer);
             InitStringBufferInfo();
         }
 
@@ -307,17 +438,9 @@ public:
     }
 
 
-    MethodSymbol *StringBuffer_append_char_arrayMethod()
-    {
-        if (! StringBuffer_InitWithString_method)
-            (void) StringBuffer();
-        return StringBuffer_append_char_array_method;
-    }
-
-
     MethodSymbol *StringBuffer_append_charMethod()
     {
-        if (! StringBuffer_InitWithString_method)
+        if (! StringBuffer_append_char_method)
             (void) StringBuffer();
         return StringBuffer_append_char_method;
     }
@@ -325,7 +448,7 @@ public:
 
     MethodSymbol *StringBuffer_append_booleanMethod()
     {
-        if (! StringBuffer_InitWithString_method)
+        if (! StringBuffer_append_boolean_method)
             (void) StringBuffer();
         return StringBuffer_append_boolean_method;
     }
@@ -333,7 +456,7 @@ public:
 
     MethodSymbol *StringBuffer_append_intMethod()
     {
-        if (! StringBuffer_InitWithString_method)
+        if (! StringBuffer_append_int_method)
             (void) StringBuffer();
         return StringBuffer_append_int_method;
     }
@@ -341,7 +464,7 @@ public:
 
     MethodSymbol *StringBuffer_append_longMethod()
     {
-        if (! StringBuffer_InitWithString_method)
+        if (! StringBuffer_append_long_method)
             (void) StringBuffer();
         return StringBuffer_append_long_method;
     }
@@ -349,7 +472,7 @@ public:
 
     MethodSymbol *StringBuffer_append_floatMethod()
     {
-        if (! StringBuffer_InitWithString_method)
+        if (! StringBuffer_append_float_method)
             (void) StringBuffer();
         return StringBuffer_append_float_method;
     }
@@ -357,7 +480,7 @@ public:
 
     MethodSymbol *StringBuffer_append_doubleMethod()
     {
-        if (! StringBuffer_InitWithString_method)
+        if (! StringBuffer_append_double_method)
             (void) StringBuffer();
         return StringBuffer_append_double_method;
     }
@@ -365,7 +488,7 @@ public:
 
     MethodSymbol *StringBuffer_append_stringMethod()
     {
-        if (! StringBuffer_InitWithString_method)
+        if (! StringBuffer_append_string_method)
             (void) StringBuffer();
         return StringBuffer_append_string_method;
     }
@@ -373,7 +496,7 @@ public:
 
     MethodSymbol *StringBuffer_append_objectMethod()
     {
-        if (! StringBuffer_InitWithString_method)
+        if (! StringBuffer_append_object_method)
             (void) StringBuffer();
         return StringBuffer_append_object_method;
     }
@@ -392,7 +515,7 @@ public:
                      *LineNumberTable_literal,
                      *LocalVariableTable_literal,
                      *Code_literal,
-                     *Sourcefile_literal,
+                     *SourceFile_literal,
 
                      *null_literal,
                      *this_literal;
@@ -402,7 +525,8 @@ public:
 
     Utf8LiteralValue *ConvertUnicodeToUtf8(wchar_t *source)
     {
-        char *target = new char[wcslen(source) * 3 + 1]; // should be big enough for the worst case
+        // Should be big enough for the worst case.
+        char *target = new char[wcslen(source) * 3 + 1];
         int length = ConvertUnicodeToUtf8(source, target);
         Utf8LiteralValue *literal = Utf8_pool.FindOrInsert(target, length);
         delete [] target;
@@ -447,13 +571,14 @@ public:
     {
         NameSymbol *name_symbol = name_table.FindOrInsertName(name, len);
         if (! name_symbol -> Utf8_literal)
-            name_symbol -> Utf8_literal = ConvertUnicodeToUtf8(name_symbol -> Name());
+            name_symbol -> Utf8_literal =
+                ConvertUnicodeToUtf8(name_symbol -> Name());
 
         return name_symbol;
     }
 
     //
-    // Make up a parameter name of the form #(num) and return its name symbol.
+    // Make up a parameter name of the form $(num) and return its name symbol.
     //
     NameSymbol *MakeParameter(int num)
     {
@@ -481,7 +606,8 @@ public:
 
     inline bool IsSimpleIntegerValueType(TypeSymbol *type)
     {
-        return (type == byte_type || type == short_type || type == int_type || type == char_type);
+        return (type == byte_type || type == short_type ||
+                type == int_type || type == char_type);
     }
 
     inline bool IsIntegral(TypeSymbol *type)
@@ -546,6 +672,8 @@ private:
                *Long_type,
                *Float_type,
                *Double_type,
+               *Comparable_type,
+               *AssertionError_type,
                *Class_type,
                *Throwable_type,
                *Exception_type,
@@ -555,16 +683,30 @@ private:
                *NoClassDefFoundError_type,
                *StringBuffer_type;
 
-    MethodSymbol *Class_forName_method,
+    MethodSymbol *Object_getClass_method,
+
+                 *Class_forName_method,
+                 *Class_getComponentType_method,
+                 *Class_desiredAssertionStatus_method,
+
+                 *AssertionError_Init_method,
+                 *AssertionError_InitWithChar_method,
+                 *AssertionError_InitWithBoolean_method,
+                 *AssertionError_InitWithInt_method,
+                 *AssertionError_InitWithLong_method,
+                 *AssertionError_InitWithFloat_method,
+                 *AssertionError_InitWithDouble_method,
+                 *AssertionError_InitWithObject_method,
 
                  *Throwable_getMessage_method,
+                 *Throwable_initCause_method,
 
-                 *NoClassDefFoundError_InitWithString_method,
+                 *NoClassDefFoundError_InitString_method,
+                 *NoClassDefFoundError_Init_method,
 
                  *StringBuffer_Init_method,
                  *StringBuffer_InitWithString_method,
                  *StringBuffer_toString_method,
-                 *StringBuffer_append_char_array_method,
                  *StringBuffer_append_char_method,
                  *StringBuffer_append_boolean_method,
                  *StringBuffer_append_int_method,
@@ -588,9 +730,10 @@ private:
 
     void ProcessFile(FileSymbol *);
     void ProcessMembers();
+    void CollectTypes(TypeSymbol *, Tuple<TypeSymbol *> &);
     void ProcessBodies(TypeSymbol *);
 
-    void ProcessNewInputFiles(SymbolSet &, char **, int = 0);
+    void ProcessNewInputFiles(SymbolSet &, char **);
 
     FileSymbol *FindOrInsertJavaInputFile(DirectorySymbol *, NameSymbol *);
     FileSymbol *FindOrInsertJavaInputFile(wchar_t *, int);

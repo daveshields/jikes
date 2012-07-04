@@ -1,9 +1,9 @@
-// $Id: stream.h,v 1.32 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
+// $Id: stream.h,v 1.38 2002/05/16 21:51:04 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -35,7 +35,7 @@ class StreamError : public JikesError
 {
     friend class LexStream;
 
- public:
+public:
 
     StreamError();
     
@@ -45,41 +45,38 @@ class StreamError : public JikesError
     virtual JikesErrorSeverity getSeverity();
     virtual const char *getFileName();
     
-    virtual int getLeftLineNo      ();
-    virtual int getLeftColumnNo    ();
-    virtual int getRightLineNo     ();
-    virtual int getRightColumnNo   ();
+    virtual int getLeftLineNo();
+    virtual int getLeftColumnNo();
+    virtual int getRightLineNo();
+    virtual int getRightColumnNo();
     
     enum StreamErrorKind
     {
         BAD_TOKEN,
-        BAD_OCTAL_CONSTANT,
         EMPTY_CHARACTER_CONSTANT,
         UNTERMINATED_CHARACTER_CONSTANT,
         UNTERMINATED_COMMENT,
         UNTERMINATED_STRING_CONSTANT,
         INVALID_HEX_CONSTANT,
-        INVALID_FLOATING_CONSTANT_EXPONENT,
-        INVALID_UNICODE_ESCAPE
+        INVALID_UNICODE_ESCAPE,
+        INVALID_ESCAPE_SEQUENCE,
+        DEPRECATED_IDENTIFIER_ASSERT, // from here, these are warnings only
+        DOLLAR_IN_IDENTIFIER
     };
 
-    void Initialize(StreamErrorKind kind_, unsigned start_location_, unsigned end_location_, LexStream *);
+private:
 
- protected:
-
- private:
-
-    unsigned        start_location ;
-    unsigned        end_location   ;
-    StreamErrorKind kind           ;
+    unsigned start_location;
+    unsigned end_location;
+    StreamErrorKind kind;
     
-    static  bool    emacs_style_report;
-    LexStream      *lex_stream;
+    static bool emacs_style_report;
+    LexStream *lex_stream;
 
-    int left_line_no    ;
-    int left_column_no  ;
-    int right_line_no   ;
-    int right_column_no ;
+    int left_line_no;
+    int left_column_no;
+    int right_line_no;
+    int right_column_no;
 
     wchar_t *regularErrorString();
     wchar_t *emacsErrorString();
@@ -89,6 +86,9 @@ class StreamError : public JikesError
 
     bool initialized;
     
+    void Initialize(StreamErrorKind kind_, unsigned start_location_,
+                    unsigned end_location_, LexStream *);
+
 };
 
 
@@ -193,12 +193,14 @@ class LexStream : public Stream
     typedef int TypeIndex;
     typedef int TokenIndex;
     typedef int CommentIndex;
-    enum { LEX_INFINITY = INT_MAX }; // the largest possible value for TokenIndex
+    enum { LEX_INFINITY = INT_MAX }; // the largest value for TokenIndex
 
     FileSymbol *file_symbol;
 
     inline TokenIndex Next(TokenIndex i)
-         { return (++i < token_stream.Length() ? i : token_stream.Length() - 1); }
+    {
+        return (++i < token_stream.Length() ? i : token_stream.Length() - 1);
+    }
 
     inline TokenIndex Previous(TokenIndex i) { return (i <= 0 ? 0 : i - 1); }
 
@@ -209,34 +211,52 @@ class LexStream : public Stream
     inline TokenIndex Gettoken() { return index = Next(index); }
 
     inline TokenIndex Gettoken(TokenIndex end_token)
-         { return index = (index < end_token ? Next(index) : token_stream.Length() - 1); }
+    {
+        return index = (index < end_token ? Next(index)
+                        : token_stream.Length() - 1);
+    }
 
-    inline TokenIndex Badtoken() { return 0; }
+    inline static TokenIndex BadToken() { return 0; }
 
     inline unsigned Kind(TokenIndex i) { return tokens[i].Kind(); }
 
     inline unsigned Location(TokenIndex i) { return tokens[i].Location(); }
 
-    inline unsigned Line(TokenIndex i) { return FindLine(tokens[i].Location()); }
+    inline unsigned Line(TokenIndex i)
+    {
+        return FindLine(tokens[i].Location());
+    }
 
-    inline unsigned Column(TokenIndex i) { return columns ? columns[i] : (input_buffer ? FindColumn(tokens[i].Location()) : 0); }
+    inline unsigned Column(TokenIndex i)
+    {
+        return columns ? columns[i] : (input_buffer
+                                       ? FindColumn(tokens[i].Location()) : 0);
+    }
 
-    inline bool AfterEol(TokenIndex i) { return (i < 1 ? true : Line(i - 1) < Line(i)); }
+    inline bool AfterEol(TokenIndex i)
+    {
+        return (i < 1 ? true : Line(i - 1) < Line(i));
+    }
 
     inline bool IsDeprecated(TokenIndex i) { return tokens[i].Deprecated(); }
 
-    inline TokenIndex MatchingBrace(TokenIndex i) { return tokens[i].additional_info.right_brace; }
+    inline TokenIndex MatchingBrace(TokenIndex i)
+    {
+        return tokens[i].additional_info.right_brace;
+    }
 
     wchar_t *NameString(TokenIndex i)
     {
-        return (NameSymbol(i) || LiteralSymbol(i) ? tokens[i].additional_info.symbol -> Name()
-                                                  : KeywordName(tokens[i].Kind()));
+        return (NameSymbol(i) || LiteralSymbol(i)
+                ? tokens[i].additional_info.symbol -> Name()
+                : KeywordName(tokens[i].Kind()));
     }
 
     int NameStringLength(TokenIndex i)
     {
-        return (NameSymbol(i) || LiteralSymbol(i) ? tokens[i].additional_info.symbol -> NameLength()
-                                                  : wcslen(KeywordName(tokens[i].Kind())));
+        return (NameSymbol(i) || LiteralSymbol(i)
+                ? tokens[i].additional_info.symbol -> NameLength()
+                : wcslen(KeywordName(tokens[i].Kind())));
     }
 
     class LiteralSymbol *LiteralSymbol(TokenIndex);
@@ -246,12 +266,24 @@ class LexStream : public Stream
     char *FileName();
     size_t FileNameLength();
 
-    inline int LineLength(unsigned line_no) { return locations[line_no + 1] - locations[line_no]; }
-    inline int LineStart(unsigned line_no)  { return locations[line_no]; }
-    inline int LineEnd(unsigned line_no)    { return locations[line_no + 1] - 1; }
+    inline int LineLength(unsigned line_no)
+    {
+        return locations[line_no + 1] - locations[line_no];
+    }
+    inline int LineStart(unsigned line_no)
+    {
+        return locations[line_no];
+    }
+    inline int LineEnd(unsigned line_no)
+    {
+        return locations[line_no + 1] - 1;
+    }
 
     inline int LineSegmentLength(TokenIndex i)
-        { return Tab::Wcslen(input_buffer, tokens[i].Location(), LineEnd(Line(i))); }
+    {
+        return Tab::Wcslen(input_buffer, tokens[i].Location(),
+                           LineEnd(Line(i)));
+    }
 
     //
     // For a sequence of tokens in a given range find out how many large
@@ -273,7 +305,8 @@ class LexStream : public Stream
     }
 
     //
-    // When only an end token is supplied, the start token is assume to be the first one on the same line.
+    // When only an end token is supplied, the start token is assume to be the
+    // first one on the same line.
     //
     inline int WcharOffset(TokenIndex end)
     {
@@ -295,18 +328,38 @@ class LexStream : public Stream
 
     inline int NumComments() { return comment_stream.Length(); }
 
-    inline TokenIndex PrecedingToken(CommentIndex i) { return comments[i].previous_token; }
+    inline TokenIndex PrecedingToken(CommentIndex i)
+    {
+        return comments[i].previous_token;
+    }
 
-    inline unsigned CommentLocation(CommentIndex i)  { return comments[i].location; }
+    inline unsigned CommentLocation(CommentIndex i)
+    {
+        return comments[i].location;
+    }
 
-    inline wchar_t *CommentString(CommentIndex i)    { return comments[i].string; }
+    inline wchar_t *CommentString(CommentIndex i)
+    {
+        return comments[i].string;
+    }
 
-    inline int CommentStringLength(CommentIndex i)   { return comments[i].length; }
+    inline int CommentStringLength(CommentIndex i)
+    {
+        return comments[i].length;
+    }
 
-    inline int NumBadTokens() { return bad_tokens.Length(); }
+    inline int NumBadTokens()
+    {
+        int count = 0;
+        for (int i = 0; i < bad_tokens.Length(); i++)
+            if (bad_tokens[i].getSeverity() == JikesError::JIKES_ERROR)
+                count++;
+        return count;
+    }
+    inline int NumWarnTokens() { return bad_tokens.Length() - NumBadTokens(); }
 
 #ifdef JIKES_DEBUG
-    int file_read;
+    bool file_read;
 #endif
 
     //*
@@ -337,6 +390,8 @@ class LexStream : public Stream
         comment_buffer = NULL;
     }
 
+    void ReportMessage(StreamError::StreamErrorKind kind,
+                       unsigned start_location, unsigned end_location);
     void SortMessages();
     void PrintMessages();
 
@@ -347,8 +402,8 @@ class LexStream : public Stream
         RereadInput();
         //
         // Calculate the length of the string required to save the comments.
-        // Allocate the buffer, save the comments in the buffer and update their
-        // respective "string" pointer.
+        // Allocate the buffer, save the comments in the buffer and update
+        // their respective "string" pointer.
         //
         int length = 0,
             i;
@@ -359,7 +414,8 @@ class LexStream : public Stream
         wchar_t *ptr = comment_buffer;
         for (i = 1; i < comment_stream.Length(); i++)
         {
-            memmove(ptr, &(input_buffer[comments[i].location]), comments[i].length * sizeof(wchar_t));
+            memmove(ptr, &(input_buffer[comments[i].location]),
+                    comments[i].length * sizeof(wchar_t));
             comments[i].string = ptr;
             ptr += comments[i].length;
             *ptr++ = U_NULL;
@@ -411,15 +467,20 @@ private:
     class Token
     {
         //
-        // It is expected that a location will be set for every token. Therefore,
-        // as we are setting the location, we also reset the deprecated bit to 0.
-        // If it is subsequently discovered that the token is followed by one or more
-        // deprecated tags then the bit is set to 1 by an invocation of the
-        // function SetDeprecated. Note that a better way to resetting all the bits in
-        // "info" is to use the function ResetInfoAndSetLocation defined below, instead
-        // of using SetLocation
+        // It is expected that a location will be set for every token.
+        // Therefore, as we are setting the location, we also reset the
+        // deprecated bit to 0. If it is subsequently discovered that the
+        // token is followed by one or more deprecated tags then the bit is
+        // set to 1 by an invocation of the function SetDeprecated. Note that
+        // a better way to resetting all the bits in "info" is to use the
+        // function ResetInfoAndSetLocation defined below, instead of using
+        // SetLocation.
         //
-        inline void SetLocation(unsigned location) { assert(location <= 0x00FFFFFF); info = (info & 0x0000007F) | (location << 8); }
+        inline void SetLocation(unsigned location)
+        {
+            assert(location <= 0x00FFFFFF);
+            info = (info & 0x0000007F) | (location << 8);
+        }
 
     public:
         unsigned info;
@@ -430,7 +491,8 @@ private:
         } additional_info;
 
         //
-        // To just reset the info, this function should be invoked with a location value of 0.
+        // To just reset the info, this function should be invoked with a
+        // location value of 0.
         //
         inline void ResetInfoAndSetLocation(unsigned location)
         {
@@ -439,14 +501,24 @@ private:
             additional_info.symbol = NULL;
         }
 
-        inline unsigned Location()                   { return (info >> 8); }
-        inline void SetKind(unsigned kind)           { assert(kind <= 0x0000007F); info = (info & 0xFFFFFF80) | kind; }
-        inline unsigned Kind()                       { return (info & 0x0000007F); }
-        inline void SetDeprecated()                  { info |= 0x00000080; }
-        inline bool Deprecated()                     { return ((info & 0x00000080) != 0); }
+        inline unsigned Location() { return (info >> 8); }
+        inline void SetKind(unsigned kind)
+        {
+            assert(kind <= 0x0000007F);
+            info = (info & 0xFFFFFF80) | kind;
+        }
+        inline unsigned Kind() { return (info & 0x0000007F); }
+        inline void SetDeprecated() { info |= 0x00000080; }
+        inline bool Deprecated() { return ((info & 0x00000080) != 0); }
 
-        inline void SetSymbol(Symbol *symbol)        { additional_info.symbol = symbol; }
-        inline void SetRightBrace(TokenIndex rbrace) { additional_info.right_brace = rbrace; }
+        inline void SetSymbol(Symbol *symbol)
+        {
+            additional_info.symbol = symbol;
+        }
+        inline void SetRightBrace(TokenIndex rbrace)
+        {
+            additional_info.right_brace = rbrace;
+        }
     };
 
     TokenIndex GetNextToken(unsigned location = 0)
@@ -504,7 +576,8 @@ private:
     {
         assert(locations);
 
-        return Tab::Wcslen(input_buffer, locations[FindLine(location)], location);
+        return Tab::Wcslen(input_buffer, locations[FindLine(location)],
+                           location);
     }
 };
 

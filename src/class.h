@@ -1,9 +1,9 @@
-// $Id: class.h,v 1.22 2001/09/14 05:31:32 ericb Exp $ -*- c++ -*-
+// $Id: class.h,v 1.30 2002/07/11 00:32:48 cabbey Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -29,9 +29,9 @@ protected:
     //
     //    u1 info[]
     //
-    // cp_info can be viewed as a generic (abstract, in Java talk) class that must
-    // be "extended" to implement the real constant pool objects. The real objects
-    // contain the info...
+    // cp_info can be viewed as a generic (abstract, in Java talk) class that
+    // must be "extended" to implement the real constant pool objects. The real
+    // objects contain the info...
     //
 
 public:
@@ -85,12 +85,14 @@ public:
 #ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *>& constant_pool)
     {
-        Coutput << "CONSTANT_Class_info: name_index " << (unsigned) name_index << endl;
+        Coutput << "CONSTANT_Class_info: name_index "
+                << (unsigned) name_index << endl;
     }
 
     virtual void Describe(Tuple<cp_info *> &constant_pool)
     {
-        Coutput << "Class:";  constant_pool[name_index] -> Describe(constant_pool);
+        Coutput << "Class:";
+        constant_pool[name_index] -> Describe(constant_pool);
     }
 #endif
 };
@@ -108,9 +110,11 @@ class CONSTANT_Double_info : public cp_info
 
 public:
 
-    CONSTANT_Double_info(u1 _tag, u4 _high_bytes, u4 _low_bytes) : cp_info(_tag),
-                                                                   high_bytes(_high_bytes),
-                                                                   low_bytes(_low_bytes)
+    CONSTANT_Double_info(u1 _tag,
+                         u4 _high_bytes,
+                         u4 _low_bytes) : cp_info(_tag),
+                                          high_bytes(_high_bytes),
+                                          low_bytes(_low_bytes)
     {}
     virtual ~CONSTANT_Double_info() {}
 
@@ -124,7 +128,8 @@ public:
 #ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
-        Coutput << "CONSTANT_Double_info: bytes " << BaseLong(high_bytes, low_bytes).DoubleView() << endl;
+        Coutput << "CONSTANT_Double_info: bytes "
+                << BaseLong(high_bytes, low_bytes).DoubleView() << endl;
     }
 
     virtual void Describe(Tuple<cp_info *> &constant_pool)
@@ -147,9 +152,11 @@ class CONSTANT_Fieldref_info : public cp_info
 
 public:
 
-    CONSTANT_Fieldref_info(u1 _tag, u2 _class_index, u2 _name_and_type_index) : cp_info(_tag),
-                                                                                class_index(_class_index),
-                                                                                name_and_type_index(_name_and_type_index)
+    CONSTANT_Fieldref_info(u1 _tag,
+                           u2 _class_index,
+                           u2 _name_and_type_index) : cp_info(_tag),
+                                                      class_index(_class_index),
+                                                      name_and_type_index(_name_and_type_index)
     {}
     virtual ~CONSTANT_Fieldref_info() {}
 
@@ -241,7 +248,10 @@ public:
 #ifdef JIKES_DEBUG
     virtual void Print(Tuple<cp_info *> &constant_pool)
     {
-        int val = ((bytes >> 24) & 0xff) << 24 | ((bytes >> 16) & 0xff) << 16 | ((bytes >> 8) & 0xff) << 8 | (bytes & 0xff);
+        int val = ((bytes >> 24) & 0xff) << 24 |
+            ((bytes >> 16) & 0xff) << 16 |
+            ((bytes >> 8) & 0xff) << 8 |
+            (bytes & 0xff);
         Coutput << "CONSTANT_Integer_info: bytes "
                 << val
                 << endl;
@@ -267,9 +277,11 @@ class CONSTANT_InterfaceMethodref_info : public cp_info
 
 public:
 
-    CONSTANT_InterfaceMethodref_info(u1 _tag, u2 _class_index, u2 _name_and_type_index) : cp_info(_tag),
-                                                                                          class_index(_class_index),
-                                                                                          name_and_type_index(_name_and_type_index)
+    CONSTANT_InterfaceMethodref_info(u1 _tag,
+                                     u2 _class_index,
+                                     u2 _name_and_type_index) : cp_info(_tag),
+                                                                class_index(_class_index),
+                                                                name_and_type_index(_name_and_type_index)
     {}
     virtual ~CONSTANT_InterfaceMethodref_info() {}
 
@@ -312,9 +324,11 @@ class CONSTANT_Long_info : public cp_info
 
 public:
 
-    CONSTANT_Long_info(u1 _tag, u4 _high_bytes, u4 _low_bytes) : cp_info(_tag),
-                                                                 high_bytes(_high_bytes),
-                                                                 low_bytes(_low_bytes)
+    CONSTANT_Long_info(u1 _tag,
+                       u4 _high_bytes,
+                       u4 _low_bytes) : cp_info(_tag),
+                                        high_bytes(_high_bytes),
+                                        low_bytes(_low_bytes)
     {}
     virtual ~CONSTANT_Long_info() {}
 
@@ -351,9 +365,11 @@ class CONSTANT_Methodref_info : public cp_info
 
 public:
 
-    CONSTANT_Methodref_info(u1 _tag, u2 _class_index, u2 _name_and_type_index) : cp_info(_tag),
-                                                                                 class_index(_class_index),
-                                                                                 name_and_type_index(_name_and_type_index)
+    CONSTANT_Methodref_info(u1 _tag,
+                            u2 _class_index,
+                            u2 _name_and_type_index) : cp_info(_tag),
+                                                       class_index(_class_index),
+                                                       name_and_type_index(_name_and_type_index)
     {}
     virtual ~CONSTANT_Methodref_info() {}
 
@@ -396,9 +412,11 @@ class CONSTANT_NameAndType_info : public cp_info
 
 public:
 
-    CONSTANT_NameAndType_info(u1 _tag, u2 _name_index, u2 _descriptor_index) : cp_info(_tag),
-                                                                               name_index(_name_index),
-                                                                               descriptor_index(_descriptor_index)
+    CONSTANT_NameAndType_info(u1 _tag,
+                              u2 _name_index,
+                              u2 _descriptor_index) : cp_info(_tag),
+                                                      name_index(_name_index),
+                                                      descriptor_index(_descriptor_index)
     {}
     virtual ~CONSTANT_NameAndType_info() {}
 
@@ -439,8 +457,9 @@ class CONSTANT_String_info : public cp_info
     u2 string_index;
 
 public:
-    CONSTANT_String_info(u1 _tag, u2 _string_index) : cp_info(_tag),
-                                                      string_index(_string_index)
+    CONSTANT_String_info(u1 _tag,
+                         u2 _string_index) : cp_info(_tag),
+                                             string_index(_string_index)
     {}
     virtual ~CONSTANT_String_info() {}
 
@@ -484,8 +503,6 @@ public:
         bytes = new char[_length];
         for (int i = 0; i < _length; i++)
             bytes[i] = _bytes[i];
-
-        return;
     }
     virtual ~CONSTANT_Utf8_info()
     {
@@ -526,8 +543,8 @@ public:
 
 
 //
-// field_info and method_info should be defined here, but they contain attributes, so it is necessary
-// to define the attributes first.
+// field_info and method_info should be defined here, but they contain
+// attributes, so it is necessary to define the attributes first.
 //
 
 class attribute_info
@@ -541,9 +558,9 @@ protected:
     //    u2 attribute_length;
     //    u1 info[attribute_length];
     //
-    // attribute_info can be viewed as a generic (abstract, in Java talk) class that must
-    // be "extended" to implement the real attribute objects. The real objects
-    // contain the info...
+    // attribute_info can be viewed as a generic (abstract, in Java talk) class
+    // that must be "extended" to implement the real attribute objects. The
+    // real objects contain the info...
     //
 
 public:
@@ -628,13 +645,14 @@ class Code_attribute : public attribute_info
 
 public:
 
-    Code_attribute(u2 _name_index, u2 _max_locals) : attribute_info(Code, _name_index),
-                                                     attribute_length(0),
-                                                     max_stack(0),
-                                                     max_locals(_max_locals),
-                                                     code(8, 4),
-                                                     exception_table(6, 16),
-                                                     attributes(6, 16)
+    Code_attribute(u2 _name_index,
+                   u2 _max_locals) : attribute_info(Code, _name_index),
+                                     attribute_length(0),
+                                     max_stack(0),
+                                     max_locals(_max_locals),
+                                     code(8, 4),
+                                     exception_table(6, 16),
+                                     attributes(6, 16)
     {}
     virtual ~Code_attribute()
     {
@@ -672,7 +690,12 @@ public:
     u2 MaxLocals() { return max_locals; }
     void ResetMaxLocals(u2 val) { max_locals = val; }
 
-    u2 CodeLength() { return code.Length(); }
+    u2 CodeLength()
+    {
+        return CodeLengthExceeded() ? 65535 : (u2) code.Length();
+    }
+
+    bool CodeLengthExceeded() { return code.Length() > 65535; }
 
     void ResetCode(int i, u1 byte)
     {
@@ -684,16 +707,34 @@ public:
         code.Next() = byte;
     }
 
+    void DeleteCode(int count)
+    {
+        code.Reset(code.Length() - count);
+    }
+
     u2 ExceptionTableLength() { return exception_table.Length(); }
 
     void AddException(u2 start_pc, u2 end_pc, u2 handler_pc, u2 catch_type)
     {
-        int exception_index = exception_table.NextIndex();
-
-        exception_table[exception_index].start_pc = start_pc;
-        exception_table[exception_index].end_pc = end_pc;
-        exception_table[exception_index].handler_pc = handler_pc;
-        exception_table[exception_index].catch_type = catch_type;
+        if (start_pc == end_pc)
+            return;
+        int exception_index = exception_table.Length() - 1;
+        if (exception_index >= 0 &&
+            end_pc == exception_table[exception_index].start_pc &&
+            handler_pc == exception_table[exception_index].handler_pc &&
+            catch_type == exception_table[exception_index].catch_type)
+        {
+            exception_table[exception_index].start_pc = start_pc;
+        }
+        else
+        {
+            exception_index++;
+            exception_table.NextIndex();
+            exception_table[exception_index].start_pc = start_pc;
+            exception_table[exception_index].end_pc = end_pc;
+            exception_table[exception_index].handler_pc = handler_pc;
+            exception_table[exception_index].catch_type = catch_type;
+        }
     }
 
     u2 AttributesCount() { return attributes.Length(); }
@@ -728,8 +769,6 @@ public:
         output_buffer.PutB2(attributes.Length());
         for (int k = 0; k < attributes.Length(); k++)
             attributes[k] -> Put(output_buffer);
-
-        return;
     }
 
 #ifdef JIKES_DEBUG
@@ -766,7 +805,7 @@ public:
             }
         }
 
-        Operators::opdmp(constant_pool, code);
+        Operators::OpDmp(constant_pool, code);
 
         Coutput << "  " << endl;
 
@@ -792,8 +831,9 @@ class ConstantValue_attribute : public attribute_info
 
 public:
 
-    ConstantValue_attribute(u2 _name_index, u2 _constantvalue_index) : attribute_info(ConstantValue, _name_index),
-                                                                       constantvalue_index(_constantvalue_index)
+    ConstantValue_attribute(u2 _name_index,
+                            u2 _constantvalue_index) : attribute_info(ConstantValue, _name_index),
+                                                       constantvalue_index(_constantvalue_index)
     {}
     virtual ~ConstantValue_attribute() {}
 
@@ -832,11 +872,13 @@ class Exceptions_attribute : public attribute_info
     //
     //    u4 attribute_length;
     //
-    // The value of attribute_length is derived from the exception_index_table. See below
+    // The value of attribute_length is derived from the exception_index_table.
+    // See below
     //
     //    u2 number_of_exceptions;
     //
-    // The value of number_of_exceptions is derived from the exception_index_table. See below
+    // The value of number_of_exceptions is derived from the
+    // exception_index_table. See below
     //
 
     Tuple<u2> exception_index_table; /* exception_index_table[number_of_exceptions] */
@@ -993,11 +1035,13 @@ class LineNumberTable_attribute : public attribute_info
     //
     //    u4 attribute_length;
     //
-    // The value of attribute_length is derived from line_number_table. See below
+    // The value of attribute_length is derived from line_number_table. See
+    // below
     //
     //    u2 line_number_table_length;
     //
-    // The value of line_number_table_length is derived from line_number_table. See below
+    // The value of line_number_table_length is derived from line_number_table.
+    // See below
     //
 
     struct line_number_element
@@ -1030,6 +1074,13 @@ public:
 
         line_number_table[line_number_index].start_pc = start_pc;
         line_number_table[line_number_index].line_number = line_number;
+    }
+
+    void SetMax(u2 max_pc)
+    {
+        int i = line_number_table.Length();
+        while(--i > 0 && line_number_table[i].start_pc > max_pc)
+            line_number_table[i].start_pc = max_pc;
     }
 
     virtual void Put(OutputBuffer &output_buffer)
@@ -1082,11 +1133,13 @@ class LocalVariableTable_attribute : public attribute_info
     //
     //    u4 attribute_length;
     //
-    // The value of attribute_length is derived from local_variable_table. See below
+    // The value of attribute_length is derived from local_variable_table. See
+    // below
     //
     //    u2 local_variable_length;
     //
-    // The value of local_variable_length is derived from local_variable_length. See below
+    // The value of local_variable_length is derived from
+    // local_variable_length. See below
     //
 
     struct local_variable_element
@@ -1129,10 +1182,6 @@ public:
             local_variable_table[local_index].descriptor_index = descriptor;
             local_variable_table[local_index].index = index;
         }
-else 
-end = end;
-
-        return;
     }
 
     virtual void Put(OutputBuffer &output_buffer)
@@ -1234,7 +1283,8 @@ class Synthetic_attribute : public attribute_info
     //
     //    u2 attribute_name_index;
     //
-    // The fields attribute_name_index and attribute_length are inherited from attribute_info
+    // The fields attribute_name_index and attribute_length are inherited from
+    // attribute_info
     //
     // The attribute_length is always 0.
     //
@@ -1273,7 +1323,8 @@ class Deprecated_attribute : public attribute_info
     //
     //    u2 attribute_name_index;
     //
-    // The fields attribute_name_index and attribute_length are inherited from attribute_info
+    // The fields attribute_name_index and attribute_length are inherited from
+    // attribute_info
     //
     // The attribute_length is always 0.
     //
@@ -1477,14 +1528,20 @@ public:
 
         for (int j = 0; j < attributes.Length(); j++)
             delete attributes[j];
-
-        return;
     }
 
     void Write()
     {
         Semantic *sem = unit_type -> semantic_environment -> sem;
         Control &control = sem -> control;
+
+        char *class_file_name = unit_type -> ClassName();
+        if (control.option.verbose)
+        {
+            Coutput << "[write "
+                    << class_file_name
+                    << "]" << endl;
+        }
 
         if (! control.option.nowrite)
         {
@@ -1501,11 +1558,30 @@ public:
                 assert(constant_pool[i]);
 
                 constant_pool[i] -> Put(output_buffer);
-                if (constant_pool[i] -> Tag()  ==  CONSTANT_Long || constant_pool[i] -> Tag()  ==  CONSTANT_Double)
-                    i++;; // skip the next entry for eight-byte constants
+                if (constant_pool[i] -> Tag() == CONSTANT_Long ||
+                    constant_pool[i] -> Tag() == CONSTANT_Double)
+                    i++; // skip the next entry for eight-byte constants
             }
 
-            output_buffer.PutB2(access_flags);
+            //
+            // For compatibility reasons, protected classes are marked public,
+            // and private classes are marked default; and no class may be
+            // static or strictfp. These properties are displayed correctly
+            // later on in the InnerClasses attribute.
+            //
+            {
+                AccessFlags compat(access_flags);
+                if (compat.ACC_PROTECTED())
+                {
+                    compat.ResetACC_PROTECTED();
+                    compat.SetACC_PUBLIC();
+                }
+                else if (compat.ACC_PRIVATE())
+                    compat.ResetACC_PRIVATE();
+                compat.ResetACC_STATIC();
+                compat.ResetACC_STRICTFP();
+                output_buffer.PutB2(compat.Flags());
+            }
             output_buffer.PutB2(this_class);
             output_buffer.PutB2(super_class);
 
@@ -1537,14 +1613,6 @@ public:
             for (int m = 0; m < attributes.Length(); m++)
                 attributes[m] -> Put(output_buffer);
 
-            char *class_file_name = unit_type -> ClassName();
-            if (control.option.verbose)
-            {
-                Coutput << "[write "
-                        << class_file_name
-                        << "]" << endl;
-            }
-
             if (! output_buffer.WriteToFile(class_file_name))
             {
                 int length = strlen(class_file_name);
@@ -1560,8 +1628,6 @@ public:
                 delete [] name;
             }
         }
-
-        return;
     }
 
 protected:

@@ -1,9 +1,9 @@
-// $Id: getclass.cpp,v 1.28 2001/09/14 05:31:33 ericb Exp $
+// $Id: getclass.cpp,v 1.32 2002/07/09 07:28:43 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -63,17 +63,21 @@ inline void Semantic::Skip(const char *&buffer, int n)
 }
 
 
-TypeSymbol *Semantic::ProcessNestedType(TypeSymbol *base_type, NameSymbol *name_symbol, LexStream::TokenIndex tok)
+TypeSymbol *Semantic::ProcessNestedType(TypeSymbol *base_type,
+                                        NameSymbol *name_symbol,
+                                        LexStream::TokenIndex tok)
 {
     TypeSymbol *inner_type = base_type -> FindTypeSymbol(name_symbol);
     if (! inner_type)
     {
-        int length = base_type -> ExternalNameLength() + 1 + name_symbol -> NameLength(); // +1 for $,... +1 for $
+        int length = base_type -> ExternalNameLength() + 1 +
+            name_symbol -> NameLength(); // +1 for $,... +1 for $
         wchar_t *external_name = new wchar_t[length + 1]; // +1 for '\0';
         wcscpy(external_name, base_type -> ExternalName());
-        wcscat(external_name, StringConstant::US__DS);
+        wcscat(external_name, StringConstant::US_DS);
         wcscat(external_name, name_symbol -> Name());
-        NameSymbol *external_name_symbol = control.FindOrInsertName(external_name, length);
+        NameSymbol *external_name_symbol =
+            control.FindOrInsertName(external_name, length);
 
         delete [] external_name;
 
@@ -85,7 +89,9 @@ TypeSymbol *Semantic::ProcessNestedType(TypeSymbol *base_type, NameSymbol *name_
         inner_type -> SetOwner(base_type);
         inner_type -> SetSignature(control);
 
-        FileSymbol *file_symbol = Control::GetFile(control, base_type -> ContainingPackage(), external_name_symbol);
+        FileSymbol *file_symbol =
+            Control::GetFile(control, base_type -> ContainingPackage(),
+                             external_name_symbol);
         if (file_symbol)
         {
             inner_type -> file_symbol = file_symbol;
@@ -95,7 +101,8 @@ TypeSymbol *Semantic::ProcessNestedType(TypeSymbol *base_type, NameSymbol *name_
         }
         else
         {
-            inner_type -> SetSymbolTable(1); // this symbol table will only contain a default constructor
+            // this symbol table will only contain a default constructor
+            inner_type -> SetSymbolTable(1);
             inner_type -> super = control.Object();
             inner_type -> MarkBad();
             AddDefaultConstructor(inner_type);
@@ -111,19 +118,27 @@ TypeSymbol *Semantic::ProcessNestedType(TypeSymbol *base_type, NameSymbol *name_
 }
 
 
-TypeSymbol *Semantic::RetrieveNestedTypes(TypeSymbol *base_type, wchar_t *signature, LexStream::TokenIndex tok)
+TypeSymbol *Semantic::RetrieveNestedTypes(TypeSymbol *base_type,
+                                          wchar_t *signature,
+                                          LexStream::TokenIndex tok)
 {
     int len;
-    for (len = 0; signature[len] != U_NULL && signature[len] != U_DOLLAR; len++)
+    for (len = 0;
+         signature[len] != U_NULL && signature[len] != U_DOLLAR; len++)
         ;
     NameSymbol *name_symbol = control.FindOrInsertName(signature, len);
     TypeSymbol *inner_type = ProcessNestedType(base_type, name_symbol, tok);
 
-    return (signature[len] == U_DOLLAR ? RetrieveNestedTypes(inner_type, &signature[len + 1], tok) : inner_type);
+    return (signature[len] == U_DOLLAR
+            ? RetrieveNestedTypes(inner_type, &signature[len + 1], tok)
+            : inner_type);
 }
 
 
-TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type, const char *utf8_signature, int length, LexStream::TokenIndex tok)
+TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type,
+                                            const char *utf8_signature,
+                                            int length,
+                                            LexStream::TokenIndex tok)
 {
     TypeSymbol *type = control.type_table.FindType(utf8_signature, length);
 
@@ -135,33 +150,43 @@ TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type, const char *u
     else
     {
         wchar_t *signature = new wchar_t[length + 1];
-        (void) Control::ConvertUtf8ToUnicode(signature, utf8_signature, length);
+        Control::ConvertUtf8ToUnicode(signature, utf8_signature, length);
 
         int total_length;
-        for (total_length = 0; signature[total_length] != U_NULL && signature[total_length] != U_DOLLAR; total_length++)
+        for (total_length = 0;
+             signature[total_length] != U_NULL &&
+                 signature[total_length] != U_DOLLAR; total_length++)
             ;
 
-        if (signature[total_length] != U_NULL && Code::IsDigit(signature[total_length + 1])) // an anonymous or a local type?
+        if (signature[total_length] != U_NULL &&
+            Code::IsDigit(signature[total_length + 1]))
         {
-            for (total_length += 2; Code::IsDigit(signature[total_length]); total_length++) // will stop at next '$' or '\0' !!!
+            // an anonymous or a local type?
+            for (total_length += 2;
+                 Code::IsDigit(signature[total_length]); total_length++)
+                // will stop at next '$' or '\0' !!!
                 ;
-            if (signature[total_length] != U_NULL) // not an anonymous type ?  then, it's a local type: scan local name
+            if (signature[total_length] != U_NULL)
             {
-                for (total_length++; signature[total_length] != U_NULL && signature[total_length] != U_DOLLAR; total_length++)
+                // not an anonymous type? then scan local type name
+                for (total_length++;
+                     signature[total_length] != U_NULL &&
+                         signature[total_length] != U_DOLLAR; total_length++)
                     ;
             }
         }
 
         int len;
-        for (len = total_length - 1; len >= 0 && signature[len] != U_SLASH; len--)
+        for (len = total_length - 1;
+             len >= 0 && signature[len] != U_SLASH; len--)
             ;
 
         wchar_t *name = &(signature[len + 1]);
 
         //
-        // When a package name is specified in the signature, we look for the type in question
-        // in that package, i.e., we redefine package. Otherwise, we search for the type in the
-        // unnamed package.
+        // When a package name is specified in the signature, we look for the
+        // type in question in that package, i.e., we redefine package.
+        // Otherwise, we search for the type in the unnamed package.
         //
         PackageSymbol *package = NULL;
 
@@ -190,7 +215,8 @@ TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type, const char *u
         //
         // Process type
         //
-        NameSymbol *name_symbol = control.FindOrInsertName(name, total_length - (len + 1));
+        NameSymbol *name_symbol =
+            control.FindOrInsertName(name, total_length - (len + 1));
         type = package -> FindTypeSymbol(name_symbol);
         if (type)
         {
@@ -199,26 +225,32 @@ TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type, const char *u
         }
         else
         {
-            FileSymbol *file_symbol = Control::GetFile(control, package, name_symbol);
+            FileSymbol *file_symbol = Control::GetFile(control, package,
+                                                       name_symbol);
 
             //
             // If we are dealing with the unnamed package, ...
             //
             if ((! file_symbol) && package == control.unnamed_package)
-                file_symbol = Control::GetFile(control, control.unnamed_package, name_symbol);
+                file_symbol = Control::GetFile(control,
+                                               control.unnamed_package,
+                                               name_symbol);
 
             //
-            // If a file_symbol was not found, ReadType will issue an error message
+            // If a file_symbol was not found, ReadType will issue an error
+            // message
             //
             type = ReadType(file_symbol, package, name_symbol, tok);
 
             //
-            // If we have to do a full check and we have a case where a ".class" file
-            // depends on a ".java" file then we should signal that the ".java" file
-            // associated with the ".class" file should be recompiled.
+            // If we have to do a full check and we have a case where a
+            // ".class" file depends on a ".java" file then we should signal
+            // that the ".java" file associated with the ".class" file should
+            // be recompiled.
             //
-            if (control.option.full_check && (! control.option.depend) &&
-                file_symbol && file_symbol -> IsJava() && (! file_symbol -> IsZip()))
+            if (control.option.full_check && ! control.option.depend &&
+                file_symbol && file_symbol -> IsJava() &&
+                ! file_symbol -> IsZip())
             {
                 control.recompilation_file_set.AddElement(file_symbol);
                 if (! control.option.incremental && control.option.pedantic)
@@ -235,7 +267,8 @@ TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type, const char *u
         }
 
         if (signature[total_length] == U_DOLLAR)
-            type = RetrieveNestedTypes(type, &signature[total_length + 1], tok);
+            type = RetrieveNestedTypes(type, &signature[total_length + 1],
+                                       tok);
 
         delete [] signature;
     }
@@ -249,7 +282,9 @@ TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type, const char *u
 }
 
 
-TypeSymbol *Semantic::ProcessSignature(TypeSymbol *base_type, const char *signature, LexStream::TokenIndex tok)
+TypeSymbol *Semantic::ProcessSignature(TypeSymbol *base_type,
+                                       const char *signature,
+                                       LexStream::TokenIndex tok)
 {
     TypeSymbol *type;
     int num_dimensions = 0;
@@ -280,13 +315,15 @@ TypeSymbol *Semantic::ProcessSignature(TypeSymbol *base_type, const char *signat
         case U_L:
              {
                  //
-                 // The signature is of the form: "L<filename>;" - So, +1 to skip the 'L'
-                 // ReadTypeFromSignature considers a semicolon to be a terminator.
+                 // The signature is of the form: "L<filename>;" - So, +1 to
+                 // skip the 'L' ReadTypeFromSignature considers a semicolon
+                 // to be a terminator.
                  //
                  const char *str = ++signature;
                  while (*str != U_SEMICOLON)
                      str++;
-                 type = ReadTypeFromSignature(base_type, signature, str - signature, tok);
+                 type = ReadTypeFromSignature(base_type, signature,
+                                              str - signature, tok);
              }
              break;
         case U_S:
@@ -303,7 +340,8 @@ TypeSymbol *Semantic::ProcessSignature(TypeSymbol *base_type, const char *signat
             break;
     }
 
-    return (num_dimensions == 0 ? type : type -> GetArrayType((Semantic *)this, num_dimensions));
+    return (num_dimensions == 0 ? type : type -> GetArrayType(this,
+                                                              num_dimensions));
 }
 
 
@@ -327,7 +365,8 @@ inline TypeSymbol *Semantic::GetClassPool(TypeSymbol *base_type,
             for (p = &str[length - 1]; Code::IsDigit(*p); p--)
                 ;
             if (*p != U_DOLLAR) // not an anonymous class
-                class_pool[index] = ReadTypeFromSignature(base_type, str, length, tok);
+                class_pool[index] = ReadTypeFromSignature(base_type, str,
+                                                          length, tok);
         }
     }
 
@@ -355,9 +394,11 @@ void Semantic::ReadClassFile(TypeSymbol *type, LexStream::TokenIndex tok)
 
         if (zipfile -> Buffer() == NULL)
         {
-            type -> SetSymbolTable(1); // this symbol table will only contain a default constructor
+            // this symbol table will only contain a default constructor
+            type -> SetSymbolTable(1);
             if (type != control.Object())
-                type -> super = (type == control.Throwable() ? control.Object() : control.Throwable());
+                type -> super = (type == control.Throwable()
+                                 ? control.Object() : control.Throwable());
             type -> MarkBad();
             AddDefaultConstructor(type);
 
@@ -368,7 +409,8 @@ void Semantic::ReadClassFile(TypeSymbol *type, LexStream::TokenIndex tok)
                            type -> ContainingPackage() -> PackageName(),
                            type -> ExternalName());
         }
-        else if (! ProcessClassFile(type, zipfile -> Buffer(), file_symbol -> uncompressed_size, tok))
+        else if (! ProcessClassFile(type, zipfile -> Buffer(),
+                                    file_symbol -> uncompressed_size, tok))
             ProcessBadClass(type, tok);
 
         delete zipfile;
@@ -376,12 +418,15 @@ void Semantic::ReadClassFile(TypeSymbol *type, LexStream::TokenIndex tok)
     else
     {
         // Get a ReadObject from the API that contains the filew data.
-        JikesAPI::FileReader  *classFile   = JikesAPI::getInstance()->read(file_symbol->FileName());
+        JikesAPI::FileReader *classFile =
+            JikesAPI::getInstance()->read(file_symbol->FileName());
         if (classFile == NULL)
         {
-            type -> SetSymbolTable(1); // this symbol table will only contain a default constructor
+            // this symbol table will only contain a default constructor
+            type -> SetSymbolTable(1);
             if (type != control.Object())
-                type -> super = (type == control.Throwable() ? control.Object() : control.Throwable());
+                type -> super = (type == control.Throwable()
+                                 ? control.Object() : control.Throwable());
             type -> MarkBad();
             AddDefaultConstructor(type);
 
@@ -414,11 +459,15 @@ void Semantic::ReadClassFile(TypeSymbol *type, LexStream::TokenIndex tok)
 void Semantic::ProcessBadClass(TypeSymbol *type, LexStream::TokenIndex tok)
 {
     if (! type -> Table()) // if there is no symbol table, add one
-        type -> SetSymbolTable(1); // this symbol table will only contain a default constructor
-    if ((! type -> super) && type != control.Object()) // if there is no super type, add one
-        type -> super = (type == control.Throwable() ? control.Object() : control.Throwable());
+        // this symbol table will only contain a default constructor
+        type -> SetSymbolTable(1);
+    // if there is no super type, add one
+    if ((! type -> super) && type != control.Object())
+        type -> super = (type == control.Throwable()
+                         ? control.Object() : control.Throwable());
     type -> MarkBad();
-    if (! type -> FindConstructorSymbol()) // if there are no constructors, add a default one
+    // if there are no constructors, add a default one
+    if (! type -> FindConstructorSymbol())
         AddDefaultConstructor(type);
 
     ReportSemError(SemanticError::INVALID_CLASS_FILE,
@@ -431,7 +480,8 @@ void Semantic::ProcessBadClass(TypeSymbol *type, LexStream::TokenIndex tok)
 }
 
 
-bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer, int buffer_size, LexStream::TokenIndex tok)
+bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer,
+                                int buffer_size, LexStream::TokenIndex tok)
 {
     const char *buffer_tail = &buffer[buffer_size];
 
@@ -450,8 +500,9 @@ bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer, int buffer_
         return false;
     u2 constant_pool_count = GetAndSkipU2(buffer);
     const char **constant_pool = new const char*[constant_pool_count];
-    TypeSymbol **class_pool = (TypeSymbol **)
-                              memset(new TypeSymbol*[constant_pool_count], 0, constant_pool_count * sizeof(TypeSymbol *));
+    TypeSymbol **class_pool =
+        (TypeSymbol **) memset(new TypeSymbol*[constant_pool_count], 0,
+                               constant_pool_count * sizeof(TypeSymbol *));
 
     constant_pool[0] = NULL;
     int *next_pool_index = new int[constant_pool_count],
@@ -467,7 +518,7 @@ bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer, int buffer_
         if (tag == Cp_Info::CONSTANT_Long || tag == Cp_Info::CONSTANT_Double)
             ++i; // skip the next entry for eight-byte constants
 
-        u2 length;
+        u2 length = 0;
         switch (tag)
         {
             case Cp_Info::CONSTANT_Utf8:
@@ -476,20 +527,24 @@ bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer, int buffer_
                  length = GetAndSkipU2(buffer);
                  break;
             case Cp_Info::CONSTANT_Class:
-                 length = 2;                      // set_NameIndex(GetU2(classfile));
-                 next_pool_index[i] = Class_root; // save index of class constant
+                 length = 2; // set_NameIndex(GetU2(classfile));
+                 // save index of class constant
+                 next_pool_index[i] = Class_root;
                  Class_root = i;
                  break;
             case Cp_Info::CONSTANT_String:
                  length = 2; // set_NameIndex(GetU2(classfile));
                  break;
             case Cp_Info::CONSTANT_NameAndType:
-                 length = 4; // set_class_index(GetU2(classfile)); set_name_and_type_index(GetU2(classfile));
-                             //                                     or
-                             // set_NameIndex(GetU2(classfile)); set_DescriptorIndex(GetU2(classfile));
-                             //                                     or
-                             // SetBytes(GetU4(classfile));
-                 next_pool_index[i] = NameAndType_root; // save index of class constant
+                 length = 4;
+                 // set_class_index(GetU2(classfile)); set_name_and_type_index(GetU2(classfile));
+                 //                                     or
+                 // set_NameIndex(GetU2(classfile)); set_DescriptorIndex(GetU2(classfile));
+                 //                                     or
+                 // SetBytes(GetU4(classfile));
+
+                 // save index of class constant
+                 next_pool_index[i] = NameAndType_root;
                  NameAndType_root = i;
                  break;
             case Cp_Info::CONSTANT_Fieldref:
@@ -497,11 +552,12 @@ bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer, int buffer_
             case Cp_Info::CONSTANT_InterfaceMethodref:
             case Cp_Info::CONSTANT_Integer:
             case Cp_Info::CONSTANT_Float:
-                 length = 4; // set_class_index(GetU2(classfile)); set_name_and_type_index(GetU2(classfile));
-                             //                                     or
-                             // set_NameIndex(GetU2(classfile)); set_DescriptorIndex(GetU2(classfile));
-                             //                                     or
-                             // SetBytes(GetU4(classfile));
+                 length = 4;
+                 // set_class_index(GetU2(classfile)); set_name_and_type_index(GetU2(classfile));
+                 //                                     or
+                 // set_NameIndex(GetU2(classfile)); set_DescriptorIndex(GetU2(classfile));
+                 //                                     or
+                 // SetBytes(GetU4(classfile));
                  break;
             case Cp_Info::CONSTANT_Long:
             case Cp_Info::CONSTANT_Double:
@@ -510,9 +566,10 @@ bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer, int buffer_
 
                  break;
             default:
-fprintf(stderr, "%s%d%s", "chaos: CODE \"", (int) tag, "\" is an invalid tag !!!\n");
-fflush(stderr);
-                 break;
+                fprintf(stderr, "%s%d%s", "chaos: CODE \"", (int) tag,
+                        "\" is an invalid tag !!!\n");
+                fflush(stderr);
+                break;
         }
 
         Skip(buffer, length);
@@ -529,9 +586,12 @@ fflush(stderr);
     if (! InRange(buffer, buffer_tail, 2))
         return false;
     u2 this_class_index = GetAndSkipU2(buffer); // The index of this class
-    u2 name_index = Constant_Class_info::NameIndex(constant_pool[this_class_index]);
-    const char *type_name = Constant_Utf8_info::Bytes(constant_pool[name_index]);
-    u2 type_name_length = Constant_Utf8_info::Length(constant_pool[name_index]);
+    u2 name_index =
+        Constant_Class_info::NameIndex(constant_pool[this_class_index]);
+    const char *type_name =
+        Constant_Utf8_info::Bytes(constant_pool[name_index]);
+    u2 type_name_length =
+        Constant_Utf8_info::Length(constant_pool[name_index]);
 
     int n;
     for (n = type_name_length; n >= 0 && type_name[n] != U_SLASH; n--)
@@ -546,13 +606,16 @@ fflush(stderr);
             ;
         matched_package_names = (i == n);
     }
-    else matched_package_names = (n < 0 && type -> ContainingPackage() == control.unnamed_package);
+    else matched_package_names = (n < 0 && (type -> ContainingPackage() ==
+                                            control.unnamed_package));
 
     if (! matched_package_names)
     {
-        type -> SetSymbolTable(1); // this symbol table will only contain a default constructor
+        // this symbol table will only contain a default constructor
+        type -> SetSymbolTable(1);
         if (type != control.Object())
-            type -> super = (type == control.Throwable() ? control.Object() : control.Throwable());
+            type -> super = (type == control.Throwable()
+                             ? control.Object() : control.Throwable());
         type -> MarkBad();
         AddDefaultConstructor(type);
 
@@ -581,9 +644,11 @@ fflush(stderr);
     }
     else
     {
-        if ((! type -> IsNested()) && (n < 0)) // An outermost type contained in the unnamed package?
+        // An outermost type contained in the unnamed package?
+        if (! type -> IsNested() && n < 0)
         {
-            TypeSymbol *old_type = (TypeSymbol *) control.unnamed_package_types.Image(type -> Identity());
+            TypeSymbol *old_type = (TypeSymbol *)
+                control.unnamed_package_types.Image(type -> Identity());
             if (! old_type)
                 control.unnamed_package_types.AddElement(type);
             else
@@ -632,10 +697,13 @@ fflush(stderr);
         u2 super_class = GetAndSkipU2(buffer);
         if (super_class)
         {
-            type -> super = GetClassPool(type, class_pool, constant_pool, super_class, tok);
+            type -> super = GetClassPool(type, class_pool, constant_pool,
+                                         super_class, tok);
 
-            type -> outermost_type -> supertypes_closure -> AddElement(type -> super -> outermost_type);
-            type -> outermost_type -> supertypes_closure -> Union(*type -> super -> outermost_type -> supertypes_closure);
+            type -> outermost_type -> supertypes_closure ->
+                AddElement(type -> super -> outermost_type);
+            type -> outermost_type -> supertypes_closure ->
+                Union(*type -> super -> outermost_type -> supertypes_closure);
         }
 
         if (! InRange(buffer, buffer_tail, 2))
@@ -645,10 +713,13 @@ fflush(stderr);
             if (! InRange(buffer, buffer_tail, 2))
                 return false;
             u2 interface_index = GetAndSkipU2(buffer);
-            type -> AddInterface(GetClassPool(type, class_pool, constant_pool, interface_index, tok));
+            type -> AddInterface(GetClassPool(type, class_pool, constant_pool,
+                                              interface_index, tok));
 
-            type -> outermost_type -> supertypes_closure -> AddElement(type -> super -> outermost_type);
-            type -> outermost_type -> supertypes_closure -> Union(*type -> super -> outermost_type -> supertypes_closure);
+            type -> outermost_type -> supertypes_closure ->
+                AddElement(type -> super -> outermost_type);
+            type -> outermost_type -> supertypes_closure ->
+                Union(*type -> super -> outermost_type -> supertypes_closure);
         }
 
         //
@@ -666,14 +737,16 @@ fflush(stderr);
             u2 name_index = GetAndSkipU2(buffer);
             u2 descriptor_index = GetAndSkipU2(buffer);
 
-            NameSymbol *name_symbol = control.ConvertUtf8ToUnicode(Constant_Utf8_info::Bytes(constant_pool[name_index]),
-                                                                   Constant_Utf8_info::Length(constant_pool[name_index]));
+            NameSymbol *name_symbol =
+                control.ConvertUtf8ToUnicode(Constant_Utf8_info::Bytes(constant_pool[name_index]),
+                                             Constant_Utf8_info::Length(constant_pool[name_index]));
 
             VariableSymbol *symbol = new VariableSymbol(name_symbol);
             fields[k] = symbol;
 
             symbol -> SetOwner(type);
             symbol -> MarkComplete();
+            symbol -> MarkInitialized();
             symbol -> SetFlags(access_flags);
             symbol -> SetSignatureString(Constant_Utf8_info::Bytes(constant_pool[descriptor_index]),
                                          Constant_Utf8_info::Length(constant_pool[descriptor_index]));
@@ -687,30 +760,40 @@ fflush(stderr);
                     return false;
                 u2 name_index = GetAndSkipU2(buffer);
 
-                if (Constant_Utf8_info::Length(constant_pool[name_index]) == StringConstant::U8S_Synthetic_length &&
+                if ((Constant_Utf8_info::Length(constant_pool[name_index]) ==
+                     StringConstant::U8S_Synthetic_length) &&
                     memcmp(Constant_Utf8_info::Bytes(constant_pool[name_index]),
-                           StringConstant::U8S_Synthetic, StringConstant::U8S_Synthetic_length * sizeof(char)) == 0)
+                           StringConstant::U8S_Synthetic,
+                           StringConstant::U8S_Synthetic_length * sizeof(char)) == 0)
                 {
                     symbol -> MarkSynthetic();
                     if (! InRange(buffer, buffer_tail, 4))
                         return false;
-                    Skip(buffer, 4); // u4 attribute_length() { return attribute_length_; }
-                                     // there is no info associated with a Synthetic attribute
-                    break; // If the field is synthetic, remaining attributes don't matter...
+                    Skip(buffer, 4);
+                    // u4 attribute_length() { return attribute_length_; }
+                    // there is no info associated with a Synthetic attribute
+                    // If the field is synthetic, remaining attributes don't
+                    // matter...
+                    break;
                 }
-                else if (Constant_Utf8_info::Length(constant_pool[name_index]) == StringConstant::U8S_Deprecated_length &&
+                else if ((Constant_Utf8_info::Length(constant_pool[name_index]) ==
+                          StringConstant::U8S_Deprecated_length) &&
                          memcmp(Constant_Utf8_info::Bytes(constant_pool[name_index]),
-                                StringConstant::U8S_Deprecated, StringConstant::U8S_Deprecated_length * sizeof(char)) == 0)
+                                StringConstant::U8S_Deprecated,
+                                StringConstant::U8S_Deprecated_length * sizeof(char)) == 0)
                 {
                     symbol -> MarkDeprecated();
                     if (! InRange(buffer, buffer_tail, 4))
                         return false;
-                    Skip(buffer, 4); // u4 attribute_length() { return attribute_length_; }
-                                     // there is no info associated with a Deprecated attribute
+                    Skip(buffer, 4);
+                    // u4 attribute_length() { return attribute_length_; }
+                    // there is no info associated with a Deprecated attribute
                 }
-                else if (Constant_Utf8_info::Length(constant_pool[name_index]) == StringConstant::U8S_ConstantValue_length &&
+                else if ((Constant_Utf8_info::Length(constant_pool[name_index]) ==
+                          StringConstant::U8S_ConstantValue_length) &&
                          memcmp(Constant_Utf8_info::Bytes(constant_pool[name_index]),
-                                StringConstant::U8S_ConstantValue, StringConstant::U8S_ConstantValue_length * sizeof(char)) == 0)
+                                StringConstant::U8S_ConstantValue,
+                                StringConstant::U8S_ConstantValue_length * sizeof(char)) == 0)
                 {
                     Skip(buffer, 4); // u4 attribute_length;
                     if (! InRange(buffer, buffer_tail, 2))
@@ -721,48 +804,56 @@ fflush(stderr);
                     if (tag == Cp_Info::CONSTANT_Integer)
                     {
                         int value = Constant_Integer_info::Value(constant_pool[constantvalue_index]);
-                        symbol -> initial_value = control.int_pool.FindOrInsert(value);
+                        symbol -> initial_value =
+                            control.int_pool.FindOrInsert(value);
                     }
                     else if (tag == Cp_Info::CONSTANT_Long)
                     {
                         LongInt value = Constant_Long_info::Value(constant_pool[constantvalue_index]);
-                        symbol -> initial_value = control.long_pool.FindOrInsert(value);
+                        symbol -> initial_value =
+                            control.long_pool.FindOrInsert(value);
                     }
                     else if (tag == Cp_Info::CONSTANT_Float)
                     {
                         IEEEfloat value = Constant_Float_info::Value(constant_pool[constantvalue_index]);
-                        symbol -> initial_value = control.float_pool.FindOrInsert(value);
+                        symbol -> initial_value =
+                            control.float_pool.FindOrInsert(value);
                     }
                     else if (tag == Cp_Info::CONSTANT_Double)
                     {
                         IEEEdouble value = Constant_Double_info::Value(constant_pool[constantvalue_index]);
-                        symbol -> initial_value = control.double_pool.FindOrInsert(value);
+                        symbol -> initial_value =
+                            control.double_pool.FindOrInsert(value);
                     }
                     else if (tag == Cp_Info::CONSTANT_String)
                     {
                         u2 string_index = Constant_String_info::StringIndex(constant_pool[constantvalue_index]);
                         u2 length = Constant_Utf8_info::Length(constant_pool[string_index]);
                         const char *value = Constant_Utf8_info::Bytes(constant_pool[string_index]);
-                        symbol -> initial_value = control.Utf8_pool.FindOrInsert(value, length);
+                        symbol -> initial_value =
+                            control.Utf8_pool.FindOrInsert(value, length);
                     }
                     else if (tag == Cp_Info::CONSTANT_Utf8)
                     {
                         u2 length = Constant_Utf8_info::Length(constant_pool[constantvalue_index]);
                         const char *value = Constant_Utf8_info::Bytes(constant_pool[constantvalue_index]);
-                        symbol -> initial_value = control.Utf8_pool.FindOrInsert(value, length);
+                        symbol -> initial_value =
+                            control.Utf8_pool.FindOrInsert(value, length);
                     }
-else
-{
-fprintf(stderr, "%s%d%s", "chaos: Constant tag \"", (int) tag, "\" is an invalid tag !!!\n");
-fflush(stderr);
-}
+                    else
+                    {
+                        fprintf(stderr, "%s%d%s", "chaos: Constant tag \"",
+                                (int) tag, "\" is an invalid tag !!!\n");
+                        fflush(stderr);
+                    }
                 }
                 else
                 {
                     if (! InRange(buffer, buffer_tail, 4))
                         return false;
-                    Skip(buffer, GetAndSkipU4(buffer)); // u4 attribute_length() { return attribute_length_; }
-                                                        // u1 *info; /* info[attribute_length] */
+                    Skip(buffer, GetAndSkipU4(buffer));
+                    // u4 attribute_length() { return attribute_length_; }
+                    // u1 *info; /* info[attribute_length] */
                 }
             }
 
@@ -774,8 +865,9 @@ fflush(stderr);
                 Skip(buffer, 2);                    // u2 name_index
                 if (! InRange(buffer, buffer_tail, 4))
                     return false;
-                Skip(buffer, GetAndSkipU4(buffer)); // u4 attribute_length() { return attribute_length_; }
-                                                    // u1 *info; /* info[attribute_length] */
+                Skip(buffer, GetAndSkipU4(buffer));
+                // u4 attribute_length() { return attribute_length_; }
+                // u1 *info; /* info[attribute_length] */
             }
         }
 
@@ -814,7 +906,8 @@ fflush(stderr);
                 method -> SetContainingType(type);
                 method -> SetFlags(access_flags);
 
-                const char *signature = Constant_Utf8_info::Bytes(constant_pool[descriptor_index]);
+                const char *signature =
+                    Constant_Utf8_info::Bytes(constant_pool[descriptor_index]);
                 int length = Constant_Utf8_info::Length(constant_pool[descriptor_index]);
 
                 method -> SetSignature(control.Utf8_pool.FindOrInsert(signature, length));
@@ -828,32 +921,44 @@ fflush(stderr);
                         return false;
                     u2 name_index = GetAndSkipU2(buffer);
 
-                    if (Constant_Utf8_info::Length(constant_pool[name_index]) == StringConstant::U8S_Synthetic_length &&
+                    if ((Constant_Utf8_info::Length(constant_pool[name_index]) ==
+                         StringConstant::U8S_Synthetic_length) &&
                         memcmp(Constant_Utf8_info::Bytes(constant_pool[name_index]),
-                               StringConstant::U8S_Synthetic, StringConstant::U8S_Synthetic_length * sizeof(char)) == 0)
+                               StringConstant::U8S_Synthetic,
+                               StringConstant::U8S_Synthetic_length * sizeof(char)) == 0)
                     {
                         method -> MarkSynthetic();
                         if (! InRange(buffer, buffer_tail, 4))
                             return false;
-                        Skip(buffer, 4); // u4 attribute_length() { return attribute_length_; }
-                                         // there is no info associated with a Synthetic attribute
-                        break; // If the field is synthetic, remaining attributes don't matter...
+                        Skip(buffer, 4);
+                        // u4 attribute_length() { return attribute_length_; }
+                        // there is no info associated with a Synthetic
+                        // attribute. If the field is synthetic, remaining
+                        // attributes don't matter...
+                        break;
                     }
-                    else if (Constant_Utf8_info::Length(constant_pool[name_index]) == StringConstant::U8S_Deprecated_length &&
+                    else if ((Constant_Utf8_info::Length(constant_pool[name_index]) ==
+                              StringConstant::U8S_Deprecated_length) &&
                              memcmp(Constant_Utf8_info::Bytes(constant_pool[name_index]),
-                                    StringConstant::U8S_Deprecated, StringConstant::U8S_Deprecated_length * sizeof(char)) == 0)
+                                    StringConstant::U8S_Deprecated,
+                                    StringConstant::U8S_Deprecated_length * sizeof(char)) == 0)
                     {
                         method -> MarkDeprecated();
                         if (! InRange(buffer, buffer_tail, 4))
                             return false;
-                        Skip(buffer, 4); // u4 attribute_length() { return attribute_length_; }
-                                         // there is no info associated with a Deprecated attribute
+                        Skip(buffer, 4);
+                        // u4 attribute_length() { return attribute_length_; }
+                        // there is no info associated with a Deprecated
+                        // attribute
                     }
-                    else if (Constant_Utf8_info::Length(constant_pool[name_index]) == StringConstant::U8S_Exceptions_length &&
+                    else if ((Constant_Utf8_info::Length(constant_pool[name_index]) ==
+                              StringConstant::U8S_Exceptions_length) &&
                              memcmp(Constant_Utf8_info::Bytes(constant_pool[name_index]),
-                                    StringConstant::U8S_Exceptions, StringConstant::U8S_Exceptions_length * sizeof(char)) == 0)
+                                    StringConstant::U8S_Exceptions,
+                                    StringConstant::U8S_Exceptions_length * sizeof(char)) == 0)
                     {
-                        Skip(buffer, 4); // attribute_length = GetAndSkipU4(buffer);
+                        Skip(buffer, 4);
+                        // attribute_length = GetAndSkipU4(buffer);
                         if (! InRange(buffer, buffer_tail, 2))
                             return false;
                         for (int k = GetAndSkipU2(buffer); k > 0; k--)
@@ -870,8 +975,9 @@ fflush(stderr);
                     {
                         if (! InRange(buffer, buffer_tail, 4))
                             return false;
-                        Skip(buffer, GetAndSkipU4(buffer)); // u4 attribute_length() { return attribute_length_; }
-                                                            // u1 *info; /* info[attribute_length] */
+                        Skip(buffer, GetAndSkipU4(buffer));
+                        // u4 attribute_length() { return attribute_length_; }
+                        // u1 *info; /* info[attribute_length] */
                     }
                 }
             }
@@ -884,8 +990,9 @@ fflush(stderr);
                 Skip(buffer, 2);                     // u2 name_index
                 if (! InRange(buffer, buffer_tail, 4))
                     return false;
-                Skip(buffer, GetAndSkipU4(buffer)); // u4 attribute_length() { return attribute_length_; }
-                                                    // u1 *info; /* info[attribute_length] */
+                Skip(buffer, GetAndSkipU4(buffer));
+                // u4 attribute_length() { return attribute_length_; }
+                // u1 *info; /* info[attribute_length] */
             }
         }
 
@@ -902,9 +1009,11 @@ fflush(stderr);
                 return false;
             u2 name_index = GetAndSkipU2(buffer);
 
-            if (Constant_Utf8_info::Length(constant_pool[name_index]) == StringConstant::U8S_InnerClasses_length &&
+            if ((Constant_Utf8_info::Length(constant_pool[name_index]) ==
+                 StringConstant::U8S_InnerClasses_length) &&
                 memcmp(Constant_Utf8_info::Bytes(constant_pool[name_index]),
-                       StringConstant::U8S_InnerClasses, StringConstant::U8S_InnerClasses_length * sizeof(char)) == 0)
+                       StringConstant::U8S_InnerClasses,
+                       StringConstant::U8S_InnerClasses_length * sizeof(char)) == 0)
             {
                 Skip(buffer, 4); // attribute_length = GetAndSkipU4(buffer);
                 if (! InRange(buffer, buffer_tail, 2))
@@ -919,25 +1028,29 @@ fflush(stderr);
                     u2 inner_class_access_flags = GetAndSkipU2(buffer);
 
                     //
-                    // Recall that the untransformed access flag is the one specified
-                    // in the inner_class attribute. (See 1.1 document)
+                    // Recall that the untransformed access flag is the one
+                    // specified in the inner_class attribute. (See 1.1
+                    // document)
                     //
                     if (inner_class_info_index == this_class_index)
                         type -> SetFlags(inner_class_access_flags);
                     //
-                    // This guard statement is used to identify only inner classes that are
-                    // not anonymous classes and are immediately contained within this class.
-                    // Recall that an inner class may not be enclosed (directly on indirectly)
-                    // in another class with the same name. Therefore when outer_class_info_index
-                    // matches this_class_index they both refer to "this" class (that we are currently processing).
+                    // This guard statement is used to identify only inner
+                    // classes that are not anonymous classes and are
+                    // immediately contained within this class.
+                    // Recall that an inner class may not be enclosed
+                    // (directly on indirectly) in another class with the
+                    // same name. Therefore when outer_class_info_index
+                    // matches this_class_index they both refer to "this"
+                    // class (that we are currently processing).
                     //
-                    else if ((outer_class_info_index == this_class_index) &&
-                             (inner_class_info_index != 0) &&                  // an inner class
-                             (inner_name_index != 0))                          // not an anonymous class
+                    else if (outer_class_info_index == this_class_index &&
+                             inner_class_info_index != 0 &&
+                             inner_name_index != 0)
                     {
                         //
-                        // When length is 0, the inner class in question is "this" class ?
-                        // the one we are currently reading ?
+                        // When length is 0, the inner class in question is
+                        // "this" class ? the one we are currently reading ?
                         //
                         u2 length = Constant_Utf8_info::Length(constant_pool[inner_name_index]);
                         if (length > 0)
@@ -945,39 +1058,45 @@ fflush(stderr);
                     }
                 }
             }
-            else if (Constant_Utf8_info::Length(constant_pool[name_index]) == StringConstant::U8S_Deprecated_length &&
+            else if ((Constant_Utf8_info::Length(constant_pool[name_index]) ==
+                      StringConstant::U8S_Deprecated_length) &&
                      memcmp(Constant_Utf8_info::Bytes(constant_pool[name_index]),
-                            StringConstant::U8S_Deprecated, StringConstant::U8S_Deprecated_length * sizeof(char)) == 0)
+                            StringConstant::U8S_Deprecated,
+                            StringConstant::U8S_Deprecated_length * sizeof(char)) == 0)
             {
                 type -> MarkDeprecated();
                 if (! InRange(buffer, buffer_tail, 4))
                     return false;
-                Skip(buffer, 4); // u4 attribute_length() { return attribute_length_; }
-                                 // there is no info associated with a Deprecated attribute
+                Skip(buffer, 4);
+                // u4 attribute_length() { return attribute_length_; }
+                // there is no info associated with a Deprecated attribute
             }
             else
             {
                 if (! InRange(buffer, buffer_tail, 4))
                     return false;
-                Skip(buffer, GetAndSkipU4(buffer)); // u4 attribute_length() { return attribute_length_; }
-                                                    // u1 *info; /* info[attribute_length] */
+                Skip(buffer, GetAndSkipU4(buffer));
+                // u4 attribute_length() { return attribute_length_; }
+                // u1 *info; /* info[attribute_length] */
             }
         }
 
         //
-        // We now have enough information to make a good estimate for the size of the
-        // symbol table we need for this class.
+        // We now have enough information to make a good estimate for the
+        // size of the symbol table we need for this class.
         //
-        type -> SetSymbolTable(fields_count + methods_count + inner_name_indexes.Length());
+        type -> SetSymbolTable(fields_count + methods_count +
+                               inner_name_indexes.Length());
 
         //
         //   . Read in all class files that are referenced in CONSTANT_Class
         //     structures in this class file.
         //
-        //   . Read in all class files that are referenced in CONSTANT_NameAndType
-        //     structures in this class file.
+        //   . Read in all class files that are referenced in
+        //     CONSTANT_NameAndType structures in this class file.
         //
-        if (control.option.full_check && (control.option.unzip || (! type -> file_symbol -> IsZip())))
+        if (control.option.full_check &&
+            (control.option.unzip || ! type -> file_symbol -> IsZip()))
         {
             for (int h = Class_root; h != 0; h = next_pool_index[h])
                 GetClassPool(type, class_pool, constant_pool, h, tok);
@@ -989,17 +1108,20 @@ fflush(stderr);
 
                 if (! class_pool[descriptor_index])
                 {
-                    if (*signature != U_LEFT_PARENTHESIS)  // ')' indicates a field descriptor
-                        class_pool[descriptor_index] = ProcessSignature(type,
-                                                                        Constant_Utf8_info::Bytes(constant_pool[descriptor_index]),
-                                                                        tok);
+                    if (*signature != U_LEFT_PARENTHESIS)
+                        // ')' indicates a field descriptor
+                        class_pool[descriptor_index] =
+                            ProcessSignature(type,
+                                             Constant_Utf8_info::Bytes(constant_pool[descriptor_index]),
+                                             tok);
                     else // a method descriptor
                     {
                         signature++; // +1 to skip initial '('
                         while (*signature != U_RIGHT_PARENTHESIS)
                         {
                             const char *str;
-                            for (str = signature; *str == U_LEFT_BRACKET; str++)
+                            for (str = signature;
+                                 *str == U_LEFT_BRACKET; str++)
                                 ;
 
                             if (*str == U_L)
@@ -1009,11 +1131,14 @@ fflush(stderr);
                             }
 
                             int len = str - signature + 1;
-                            signature += len; // make signature point to next type
+                            // make signature point to next type
+                            signature += len;
                         }
                         signature++; // skip L')'
 
-                        class_pool[descriptor_index] = ProcessSignature(type, signature, tok); // save the return type in first spot
+                        // save the return type in first spot
+                        class_pool[descriptor_index] =
+                            ProcessSignature(type, signature, tok);
                     }
                 }
             }
@@ -1032,16 +1157,20 @@ fflush(stderr);
             {
                 if (methods[l])
                 {
-                    MethodSymbol *method = type -> FindMethodSymbol(methods[l] -> name_symbol);
+                    MethodSymbol *method =
+                        type -> FindMethodSymbol(methods[l] -> name_symbol);
 
                     if (! method)
                     {
-                         if (methods[l] -> name_symbol == control.init_name_symbol)
+                         if (methods[l] -> name_symbol ==
+                             control.init_name_symbol)
+                         {
                               type -> InsertConstructorSymbol(methods[l]);
+                         }
                          else type -> InsertMethodSymbol(methods[l]);
                     }
                     else type -> Overload(method, methods[l]);
-                    methods[l] -> ProcessMethodSignature((Semantic *) this, tok);
+                    methods[l] -> ProcessMethodSignature(this, tok);
                 }
             }
 
@@ -1065,12 +1194,16 @@ fflush(stderr);
             {
                 if (methods[l])
                 {
-                    MethodSymbol *method = type -> FindMethodSymbol(methods[l] -> name_symbol);
+                    MethodSymbol *method =
+                        type -> FindMethodSymbol(methods[l] -> name_symbol);
 
                     if (! method)
                     {
-                         if (methods[l] -> name_symbol == control.init_name_symbol)
+                         if (methods[l] -> name_symbol ==
+                             control.init_name_symbol)
+                         {
                               type -> InsertConstructorSymbol(methods[l]);
+                         }
                          else type -> InsertMethodSymbol(methods[l]);
                     }
                     else type -> Overload(method, methods[l]);

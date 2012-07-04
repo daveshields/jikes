@@ -1,4 +1,4 @@
-// $Id: double.h,v 1.21 2001/09/21 05:45:42 ericb Exp $ -*- c++ -*-
+// $Id: double.h,v 1.22 2001/11/08 16:53:16 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -112,7 +112,7 @@ private:
         POS_ZERO   = 0x00000000, // 0.0
         NEG_INF    = 0xFF800000, // -Inf
         POS_INF    = 0x7F800000, // +Inf
-        NAN        = 0x7FC00000, // canonical NaN
+        NAN_BITS   = 0x7FC00000, // canonical NaN
         BYTE_MASK  = 0x000000FF, // mask off least significant byte
         MAX_INT    = 0x7FFFFFFF, // maximum integer
         MIN_INT    = 0x80000000, // minimum integer
@@ -184,7 +184,7 @@ public:
     // Note: the (u4) cast is necessary to prevent MSVC from promoting the
     // enum constants to integer, which causes an infinite loop.
     static inline const IEEEfloat
-        NaN(void)               { return IEEEfloat((u4)NAN); }
+        NaN(void)               { return IEEEfloat((u4)NAN_BITS); }
     static inline const IEEEfloat
         POSITIVE_INFINITY(void) { return IEEEfloat((u4)POS_INF); }
     static inline const IEEEfloat

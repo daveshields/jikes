@@ -1,9 +1,9 @@
-// $Id: parser.cpp,v 1.14 2001/09/14 05:31:34 ericb Exp $
+// $Id: parser.cpp,v 1.16 2002/05/22 06:56:45 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -24,20 +24,26 @@ void Parser::ReallocateStacks()
     assert(stack_length <= SHRT_MAX);
 
     int *old_stack = stack;
-    stack = (int *) memmove(new int[stack_length], stack, old_stack_length * sizeof(int));
+    stack = (int *) memmove(new int[stack_length], stack,
+                            old_stack_length * sizeof(int));
     delete [] old_stack;
 
     Location *old_location_stack = location_stack;
-    location_stack = (Location *) memmove(new Location[stack_length], location_stack, old_stack_length * sizeof(Location));
+    location_stack = (Location *) memmove(new Location[stack_length],
+                                          location_stack,
+                                          old_stack_length * sizeof(Location));
     delete [] old_location_stack;
 
     Ast **old_parse_stack = parse_stack;
-    parse_stack = (Ast **) memmove(new Ast *[stack_length], parse_stack, old_stack_length * sizeof(Ast *));
+    parse_stack = (Ast **) memmove(new Ast *[stack_length], parse_stack,
+                                   old_stack_length * sizeof(Ast *));
     delete [] old_parse_stack;
-    parse_stack[old_stack_length] = NULL; // the first time through, we initialize parse_stack[0] to NULL !!!
+    // The first time through, we initialize parse_stack[0] to NULL.
+    parse_stack[old_stack_length] = NULL;
 
     int *old_temp_stack = temp_stack;
-    temp_stack = (int *) memmove(new int[stack_length], temp_stack, old_stack_length * sizeof(int));
+    temp_stack = (int *) memmove(new int[stack_length], temp_stack,
+                                 old_stack_length * sizeof(int));
     delete [] old_temp_stack;
 
     return;
@@ -69,7 +75,8 @@ void Parser::FreeCircularList(AstListNode *tail)
 }
 
 
-AstPackageDeclaration *Parser::PackageHeaderParse(LexStream *lex_stream_, StoragePool *ast_pool_)
+AstPackageDeclaration *Parser::PackageHeaderParse(LexStream *lex_stream_,
+                                                  StoragePool *ast_pool_)
 {
     AstPackageDeclaration *package_declaration = NULL;
 
@@ -78,26 +85,37 @@ AstPackageDeclaration *Parser::PackageHeaderParse(LexStream *lex_stream_, Storag
     if (lex_stream_ -> Kind(lex_stream_ -> Peek()) == TK_package)
     {
         ast_pool = ast_pool_;
+        list_node_pool = new StoragePool(lex_stream_ -> NumTokens());
+        free_list_nodes = NULL;
 
         parse_package_header_only = true;
-        end_token = LexStream::LEX_INFINITY; // We are parsing the whole input and not just a segment.
+        // We are parsing the whole input and not just a segment.
+        end_token = LexStream::LEX_INFINITY;
         lex_stream = lex_stream_;
         Ast *ast = HeaderParse();
         parse_package_header_only = false;
 
         if (ast)
         {
-            AstCompilationUnit *compilation_unit = ast -> CompilationUnitCast();
-            if (compilation_unit && (! compilation_unit -> BadCompilationUnitCast()))
-                package_declaration = compilation_unit -> package_declaration_opt;
+            AstCompilationUnit *compilation_unit =
+                ast -> CompilationUnitCast();
+            if (compilation_unit &&
+                ! compilation_unit -> BadCompilationUnitCast())
+            {
+                package_declaration =
+                    compilation_unit -> package_declaration_opt;
+            }
         }
+
+        delete list_node_pool;
     }
 
     return package_declaration;
 }
 
 
-AstCompilationUnit *Parser::HeaderParse(LexStream *lex_stream_, StoragePool *ast_pool_)
+AstCompilationUnit *Parser::HeaderParse(LexStream *lex_stream_,
+                                        StoragePool *ast_pool_)
 {
     lex_stream_ -> Reset();
 
@@ -108,7 +126,8 @@ AstCompilationUnit *Parser::HeaderParse(LexStream *lex_stream_, StoragePool *ast
     AstCompilationUnit *compilation_unit = NULL;
 
     parse_header_only = true;
-    end_token = LexStream::LEX_INFINITY; // We are parsing the whole input and not just a segment.
+    // We are parsing the whole input and not just a segment.
+    end_token = LexStream::LEX_INFINITY;
     lex_stream = lex_stream_;
     Ast *ast = HeaderParse();
     parse_header_only = false;
@@ -116,7 +135,8 @@ AstCompilationUnit *Parser::HeaderParse(LexStream *lex_stream_, StoragePool *ast
     if (ast)
     {
         compilation_unit = ast -> CompilationUnitCast();
-        if (compilation_unit && (! compilation_unit -> BadCompilationUnitCast()))
+        if (compilation_unit &&
+            ! compilation_unit -> BadCompilationUnitCast())
         {
             if (compilation_unit -> NumTypeDeclarations() == 0)
                 compilation_unit -> kind = Ast::EMPTY_COMPILATION;
@@ -127,9 +147,9 @@ AstCompilationUnit *Parser::HeaderParse(LexStream *lex_stream_, StoragePool *ast
     }
 
     //
-    // If we succesfully parsed a compilation unit, allocate a storage pool for it.
-    // Subtract the amount of space that's already been allocated for the headers
-    // from the estimate for the bodies.
+    // If we succesfully parsed a compilation unit, allocate a storage pool
+    // for it. Subtract the amount of space that's already been allocated for
+    // the headers from the estimate for the bodies.
     //
     if (compilation_unit)
          compilation_unit -> ast_pool = body_pool;
@@ -201,7 +221,8 @@ Ast *Parser::HeaderParse()
     if (act == ERROR_ACTION)
     {
         //
-        // If any error is found in a package declaration, do not try to repair it.
+        // If any error is found in a package declaration, do not try to
+        // repair it.
         //
         if (! parse_package_header_only)
             RepairParse(curtok);
@@ -230,49 +251,40 @@ bool Parser::BodyParse(LexStream *lex_stream_, AstClassBody *class_body)
     list_node_pool = new StoragePool(lex_stream_ -> NumTokens());
     free_list_nodes = NULL;
 
-    bool no_errors_detected = Body(class_body);
+    bool success = Body(class_body);
 
     delete list_node_pool; // free the pool of list nodes
 
     class_body -> mark_parsed();
 
-    return no_errors_detected;
+    return success;
 }
 
 
 bool Parser::Body(AstClassBody *class_body)
 {
-    bool no_errors_detected = true;
+    bool errors_detected = false;
 
     for (int i = 0; i < class_body -> NumConstructors(); i++)
     {
-        AstConstructorDeclaration *constructor_decl = class_body -> Constructor(i);
+        AstConstructorDeclaration *constructor_decl =
+            class_body -> Constructor(i);
 
         if (constructor_decl -> constructor_symbol)
         {
-            AstConstructorBlock *block = constructor_decl -> constructor_body;
+            AstMethodBody *block = constructor_decl -> constructor_body;
             end_token = block -> right_brace_token; // last token in the body
 
-            AstStatement *new_body = (AstStatement *) ParseSegment(block -> left_brace_token);
+            AstMethodBody *new_body = ParseSegment(block -> left_brace_token);
 
             if (! new_body)
-                no_errors_detected = false;
+                errors_detected = true;
             else
             {
-                AstConstructorBlock *new_block = new_body -> ConstructorBlockCast();
-
-                if (! new_block)
-                {
-                    new_block                                        = ast_pool -> GenConstructorBlock();
-                    new_block -> left_brace_token                    = new_body -> LeftToken();
-                    new_block -> explicit_constructor_invocation_opt = NULL;
-                    new_block -> block                               = (AstBlock *) new_body;
-                    new_block -> right_brace_token                   = new_body -> RightToken();
-                }
 // STG:
 //                delete block; // destroy old empty block
 //
-                constructor_decl -> constructor_body = new_block;
+                constructor_decl -> constructor_body = new_body;
             }
         }
     }
@@ -283,46 +295,42 @@ bool Parser::Body(AstClassBody *class_body)
 
         if (method_decl -> method_symbol)
         {
-            AstBlock *block = method_decl -> method_body -> BlockCast();
+            AstMethodBody *block =
+                method_decl -> method_body -> MethodBodyCast();
 
             if (block)
             {
-                end_token = block -> right_brace_token; // last token in the body
-                AstStatement *new_block = (AstStatement *) ParseSegment(block -> left_brace_token);
+                // Last token in the body.
+                end_token = block -> right_brace_token;
+                AstMethodBody *new_block =
+                    ParseSegment(block -> left_brace_token);
 
                 if (! new_block) // a bad block ?
-                    no_errors_detected = false;
+                    errors_detected = true;
                 else
                 {
-                    //
-                    // The block associated with the method may syntactically be either a
-                    // block or a constructor block. If it is a block, nest it inside the
-                    // initial block. If it is a constructor block, replace the initial block
-                    // by the constructor block.
-                    //
-                    if (new_block -> BlockCast())
-                        block -> AddStatement(new_block);
-                    else
-                    {
-                        method_decl -> method_body = new_block;
 // STG:
 //                        delete block; // destroy old empty block
-                    }
+                    //
+                        method_decl -> method_body = new_block;
                 }
             }
         }
     }
 
     for (int k = 0; k < class_body -> NumNestedClasses(); k++)
-        no_errors_detected = no_errors_detected && Body(class_body -> NestedClass(k) -> class_body);
+        errors_detected = errors_detected ||
+            ! Body(class_body -> NestedClass(k) -> class_body);
 
     for (int l = 0; l < class_body -> NumNestedInterfaces(); l++)
-        no_errors_detected = no_errors_detected && Body(class_body -> NestedInterface(l));
+        errors_detected = errors_detected ||
+            ! Body(class_body -> NestedInterface(l));
 
-    return no_errors_detected;
+    return ! errors_detected;
 }
 
-bool Parser::BodyParse(LexStream *lex_stream_, AstInterfaceDeclaration *interface_declaration)
+bool Parser::BodyParse(LexStream *lex_stream_,
+                       AstInterfaceDeclaration *interface_declaration)
 {
     assert(interface_declaration -> UnparsedInterfaceBodyCast());
 
@@ -332,27 +340,29 @@ bool Parser::BodyParse(LexStream *lex_stream_, AstInterfaceDeclaration *interfac
     list_node_pool = new StoragePool(lex_stream_ -> NumTokens());
     free_list_nodes = NULL;
 
-    bool no_errors_detected = Body(interface_declaration);
+    bool success = Body(interface_declaration);
 
     delete list_node_pool; // free the pool of list nodes
 
     interface_declaration -> mark_parsed();
 
-    return no_errors_detected;
+    return success;
 }
 
 
 bool Parser::Body(AstInterfaceDeclaration *interface_declaration)
 {
-    bool no_errors_detected = true;
+    bool errors_detected = false;
 
     for (int k = 0; k < interface_declaration -> NumNestedClasses(); k++)
-        no_errors_detected = no_errors_detected && Body(interface_declaration -> NestedClass(k) -> class_body);
+        errors_detected = errors_detected ||
+            ! Body(interface_declaration -> NestedClass(k) -> class_body);
 
     for (int l = 0; l < interface_declaration -> NumNestedInterfaces(); l++)
-        no_errors_detected = no_errors_detected && Body(interface_declaration -> NestedInterface(l));
+        errors_detected = errors_detected ||
+            ! Body(interface_declaration -> NestedInterface(l));
 
-    return no_errors_detected;
+    return ! errors_detected;
 }
 
 
@@ -364,15 +374,16 @@ bool Parser::InitializerParse(LexStream *lex_stream_, AstClassBody *class_body)
     list_node_pool = new StoragePool(lex_stream_ -> NumTokens());
     free_list_nodes = NULL;
 
-    bool no_errors_detected = Initializer(class_body);
+    bool success = Initializer(class_body);
 
     delete list_node_pool; // free the pool of list nodes
 
-    return no_errors_detected;
+    return success;
 }
 
 
-bool Parser::InitializerParse(LexStream *lex_stream_, AstInterfaceDeclaration *interface_declaration)
+bool Parser::InitializerParse(LexStream *lex_stream_,
+                              AstInterfaceDeclaration *interface_declaration)
 {
     lex_stream = lex_stream_;
     ast_pool = interface_declaration -> pool;
@@ -380,28 +391,30 @@ bool Parser::InitializerParse(LexStream *lex_stream_, AstInterfaceDeclaration *i
     list_node_pool = new StoragePool(lex_stream_ -> NumTokens());
     free_list_nodes = NULL;
 
-    bool no_errors_detected = Initializer(interface_declaration);
+    bool success = Initializer(interface_declaration);
 
     delete list_node_pool; // free the pool of list nodes
 
-    return no_errors_detected;
+    return success;
 }
 
 
 bool Parser::Initializer(AstClassBody *class_body)
 {
-    bool no_errors_detected = true;
+    bool errors_detected = false;
 
     for (int i = 0; i < class_body -> NumStaticInitializers(); i++)
     {
-         AstBlock *block = class_body -> StaticInitializer(i) -> block;
+         AstMethodBody *block = class_body -> StaticInitializer(i) -> block;
          end_token = block -> right_brace_token; // last token in the body
-         class_body -> StaticInitializer(i) -> block = (AstBlock *) ParseSegment(block -> left_brace_token);
+         class_body -> StaticInitializer(i) -> block =
+             ParseSegment(block -> left_brace_token);
 
         if (! class_body -> StaticInitializer(i) -> block)
         {
-            no_errors_detected = false;
-            class_body -> StaticInitializer(i) -> block = block; // restore old empty block
+            errors_detected = true;
+            // Restore old empty block.
+            class_body -> StaticInitializer(i) -> block = block;
         }
 // STG:
 //      else
@@ -410,52 +423,59 @@ bool Parser::Initializer(AstClassBody *class_body)
 //      }
     }
 
-    for (int j = 0; j < class_body -> NumBlocks(); j++)
+    for (int j = 0; j < class_body -> NumInstanceInitializers(); j++)
     {
-         AstBlock *block = class_body -> Block(j);
+         AstMethodBody *block = class_body -> InstanceInitializer(j);
          end_token = block -> right_brace_token; // last token in the body
-         class_body -> Block(j) = (AstBlock *) ParseSegment(block -> left_brace_token);
+         class_body -> InstanceInitializer(j) =
+             ParseSegment(block -> left_brace_token);
 
-        if (! class_body -> Block(j))
+        if (! class_body -> InstanceInitializer(j))
         {
-            no_errors_detected = false;
-            class_body -> Block(j) = block; // restore old empty block
+            errors_detected = true;
+            // Restore old empty block.
+            class_body -> InstanceInitializer(j) = block;
         }
 //
 // STG: if we ever go back to a new/free model of allocating Ast nodes
 // This loop needs to be rewritten as otherwise, the new block allocated
 // here would cause a memory leak since the class_body_declarations list
-// is unaware of it. The solution is to iterate over the class_body_declarations
-// list in order to locate the old block, free it and update the class_body_declarations
-// list to point to the new block.
+// is unaware of it. The solution is to iterate over the
+// class_body_declarations list in order to locate the old block, free it and
+// update the class_body_declarations list to point to the new block.
 //
     }
 
     for (int k = 0; k < class_body -> NumNestedClasses(); k++)
-        no_errors_detected = no_errors_detected && Initializer(class_body -> NestedClass(k) -> class_body);
+        errors_detected = errors_detected ||
+            ! Initializer(class_body -> NestedClass(k) -> class_body);
 
     for (int l = 0; l < class_body -> NumNestedInterfaces(); l++)
-        no_errors_detected = no_errors_detected && Initializer(class_body -> NestedInterface(l));
+        errors_detected = errors_detected ||
+            ! Initializer(class_body -> NestedInterface(l));
 
-    return no_errors_detected;
+    return ! errors_detected;
 }
 
 
 bool Parser::Initializer(AstInterfaceDeclaration *interface_declaration)
 {
-    bool no_errors_detected = true;
+    bool errors_detected = false;
 
     for (int k = 0; k < interface_declaration -> NumNestedClasses(); k++)
-        no_errors_detected = no_errors_detected && Initializer(interface_declaration -> NestedClass(k) -> class_body);
+        errors_detected = errors_detected ||
+            ! Initializer(interface_declaration -> NestedClass(k)
+                          -> class_body);
 
     for (int l = 0; l < interface_declaration -> NumNestedInterfaces(); l++)
-        no_errors_detected = no_errors_detected && Initializer(interface_declaration -> NestedInterface(l));
+        errors_detected = errors_detected ||
+            ! Initializer(interface_declaration -> NestedInterface(l));
 
-    return no_errors_detected;
+    return ! errors_detected;
 }
 
 
-Ast *Parser::ParseSegment(TokenObject start_token)
+AstMethodBody *Parser::ParseSegment(TokenObject start_token)
 {
     //
     // The next call to Gettoken will return the start_token.
@@ -527,7 +547,7 @@ Ast *Parser::ParseSegment(TokenObject start_token)
         parse_stack[0] = NULL;
     }
 
-    return parse_stack[0];
+    return DYNAMIC_CAST<AstMethodBody *> (parse_stack[0]);
 }
 
 
@@ -545,8 +565,8 @@ void Parser::RepairParse(TokenObject curtok)
         // caused by the error token.
         //
         int k;
-        for (k = state_stack_top - 1; k >= 0 && location_stack[k] == Loc(curtok); k--)
-             ;
+        for (k = state_stack_top - 1;
+             k >= 0 && location_stack[k] == Loc(curtok); k--);
         k++;
 // STG:
 //        for (int i = k; i < state_stack_top; i++)
@@ -601,7 +621,9 @@ void Parser::RepairParse(TokenObject curtok)
             //
             else if (act == ACCEPT_ACTION)
                  return;
-            else break; // loop around and keep trying until something is accepted.
+            else
+                // loop around and keep trying until something is accepted.
+                break;
 
             //
             // Process a nonterminal
@@ -642,7 +664,8 @@ void Parser::ErrorRepair(TokenObject error_token)
 
         int last_index;
         for (last_index = MAX_DISTANCE - 1;
-             last_index >= 1 && lex_stream -> Kind(buffer[last_index]) == EOFT_SYMBOL;
+             last_index >= 1 &&
+                 lex_stream -> Kind(buffer[last_index]) == EOFT_SYMBOL;
              last_index--);
         last_index++;
 
@@ -674,15 +697,19 @@ SecondaryRepairInfo Parser::ErrorSurgery
     int stack_deletions = 0;
     Location  previous_loc = Loc(buffer[2]);
 
-    for (int top = stack_top; top >= 0 && repair.num_deletions >= stack_deletions; top--)
+    for (int top = stack_top;
+         top >= 0 && repair.num_deletions >= stack_deletions; top--)
     {
         if (location_stack[top] < previous_loc)
             stack_deletions++;
         previous_loc = location_stack[top];
 
-        for (int i = 1; i <= last_index && repair.num_deletions >= (stack_deletions + i - 1); i++)
+        for (int i = 1;
+             i <= last_index &&
+                 repair.num_deletions >= (stack_deletions + i - 1); i++)
         {
-            int j = ParseCheck(stck, top, lex_stream -> Kind(buffer[i]), i + 1);
+            int j = ParseCheck(stck, top, lex_stream -> Kind(buffer[i]),
+                               i + 1);
 
             if ((j - i + 1) > MIN_DISTANCE)
             {
@@ -709,7 +736,8 @@ SecondaryRepairInfo Parser::ErrorSurgery
 /* been consumed, or an error is encountered. Return the number  */
 /* of tokens that were expended before the parse blocked.        */
 /*****************************************************************/
-int Parser::ParseCheck(int stck[], int stack_top, int first_token, int buffer_position)
+int Parser::ParseCheck(int stck[], int stack_top, int first_token,
+                       int buffer_position)
 {
     int max_pos,
         indx,

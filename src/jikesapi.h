@@ -1,4 +1,4 @@
-// $Id: jikesapi.h,v 1.13 2001/09/14 05:31:33 ericb Exp $ -*- c++ -*-
+// $Id: jikesapi.h,v 1.14 2001/10/31 14:51:49 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -15,24 +15,52 @@ class JikesOption
 {    
  public:
     
-    char *bootclasspath;
-    char *extdirs;
-    char *classpath;
-    char *sourcepath;
-    char *directory;
-    char *encoding;
+    char *bootclasspath; // Location of the libraries
+    char *extdirs;       // Location of external drop-in jars
+    char *classpath;     // Location of source and user class files
+    char *sourcepath;    // Location of source files only
+    char *directory;     // Target directory for output
+    char *encoding;      // Character encoding name
 
     // Each of these fields is a boolean value
     // 0 if false, non-zero if true
-    int nowrite;
-    int deprecation;
-    int O;
-    int g;
-    int verbose;
-    int depend;
-    int nowarn;
-    int old_classpath_search_order;
-    int zero_defect;
+    int nowrite;         // Don't generate output, useful with verbose
+    int deprecation;     // Warn about deprecated code
+    int optimize;        // Enable optimizations
+    int verbose;         // Verbosely track compilation progress
+    int depend;          // Require full dependency check
+    int nowarn;          // Disable warnings
+    int old_classpath_search_order; // Use older classpath search order
+    int zero_defect;     // Treat warnings as errors
+    int help;            // Display a usage help message
+    int version;         // Display a version message
+
+    enum DebugLevel
+    {
+        NONE = 0,
+        SOURCE = 1,
+        LINES = 2,
+        VARS = 4
+    };
+
+    enum ReleaseLevel
+    {
+        UNKNOWN,
+        SDK1_1,
+        SDK1_2,
+        SDK1_3,
+        SDK1_4
+    };
+
+    // This field can be 0 through 7 to represent all debug level combinations.
+    int g;               // Annotate class files with debugging information
+
+    //
+    // The JDK release number of the syntax rules to obey (for example,
+    // assert was added in 1.4), as well as the VM level to target.
+    // 
+    ReleaseLevel source;
+    ReleaseLevel target;
 
     virtual ~JikesOption();
 
@@ -50,15 +78,15 @@ class JikesError
         JIKES_ERROR,
         JIKES_CAUTION,
         JIKES_WARNING
-    } ;
+    };
         
-    virtual JikesErrorSeverity getSeverity() = 0 ;
-    virtual const char *getFileName() = 0 ;
+    virtual JikesErrorSeverity getSeverity() = 0;
+    virtual const char *getFileName() = 0;
     
-    virtual int getLeftLineNo      () = 0 ;
-    virtual int getLeftColumnNo    () = 0 ;
-    virtual int getRightLineNo     () = 0 ;
-    virtual int getRightColumnNo   () = 0 ;
+    virtual int getLeftLineNo() = 0;
+    virtual int getLeftColumnNo() = 0;
+    virtual int getRightLineNo() = 0;
+    virtual int getRightColumnNo() = 0;
 
     /**
      * Returns message describing error.
@@ -102,7 +130,7 @@ class JikesAPI
      * by this method as it can be freed during another call
      * to parseOptions() or when this object is destroyed.
      */
-    virtual char** parseOptions(int argc, char **argv) ;
+    virtual char** parseOptions(int argc, char **argv);
 
     /**
      * Compile given list of files using current compiler options.
@@ -126,37 +154,42 @@ class JikesAPI
      * A pointer to an object of this type is returned by JikesAPI::read()
      */
     class FileReader
-        {
+    {
     public:
-            virtual  ~FileReader()  {}
+        virtual ~FileReader() {}
             
-            virtual const char     *getBuffer()      = 0; // If the file is unreadable an object should still be created but GetBuffer() should return NULL.
-            virtual       size_t    getBufferSize()  = 0; // If the file is unreadable GetBufferSize() is undefined.
-        };
+        // If the file is unreadable an object should still be created but
+        // GetBuffer() should return NULL.
+        virtual const char *getBuffer() = 0;
+        // If the file is unreadable GetBufferSize() is undefined.
+        virtual size_t getBufferSize() = 0;
+    };
 
     /**
      * Define the virtual base class for all WriteObjects.
      * A pointer to an object of this type is returned by JikesAPI::write()
      */
     class FileWriter
-        {
+    {
     public:
-            FileWriter(size_t mS):   maxSize(mS) {} 
-            virtual  ~FileWriter() {}
+        FileWriter(size_t mS) : maxSize(mS) {} 
+        virtual  ~FileWriter() {}
             
-            size_t    write(const unsigned char *data, size_t size);
-            virtual  int      isValid()                         = 0;
+        size_t write(const unsigned char *data, size_t size);
+        virtual int isValid() = 0;
             
     private:
             
-            virtual  size_t    doWrite(const unsigned char *data, size_t size)   = 0; // Garanteed not to be called with a combined total of more than maxSize bytes during the lifespan of the object.
-            size_t   maxSize;
-        };
+        // Guaranteed not to be called with a combined total of more than
+        // maxSize bytes during the lifespan of the object.
+        virtual size_t doWrite(const unsigned char *data, size_t size) = 0;
+        size_t maxSize;
+    };
         
     virtual int stat(const char *filename, struct stat *status);
     
-    virtual FileReader  *read  (const char *filename              );
-    virtual FileWriter  *write (const char *filename, size_t bytes);
+    virtual FileReader *read(const char *filename);
+    virtual FileWriter *write(const char *filename, size_t bytes);
     
  private:
 

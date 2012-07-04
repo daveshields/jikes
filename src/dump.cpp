@@ -1,9 +1,9 @@
-// $Id: dump.cpp,v 1.20 2001/09/14 05:31:33 ericb Exp $
+// $Id: dump.cpp,v 1.27 2002/05/16 06:44:29 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -20,9 +20,10 @@ namespace Jikes { // Open namespace Jikes block
 #endif
 
 static char*
-      TK_notoken_STRING      = "TK_notoken",
+      TK_notoken_STRING = "TK_notoken",
       TK_Identifier_STRING[] = "TK_Identifier",
       TK_abstract_STRING[] = "TK_abstract",
+      TK_assert_STRING[] = "TK_assert",
       TK_boolean_STRING[] = "TK_boolean",
       TK_break_STRING[] = "TK_break",
       TK_byte_STRING[] = "TK_byte",
@@ -60,6 +61,7 @@ static char*
       TK_return_STRING[] = "TK_return",
       TK_short_STRING[] = "TK_short",
       TK_static_STRING[] = "TK_static",
+      TK_strictfp_STRING[] = "TK_strictfp",
       TK_super_STRING[] = "TK_super",
       TK_switch_STRING[] = "TK_switch",
       TK_synchronized_STRING[] = "TK_synchronized",
@@ -74,7 +76,7 @@ static char*
       TK_while_STRING[] = "TK_while",
       TK_IntegerLiteral_STRING[] = "TK_IntegerLiteral",
       TK_LongLiteral_STRING[] = "TK_LongLiteral",
-      TK_FloatingPointLiteral_STRING[] = "TK_FloatingPointLiteral",
+      TK_FloatLiteral_STRING[] = "TK_FloatLiteral",
       TK_DoubleLiteral_STRING[] = "TK_DoubleLiteral",
       TK_CharacterLiteral_STRING[] = "TK_CharacterLiteral",
       TK_StringLiteral_STRING[] = "TK_StringLiteral",
@@ -125,8 +127,7 @@ static char*
       TK_DOT_STRING[] = "TK_DOT",
       TK_EQUAL_STRING[] = "TK_EQUAL",
       TK_ERROR_STRING[] = "TK_ERROR",
-      TK_EOF_STRING[] = "TK_EOF",
-      TK_EOL_STRING[] = "TK_EOL";
+      TK_EOF_STRING[] = "TK_EOF";
 
 static char *token_type(unsigned char kind)
 {
@@ -134,6 +135,7 @@ static char *token_type(unsigned char kind)
     {
     case TK_Identifier: return TK_Identifier_STRING;
     case TK_abstract: return TK_abstract_STRING;
+    case TK_assert: return TK_assert_STRING;
     case TK_boolean: return TK_boolean_STRING;
     case TK_break: return TK_break_STRING;
     case TK_byte: return TK_byte_STRING;
@@ -171,6 +173,7 @@ static char *token_type(unsigned char kind)
     case TK_return: return TK_return_STRING;
     case TK_short: return TK_short_STRING;
     case TK_static: return TK_static_STRING;
+    case TK_strictfp: return TK_strictfp_STRING;
     case TK_super: return TK_super_STRING;
     case TK_switch: return TK_switch_STRING;
     case TK_synchronized: return TK_synchronized_STRING;
@@ -185,7 +188,7 @@ static char *token_type(unsigned char kind)
     case TK_while: return TK_while_STRING;
     case TK_IntegerLiteral: return TK_IntegerLiteral_STRING;
     case TK_LongLiteral: return TK_LongLiteral_STRING;
-    case TK_FloatingPointLiteral: return TK_FloatingPointLiteral_STRING;
+    case TK_FloatLiteral: return TK_FloatLiteral_STRING;
     case TK_DoubleLiteral: return TK_DoubleLiteral_STRING;
     case TK_CharacterLiteral: return TK_CharacterLiteral_STRING;
     case TK_StringLiteral: return TK_StringLiteral_STRING;
@@ -237,7 +240,6 @@ static char *token_type(unsigned char kind)
     case TK_EQUAL: return TK_EQUAL_STRING;
     case TK_ERROR: return TK_ERROR_STRING;
     case TK_EOF: return TK_EOF_STRING;
-    case TK_EOL: return TK_EOL_STRING;
     default: return TK_notoken_STRING;
     }
 }
@@ -247,11 +249,12 @@ void LexStream::Dump()
     FILE *tokfile;
     char *tokfile_name = new char[FileNameLength() + 5]; // +1 for '\0' +4 for length(".tok")
     strcpy(tokfile_name, FileName());
-    strcat(tokfile_name, StringConstant::U8S__DO_tok);
+    strcat(tokfile_name, StringConstant::U8S_DO_tok);
 
     if ((tokfile = SystemFopen(tokfile_name, "w")) == NULL)
     {
-        Coutput << "*** Cannot open file " << tokfile_name << endl;
+        Coutput << "*** Cannot open LexStream dump output file "
+                << tokfile_name << endl;
         return;
     }
 

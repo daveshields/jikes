@@ -1,9 +1,9 @@
-/* src/config.h.in.  Generated automatically from configure.in by autoheader.  */
+/* src/config.h.in.  Generated from configure.in by autoheader.  */
 
 /* This software is subject to the terms of the IBM Jikes
 Compiler License Agreement available at the following URL:
 http://ibm.com/developerworks/opensource/jikes.
-Copyright (C) 2000, 2001 International Business Machines Corporation
+Copyright (C) 1996, 2002 International Business Machines Corporation
 and others.  All Rights Reserved.
 You must accept the terms of that agreement to use this software. */
 
@@ -13,7 +13,7 @@ You must accept the terms of that agreement to use this software. */
 /* Defined when the compiler supports 64 bit integer math */
 #undef HAVE_64BIT_TYPES
 
-/* Define if you have the <assert.h> header file. */
+/* Define to 1 if you have the <assert.h> header file. */
 #undef HAVE_ASSERT_H
 
 /* defined if bool is a built-in C++ type */
@@ -25,16 +25,16 @@ You must accept the terms of that agreement to use this software. */
 /* define if the compiler supports const_cast<> */
 #undef HAVE_CONST_CAST
 
-/* Define if you have the <ctype.h> header file. */
+/* Define to 1 if you have the <ctype.h> header file. */
 #undef HAVE_CTYPE_H
 
-/* Define if you have the `cygwin_win32_to_posix_path_list' function. */
+/* Define to 1 if you have the `cygwin_win32_to_posix_path_list' function. */
 #undef HAVE_CYGWIN_WIN32_TO_POSIX_PATH_LIST
 
-/* Define if you have the <direct.h> header file. */
+/* Define to 1 if you have the <direct.h> header file. */
 #undef HAVE_DIRECT_H
 
-/* Define if you have the <dirent.h> header file. */
+/* Define to 1 if you have the <dirent.h> header file. */
 #undef HAVE_DIRENT_H
 
 /* define if the compiler supports dynamic_cast<> */
@@ -55,7 +55,7 @@ You must accept the terms of that agreement to use this software. */
 /* define if the compiler supports the explicit keyword */
 #undef HAVE_EXPLICIT
 
-/* Define if you have the <float.h> header file. */
+/* Define to 1 if you have the <float.h> header file. */
 #undef HAVE_FLOAT_H
 
 /* use unix style mkdir(str, S_IRWXU | S_IRWXG | S_IRWXO) */
@@ -64,52 +64,52 @@ You must accept the terms of that agreement to use this software. */
 /* known to be broken on Win and OS2 when compiled with ICC */
 #undef HAVE_ICC_FP_BUGS
 
-/* Define if you have the <iconv.h> header file. */
+/* Define to 1 if you have the <iconv.h> header file. */
 #undef HAVE_ICONV_H
 
 /* Defined when Jikes is built with native floating support */
 #undef HAVE_IEEE754
 
-/* Define if you have the <inttypes.h> header file. */
+/* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* Define Jikes functions in a namespace */
+/* Define Jikes classes in a C++ namespace */
 #undef HAVE_JIKES_NAMESPACE
 
-/* Define if you have the <langinfo.h> header file. */
+/* Define to 1 if you have the <langinfo.h> header file. */
 #undef HAVE_LANGINFO_H
 
 /* use unix style mkdir(str, S_IRWXU) */
 #undef HAVE_LIBC5_MKDIR
 
-/* Define if you have the `iconv' library (-liconv). */
+/* Define to 1 if you have the `iconv' library (-liconv). */
 #undef HAVE_LIBICONV
 
-/* Define if you have the `icu-uc' library (-licu-uc). */
+/* Define to 1 if you have the `icu-uc' library (-licu-uc). */
 #undef HAVE_LIBICU_UC
 
-/* Define if you have the `m' library (-lm). */
+/* Define to 1 if you have the `m' library (-lm). */
 #undef HAVE_LIBM
 
-/* Define if you have the <limits.h> header file. */
+/* Define to 1 if you have the <limits.h> header file. */
 #undef HAVE_LIMITS_H
 
-/* Define if you have the <locale.h> header file. */
+/* Define to 1 if you have the <locale.h> header file. */
 #undef HAVE_LOCALE_H
 
 /* use mac style mkdir(str,0) from <stat.mac.h> */
 #undef HAVE_MAC_MKDIR
 
-/* Define if you have the <math.h> header file. */
+/* Define to 1 if you have the <math.h> header file. */
 #undef HAVE_MATH_H
 
 /* define if the compiler supports member constants */
 #undef HAVE_MEMBER_CONSTANTS
 
-/* Define if you have the <memory.h> header file. */
+/* Define to 1 if you have the <memory.h> header file. */
 #undef HAVE_MEMORY_H
 
-/* Define if you have the `mkdir' function. */
+/* Define to 1 if you have the `mkdir' function. */
 #undef HAVE_MKDIR
 
 /* define if the compiler implements namespaces */
@@ -133,34 +133,34 @@ You must accept the terms of that agreement to use this software. */
 /* define if the compiler supports ISO C++ standard library */
 #undef HAVE_STD
 
-/* Define if you have the <stdint.h> header file. */
+/* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
-/* Define if you have the <stdio.h> header file. */
+/* Define to 1 if you have the <stdio.h> header file. */
 #undef HAVE_STDIO_H
 
-/* Define if you have the <stdlib.h> header file. */
+/* Define to 1 if you have the <stdlib.h> header file. */
 #undef HAVE_STDLIB_H
 
-/* Define if you have the <strings.h> header file. */
+/* Define to 1 if you have the <strings.h> header file. */
 #undef HAVE_STRINGS_H
 
-/* Define if you have the <string.h> header file. */
+/* Define to 1 if you have the <string.h> header file. */
 #undef HAVE_STRING_H
 
-/* Define if you have the <sys/cygwin.h> header file. */
+/* Define to 1 if you have the <sys/cygwin.h> header file. */
 #undef HAVE_SYS_CYGWIN_H
 
-/* Define if you have the <sys/stat.h> header file. */
+/* Define to 1 if you have the <sys/stat.h> header file. */
 #undef HAVE_SYS_STAT_H
 
-/* Define if you have the <sys/types.h> header file. */
+/* Define to 1 if you have the <sys/types.h> header file. */
 #undef HAVE_SYS_TYPES_H
 
-/* Define if you have the <time.h> header file. */
+/* Define to 1 if you have the <time.h> header file. */
 #undef HAVE_TIME_H
 
-/* Define if you have the <unistd.h> header file. */
+/* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
 /* Defined when the compiler supports the unsigned __int64 type */
@@ -172,31 +172,31 @@ You must accept the terms of that agreement to use this software. */
 /* Use visual C++ version of set_new_handler */
 #undef HAVE_VCPP_SET_NEW_HANDLER
 
-/* Define if you have the <wchar.h> header file. */
+/* Define to 1 if you have the <wchar.h> header file. */
 #undef HAVE_WCHAR_H
 
-/* Define if you have the `wcscat' function. */
+/* Define to 1 if you have the `wcscat' function. */
 #undef HAVE_WCSCAT
 
-/* Define if you have the `wcscmp' function. */
+/* Define to 1 if you have the `wcscmp' function. */
 #undef HAVE_WCSCMP
 
-/* Define if you have the `wcscpy' function. */
+/* Define to 1 if you have the `wcscpy' function. */
 #undef HAVE_WCSCPY
 
-/* Define if you have the `wcslen' function. */
+/* Define to 1 if you have the `wcslen' function. */
 #undef HAVE_WCSLEN
 
-/* Define if you have the `wcsncmp' function. */
+/* Define to 1 if you have the `wcsncmp' function. */
 #undef HAVE_WCSNCMP
 
-/* Define if you have the `wcsncpy' function. */
+/* Define to 1 if you have the `wcsncpy' function. */
 #undef HAVE_WCSNCPY
 
 /* use win32 style mkdir(str) from <direct.h> */
 #undef HAVE_WIN32_MKDIR
 
-/* Define if you have the <windows.h> header file. */
+/* Define to 1 if you have the <windows.h> header file. */
 #undef HAVE_WINDOWS_H
 
 /* Defined when the wint_t type is supported */
@@ -216,11 +216,26 @@ You must accept the terms of that agreement to use this software. */
 /* Used to test results of stat call to see if it is a directory */
 #undef JIKES_STAT_S_IFDIR
 
-/* A string to indicate the release of jikes: Version 1.14 - 13 May 2001 */
+/* A string to indicate the release of jikes: Version 1.15 - 26 Sept 2001 */
 #undef JIKES_VERSION_STRING
 
 /* Name of package */
 #undef PACKAGE
+
+/* Define to the address where bug reports for this package should be sent. */
+#undef PACKAGE_BUGREPORT
+
+/* Define to the full name of this package. */
+#undef PACKAGE_NAME
+
+/* Define to the full name and version of this package. */
+#undef PACKAGE_STRING
+
+/* Define to the one symbol short name of this package. */
+#undef PACKAGE_TARNAME
+
+/* Define to the version of this package. */
+#undef PACKAGE_VERSION
 
 /* used to seperate elements on the PATH */
 #undef PATH_SEPARATOR
@@ -228,7 +243,7 @@ You must accept the terms of that agreement to use this software. */
 /* The size of a `wchar_t', as computed by sizeof. */
 #undef SIZEOF_WCHAR_T
 
-/* Define if you have the ANSI C header files. */
+/* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
 
 /* quick hack to use UNIX file system, fixme */
@@ -240,6 +255,6 @@ You must accept the terms of that agreement to use this software. */
 /* quick hack to use Win32 file system, fixme */
 #undef WIN32_FILE_SYSTEM
 
-/* Define if your processor stores words with the most significant byte first
-   (like Motorola and SPARC, unlike Intel and VAX). */
+/* Define to 1 if your processor stores words with the most significant byte
+   first (like Motorola and SPARC, unlike Intel and VAX). */
 #undef WORDS_BIGENDIAN

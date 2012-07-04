@@ -1,4 +1,4 @@
-// $Id: zip.h,v 1.11 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
+// $Id: zip.h,v 1.12 2001/12/13 00:40:15 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -62,7 +62,7 @@ public:
     Zip(Control &, char *);
     ~Zip();
 
-    bool IsValid() { return magic == 0x06054b50; }
+    bool IsValid() { return magic == END_SIG; }
 
     DirectorySymbol *RootDirectory() { return root_directory; }
 
@@ -70,6 +70,18 @@ private:
     friend class ZipFile;
 
     Control &control;
+
+    enum
+    {
+        LOC_SIG = 0x04034b50,
+        LOC_SIZE = 30,
+        DATA_SIG = 0x08074b50,
+        DATA_SIZE = 16,
+        CEN_SIG = 0x02014b50,
+        CEN_SIZE = 46,
+        END_SIG = 0x06054b50,
+        END_SIZE = 22
+    };
 
     u4 magic;
 

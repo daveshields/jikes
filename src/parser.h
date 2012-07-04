@@ -1,9 +1,9 @@
-// $Id: parser.h,v 1.13 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
+// $Id: parser.h,v 1.14 2002/05/22 06:56:45 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -20,12 +20,13 @@ namespace Jikes { // Open namespace Jikes block
 
 
 class StoragePool;
+class Ast;
 class AstPackageDeclaration;
 class AstCompilationUnit;
 class AstClassBody;
 class AstInterfaceDeclaration;
-class Ast;
 class AstListNode;
+class AstMethodBody;
 
 enum ParseErrorCode
 {
@@ -107,7 +108,7 @@ protected:
     bool Initializer(AstInterfaceDeclaration *);
     bool Body(AstClassBody *);
     bool Body(AstInterfaceDeclaration *);
-    Ast *ParseSegment(TokenObject);
+    AstMethodBody *ParseSegment(TokenObject);
 
 #define HEADERS
 #include "javaact.h"
@@ -116,7 +117,7 @@ protected:
 
     void InitRuleAction();
 
-    //******************************************************************************
+    //********************************************************************
     //
     // Given a rule of the form     A ::= x1 x2 ... xn     n > 0
     //
@@ -124,30 +125,30 @@ protected:
     // or ti, if xi is a nonterminal that produced a string of the form
     // xi => ti w.
     //
-    //******************************************************************************
+    //********************************************************************
     inline LexStream::TokenIndex Token(int i)
     {
         return location_stack[state_stack_top + (i - 1)];
     }
 
-    //******************************************************************************
+    //********************************************************************
     //
     // Given a rule of the form     A ::= x1 x2 ... xn     n > 0
     //
     // the function Sym(i) yields the AST subtree associated with symbol
     // xi. NOTE that if xi is a terminal, Sym(i) is undefined !
     //
-    //******************************************************************************
+    //********************************************************************
     inline Ast*& Sym(int i) { return parse_stack[state_stack_top + (i - 1)]; }
 
-    //******************************************************************************
+    //********************************************************************
     //
     // When a token is shifted, we also construct a null AST for
     // it.  This is necessary in case we encounter an error and need to
     // delete AST subtrees from the parse stack - those corresponding to
     // shifted tokens should also have a valid subtree.
     //
-    //******************************************************************************
+    //********************************************************************
     inline void TokenAction(TokenObject curtok) { Sym(1) = NULL; }
 
     LexStream *lex_stream;
@@ -192,7 +193,8 @@ protected:
                                      int stack_top,
                                      int last_index,
                                      SecondaryRepairInfo repair);
-    int ParseCheck(int stack[], int stack_top, int first_token, int buffer_position);
+    int ParseCheck(int stack[], int stack_top, int first_token,
+                   int buffer_position);
 };
 
 #ifdef HAVE_JIKES_NAMESPACE

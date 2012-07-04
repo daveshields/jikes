@@ -1,9 +1,9 @@
-// $Id: op.h,v 1.12 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
+// $Id: op.h,v 1.15 2002/02/01 06:46:19 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -24,7 +24,7 @@ class cp_info;
 class Operators
 {
 public:
-    enum operators
+    enum Opcode
     {
         OP_NOP = 0x00,
         OP_ACONST_NULL = 0x01,
@@ -209,7 +209,7 @@ public:
         OP_GETFIELD = 0xb4,
         OP_PUTFIELD = 0xb5,
         OP_INVOKEVIRTUAL = 0xb6,
-        OP_INVOKENONVIRTUAL = 0xb7,
+        OP_INVOKESPECIAL = 0xb7,
         OP_INVOKESTATIC = 0xb8,
         OP_INVOKEINTERFACE = 0xb9,
         OP_XXXUNUSEDXXX = 0xba,
@@ -232,7 +232,7 @@ public:
         OP_HARDWARE = 0xff
     };
 
-    static void opdmp(Tuple<cp_info *> &, Tuple<u1> &);
+    static void OpDmp(Tuple<cp_info *> &, Tuple<u1> &);
 
 protected:
 
@@ -248,39 +248,41 @@ private:
         INFO_DONE  = 3
     };
 
-    static void opdesc (int opc, const char **name, const char **desc);
+protected:
+    static void OpDesc(Opcode, const char **name, const char **desc);
 
-    inline static signed char get_i1(Tuple<u1> &code, int pc)
+private:
+    inline static signed char GetI1(Tuple<u1> &code, int pc)
     {
         return code[pc];
     }
 
-    inline static short get_i2(Tuple<u1> &code, int pc)
+    inline static short GetI2(Tuple<u1> &code, int pc)
     {
         return  code[pc] << 8 | code[pc + 1];
     }
 
-    inline static int get_i4(Tuple<u1> &code, int pc)
+    inline static int GetI4(Tuple<u1> &code, int pc)
     {
         return  code[pc] << 24 | code[pc + 1] << 16 | code[pc + 2] << 8 | code[pc + 3];
     }
 
-    inline static unsigned get_u1(Tuple<u1> &code, int pc)
+    inline static unsigned GetU1(Tuple<u1> &code, int pc)
     {
         return code[pc];
     }
 
-    inline static unsigned get_u2(Tuple<u1> &code, int pc)
+    inline static unsigned GetU2(Tuple<u1> &code, int pc)
     {
         return (unsigned) (code[pc] << 8 | code[pc + 1]);
     }
 
-    inline static unsigned get_u4(Tuple<u1> &code, int pc)
+    inline static unsigned GetU4(Tuple<u1> &code, int pc)
     {
         return (unsigned) (code[pc] << 24 | code[pc + 1] << 16 | code[pc + 2] << 8 | code[pc + 3]);
     }
 
-    static void opline(Tuple<cp_info *> &, const char *, int, int,
+    static void OpLine(Tuple<cp_info *> &, const char *, int, Opcode,
                        const char *, char *, const char *, int, int);
 };
 

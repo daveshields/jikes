@@ -1,9 +1,9 @@
-// $Id: expr.cpp,v 1.76 2001/09/14 05:31:33 ericb Exp $
+// $Id: expr.cpp,v 1.134 2002/07/11 01:11:57 cabbey Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001 International Business
+// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
@@ -21,37 +21,62 @@
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-bool Semantic::IsIntValueRepresentableInType(AstExpression *expr, TypeSymbol *type)
+bool Semantic::IsIntValueRepresentableInType(AstExpression *expr,
+                                             TypeSymbol *type)
 {
-    IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
+    if (! expr -> IsConstant() ||
+        ! control.IsSimpleIntegerValueType(expr -> Type()))
+    {
+        return false;
+    }
 
-    return (expr -> IsConstant() &&
-            control.IsSimpleIntegerValueType(expr -> Type()) &&
-            (type == control.int_type ||
-             type == control.no_type  ||
-             (type == control.char_type && (literal -> value >= 0) && (literal -> value <= 65535)) ||
-             (type == control.byte_type && (literal -> value >= -128) && (literal -> value <= 127)) ||
-             (type == control.short_type && (literal -> value >= -32768) && (literal -> value <= 32767))));
+    IntLiteralValue *literal = DYNAMIC_CAST<IntLiteralValue *> (expr -> value);
+
+    return (type == control.int_type || type == control.no_type ||
+            (type == control.char_type && (literal -> value >= 0) &&
+             (literal -> value <= 65535)) ||
+            (type == control.byte_type && (literal -> value >= -128) &&
+             (literal -> value <= 127)) ||
+            (type == control.short_type && (literal -> value >= -32768) &&
+             (literal -> value <= 32767)));
 }
 
 
-inline bool Semantic::MoreSpecific(MethodSymbol *source_method, MethodSymbol *target_method)
+//
+// Returns true if source_method is more specific than target_method, which
+// is defined as the type that declared the method, as well as all method
+// parameter types, being equal or more specific in the source_method.
+//
+inline bool Semantic::MoreSpecific(MethodSymbol *source_method,
+                                   MethodSymbol *target_method)
 {
-    if (! CanMethodInvocationConvert(target_method -> containing_type, source_method -> containing_type))
+    if (! CanMethodInvocationConvert(target_method -> containing_type,
+                                     source_method -> containing_type))
+    {
         return false;
+    }
 
     for (int k = target_method -> NumFormalParameters() - 1; k >= 0; k--)
     {
-        if (! CanMethodInvocationConvert(target_method -> FormalParameter(k) -> Type(),
-                                         source_method -> FormalParameter(k) -> Type()))
+        if (! CanMethodInvocationConvert(target_method -> FormalParameter(k) ->
+                                         Type(),
+                                         source_method -> FormalParameter(k) ->
+                                         Type()))
+        {
             return false;
+        }
     }
 
     return true;
 }
 
 
-inline bool Semantic::MoreSpecific(MethodSymbol *method, Tuple<MethodSymbol *> &maximally_specific_method)
+//
+// Returns true if a method is more specific than the current set of maximally
+// specific methods.
+//
+inline bool Semantic::MoreSpecific(MethodSymbol *method,
+                                   Tuple<MethodSymbol *> &maximally_specific_method)
 {
     for (int i = 0; i < maximally_specific_method.Length(); i++)
     {
@@ -63,7 +88,13 @@ inline bool Semantic::MoreSpecific(MethodSymbol *method, Tuple<MethodSymbol *> &
 }
 
 
-inline bool Semantic::NoMethodMoreSpecific(Tuple<MethodSymbol *> &maximally_specific_method, MethodSymbol *method)
+//
+// Returns true if no method in the current set of maximally specific methods
+// is more specific than the given method, meaning that the given method should
+// be added to the set.
+//
+inline bool Semantic::NoMethodMoreSpecific(Tuple<MethodSymbol *> &maximally_specific_method,
+                                           MethodSymbol *method)
 {
     for (int i = 0; i < maximally_specific_method.Length(); i++)
     {
@@ -75,56 +106,292 @@ inline bool Semantic::NoMethodMoreSpecific(Tuple<MethodSymbol *> &maximally_spec
 }
 
 
-void Semantic::ReportMethodNotFound(Ast *ast, wchar_t *name)
+//
+// Called when no accessible method was found. This checks in order: an
+// accessible method of the same name but different parameters, favoring
+// methods with the same parameter count; for a no-arg method, an accessible
+// field by the same name; an inaccessible method in a superclass; a
+// misspelled method name; a type by the same name; and finally no method
+// was found.
+//
+void Semantic::ReportMethodNotFound(AstMethodInvocation *method_call,
+                                    TypeSymbol *type)
 {
-    SemanticError::SemanticErrorKind kind;
+    AstFieldAccess *field_access = method_call -> method -> FieldAccessCast();
+    AstSimpleName *simple_name = method_call -> method -> SimpleNameCast();
+    assert(field_access || simple_name);
+
+    LexStream::TokenIndex id_token = (field_access
+                                      ? field_access -> identifier_token
+                                      : simple_name -> identifier_token);
+    NameSymbol *name_symbol = lex_stream -> NameSymbol(id_token);
+    MethodShadowSymbol *method_shadow;
+
+    if (! type -> expanded_method_table)
+        ComputeMethodsClosure(type, id_token);
+    if (! type -> expanded_field_table)
+        ComputeFieldsClosure(type, id_token);
+
+    //
+    // Search for an accessible method with different arguments. Favor the
+    // earliest method found with the smallest difference in parameter count.
+    // Since the JVMS limits methods to 255 parameters, we initialize our
+    // difference detection with 255.
+    //
+    MethodSymbol *best_match = NULL;
+    int difference = 255;
+    for (method_shadow = type -> expanded_method_table -> FindMethodShadowSymbol(name_symbol);
+         method_shadow; method_shadow = method_shadow -> next_method)
+    {
+        MethodSymbol *method = method_shadow -> method_symbol;
+
+        if (! method -> IsTyped())
+            method -> ProcessMethodSignature(this, id_token);
+
+        if (MemberAccessCheck(field_access, type, method))
+        {
+            int diff = method_call -> NumArguments() - method -> NumFormalParameters();
+            if (diff < 0)
+                diff = - diff;
+            if (diff < difference)
+            {
+                best_match = method;
+                difference = diff;
+            }
+        }
+    }
+    if (best_match)
+    {
+        ReportSemError(SemanticError::METHOD_OVERLOAD_NOT_FOUND,
+                       method_call -> LeftToken(),
+                       method_call -> RightToken(),
+                       name_symbol -> Name(), // FIXME: should be method_call -> symbol -> Header(), except that method_call has no symbol yet
+                       best_match -> containing_type -> ContainingPackage() -> PackageName(),
+                       best_match -> containing_type -> ExternalName(),
+                       best_match -> Header());
+        return;
+    }
+
+    //
+    // For a no-arg method, search for an accessible field of the same name.
+    //
+    if (method_call -> NumArguments() == 0)
+    {
+        VariableShadowSymbol *variable_shadow = type -> expanded_field_table -> FindVariableShadowSymbol(name_symbol);
+
+        if (variable_shadow)
+        {
+            VariableSymbol *variable = variable_shadow -> variable_symbol;
+            if (MemberAccessCheck((AstFieldAccess *) NULL, type, variable))
+            {
+                TypeSymbol *enclosing_type = variable -> owner -> TypeCast();
+                assert(enclosing_type);
+
+                ReportSemError(SemanticError::FIELD_NOT_METHOD,
+                               method_call -> LeftToken(),
+                               method_call -> RightToken(),
+                               variable -> Name(),
+                               enclosing_type -> ContainingPackage() -> PackageName(),
+                               enclosing_type -> ExternalName());
+                return;
+            }
+        }
+    }
+
+    //
+    // Check if the method is inaccessible.
+    //
+    for (TypeSymbol *super_type = type;
+         super_type; super_type = super_type -> super)
+    {
+        for (method_shadow = super_type -> expanded_method_table -> FindMethodShadowSymbol(name_symbol);
+             method_shadow; method_shadow = method_shadow -> next_method)
+        {
+            MethodSymbol *method = method_shadow -> method_symbol;
+            if (! method -> IsTyped())
+                method -> ProcessMethodSignature(this, field_access -> identifier_token);
+
+            if (method_call -> NumArguments() == method -> NumFormalParameters())
+            {
+                int i;
+                for (i = 0; i < method_call -> NumArguments(); i++)
+                {
+                    AstExpression *expr = method_call -> Argument(i);
+                    if (! CanMethodInvocationConvert(method -> FormalParameter(i) -> Type(), expr -> Type()))
+                        break;
+                }
+                if (i == method_call -> NumArguments()) // found a match?
+                {
+                    //
+                    // JLS 9.2: Interfaces do not have protected members,
+                    // even though jikes treats interfaces as subtypes of
+                    // Object.
+                    //
+                    if (field_access && method -> ACC_PROTECTED() &&
+                        field_access -> base -> Type() -> ACC_INTERFACE())
+                    {
+                        assert(method -> containing_type == control.Object());
+                        ReportSemError(SemanticError::PROTECTED_INTERFACE_METHOD_NOT_ACCESSIBLE,
+                                       method_call -> LeftToken(),
+                                       method_call -> RightToken(),
+                                       method -> Header());
+                    }
+                    //
+                    // A protected instance method in the superclass is
+                    // inaccessible if the base expression is the wrong type.
+                    //
+                    else if (method -> ACC_PROTECTED() &&
+                             ! method -> ACC_STATIC() &&
+                             ThisType() -> HasProtectedAccessTo(method -> containing_type))
+                    {
+                        ReportSemError(SemanticError::PROTECTED_INSTANCE_METHOD_NOT_ACCESSIBLE,
+                                       method_call -> LeftToken(),
+                                       method_call -> RightToken(),
+                                       method -> Header(),
+                                       method -> containing_type -> ContainingPackage() -> PackageName(),
+                                       method -> containing_type -> ExternalName(),
+                                       ThisType() -> ContainingPackage() -> PackageName(),
+                                       ThisType() -> ExternalName());
+                    }
+                    else
+                    {
+                        ReportSemError(SemanticError::METHOD_NOT_ACCESSIBLE,
+                                       method_call -> LeftToken(),
+                                       method_call -> RightToken(),
+                                       method -> Header(),
+                                       method -> containing_type -> ContainingPackage() -> PackageName(),
+                                       method -> containing_type -> ExternalName(),
+                                       method -> AccessString());
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+    //
+    // Search for a misspelled method name.
+    //
+    best_match = FindMisspelledMethodName(type, method_call, name_symbol);
+    if (best_match)
+        ReportSemError(SemanticError::METHOD_NAME_MISSPELLED,
+                       method_call -> LeftToken(),
+                       method_call -> RightToken(),
+                       name_symbol -> Name(),
+                       type -> ContainingPackage() -> PackageName(),
+                       type -> ExternalName(),
+                       best_match -> Name());
+    //
+    // Search for a type of the same name.
+    //
+    else if (FindType(id_token))
+        ReportSemError(SemanticError::TYPE_NOT_METHOD,
+                       method_call -> LeftToken(),
+                       method_call -> RightToken(),
+                       name_symbol -> Name());
+    //
+    // Give up. We didn't find it.
+    //
+    else ReportSemError(SemanticError::METHOD_NOT_FOUND,
+                        method_call -> LeftToken(),
+                        method_call -> RightToken(),
+                        name_symbol -> Name(),
+                        type -> ContainingPackage() -> PackageName(),
+                        type -> ExternalName());
+}
+
+
+void Semantic::ReportConstructorNotFound(Ast *ast, TypeSymbol *type)
+{
+    wchar_t *name = type -> Name();
 
     int num_arguments;
     AstExpression **argument;
 
-    AstMethodInvocation *method_call;
-    if ((method_call = ast -> MethodInvocationCast()))
+    AstClassInstanceCreationExpression *class_creation =
+        ast -> ClassInstanceCreationExpressionCast();
+    AstSuperCall *super_call = ast -> SuperCallCast();
+    LexStream::TokenIndex left_tok;
+    LexStream::TokenIndex right_tok;
+
+    if (class_creation)
     {
-        kind = SemanticError::METHOD_NOT_FOUND;
-        num_arguments = method_call -> NumArguments();
+        num_arguments = class_creation -> NumArguments();
         argument = new AstExpression*[num_arguments + 1];
         for (int i = 0; i < num_arguments; i++)
-            argument[i] = method_call -> Argument(i);
+            argument[i] = class_creation -> Argument(i);
+        left_tok = class_creation -> new_token;
+        right_tok = class_creation -> right_parenthesis_token;
+    }
+    else if (super_call)
+    {
+        num_arguments = super_call -> NumArguments();
+        argument = new AstExpression*[num_arguments + 1];
+        for (int i = 0; i < num_arguments; i++)
+            argument[i] = super_call -> Argument(i);
+        left_tok = super_call -> super_token;
+        right_tok = super_call -> right_parenthesis_token;
     }
     else
     {
-        kind = SemanticError::CONSTRUCTOR_NOT_FOUND;
+        AstThisCall *this_call = ast -> ThisCallCast();
+        assert(this_call);
 
-        AstClassInstanceCreationExpression *class_creation;
-        AstSuperCall *super_call;
+        num_arguments = this_call -> NumArguments();
+        argument = new AstExpression*[num_arguments + 1];
+        for (int i = 0; i < num_arguments; i++)
+            argument[i] = this_call -> Argument(i);
+        left_tok = this_call -> this_token;
+        right_tok = this_call -> right_parenthesis_token;
+    }
 
-        if ((class_creation = ast -> ClassInstanceCreationExpressionCast()))
+    MethodSymbol *method;
+    for (method = type -> FindMethodSymbol(type -> Identity());
+         method; method = method -> next_method)
+    {
+        if (! method -> IsTyped())
+            method -> ProcessMethodSignature((Semantic *) this, right_tok);
+
+        if (num_arguments == method -> NumFormalParameters())
         {
-            num_arguments = class_creation -> NumArguments();
-            argument = new AstExpression*[num_arguments + 1];
-            for (int i = 0; i < num_arguments; i++)
-                argument[i] = class_creation -> Argument(i);
+            int i;
+            for (i = 0; i < num_arguments; i++)
+            {
+                if (! CanMethodInvocationConvert(method -> FormalParameter(i) -> Type(), argument[i] -> Type()))
+                    break;
+            }
+            if (i == num_arguments)
+                break;
         }
-        else if ((super_call = ast -> SuperCallCast()))
+    }
+    if (method)
+    {
+        if (method -> declaration)
         {
-            num_arguments = super_call -> NumArguments();
-            argument = new AstExpression*[num_arguments + 1];
-            for (int i = 0; i < num_arguments; i++)
-                argument[i] = super_call -> Argument(i);
+            AstMethodDeclaration *method_declaration =
+                (AstMethodDeclaration *) method -> declaration;
+            FileLocation loc((method -> containing_type ->
+                              semantic_environment -> sem -> lex_stream),
+                             (method_declaration -> method_declarator ->
+                              identifier_token));
+
+            ReportSemError(SemanticError::METHOD_FOUND_FOR_CONSTRUCTOR,
+                           left_tok,
+                           right_tok,
+                           type -> Name(),
+                           loc.location);
         }
         else
         {
-            AstThisCall *this_call = ast -> ThisCallCast();
-
-            assert(this_call);
-
-            num_arguments = this_call -> NumArguments();
-            argument = new AstExpression*[num_arguments + 1];
-            for (int i = 0; i < num_arguments; i++)
-                argument[i] = this_call -> Argument(i);
+            ReportSemError(SemanticError::METHOD_FOUND_FOR_CONSTRUCTOR,
+                           left_tok,
+                           right_tok,
+                           type -> Name(),
+                           method -> containing_type -> file_location -> location);
         }
     }
 
+    // TODO: also check for inaccessible constructors
     int length = wcslen(name);
 
     for (int i = 0; i < num_arguments; i++)
@@ -149,7 +416,8 @@ void Semantic::ReportMethodNotFound(Ast *ast, wchar_t *name)
 
             PackageSymbol *package = arg_type -> ContainingPackage();
             wchar_t *package_name = package -> PackageName();
-            if (package -> PackageNameLength() > 0 && wcscmp(package_name, StringConstant::US__DO) != 0)
+            if (package -> PackageNameLength() > 0 &&
+                wcscmp(package_name, StringConstant::US_DO) != 0)
             {
                 while (*package_name)
                 {
@@ -170,37 +438,52 @@ void Semantic::ReportMethodNotFound(Ast *ast, wchar_t *name)
     *s++ = U_RIGHT_PARENTHESIS;
     *s = U_NULL;
 
-    ReportSemError(kind,
+    ReportSemError(SemanticError::CONSTRUCTOR_NOT_FOUND,
                    ast -> LeftToken(),
                    ast -> RightToken(),
                    header);
 
     delete [] header;
     delete [] argument;
-
-    return;
 }
 
 
 MethodSymbol *Semantic::FindConstructor(TypeSymbol *containing_type, Ast *ast,
-                                        LexStream::TokenIndex left_tok, LexStream::TokenIndex right_tok)
+                                        LexStream::TokenIndex left_tok,
+                                        LexStream::TokenIndex right_tok)
 {
-    Tuple<MethodSymbol *> constructor_set(2);
+    if (containing_type == control.no_type)
+        return NULL;
+
+    Tuple<MethodSymbol *> constructor_set(2); // Stores constructor overloads.
 
     int num_arguments;
     AstExpression **argument;
 
-    AstClassInstanceCreationExpression *class_creation;
-    AstSuperCall *super_call;
+    AstClassInstanceCreationExpression *class_creation =
+        ast -> ClassInstanceCreationExpressionCast();
+    AstSuperCall *super_call = ast -> SuperCallCast();
 
-    if ((class_creation = ast -> ClassInstanceCreationExpressionCast()))
+    if (class_creation)
     {
+        //
+        // If this type is anonymous, we have just generated the constructor,
+        // so we know it is the right one.
+        //
+        if (containing_type -> Anonymous())
+        {
+            if (class_creation -> class_type -> symbol == control.no_type)
+                return NULL;
+            assert(class_creation -> class_type -> symbol -> MethodCast());
+            return (MethodSymbol *) class_creation -> class_type -> symbol;
+        }
+
         num_arguments = class_creation -> NumArguments();
         argument = new AstExpression*[num_arguments + 1];
         for (int i = 0; i < num_arguments; i++)
             argument[i] = class_creation -> Argument(i);
     }
-    else if ((super_call = ast -> SuperCallCast()))
+    else if (super_call)
     {
         num_arguments = super_call -> NumArguments();
         argument = new AstExpression*[num_arguments + 1];
@@ -221,90 +504,53 @@ MethodSymbol *Semantic::FindConstructor(TypeSymbol *containing_type, Ast *ast,
 
     assert(containing_type -> ConstructorMembersProcessed());
 
-    for (MethodSymbol *constructor = containing_type -> FindConstructorSymbol();
-         constructor; constructor = constructor -> next_method)
+    for (MethodSymbol *ctor = containing_type -> FindConstructorSymbol();
+         ctor; ctor = ctor -> next_method)
     {
-        if (! constructor -> IsTyped())
-            constructor -> ProcessMethodSignature((Semantic *) this, right_tok);
+        if (! ctor -> IsTyped())
+            ctor -> ProcessMethodSignature(this, right_tok);
 
-        if (num_arguments == constructor -> NumFormalParameters())
+        if (num_arguments == ctor -> NumFormalParameters() &&
+            ConstructorAccessCheck(ast, ctor))
         {
             int i;
             for (i = 0; i < num_arguments; i++)
             {
-                if (! CanMethodInvocationConvert(constructor -> FormalParameter(i) -> Type(), argument[i] -> Type()))
+                if (! CanMethodInvocationConvert(ctor -> FormalParameter(i) -> Type(),
+                                                 argument[i] -> Type()))
+                {
                     break;
+                }
             }
             if (i == num_arguments)
             {
-                if (MoreSpecific(constructor, constructor_set))
+                if (MoreSpecific(ctor, constructor_set))
                 {
                     constructor_set.Reset();
-                    constructor_set.Next() = constructor;
+                    constructor_set.Next() = ctor;
                 }
-                else if (NoMethodMoreSpecific(constructor_set, constructor))
-                    constructor_set.Next() = constructor;
+                else if (NoMethodMoreSpecific(constructor_set, ctor))
+                    constructor_set.Next() = ctor;
             }
         }
     }
 
     if (constructor_set.Length() == 0)
     {
-        MethodSymbol *method;
-        for (method = containing_type -> FindMethodSymbol(containing_type -> Identity()); method; method = method -> next_method)
-        {
-            if (! method -> IsTyped())
-                method -> ProcessMethodSignature((Semantic *) this, right_tok);
-
-            if (num_arguments == method -> NumFormalParameters())
-            {
-                int i;
-                for (i = 0; i < num_arguments; i++)
-                {
-                    if (! CanMethodInvocationConvert(method -> FormalParameter(i) -> Type(), argument[i] -> Type()))
-                        break;
-                }
-                if (i == num_arguments)
-                    break;
-            }
-        }
-
-        if (method)
-        {
-            if (method -> method_or_constructor_declaration)
-            {
-                AstMethodDeclaration *method_declaration = (AstMethodDeclaration *) method -> method_or_constructor_declaration;
-                FileLocation loc(method -> containing_type -> semantic_environment -> sem -> lex_stream,
-                                 method_declaration -> method_declarator -> identifier_token);
-
-                ReportSemError(SemanticError::METHOD_FOUND_FOR_CONSTRUCTOR,
-                               left_tok,
-                               right_tok,
-                               containing_type -> Name(),
-                               loc.location);
-            }
-            else
-            {
-                ReportSemError(SemanticError::METHOD_FOUND_FOR_CONSTRUCTOR,
-                               left_tok,
-                               right_tok,
-                               containing_type -> Name(),
-                               method -> containing_type -> file_location -> location);
-            }
-        }
-        else if ((! containing_type -> Bad()) || NumErrors() == 0)
-            ReportMethodNotFound(ast, containing_type -> Name());
+        if (! containing_type -> Bad() || NumErrors() == 0)
+            ReportConstructorNotFound(ast, containing_type);
 
         delete [] argument;
-
         return (MethodSymbol *) NULL;
     }
-    else if (constructor_set.Length() > 1)
+    if (constructor_set.Length() > 1)
     {
         ReportSemError(SemanticError::AMBIGUOUS_CONSTRUCTOR_INVOCATION,
                        left_tok,
                        right_tok,
-                       containing_type -> Name());
+                       containing_type -> Name(),
+                       constructor_set[0] -> Header(),
+                       constructor_set[1] -> Header());
     }
 
     delete [] argument;
@@ -322,7 +568,8 @@ MethodSymbol *Semantic::FindConstructor(TypeSymbol *containing_type, Ast *ast,
     }
 
     //
-    // If this constructor came from a class file, make sure that its throws clause has been processed.
+    // If this constructor came from a class file, make sure that its throws
+    // clause has been processed.
     //
     constructor_symbol -> ProcessMethodThrows((Semantic *) this, right_tok);
 
@@ -345,7 +592,8 @@ MethodSymbol *Semantic::FindConstructor(TypeSymbol *containing_type, Ast *ast,
 //
 //
 //
-VariableSymbol *Semantic::FindMisspelledVariableName(TypeSymbol *type, LexStream::TokenIndex identifier_token)
+VariableSymbol *Semantic::FindMisspelledVariableName(TypeSymbol *type,
+                                                     LexStream::TokenIndex identifier_token)
 {
     VariableSymbol *misspelled_variable = NULL;
     int index = 0;
@@ -356,7 +604,7 @@ VariableSymbol *Semantic::FindMisspelledVariableName(TypeSymbol *type, LexStream
         VariableShadowSymbol *variable_shadow = type -> expanded_field_table -> symbol_pool[k];
         VariableSymbol *variable = variable_shadow -> variable_symbol;
         if (! variable -> IsTyped())
-            variable -> ProcessVariableSignature((Semantic *) this, identifier_token);
+            variable -> ProcessVariableSignature(this, identifier_token);
 
         int new_index = Spell::Index(name, variable -> Name());
         if (new_index > index)
@@ -368,15 +616,18 @@ VariableSymbol *Semantic::FindMisspelledVariableName(TypeSymbol *type, LexStream
 
     int length = wcslen(name);
 
-    return ((length == 3 && index >= 5) || (length == 4 && index >= 6) || (length >= 5 && index >= 7)
-                          ? misspelled_variable
-                          : (VariableSymbol *) NULL);
+    return ((length == 3 && index >= 5) ||
+            (length == 4 && index >= 6) ||
+            (length >= 5 && index >= 7)
+            ? misspelled_variable : (VariableSymbol *) NULL);
 }
 
 //
 //
 //
-MethodSymbol *Semantic::FindMisspelledMethodName(TypeSymbol *type, AstMethodInvocation *method_call, NameSymbol *name_symbol)
+MethodSymbol *Semantic::FindMisspelledMethodName(TypeSymbol *type,
+                                                 AstMethodInvocation *method_call,
+                                                 NameSymbol *name_symbol)
 {
     MethodSymbol *misspelled_method = NULL;
     int index = 0;
@@ -390,7 +641,7 @@ MethodSymbol *Semantic::FindMisspelledMethodName(TypeSymbol *type, AstMethodInvo
         MethodSymbol *method = method_shadow -> method_symbol;
 
         if (! method -> IsTyped())
-            method -> ProcessMethodSignature((Semantic *) this, identifier_token);
+            method -> ProcessMethodSignature(this, identifier_token);
 
         if (method_call -> NumArguments() == method -> NumFormalParameters())
         {
@@ -417,45 +668,30 @@ MethodSymbol *Semantic::FindMisspelledMethodName(TypeSymbol *type, AstMethodInvo
          num_args = method_call -> NumArguments();
 
     //
-    // If we have a name of length 2, accept >= 30% probality if the function takes at least one argument
-    // If we have a name of length 3, accept >= 50% probality if the function takes at least one argument
+    // If we have a name of length 2, accept >= 30% probality if the function
+    // takes at least one argument. If we have a name of length 3,
+    // accept >= 50% probality if the function takes at least one argument.
     // Otherwise, if the length of the name is > 3, accept >= 60% probability.
     //
     return (index < 3 ? (MethodSymbol *) NULL
-                      : (length == 2 && (index >= 3 || num_args > 0)) ||
-                        (length == 3 && (index >= 5 || num_args > 0)) ||
-                        (length  > 3 && (index >= 6 || (index >= 5 && num_args > 0)))
-                                     ? misspelled_method
-                                     : (MethodSymbol *) NULL);
+            : ((length == 2 && (index >= 3 || num_args > 0)) ||
+               (length == 3 && (index >= 5 || num_args > 0)) ||
+               (length  > 3 && (index >= 6 || (index >= 5 && num_args > 0))))
+            ? misspelled_method : (MethodSymbol *) NULL);
 }
 
 
 //
-// This method is a mirror image of MemberAccessCheck.
+// Search the type in question for a method. Note that name_symbol is an
+// optional argument. If it was not passed to this function then its default
+// value is NULL (see semantic.h) and we assume that the name to search for
+// is the name specified in the field_access of the method_call.
 //
-bool Semantic::IsMethodAccessible(AstFieldAccess *field_access, TypeSymbol *base_type, MethodSymbol *method_symbol)
+MethodSymbol *Semantic::FindMethodInType(TypeSymbol *type,
+                                         AstMethodInvocation *method_call,
+                                         NameSymbol *name_symbol)
 {
-    TypeSymbol *this_type = ThisType(),
-               *containing_type = method_symbol -> containing_type;
-
-    return (this_type -> outermost_type == containing_type -> outermost_type) ||
-            method_symbol -> ACC_PUBLIC() ||
-            ((! method_symbol -> ACC_PRIVATE()) && containing_type -> ContainingPackage() == this_package) ||
-            (method_symbol -> ACC_PROTECTED() && (field_access -> base -> IsSuperExpression() ||
-                                                  (this_type -> HasProtectedAccessTo(containing_type) &&
-                                                   (base_type -> IsSubclass(this_type) || base_type -> IsOwner(this_type)))));
-}
-
-
-//
-// Search the type in question for a method. Note that name_symbol is an optional argument.
-// If it was not passed to this function then its default value is NULL (see semantic.h) and
-// we assume that the name to search for is the name specified in the field_access of the
-// method_call.
-//
-MethodSymbol *Semantic::FindMethodInType(TypeSymbol *type, AstMethodInvocation *method_call, NameSymbol *name_symbol)
-{
-    Tuple<MethodSymbol *> method_set(2);
+    Tuple<MethodSymbol *> method_set(2); // Stores method overloads.
     AstFieldAccess *field_access = method_call -> method -> FieldAccessCast();
     if (! name_symbol)
         name_symbol = lex_stream -> NameSymbol(field_access -> identifier_token);
@@ -463,159 +699,47 @@ MethodSymbol *Semantic::FindMethodInType(TypeSymbol *type, AstMethodInvocation *
     if (! type -> expanded_method_table)
         ComputeMethodsClosure(type, field_access -> identifier_token);
 
-//
-// TODO: Confirm that this is no longer the case as of javac 1.2
-//
-/*
     //
-    // First look for the method in the "type". If it is not found, look for
-    // it in the superclasses in the proper order. It is possible that the
-    // method in question is a private field that is contained in the body
-    // of the type that we are currently processing (this_type()), in which
-    // case it is accessible even though it is not directly inherited by "type".
+    // Here, we ignore any conflicts in a method declaration. If there are
+    // conflicts, they are necessarily abstract methods inherited from
+    // interfaces, so either the original method implements them all, or it
+    // is also abstract and we are free to choose which one to use.
     //
-    for (TypeSymbol *type_symbol = type; type_symbol && method_set.Length() == 0; type_symbol = type_symbol -> super)
+    for (MethodShadowSymbol *method_shadow = type -> expanded_method_table -> FindMethodShadowSymbol(name_symbol);
+         method_shadow; method_shadow = method_shadow -> next_method)
     {
-*/
-        TypeSymbol *type_symbol = type;
+        MethodSymbol *method = method_shadow -> method_symbol;
 
-        for (MethodShadowSymbol *method_shadow = type_symbol -> expanded_method_table -> FindMethodShadowSymbol(name_symbol);
-             method_shadow; method_shadow = method_shadow -> next_method)
+        if (! method -> IsTyped())
+            method -> ProcessMethodSignature(this,
+                                             field_access -> identifier_token);
+
+        if (method_call -> NumArguments() == method -> NumFormalParameters() &&
+            MemberAccessCheck(field_access, type, method))
         {
-            MethodSymbol *method = method_shadow -> method_symbol;
-
-            if (! method -> IsTyped())
-                method -> ProcessMethodSignature((Semantic *) this, field_access -> identifier_token);
-
-            if (method_call -> NumArguments() == method -> NumFormalParameters() &&
-                IsMethodAccessible(field_access, type_symbol, method))
+            int i;
+            for (i = 0; i < method_call -> NumArguments(); i++)
             {
-                int i;
-                for (i = 0; i < method_call -> NumArguments(); i++)
+                AstExpression *expr = method_call -> Argument(i);
+                if (! CanMethodInvocationConvert(method -> FormalParameter(i) -> Type(), expr -> Type()))
+                    break;
+            }
+            if (i == method_call -> NumArguments())
+            {
+                if (MoreSpecific(method, method_set))
                 {
-                    AstExpression *expr = method_call -> Argument(i);
-                    if (! CanMethodInvocationConvert(method -> FormalParameter(i) -> Type(), expr -> Type()))
-                        break;
+                    method_set.Reset();
+                    method_set.Next() = method;
                 }
-                if (i == method_call -> NumArguments())
-                {
-                    if (MoreSpecific(method, method_set))
-                    {
-                        method_set.Reset();
-                        method_set.Next() = method;
-                    }
-                    else if (NoMethodMoreSpecific(method_set, method))
-                        method_set.Next() = method;
-                }
+                else if (NoMethodMoreSpecific(method_set, method))
+                    method_set.Next() = method;
             }
         }
-
-/*
-See comment above...
     }
-*/
 
     if (method_set.Length() == 0)
     {
-        if (! type -> expanded_field_table)
-            ComputeFieldsClosure(type, field_access -> identifier_token);
-
-        VariableShadowSymbol *variable_shadow_symbol = type -> expanded_field_table -> FindVariableShadowSymbol(name_symbol);
-
-        if (variable_shadow_symbol)
-        {
-            VariableSymbol *variable_symbol = variable_shadow_symbol -> variable_symbol;
-            TypeSymbol *enclosing_type = variable_symbol -> owner -> TypeCast();
-
-            assert(enclosing_type);
-
-            ReportSemError(SemanticError::FIELD_NOT_METHOD,
-                           method_call -> LeftToken(),
-                           method_call -> RightToken(),
-                           variable_symbol -> Name(),
-                           enclosing_type -> ContainingPackage() -> PackageName(),
-                           enclosing_type -> ExternalName());
-        }
-        else
-        {
-            TypeSymbol *super_type;
-            MethodShadowSymbol *method_shadow;
-
-            //
-            // Check whether or not the method we are looking for is not an inaccessible private method.
-            //
-            for (super_type = type; super_type; super_type = super_type -> super)
-            {
-                for (method_shadow = super_type -> expanded_method_table -> FindMethodShadowSymbol(name_symbol);
-                     method_shadow; method_shadow = method_shadow -> next_method)
-                {
-                    MethodSymbol *method = method_shadow -> method_symbol;
-                    if (! method -> IsTyped())
-                        method -> ProcessMethodSignature((Semantic *) this, field_access -> identifier_token);
-
-                    if (method_call -> NumArguments() == method -> NumFormalParameters())
-                    {
-                        int i;
-                        for (i = 0; i < method_call -> NumArguments(); i++)
-                        {
-                            AstExpression *expr = method_call -> Argument(i);
-                            if (! CanMethodInvocationConvert(method -> FormalParameter(i) -> Type(), expr -> Type()))
-                                break;
-                        }
-                        if (i == method_call -> NumArguments()) // found a match ?
-                            break;
-                    }
-                }
-
-                if (method_shadow) // found a match ?
-                    break;
-            }
-
-            if (super_type)
-            {
-                ReportSemError((method_shadow -> method_symbol -> ACC_PRIVATE()
-                                               ? SemanticError::METHOD_WITH_PRIVATE_ACCESS_NOT_ACCESSIBLE
-                                               : SemanticError::METHOD_WITH_DEFAULT_ACCESS_NOT_ACCESSIBLE),
-                               method_call -> LeftToken(),
-                               method_call -> RightToken(),
-                               method_shadow -> method_symbol -> Header(),
-                               super_type -> ContainingPackage() -> PackageName(),
-                               super_type -> ExternalName(),
-                               ThisType() -> ContainingPackage() -> PackageName(),
-                               ThisType() -> ExternalName());
-            }
-            else
-            {
-                if (FindNestedType(type, field_access -> identifier_token))
-                {
-                    ReportSemError(SemanticError::TYPE_NOT_METHOD,
-                                   field_access -> identifier_token,
-                                   field_access -> identifier_token,
-                                   name_symbol -> Name());
-                }
-                else if (type -> expanded_method_table -> FindMethodShadowSymbol(name_symbol))
-                    ReportMethodNotFound(method_call, name_symbol -> Name());
-                else
-                {
-                    MethodSymbol *method = FindMisspelledMethodName(type, method_call, name_symbol);
-                    if (method)
-                         ReportSemError(SemanticError::METHOD_NAME_MISSPELLED,
-                                        method_call -> LeftToken(),
-                                        method_call -> RightToken(),
-                                        name_symbol -> Name(),
-                                        type -> ContainingPackage() -> PackageName(),
-                                        type -> ExternalName(),
-                                        method -> Name());
-                    else ReportSemError(SemanticError::METHOD_NAME_NOT_FOUND_IN_TYPE,
-                                        method_call -> LeftToken(),
-                                        method_call -> RightToken(),
-                                        name_symbol -> Name(),
-                                        type -> ContainingPackage() -> PackageName(),
-                                        type -> ExternalName());
-                }
-            }
-        }
-
+        ReportMethodNotFound(method_call, type);
         return (MethodSymbol *) NULL;
     }
     else if (method_set.Length() > 1)
@@ -644,9 +768,10 @@ See comment above...
     }
 
     //
-    // If this method came from a class file, make sure that its throws clause has been processed.
+    // If this method came from a class file, make sure that its throws clause
+    // has been processed.
     //
-    method -> ProcessMethodThrows((Semantic *) this, field_access -> identifier_token);
+    method -> ProcessMethodThrows(this, field_access -> identifier_token);
 
     if (control.option.deprecation &&
         method -> IsDeprecated() && method -> containing_type -> outermost_type != ThisType() -> outermost_type)
@@ -663,10 +788,10 @@ See comment above...
 }
 
 
-void Semantic::SearchForMethodInEnvironment(Tuple<MethodSymbol *> &methods_found,
-                                            SemanticEnvironment *&where_found,
-                                            SemanticEnvironment *stack,
-                                            AstMethodInvocation *method_call)
+void Semantic::FindMethodInEnvironment(Tuple<MethodSymbol *> &methods_found,
+                                       SemanticEnvironment *&where_found,
+                                       SemanticEnvironment *stack,
+                                       AstMethodInvocation *method_call)
 {
     AstSimpleName *simple_name = method_call -> method -> SimpleNameCast();
     NameSymbol *name_symbol = lex_stream -> NameSymbol(simple_name -> identifier_token);
@@ -681,11 +806,13 @@ void Semantic::SearchForMethodInEnvironment(Tuple<MethodSymbol *> &methods_found
         where_found = NULL;
 
         //
-        // If this environment contained a method with the right name, the search stops:
+        // If this environment contained a method with the right name, the
+        // search stops:
         //
-        //    "Class scoping does not influence overloading: if the inner class has one
-        //     print method, the simple method name 'print' refers to that method, not
-        //     any of the ten 'print' methods in the enclosing class."
+        //    "Class scoping does not influence overloading: if the inner
+        //     class has one print method, the simple method name 'print'
+        //     refers to that method, not any of the ten 'print' methods in
+        //     the enclosing class."
         //
         MethodShadowSymbol *method_shadow = type -> expanded_method_table -> FindMethodShadowSymbol(name_symbol);
         if (method_shadow)
@@ -695,11 +822,12 @@ void Semantic::SearchForMethodInEnvironment(Tuple<MethodSymbol *> &methods_found
                 MethodSymbol *method = method_shadow -> method_symbol;
 
                 if (! method -> IsTyped())
-                    method -> ProcessMethodSignature((Semantic *) this, simple_name -> identifier_token);
+                    method -> ProcessMethodSignature(this,
+                                                     simple_name -> identifier_token);
 
                 //
-                // Since type -> IsOwner(this_type()), i.e., type encloses this_type(),
-                // method is accessible, even if it is private.
+                // Since type -> IsOwner(this_type()), i.e., type encloses
+                // this_type(), method is accessible, even if it is private.
                 //
                 if (method_call -> NumArguments() == method -> NumFormalParameters())
                 {
@@ -730,8 +858,6 @@ void Semantic::SearchForMethodInEnvironment(Tuple<MethodSymbol *> &methods_found
             break;
         }
     }
-
-    return;
 }
 
 
@@ -740,7 +866,7 @@ MethodSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&where_foun
                                                 AstMethodInvocation *method_call)
 {
     Tuple<MethodSymbol *> methods_found(2);
-    SearchForMethodInEnvironment(methods_found, where_found, stack, method_call);
+    FindMethodInEnvironment(methods_found, where_found, stack, method_call);
 
     MethodSymbol *method_symbol = (methods_found.Length() > 0 ? methods_found[0] : (MethodSymbol *) NULL);
     if (method_symbol)
@@ -775,9 +901,11 @@ MethodSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&where_foun
                 Tuple<MethodSymbol *> others(2);
                 SemanticEnvironment *found_other,
                                     *previous_env = where_found -> previous;
-                SearchForMethodInEnvironment(others, found_other, previous_env, method_call);
+                FindMethodInEnvironment(others, found_other, previous_env,
+                                        method_call);
 
-                if (others.Length() > 0 && where_found -> Type() -> CanAccess(found_other -> Type()))
+                if (others.Length() > 0 &&
+                    where_found -> Type() -> HasEnclosingInstance(found_other -> Type()))
                 {
                     for (int i = 0; i < others.Length();  i++)
                     {
@@ -805,14 +933,15 @@ MethodSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&where_foun
         bool symbol_found = false;
 
         //
-        // First, search for a perfect visible method match in an enclosing class.
+        // First, search for a perfect visible method match in an enclosing
+        // class.
         //
         assert(stack);
         for (SemanticEnvironment *env = stack -> previous; env; env = env -> previous)
         {
             Tuple<MethodSymbol *> others(2);
             SemanticEnvironment *found_other;
-            SearchForMethodInEnvironment(others, found_other, env, method_call);
+            FindMethodInEnvironment(others, found_other, env, method_call);
 
             if (others.Length() > 0)
             {
@@ -829,8 +958,8 @@ MethodSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&where_foun
         }
 
         //
-        // If a method in an enclosing class was not found. Search for a similar visible field
-        // or a private method with the name.
+        // If a method in an enclosing class was not found. Search for a
+        // similar visible field or a private method with the name.
         //
         for (SemanticEnvironment *env2 = stack; env2 && (! symbol_found); env2 = env2 -> previous)
         {
@@ -868,7 +997,7 @@ MethodSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&where_foun
                     {
                         MethodSymbol *method = method_shadow -> method_symbol;
                         if (! method -> IsTyped())
-                            method -> ProcessMethodSignature((Semantic *) this, simple_name -> identifier_token);
+                            method -> ProcessMethodSignature(this, simple_name -> identifier_token);
 
                         if (method_call -> NumArguments() == method -> NumFormalParameters())
                         {
@@ -890,16 +1019,14 @@ MethodSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&where_foun
 
                 if (super_type)
                 {
-                    ReportSemError((method_shadow -> method_symbol -> ACC_PRIVATE()
-                                                   ? SemanticError::METHOD_WITH_PRIVATE_ACCESS_NOT_ACCESSIBLE
-                                                   : SemanticError::METHOD_WITH_DEFAULT_ACCESS_NOT_ACCESSIBLE),
+                    ReportSemError(SemanticError::METHOD_NOT_ACCESSIBLE,
                                    method_call -> LeftToken(),
                                    method_call -> RightToken(),
                                    name_symbol -> Name(),
                                    super_type -> ContainingPackage() -> PackageName(),
                                    super_type -> ExternalName(),
-                                   type -> ContainingPackage() -> PackageName(),
-                                   type -> ExternalName());
+                                   method_shadow -> method_symbol -> AccessString());
+                    assert(! method_shadow -> method_symbol -> ACC_PROTECTED()); // protected access in subclass is always possible by simple name
                     symbol_found = true;
                     break;
                 }
@@ -907,8 +1034,8 @@ MethodSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&where_foun
         }
 
         //
-        // Finally, if we did not find a method or field name that matches, look for a type
-        // with that name.
+        // Finally, if we did not find a method or field name that matches,
+        // look for a type with that name.
         //
         if (! symbol_found)
         {
@@ -922,7 +1049,7 @@ MethodSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&where_foun
                                name_symbol -> Name());
             }
             else if (this_type -> expanded_method_table -> FindMethodShadowSymbol(name_symbol))
-                ReportMethodNotFound(method_call, name_symbol -> Name());
+                ReportMethodNotFound(method_call, this_type);
             else
             {
                 MethodSymbol *method = FindMisspelledMethodName(this_type, method_call, name_symbol);
@@ -934,7 +1061,7 @@ MethodSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&where_foun
                                     this_type -> ContainingPackage() -> PackageName(),
                                     this_type -> ExternalName(),
                                     method -> Name());
-                else ReportSemError(SemanticError::METHOD_NAME_NOT_FOUND_IN_TYPE,
+                else ReportSemError(SemanticError::METHOD_NOT_FOUND,
                                     method_call -> LeftToken(),
                                     method_call -> RightToken(),
                                     name_symbol -> Name(),
@@ -945,11 +1072,12 @@ MethodSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&where_foun
     }
 
     //
-    // If this method came from a class file, make sure that its throws clause has been processed.
+    // If this method came from a class file, make sure that its throws clause
+    // has been processed.
     //
     if (method_symbol)
     {
-        method_symbol -> ProcessMethodThrows((Semantic *) this, method_call -> method -> RightToken());
+        method_symbol -> ProcessMethodThrows(this, method_call -> method -> RightToken());
 
         if (control.option.deprecation &&
             method_symbol -> IsDeprecated() && method_symbol -> containing_type -> outermost_type != ThisType() -> outermost_type)
@@ -969,146 +1097,225 @@ MethodSymbol *Semantic::FindMethodInEnvironment(SemanticEnvironment *&where_foun
 
 
 //
-// Search the type in question for a variable. Note that name_symbol is an optional argument.
-// If it was not passed to this function then its default value is NULL (see semantic.h) and
-// we assume that the name to search for is the last identifier specified in the field_access.
+// Search the type in question for a variable. Note that name_symbol is an
+// optional argument. If it was not passed to this function then its default
+// value is NULL (see semantic.h) and we assume that the name to search for
+// is the last identifier specified in the field_access. Error reporting if
+// the field is not found is up to the callee, since for qualified names,
+// the name may successfully resolve to a nested type.
 //
-inline VariableSymbol *Semantic::FindVariableInType(TypeSymbol *type, AstFieldAccess *field_access, NameSymbol *name_symbol)
+VariableSymbol *Semantic::FindVariableInType(TypeSymbol *type,
+                                             AstFieldAccess *field_access,
+                                             NameSymbol *name_symbol)
 {
+    Tuple<VariableSymbol *> variable_set(2); // Stores variable conflicts.
+    VariableSymbol *variable;
     if (! name_symbol)
         name_symbol = lex_stream -> NameSymbol(field_access -> identifier_token);
 
     if (! type -> expanded_field_table)
         ComputeFieldsClosure(type, field_access -> identifier_token);
 
-//
-// TODO: Confirm that this is no longer the case as of javac 1.2
-//
-/*
     //
-    // First look for the variable in the "type". If it is not found, look for
-    // it in the superclasses in the proper order. It is possible that the
-    // field in question is a private field that is contained in the body
-    // of the type that we are currently processing (this_type()), in which case
-    // it is accessible even though it is not directly inherited by "type".
+    // Find the accessible fields with the correct name in the type.
     //
-    VariableShadowSymbol *variable_shadow_symbol;
-    for (variable_shadow_symbol = NULL; (! variable_shadow_symbol) && type; type = type -> super)
-        variable_shadow_symbol = type -> expanded_field_table -> FindVariableShadowSymbol(name_symbol);
-*/
+    VariableShadowSymbol *variable_shadow = type -> expanded_field_table -> FindVariableShadowSymbol(name_symbol);
 
-    VariableShadowSymbol *variable_shadow_symbol = type -> expanded_field_table -> FindVariableShadowSymbol(name_symbol);
-
-    //
-    // Recall that even an inaccessible member x of a super class (or interface) S,
-    // in addition to not been inherited by a subclass, hides all other occurrences of x that may
-    // appear in a super class (or super interface) of S (see 8.3).
-    //
-    if (variable_shadow_symbol)
+    if (variable_shadow)
     {
-        VariableSymbol *variable_symbol = variable_shadow_symbol -> variable_symbol;
+        variable = variable_shadow -> variable_symbol;
 
-        for (int i = 0; i < variable_shadow_symbol -> NumConflicts(); i++)
+        if (! variable -> IsTyped())
+            variable -> ProcessVariableSignature(this, field_access -> identifier_token);
+
+        if (MemberAccessCheck(field_access, type, variable))
+            variable_set.Next() = variable;
+
+        for (int i = 0; i < variable_shadow -> NumConflicts(); i++)
         {
-            ReportSemError(SemanticError::AMBIGUOUS_FIELD,
-                           field_access -> LeftToken(),
-                           field_access -> RightToken(),
-                           name_symbol -> Name(),
-                           variable_symbol -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
-                           variable_symbol -> owner -> TypeCast() -> ExternalName(),
-                           variable_shadow_symbol -> Conflict(i) -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
-                           variable_shadow_symbol -> Conflict(i) -> owner -> TypeCast() -> ExternalName());
+            VariableSymbol *variable = variable_shadow -> Conflict(i);
+
+            if (! variable -> IsTyped())
+                variable -> ProcessVariableSignature(this, field_access -> identifier_token);
+
+            if (MemberAccessCheck(field_access, type, variable))
+                variable_set.Next() = variable;
         }
-
-        if (variable_symbol -> IsSynthetic())
-        {
-            ReportSemError(SemanticError::SYNTHETIC_VARIABLE_ACCESS,
-                           field_access -> LeftToken(),
-                           field_access -> RightToken(),
-                           variable_symbol -> Name(),
-                           variable_symbol -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
-                           variable_symbol -> owner -> TypeCast() -> ExternalName());
-        }
-
-        if (control.option.deprecation &&
-            variable_symbol -> IsDeprecated() &&
-            variable_symbol -> owner -> TypeCast() -> outermost_type != ThisType() -> outermost_type)
-        {
-            ReportSemError(SemanticError::DEPRECATED_FIELD,
-                           field_access -> LeftToken(),
-                           field_access -> RightToken(),
-                           variable_symbol -> Name(),
-                           variable_symbol -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
-                           variable_symbol -> owner -> TypeCast() -> ExternalName());
-        }
-
-        if (! variable_symbol -> IsTyped())
-            variable_symbol -> ProcessVariableSignature((Semantic *) this, field_access -> identifier_token);
-
-        return variable_symbol;
     }
 
-    return (VariableSymbol *) NULL;
-}
-
-
-void Semantic::ReportAccessedFieldNotFound(AstFieldAccess *field_access, TypeSymbol *type)
-{
-    NameSymbol *name_symbol = lex_stream -> NameSymbol(field_access -> identifier_token);
-    VariableShadowSymbol *variable_shadow_symbol;
-
-    if (! type -> expanded_field_table)
-        ComputeFieldsClosure(type, field_access -> base -> LeftToken());
-    TypeSymbol *super_type;
-    for (super_type = type -> super; super_type; super_type = super_type -> super)
+    if (variable_set.Length() == 0)
     {
-        variable_shadow_symbol = super_type -> expanded_field_table -> FindVariableShadowSymbol(name_symbol);
-        if (variable_shadow_symbol)
-            break;
+        return (VariableSymbol *) NULL;
     }
-
-    if (super_type)
+    else if (variable_set.Length() > 1)
     {
-        VariableSymbol *variable_symbol = variable_shadow_symbol -> variable_symbol;
-        ReportSemError((variable_symbol -> ACC_PRIVATE()
-                                         ? SemanticError::FIELD_WITH_PRIVATE_ACCESS_NOT_ACCESSIBLE
-                                         : SemanticError::FIELD_WITH_DEFAULT_ACCESS_NOT_ACCESSIBLE),
+        ReportSemError(SemanticError::AMBIGUOUS_FIELD,
                        field_access -> LeftToken(),
                        field_access -> RightToken(),
-                       variable_symbol -> Name(),
-                       super_type -> ContainingPackage() -> PackageName(),
-                       super_type -> ExternalName(),
-                       type -> ContainingPackage() -> PackageName(),
-                       type -> ExternalName());
-    }
-    else
-    {
-        VariableSymbol *variable = FindMisspelledVariableName(type, field_access -> identifier_token);
-        if (variable)
-             ReportSemError(SemanticError::FIELD_NAME_MISSPELLED,
-                            field_access -> LeftToken(),
-                            field_access -> RightToken(),
-                            name_symbol -> Name(),
-                            type -> ContainingPackage() -> PackageName(),
-                            type -> ExternalName(),
-                            variable -> Name());
-        else ReportSemError(SemanticError::FIELD_NOT_FOUND,
-                            field_access -> LeftToken(),
-                            field_access -> RightToken(),
-                            lex_stream -> NameString(field_access -> identifier_token),
-                            type -> ContainingPackage() -> PackageName(),
-                            type -> ExternalName());
+                       name_symbol -> Name(),
+                       variable_set[0] -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variable_set[0] -> ContainingType() -> ExternalName(),
+                       variable_set[1] -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variable_set[1] -> ContainingType() -> ExternalName());
     }
 
-    return;
+    variable = variable_set[0];
+    if (variable -> IsSynthetic())
+    {
+        ReportSemError(SemanticError::SYNTHETIC_VARIABLE_ACCESS,
+                       field_access -> LeftToken(),
+                       field_access -> RightToken(),
+                       variable -> Name(),
+                       variable -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variable -> ContainingType() -> ExternalName());
+    }
+
+    if (control.option.deprecation &&
+        variable -> IsDeprecated() &&
+        variable -> ContainingType() -> outermost_type != type -> outermost_type)
+    {
+        ReportSemError(SemanticError::DEPRECATED_FIELD,
+                       field_access -> LeftToken(),
+                       field_access -> RightToken(),
+                       variable -> Name(),
+                       variable -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variable -> ContainingType() -> ExternalName());
+    }
+
+    return variable;
 }
 
 
-void Semantic::SearchForVariableInEnvironment(Tuple<VariableSymbol *> &variables_found,
-                                              SemanticEnvironment *&where_found,
-                                              SemanticEnvironment *stack,
-                                              NameSymbol *name_symbol,
-                                              LexStream::TokenIndex identifier_token)
+//
+// Called when no accessible variable was found. The access must be one of
+// AstFieldAccess or AstSimpleName. This checks in order: an accessible no-arg
+// method by the same name, an inaccessible field in a superclass, a
+// misspelled field name, a type by the same name, and finally the field was
+// not found.
+//
+void Semantic::ReportVariableNotFound(AstExpression *access, TypeSymbol *type)
+{
+    AstFieldAccess *field_access = access -> FieldAccessCast();
+    AstSimpleName *simple_name = access -> SimpleNameCast();
+    assert(field_access || simple_name);
+
+    LexStream::TokenIndex id_token = field_access ? field_access -> identifier_token : simple_name -> identifier_token;
+    NameSymbol *name_symbol = lex_stream -> NameSymbol(id_token);
+    VariableShadowSymbol *variable_shadow;
+
+    if (! type -> expanded_field_table)
+        ComputeFieldsClosure(type, id_token);
+    if (! type -> expanded_method_table)
+        ComputeMethodsClosure(type, id_token);
+
+    //
+    // Search for an accessible no-arg method of the same name.
+    //
+    MethodShadowSymbol *method_shadow;
+    for (method_shadow = type -> expanded_method_table -> FindMethodShadowSymbol(name_symbol);
+         method_shadow; method_shadow = method_shadow -> next_method)
+    {
+        MethodSymbol *method = method_shadow -> method_symbol;
+
+        //
+        // Make sure that method has been fully prepared.
+        //
+        if (! method -> IsTyped())
+            method -> ProcessMethodSignature(this, id_token);
+
+        if (method -> NumFormalParameters() == 0 &&
+            MemberAccessCheck((AstFieldAccess *) NULL, type, method))
+        {
+            ReportSemError(SemanticError::METHOD_NOT_FIELD,
+                           id_token,
+                           id_token,
+                           name_symbol -> Name(),
+                           method -> containing_type -> ContainingPackage() -> PackageName(),
+                           method -> containing_type -> ExternalName());
+            return;
+        }
+    }
+
+    //
+    // Check if the field is inaccessible.
+    //
+    for (TypeSymbol *super_type = type;
+         super_type; super_type = super_type -> super)
+    {
+        variable_shadow = super_type -> expanded_field_table -> FindVariableShadowSymbol(name_symbol);
+        if (variable_shadow)
+        {
+            VariableSymbol *variable = variable_shadow -> variable_symbol;
+            TypeSymbol *containing_type = variable -> owner -> TypeCast();
+
+            //
+            // A protected instance field in the superclass is inaccessible if
+            // the base expression is the wrong type.
+            //
+            if (variable -> ACC_PROTECTED() &&
+                ! variable -> ACC_STATIC() &&
+                ThisType() -> HasProtectedAccessTo(containing_type))
+            {
+                ReportSemError(SemanticError::PROTECTED_INSTANCE_FIELD_NOT_ACCESSIBLE,
+                               id_token,
+                               id_token,
+                               name_symbol -> Name(),
+                               containing_type -> ContainingPackage() -> PackageName(),
+                               containing_type -> ExternalName(),
+                               ThisType() -> ContainingPackage() -> PackageName(),
+                               ThisType() -> ExternalName());
+            }
+            else
+            {
+                ReportSemError(SemanticError::FIELD_NOT_ACCESSIBLE,
+                               id_token,
+                               id_token,
+                               name_symbol -> Name(),
+                               containing_type -> ContainingPackage() -> PackageName(),
+                               containing_type -> ExternalName(),
+                               variable -> AccessString());
+            }
+            return;
+        }
+    }
+
+    //
+    // Search for a misspelled field name.
+    //
+    VariableSymbol *variable = FindMisspelledVariableName(type, id_token);
+    if (variable)
+        ReportSemError(SemanticError::FIELD_NAME_MISSPELLED,
+                       id_token,
+                       id_token,
+                       name_symbol -> Name(),
+                       type -> ContainingPackage() -> PackageName(),
+                       type -> ExternalName(),
+                       variable -> Name());
+    //
+    // Search for a type of the same name.
+    //
+    else if (FindType(id_token))
+        ReportSemError(SemanticError::TYPE_NOT_FIELD,
+                       id_token,
+                       id_token,
+                       name_symbol -> Name());
+    //
+    // Give up. We didn't find it.
+    //
+    else ReportSemError(SemanticError::FIELD_NOT_FOUND,
+                        id_token,
+                        id_token,
+                        name_symbol -> Name(),
+                        type -> ContainingPackage() -> PackageName(),
+                        type -> ExternalName());
+}
+
+
+void Semantic::FindVariableInEnvironment(Tuple<VariableSymbol *> &variables_found,
+                                         SemanticEnvironment *&where_found,
+                                         SemanticEnvironment *stack,
+                                         NameSymbol *name_symbol,
+                                         LexStream::TokenIndex identifier_token)
 {
     variables_found.Reset();
     where_found = (SemanticEnvironment *) NULL;
@@ -1126,39 +1333,43 @@ void Semantic::SearchForVariableInEnvironment(Tuple<VariableSymbol *> &variables
         TypeSymbol *type = env -> Type();
         if (! type -> expanded_field_table)
             ComputeFieldsClosure(type, identifier_token);
-        VariableShadowSymbol *variable_shadow_symbol = type -> expanded_field_table -> FindVariableShadowSymbol(name_symbol);
-        if (variable_shadow_symbol)
+        VariableShadowSymbol *variable_shadow = type -> expanded_field_table -> FindVariableShadowSymbol(name_symbol);
+        if (variable_shadow)
         {
             //
-            // Since type -> IsOwner(this_type()), i.e., type encloses this_type(),
-            // variable_symbol is accessible, even if it is private.
+            // Since type -> IsOwner(this_type()), i.e., type encloses
+            // this_type(), variable_symbol is accessible, even if it is
+            // private.
             //
-            variables_found.Next() = variable_shadow_symbol -> variable_symbol;
+            variables_found.Next() = variable_shadow -> variable_symbol;
 
             //
-            // Recall that even an inaccessible member x of a super class (or interface) S,
-            // in addition to not been inherited by a subclass, hides all other occurrences of x that may
-            // appear in a super class (or super interface) of S (see 8.3).
+            // Recall that even an inaccessible member x of a super class (or
+            // interface) S, in addition to not been inherited by a subclass,
+            // hides all other occurrences of x that may appear in a super
+            // class (or super interface) of S (see 8.3).
             //
-            for (int i = 0; i < variable_shadow_symbol -> NumConflicts(); i++)
-                variables_found.Next() = variable_shadow_symbol -> Conflict(i);
+            for (int i = 0; i < variable_shadow -> NumConflicts(); i++)
+                variables_found.Next() = variable_shadow -> Conflict(i);
             where_found = env;
             break;
         }
     }
-
-    return;
 }
 
 
 VariableSymbol *Semantic::FindVariableInEnvironment(SemanticEnvironment *&where_found,
-                                                    SemanticEnvironment *stack, LexStream::TokenIndex identifier_token)
+                                                    SemanticEnvironment *stack,
+                                                    LexStream::TokenIndex identifier_token)
 {
     Tuple<VariableSymbol *> variables_found(2);
     NameSymbol *name_symbol = lex_stream -> NameSymbol(identifier_token);
-    SearchForVariableInEnvironment(variables_found, where_found, stack, name_symbol, identifier_token);
+    FindVariableInEnvironment(variables_found, where_found, stack,
+                              name_symbol, identifier_token);
 
-    VariableSymbol *variable_symbol = (VariableSymbol *) (variables_found.Length() > 0 ? variables_found[0] : NULL);
+    VariableSymbol *variable_symbol =
+        (VariableSymbol *) (variables_found.Length() > 0
+                            ? variables_found[0] : NULL);
 
     if (variable_symbol)
     {
@@ -1170,40 +1381,42 @@ VariableSymbol *Semantic::FindVariableInEnvironment(SemanticEnvironment *&where_
 
                 if (! variable_symbol -> ACC_FINAL())
                 {
-                    MethodSymbol *method = variable_symbol -> owner -> MethodCast();
+                    MethodSymbol *method =
+                        variable_symbol -> owner -> MethodCast();
 
+                    //
+                    // TODO: What if the method is a constructor ?
+                    // if (method -> Identity() != control.init_symbol &&
+                    //     method -> Identity() != control.block_init_symbol &&
+                    //     method -> Identity() != control.clinit_symbol)
+                    //
                     ReportSemError(SemanticError::INNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE,
                                    identifier_token,
                                    identifier_token,
                                    type -> ContainingPackage() -> PackageName(),
                                    type -> ExternalName(),
                                    lex_stream -> NameString(identifier_token),
-                                   //
-                                   // TODO: What if the method is a constructor ?
-                                   //        if (method -> Identity() != control.init_symbol &&
-                                   //            method -> Identity() != control.block_init_symbol &&
-                                   //            method -> Identity() != control.clinit_symbol)
-                                   //
-                                   //
-                                   method -> Name());
+                                   method -> ExternalName());
                 }
-
-                //
-                // Insert a local shadow in the type. If we are currently processing a
-                // constructor, the local shadow would have been passed to it as an argument.
-                // If so, use the local argument; otherwise, use the local shadow.
-                //
-                VariableSymbol *local_shadow = type -> FindOrInsertLocalShadow(variable_symbol),
-                               *local_symbol = stack -> symbol_table.FindVariableSymbol(local_shadow -> Identity());
-                variable_symbol = (local_symbol ? local_symbol : local_shadow);
-
-                assert(variable_symbol);
-
-                where_found = stack;
+                else if (! variable_symbol -> initial_value)
+                {
+                    //
+                    // The variable is not constant, so we need to insert a
+                    // variable shadow in the outermost local class within the
+                    // scope of the variable, and use that shadow instead.
+                    //
+                    variable_symbol = FindLocalVariable(variable_symbol,
+                                                        stack -> Type());
+                    TypeSymbol *shadow_owner =
+                        variable_symbol -> ContainingType();
+                    assert(shadow_owner);
+                    where_found = shadow_owner -> semantic_environment;
+                }
             }
         }
-        else if (variable_symbol -> owner != where_found -> Type())  // is symbol an inherited field?
+        else if (variable_symbol -> owner != where_found -> Type())
         {
+            // is symbol an inherited field?
             TypeSymbol *type = (TypeSymbol *) variable_symbol -> owner;
 
             if (variable_symbol -> IsSynthetic())
@@ -1220,15 +1433,19 @@ VariableSymbol *Semantic::FindVariableInEnvironment(SemanticEnvironment *&where_
                 Tuple<VariableSymbol *> others(2);
                 SemanticEnvironment *found_other,
                                     *previous_env = where_found -> previous;
-                SearchForVariableInEnvironment(others, found_other, previous_env, name_symbol, identifier_token);
+                FindVariableInEnvironment(others, found_other, previous_env,
+                                          name_symbol, identifier_token);
 
-                if (others.Length() > 0 && where_found -> Type() -> CanAccess(found_other -> Type()))
+                if (others.Length() > 0 &&
+                    where_found -> Type() -> HasEnclosingInstance(found_other -> Type()))
                 {
-                    for (int i = 0; i < others.Length();  i++)
+                    for (int i = 0; i < others.Length(); i++)
                     {
-                        if (! (others[i] == variable_symbol && variable_symbol -> ACC_STATIC()))
+                        if (others[i] != variable_symbol ||
+                            ! variable_symbol -> ACC_STATIC())
                         {
-                            MethodSymbol *method = others[i] -> owner -> MethodCast();
+                            MethodSymbol *method =
+                                others[i] -> owner -> MethodCast();
 
                             if (method)
                             {
@@ -1266,285 +1483,281 @@ VariableSymbol *Semantic::FindVariableInEnvironment(SemanticEnvironment *&where_
                        identifier_token,
                        identifier_token,
                        variable_symbol -> Name(),
-                       variable_symbol -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
-                       variable_symbol -> owner -> TypeCast() -> ExternalName(),
-                       variables_found[i] -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
-                       variables_found[i] -> owner -> TypeCast() -> ExternalName());
+                       variable_symbol -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variable_symbol -> ContainingType() -> ExternalName(),
+                       variables_found[i] -> ContainingType() -> ContainingPackage() -> PackageName(),
+                       variables_found[i] -> ContainingType() -> ExternalName());
     }
 
     if (variable_symbol)
     {
         if (control.option.deprecation &&
             variable_symbol -> IsDeprecated() &&
-            variable_symbol -> owner -> TypeCast() -> outermost_type != ThisType() -> outermost_type)
+            variable_symbol -> ContainingType() -> outermost_type != ThisType() -> outermost_type)
         {
             ReportSemError(SemanticError::DEPRECATED_FIELD,
                            identifier_token,
                            identifier_token,
                            variable_symbol -> Name(),
-                           variable_symbol -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
-                           variable_symbol -> owner -> TypeCast() -> ExternalName());
+                           variable_symbol -> ContainingType() -> ContainingPackage() -> PackageName(),
+                           variable_symbol -> ContainingType() -> ExternalName());
         }
 
         if (! variable_symbol -> IsTyped())
-            variable_symbol -> ProcessVariableSignature((Semantic *) this, identifier_token);
+            variable_symbol -> ProcessVariableSignature(this, identifier_token);
     }
 
     return variable_symbol;
 }
 
 
-VariableSymbol *Semantic::FindInstance(TypeSymbol *base_type, TypeSymbol *environment_type)
+//
+// Find a variable shadow in the outermost local class within the scope of
+// the variable, and return a local variable shadow to it instead.
+//
+VariableSymbol *Semantic::FindLocalVariable(VariableSymbol *local,
+                                            TypeSymbol *type)
 {
-    for (int i = 0; i < base_type -> NumEnclosingInstances(); i++)
+    while (local -> accessed_local)
+        local = local -> accessed_local;
+    assert(local -> IsLocal());
+
+    TypeSymbol *containing_type = local -> ContainingType();
+    if (type == containing_type)
+        return local;
+
+    while (type && type -> ContainingType() != containing_type)
     {
-        VariableSymbol *variable = base_type -> EnclosingInstance(i);
-        if (variable -> Type() -> IsSubclass(environment_type))
-            return variable;
-    }
-
-    AstClassDeclaration *class_declaration = base_type -> declaration -> ClassDeclarationCast();
-    AstClassInstanceCreationExpression *class_creation = base_type -> declaration -> ClassInstanceCreationExpressionCast();
-
-    assert(class_declaration || class_creation);
-
-    AstClassBody *class_body = (class_declaration ? class_declaration -> class_body : class_creation -> class_body_opt);
-
-    LexStream::TokenIndex loc = class_body -> left_brace_token;
-    AstBlock *this_block = class_body -> this_block;
-    if (! this_block)
-    {
-        this_block = compilation_unit -> ast_pool -> GenBlock();
-        this_block -> left_brace_token  = loc;
-        this_block -> right_brace_token = loc;
-
-        this_block -> is_reachable = true;
-        this_block -> can_complete_normally = true;
-
-        class_body -> this_block = this_block;
-    }
-
-    int k = base_type -> NumEnclosingInstances();
-    for (TypeSymbol *type = base_type -> EnclosingInstance(k - 1) -> Type(); type; type = type -> ContainingType(), k++)
-    {
-        AstSimpleName *parm = compilation_unit -> ast_pool -> GenSimpleName(loc);
-        parm -> symbol = base_type -> EnclosingInstance(k - 1);
-
-        VariableSymbol *variable_symbol = (VariableSymbol *) type -> FindThis(0);
-
-        AstFieldAccess *method_name = compilation_unit -> ast_pool -> GenFieldAccess();
-        method_name -> base = parm;
-        method_name -> dot_token = loc;
-        method_name -> identifier_token = loc;
-        method_name -> symbol = variable_symbol; // the variable in question
-
-        AstMethodInvocation *rhs       = compilation_unit -> ast_pool -> GenMethodInvocation();
-        rhs -> method                  = method_name;
-        rhs -> left_parenthesis_token  = loc;
-        rhs -> right_parenthesis_token = loc;
-        rhs -> symbol                  = type -> GetReadAccessMethod(variable_symbol);
-        rhs -> AddArgument(parm); // TODO: WARNING: sharing of Ast subtree !!!
-
-
-        AstSimpleName *lhs = compilation_unit -> ast_pool -> GenSimpleName(loc);
-        VariableSymbol *variable = base_type -> FindThis(k);
-        lhs -> symbol = (variable ? variable : base_type -> InsertThis(k));
-
-        AstAssignmentExpression *assign = compilation_unit -> ast_pool
-                                                           -> GenAssignmentExpression(AstAssignmentExpression::SIMPLE_EQUAL, loc);
-        assign -> left_hand_side = lhs;
-        assign -> expression     = rhs;
-        assign -> symbol         = lhs -> Type();
-
-        AstExpressionStatement *stmt  = compilation_unit -> ast_pool -> GenExpressionStatement();
-        stmt -> expression            = assign;
-        stmt -> semicolon_token_opt   = loc;
-        stmt -> is_reachable          = true;
-        stmt -> can_complete_normally = true;
-
-        this_block -> AddStatement(stmt);
-
-        if (lhs -> Type() -> IsSubclass(environment_type))
+        if (! type -> EnclosingType())
+        {
+            assert(type -> Anonymous());
             break;
+        }
+        type = type -> ContainingType();
     }
+    assert(type && type -> IsLocal());
 
-    return base_type -> EnclosingInstance(k);
+    return type -> FindOrInsertLocalShadow(local);
 }
 
 
-AstExpression *Semantic::CreateAccessToType(Ast *source, TypeSymbol *environment_type)
+//
+// Using the this$0 variable, locate the appropriate enclosing instance.
+//
+AstExpression *Semantic::FindEnclosingInstance(AstExpression *base,
+                                               TypeSymbol *environment_type,
+                                               bool exact)
+{
+    TypeSymbol *base_type = base -> Type();
+    assert(base_type != environment_type &&
+           base_type -> HasEnclosingInstance(environment_type, exact));
+    VariableSymbol *this0 = base_type -> EnclosingInstance();
+    if (! this0)
+    {
+        //
+        // In the case of an anonymous class in an explicit constructor call,
+        // when the immediate enclosing class is not yet initialized, other
+        // enclosing classes are not accessible (even though they COULD be
+        // available through additional constructor parameters) - JLS 8.8.5.1
+        //
+        assert(base_type -> Anonymous() && base_type -> IsLocal());
+        return NULL;
+    }
+
+    LexStream::TokenIndex tok = base -> RightToken();
+
+    AstFieldAccess *field_access = compilation_unit -> ast_pool ->
+        GenFieldAccess(AstFieldAccess::THIS_TAG);
+    field_access -> base = base;
+    field_access -> dot_token = tok;
+    field_access -> identifier_token = tok;
+    field_access -> symbol = this0;
+
+    if (exact ? (this0 -> Type() == environment_type)
+        : (this0 -> Type() -> IsSubclass(environment_type)))
+    {
+        return field_access;
+    }
+    return FindEnclosingInstance(field_access, environment_type, exact);
+}
+
+
+//
+// Generate access to the correct enclosing instance.
+//
+AstExpression *Semantic::CreateAccessToType(Ast *source,
+                                            TypeSymbol *environment_type)
 {
     TypeSymbol *this_type = ThisType();
 
-    LexStream::TokenIndex tok;
+    LexStream::TokenIndex left_tok;
+    LexStream::TokenIndex right_tok;
 
     AstSimpleName *simple_name = source -> SimpleNameCast();
     AstFieldAccess *field_access = source -> FieldAccessCast();
     AstSuperCall *super_call = source -> SuperCallCast();
-    AstThisCall *this_call = source -> ThisCallCast();
-    AstClassInstanceCreationExpression *class_creation = source -> ClassInstanceCreationExpressionCast();
+    AstClassInstanceCreationExpression *class_creation =
+        source -> ClassInstanceCreationExpressionCast();
 
     if (simple_name)
-         tok = simple_name -> identifier_token;
+        left_tok = right_tok = simple_name -> identifier_token;
     else if (class_creation)
-         tok = class_creation -> new_token;
+        left_tok = right_tok = class_creation -> new_token;
     else if (super_call)
-         tok = super_call -> super_token;
-    else if (this_call)
-         tok = this_call -> this_token;
+        left_tok = right_tok = super_call -> super_token;
     else if (field_access)
-         tok = field_access -> dot_token;
+    {
+        assert(field_access -> IsSuperAccess() ||
+               field_access -> IsThisAccess());
+        left_tok = field_access -> LeftToken();
+        right_tok = field_access -> identifier_token;
+    }
     else assert(false);
 
     AstExpression *resolution;
 
-    if (! this_type -> CanAccess(environment_type))
+    if (! this_type -> HasEnclosingInstance(environment_type,
+                                            field_access != NULL))
     {
-        if (ExplicitConstructorInvocation())
-            ReportSemError(SemanticError::ENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION,
-                           (field_access ? field_access -> base -> LeftToken() : tok),
-                           (field_access ? field_access -> base -> RightToken() : tok),
-                           environment_type -> ContainingPackage() -> PackageName(),
-                           environment_type -> ExternalName());
-        else
-        {
-            SemanticEnvironment *env = state_stack.Top();
-            for (; env; env = env -> previous) // check whether or not there is an intervening static type...
-            {
-                if (env -> StaticRegion() || env -> Type() -> ACC_STATIC())
-                    break;
-            }
-
-            if (env)
-                 ReportSemError(SemanticError::ENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION,
-                                (field_access ? field_access -> base -> LeftToken() : tok),
-                                (field_access ? field_access -> base -> RightToken() : tok),
-                                environment_type -> ContainingPackage() -> PackageName(),
-                                environment_type -> ExternalName(),
-                                env -> Type() -> ContainingPackage() -> PackageName(),
-                                env -> Type() -> ExternalName());
-            else ReportSemError(SemanticError::ENCLOSING_INSTANCE_NOT_ACCESSIBLE,
-                                (field_access ? field_access -> base -> LeftToken() : tok),
-                                (field_access ? field_access -> base -> RightToken() : tok),
-                                environment_type -> ContainingPackage() -> PackageName(),
-                                environment_type -> ExternalName());
-        }
-
-        resolution = compilation_unit -> ast_pool -> GenSimpleName(tok);
+        ReportSemError((ExplicitConstructorInvocation()
+                        ? SemanticError::ENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION
+                        : SemanticError::ENCLOSING_INSTANCE_NOT_ACCESSIBLE),
+                       left_tok, right_tok,
+                       environment_type -> ContainingPackage() -> PackageName(),
+                       environment_type -> ExternalName());
+        resolution = compilation_unit -> ast_pool -> GenSimpleName(left_tok);
         resolution -> symbol = control.no_type;
-    }
-    else if (ExplicitConstructorInvocation())
-    {
-        VariableSymbol *variable = LocalSymbolTable().FindVariableSymbol(control.this0_name_symbol);
-
-        assert(variable);
-
-        resolution = compilation_unit -> ast_pool -> GenSimpleName(tok);
-        resolution -> symbol = variable;
-
-        //
-        // TODO: Document this !!!
-        //
-        if (ExplicitConstructorInvocation() -> SuperCallCast())
-        {
-            TypeSymbol *containing_type = this_type -> ContainingType();
-            if (! containing_type -> IsSubclass(environment_type))
-            {
-                variable = FindInstance(containing_type, environment_type);
-
-                AstFieldAccess *method_name = compilation_unit -> ast_pool -> GenFieldAccess();
-                method_name -> base = resolution; // TODO: WARNING: sharing of Ast subtree !!!
-                method_name -> dot_token = tok;
-                method_name -> identifier_token = tok;
-                method_name -> symbol = variable;
-
-                AstMethodInvocation *method_call       = compilation_unit -> ast_pool -> GenMethodInvocation();
-                method_call -> method                  = method_name;
-                method_call -> left_parenthesis_token  = tok;
-                method_call -> right_parenthesis_token = tok;
-
-                assert(containing_type == variable -> owner -> TypeCast());
-
-                method_call -> symbol = containing_type -> GetReadAccessMethod(variable);
-                method_call -> AddArgument(resolution);
-
-                resolution = method_call;
-            }
-        }
-    }
-    else if (this_type -> IsSubclass(environment_type))
-    {
-        resolution = compilation_unit -> ast_pool -> GenThisExpression(tok);
-        resolution -> symbol = this_type;
     }
     else
     {
-        resolution = compilation_unit -> ast_pool -> GenSimpleName(tok);
-        resolution -> symbol = FindInstance(this_type, environment_type);
+        //
+        // Collapse everything except qualified this or super to the innermost
+        // class. Start from the parameter this$0 in an explicit constructor
+        // invocation, else start from this.
+        //
+        if (ExplicitConstructorInvocation())
+        {
+            VariableSymbol *variable = LocalSymbolTable().
+                FindVariableSymbol(control.this0_name_symbol);
+            assert(variable);
+
+            resolution =
+                compilation_unit -> ast_pool -> GenSimpleName(left_tok);
+            resolution -> symbol = variable;
+        }
+        else
+        {
+            resolution =
+                compilation_unit -> ast_pool -> GenThisExpression(left_tok);
+            resolution -> symbol = this_type;
+        }
+        TypeSymbol *resolved_type = resolution -> Type();
+        if (resolved_type != environment_type &&
+            (! resolved_type -> IsSubclass(environment_type) || field_access))
+        {
+            AstExpression *intermediate =
+                FindEnclosingInstance(resolution, environment_type,
+                                      field_access);
+            if (! intermediate)
+            {
+                ReportSemError(SemanticError::ENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION,
+                               left_tok, right_tok,
+                               environment_type -> ContainingPackage() -> PackageName(),
+                               environment_type -> ExternalName());
+                resolution -> symbol = control.no_type;
+            }
+            else resolution = intermediate;
+        }
     }
 
-    return ((resolution -> symbol == control.no_type) || (resolution -> Type() == environment_type)
-                                                       ? resolution
-                                                       : ConvertToType(resolution, environment_type));
+    if (field_access && field_access -> IsSuperAccess())
+        environment_type = environment_type -> super;
+
+    return ConvertToType(resolution, environment_type);
 }
 
 
-void Semantic::CreateAccessToScopedVariable(AstSimpleName *simple_name, TypeSymbol *environment_type)
+void Semantic::CreateAccessToScopedVariable(AstSimpleName *simple_name,
+                                            TypeSymbol *environment_type)
 {
-    assert(environment_type -> IsOwner(ThisType()));
+    assert(! simple_name -> IsConstant());
 
-    VariableSymbol *variable_symbol = (VariableSymbol *) simple_name -> symbol;
+    VariableSymbol *variable = (VariableSymbol *) simple_name -> symbol;
+
+    if (variable -> owner -> MethodCast() && ! variable -> ACC_FINAL())
+    {
+        //
+        // We've already reported the error, in FindVariableInEnvironment.
+        //
+        simple_name -> symbol = control.no_type;
+        return;
+    }
 
     AstExpression *access_expression;
-    if (variable_symbol -> ACC_STATIC())
+    if (variable -> ACC_STATIC())
     {
-        access_expression = compilation_unit -> ast_pool -> GenSimpleName(simple_name -> identifier_token);
+        access_expression = compilation_unit -> ast_pool ->
+            GenSimpleName(simple_name -> identifier_token);
         access_expression -> symbol = environment_type;
     }
     else access_expression = CreateAccessToType(simple_name, environment_type);
 
     if (access_expression -> symbol != control.no_type)
     {
-        assert(variable_symbol -> owner -> TypeCast());
+        assert(variable -> owner -> TypeCast());
 
-        if (variable_symbol -> ACC_PRIVATE() ||
-            (variable_symbol -> ACC_PROTECTED() &&
-             variable_symbol -> owner -> TypeCast() -> ContainingPackage() != environment_type -> ContainingPackage()))
+        TypeSymbol *containing_type = variable -> ContainingType();
+
+        if (variable -> ACC_PRIVATE() ||
+            (variable -> ACC_PROTECTED() &&
+             ! ProtectedAccessCheck(containing_type)))
         {
-            AstFieldAccess *method_name     = compilation_unit -> ast_pool -> GenFieldAccess();
-            method_name -> base             = access_expression;
-            method_name -> dot_token        = simple_name -> identifier_token;
+            assert((variable -> ACC_PRIVATE() &&
+                    environment_type == containing_type) ||
+                   (variable -> ACC_PROTECTED() &&
+                    environment_type -> IsSubclass(containing_type)));
+
+            AstFieldAccess *method_name =
+                compilation_unit -> ast_pool -> GenFieldAccess();
+            method_name -> base = access_expression;
+            method_name -> dot_token = simple_name -> identifier_token;
             method_name -> identifier_token = simple_name -> identifier_token;
-            method_name -> symbol           = variable_symbol;
+            method_name -> symbol = variable;
 
-            AstMethodInvocation *method_call       = compilation_unit -> ast_pool -> GenMethodInvocation();
-            method_call -> method                  = method_name;
-            method_call -> left_parenthesis_token  = simple_name -> identifier_token;
-            method_call -> right_parenthesis_token = simple_name -> identifier_token;
-            method_call -> symbol                  = environment_type -> GetReadAccessMethod(variable_symbol);
+            AstMethodInvocation *accessor =
+                compilation_unit -> ast_pool -> GenMethodInvocation();
+            accessor -> method = method_name;
+            accessor -> left_parenthesis_token =
+                simple_name -> identifier_token;
+            accessor -> right_parenthesis_token =
+                simple_name -> identifier_token;
+            // The default base type of the accessor method is appropriate.
+            accessor -> symbol =
+                environment_type -> GetReadAccessMethod(variable);
 
-            if (! variable_symbol -> ACC_STATIC())
-                method_call -> AddArgument(access_expression); // TODO: WARNING: sharing of Ast subtree !!!
+            if (! variable -> ACC_STATIC())
+                // TODO: WARNING: sharing of Ast subtree !!!
+                accessor -> AddArgument(access_expression);
 
-            simple_name -> resolution_opt = method_call;
+            simple_name -> resolution_opt = accessor;
         }
         else
         {
-            AstFieldAccess *field_access     = compilation_unit -> ast_pool -> GenFieldAccess();
-            field_access -> base             = access_expression;
-            field_access -> dot_token        = simple_name -> identifier_token;
+            AstFieldAccess *field_access =
+                compilation_unit -> ast_pool -> GenFieldAccess();
+            field_access -> base = access_expression;
+            field_access -> dot_token = simple_name -> identifier_token;
             field_access -> identifier_token = simple_name -> identifier_token;
-            field_access -> symbol           = variable_symbol;
+            field_access -> symbol = variable;
 
             simple_name -> resolution_opt = field_access;
         }
     }
-
-    return;
 }
 
 
-void Semantic::CreateAccessToScopedMethod(AstMethodInvocation *method_call, TypeSymbol *environment_type)
+void Semantic::CreateAccessToScopedMethod(AstMethodInvocation *method_call,
+                                          TypeSymbol *environment_type)
 {
     assert(environment_type -> IsOwner(ThisType()));
 
@@ -1564,50 +1777,50 @@ void Semantic::CreateAccessToScopedMethod(AstMethodInvocation *method_call, Type
     if (access_expression -> symbol != control.no_type)
     {
         //
-        // TODO: we have filed a query to Sun regarding the necessity of this check!
+        // TODO: we have filed a query to Sun regarding the necessity of this
+        // check!
         //
         // SimpleNameAccessCheck(simple_name, method -> containing_type, method);
         //
         simple_name -> resolution_opt = access_expression;
+
+        TypeSymbol *containing_type = method -> containing_type;
+
         if (method -> ACC_PRIVATE() ||
             (method -> ACC_PROTECTED() &&
-             method -> containing_type -> ContainingPackage() != environment_type -> ContainingPackage()))
+             ! ProtectedAccessCheck(containing_type)))
         {
-            if (method -> ACC_STATIC())
-                method_call -> symbol = environment_type -> GetReadAccessMethod(method);
-            else
-            {
-                AstMethodInvocation *old_method_call = method_call;
+            assert((method -> ACC_PRIVATE() &&
+                    environment_type == containing_type) ||
+                   (method -> ACC_PROTECTED() &&
+                    environment_type -> IsSubclass(containing_type)));
 
-                //
-                // TODO: WARNING: sharing of subtrees...
-                //
-                AstMethodInvocation *method_call       = compilation_unit -> ast_pool -> GenMethodInvocation();
-                method_call -> method                  = old_method_call -> method;
-                method_call -> left_parenthesis_token  = old_method_call -> left_parenthesis_token;
-                method_call -> right_parenthesis_token = old_method_call -> right_parenthesis_token;
-                method_call -> symbol                  = environment_type -> GetReadAccessMethod(method);
-                method_call -> AddArgument(access_expression);
-                for (int i = 0; i < old_method_call -> NumArguments(); i++)
-                    method_call -> AddArgument(old_method_call -> Argument(i));
+            AstMethodInvocation *accessor       = compilation_unit -> ast_pool -> GenMethodInvocation();
+            accessor -> method                  = method_call -> method; // TODO: WARNING: sharing of subtrees...
+            accessor -> left_parenthesis_token  = method_call -> left_parenthesis_token;
+            accessor -> right_parenthesis_token = method_call -> right_parenthesis_token;
+            accessor -> symbol                  = environment_type -> GetReadAccessMethod(method); // default base type is appropriate
 
-                old_method_call -> symbol = method;
-                old_method_call -> resolution_opt = method_call;
-            }
+            if (! method -> ACC_STATIC())
+                accessor -> AddArgument(access_expression);
+            for (int i = 0; i < method_call -> NumArguments(); i++)
+                accessor -> AddArgument(method_call -> Argument(i));
+
+            method_call -> symbol = method;
+            method_call -> resolution_opt = accessor;
         }
     }
-
-    return;
 }
 
 
-void Semantic::CheckSimpleName(AstSimpleName *simple_name, SemanticEnvironment *where_found)
+void Semantic::CheckSimpleName(AstSimpleName *simple_name,
+                               SemanticEnvironment *where_found)
 {
     VariableSymbol *variable_symbol = simple_name -> symbol -> VariableCast();
 
     assert(variable_symbol);
 
-    if (StaticRegion())
+    if (StaticRegion() && ! ExplicitConstructorInvocation())
     {
         if (! (variable_symbol -> IsLocal() || variable_symbol -> ACC_STATIC()))
         {
@@ -1616,7 +1829,9 @@ void Semantic::CheckSimpleName(AstSimpleName *simple_name, SemanticEnvironment *
                            simple_name -> identifier_token,
                            lex_stream -> NameString(simple_name -> identifier_token));
         }
-        else if (! variable_symbol -> IsDeclarationComplete())
+        else if (variable_symbol -> owner -> TypeCast() &&
+                 ! variable_symbol -> IsDeclarationComplete() &&
+                 ! ProcessingSimpleAssignment())
         {
             ReportSemError(SemanticError::NAME_NOT_YET_AVAILABLE,
                            simple_name -> identifier_token,
@@ -1626,25 +1841,29 @@ void Semantic::CheckSimpleName(AstSimpleName *simple_name, SemanticEnvironment *
     }
     else if (! variable_symbol -> ACC_STATIC()) // an instance variable?
     {
-        TypeSymbol *containing_type = variable_symbol -> owner -> TypeCast(); // an instance field member ?
+        // an instance field member ?
+        TypeSymbol *containing_type = variable_symbol -> owner -> TypeCast();
 
         if (containing_type) // variable must be a field
         {
-            if (containing_type == ThisType() && (! variable_symbol -> IsDeclarationComplete())) // forward reference?
+            if (containing_type == ThisType() &&
+                ! variable_symbol -> IsDeclarationComplete() &&
+                ! ProcessingSimpleAssignment()) // forward reference?
             {
                 ReportSemError(SemanticError::NAME_NOT_YET_AVAILABLE,
                                simple_name -> identifier_token,
                                simple_name -> identifier_token,
                                lex_stream -> NameString(simple_name -> identifier_token));
             }
-            else if (ExplicitConstructorInvocation() && where_found == state_stack.Top())
+            else if (ExplicitConstructorInvocation() &&
+                     where_found == state_stack.Top())
             {
                 //
                 // If the variable in question is an instance variable that is
                 // declared in this_type (this_type is definitely a class) or
                 // one of its super classes, then we have an error:
                 //
-                ReportSemError(SemanticError::INSTANCE_VARIABLE_IN_EXPLICIT_CONSTRUCTOR_INVOCATION,
+                ReportSemError(SemanticError::INSTANCE_VARIABLE_IN_EXPLICIT_CONSTRUCTOR,
                                simple_name -> identifier_token,
                                simple_name -> identifier_token,
                                lex_stream -> NameString(simple_name -> identifier_token),
@@ -1652,8 +1871,6 @@ void Semantic::CheckSimpleName(AstSimpleName *simple_name, SemanticEnvironment *
             }
         }
     }
-
-    return;
 }
 
 
@@ -1663,153 +1880,80 @@ void Semantic::ProcessSimpleName(Ast *expr)
 
     AstSimpleName *simple_name = (AstSimpleName *) expr;
     SemanticEnvironment *where_found;
-    VariableSymbol *variable_symbol = FindVariableInEnvironment(where_found, state_stack.Top(), simple_name -> identifier_token);
+    VariableSymbol *variable_symbol =
+        FindVariableInEnvironment(where_found, state_stack.Top(),
+                                  simple_name -> identifier_token);
     if (variable_symbol)
     {
-        simple_name -> symbol = variable_symbol;
-
         assert(variable_symbol -> IsTyped());
+        simple_name -> symbol = variable_symbol;
+        CheckSimpleName(simple_name, where_found);
 
         //
-        // A variable_symbol FINAL must have an initial value.
+        // A FINAL field may have an initial value.
         //
         if (variable_symbol -> ACC_FINAL())
         {
-            if (variable_symbol -> IsDeclarationComplete())
-                simple_name -> value = variable_symbol -> initial_value;
-            else if (variable_symbol -> declarator)
-            {
-                AstVariableDeclarator *declarator = variable_symbol -> declarator -> VariableDeclaratorCast();
-                //
-                // If the variable declarator in question exists and its computation is not
-                // pending (to avoid looping) and it has a simple expression initializer.
-                //
-                if (declarator &&
-                    (! declarator -> pending) &&
-                    declarator -> variable_initializer_opt &&
-                    (! declarator -> variable_initializer_opt -> ArrayInitializerCast()))
-                {
-                    TypeSymbol *type = (TypeSymbol *) variable_symbol -> owner;
-                    Semantic *sem = type -> semantic_environment -> sem;
-                    simple_name -> value = sem -> ComputeFinalValue(declarator);
-                }
-            }
+            if (! variable_symbol -> IsInitialized())
+                ComputeFinalValue(variable_symbol);
+            simple_name -> value = variable_symbol -> initial_value;
         }
-
-        CheckSimpleName(simple_name, where_found);
 
         //
         // If the variable belongs to an outer type, add the proper
         // pointer dereferences (and method access in the case of a
         // private variable) necessary to get to it.
         //
-        if (where_found != state_stack.Top())
+        if (where_found != state_stack.Top() &&
+            ! simple_name -> IsConstant())
+        {
             CreateAccessToScopedVariable(simple_name, where_found -> Type());
+        }
     }
     else
     {
-        //
-        // We make a little effort to issue a better error message if we can identify
-        // the name in question as the name of a method in the local type.
-        //
-        NameSymbol *name_symbol = lex_stream -> NameSymbol(simple_name -> identifier_token);
-
-        MethodShadowSymbol *method_shadow;
-        MethodSymbol *method;
-
-        for (method_shadow = this_type -> expanded_method_table -> FindMethodShadowSymbol(name_symbol);
-             method_shadow; method_shadow = method_shadow -> next_method)
-        {
-            method = method_shadow -> method_symbol;
-
-            //
-            // Make sure that method has been fully prepared
-            //
-            if (! method -> IsTyped())
-                method -> ProcessMethodSignature((Semantic *) this, simple_name -> identifier_token);
-
-            if (method -> NumFormalParameters() == 0)
-                break;
-        }
-
-        if (method_shadow)
-        {
-             ReportSemError(SemanticError::METHOD_NOT_FIELD,
-                            simple_name -> identifier_token,
-                            simple_name -> identifier_token,
-                            lex_stream -> NameString(simple_name -> identifier_token),
-                            method -> containing_type -> ContainingPackage() -> PackageName(),
-                            method -> containing_type -> ExternalName());
-        }
-        else if (FindType(simple_name -> identifier_token))
-        {
-             ReportSemError(SemanticError::TYPE_NOT_FIELD,
-                            simple_name -> identifier_token,
-                            simple_name -> identifier_token,
-                            lex_stream -> NameString(simple_name -> identifier_token));
-        }
-        else
-        {
-            VariableSymbol *variable = FindMisspelledVariableName(this_type, simple_name -> identifier_token);
-            if (variable)
-                 ReportSemError(SemanticError::FIELD_NAME_MISSPELLED,
-                                simple_name -> identifier_token,
-                                simple_name -> identifier_token,
-                                name_symbol -> Name(),
-                                this_type -> ContainingPackage() -> PackageName(),
-                                this_type -> ExternalName(),
-                                variable -> Name());
-            else ReportSemError(SemanticError::NAME_NOT_FOUND,
-                                simple_name -> identifier_token,
-                                simple_name -> identifier_token,
-                                lex_stream -> NameString(simple_name -> identifier_token));
-        }
+        ReportVariableNotFound(simple_name, this_type);
         simple_name -> symbol = control.no_type;
     }
-
-    return;
 }
 
 
-void Semantic::TypeAccessCheck(Ast *ast, TypeSymbol *type)
+bool Semantic::TypeAccessCheck(Ast *ast, TypeSymbol *type)
 {
+    // According to JLS 6.6.1, a type T[] is accessible if T is accessible.
+    if (type -> IsArray())
+        type = type -> base_type;
+
     //
-    // Unless we are processing the body of a type do not do type checking.
-    // (This method may be invoked, for example, when FindFirstType invokes ProcessPackageOrType)
+    // Outside a class body, only public types from other packages, or
+    // non-private types in the current package, are accessible. For a member
+    // type, as in T1.T2, this does not check that T1 is also accessible; that
+    // requires additional checks by the caller.
     //
+    assert(this_package);
+    if (type -> ACC_PUBLIC() ||
+        (type -> ContainingPackage() == this_package &&
+         ! type -> ACC_PRIVATE()))
+    {
+        return true;
+    }
     if (state_stack.Size() > 0)
     {
+        //
+        // Inside a class body, all types listed above are accessible, and
+        // additionally declared or inherited member types are accessible
+        //
         TypeSymbol *this_type = ThisType();
-
-        //
-        // Type checking is necessary only for two types that are not enclosed within
-        // the same outermost type. Note that if we are trying to access an inner type
-        // T1.T2...Tn from this type, TypeAccessCheck is expected to be invoked first
-        // for T1, then T1.T2, ... and finally for T1.T2...Tn, in turn. When invoked
-        // for T1.T2, for example, this function only checks whether or not T1.T2
-        // is accessible from "this" type. It does not recheck whether or not T1 is
-        // accessible.
-        //
-        if (this_type -> outermost_type != type -> outermost_type)
+        assert(this_type -> ContainingPackage() == this_package);
+        if (this_type -> outermost_type == type -> outermost_type ||
+            (type -> ACC_PROTECTED() &&
+             this_type -> HasProtectedAccessTo(type)))
         {
-            if (type -> ACC_PRIVATE())
-                 ReportTypeInaccessible(ast, type);
-            else if (type -> ACC_PROTECTED())
-            {
-                //
-                // TODO: we have filed a query to Sun regarding which test is required here!
-                //
-                // if (! (type -> ContainingPackage() == this_package || this_type -> IsSubclass(type)))
-                //
-                if (! (type -> ContainingPackage() == this_package || this_type -> HasProtectedAccessTo(type)))
-                    ReportTypeInaccessible(ast, type);
-            }
-            else if (! (type -> ACC_PUBLIC() || type -> ContainingPackage() == this_package))
-                 ReportTypeInaccessible(ast, type);
+            return true;
         }
     }
-
-    return;
+    ReportTypeInaccessible(ast, type);
+    return false;
 }
 
 
@@ -1826,58 +1970,51 @@ void Semantic::TypeNestAccessCheck(AstExpression *name)
     TypeSymbol *type = (simple_name ? simple_name -> Type() : field_access -> Type());
     if (type)
         TypeAccessCheck(name, type);
-
-    return;
 }
 
 
-void Semantic::ConstructorAccessCheck(AstClassInstanceCreationExpression *class_creation, MethodSymbol *constructor)
+//
+// Returns whether or not the constructor is accessible.
+//
+bool Semantic::ConstructorAccessCheck(Ast *invocation,
+                                      MethodSymbol *constructor)
 {
     TypeSymbol *this_type = ThisType();
     TypeSymbol *containing_type = constructor -> containing_type;
+    AstClassInstanceCreationExpression *class_creation =
+        invocation -> ClassInstanceCreationExpressionCast();
+    AstSuperCall *super_call = invocation -> SuperCallCast();
+    AstThisCall *this_call = invocation -> ThisCallCast();
+    assert(class_creation || super_call || this_call);
 
-    if (this_type -> outermost_type != containing_type -> outermost_type)
+    if (this_type -> outermost_type != containing_type -> outermost_type &&
+        constructor -> ACC_PRIVATE())
     {
-        if (constructor -> ACC_PRIVATE())
-        {
-            ReportSemError(SemanticError::PRIVATE_CONSTRUCTOR_NOT_ACCESSIBLE,
-                           class_creation -> class_type -> LeftToken(),
-                           class_creation -> right_parenthesis_token,
-                           constructor -> Header(),
-                           containing_type -> ContainingPackage() -> PackageName(),
-                           containing_type -> ExternalName());
-        }
-        else if (! class_creation -> symbol -> TypeCast() -> Anonymous())
-        {
-            if (constructor -> ACC_PROTECTED())
-            {
-                if (containing_type->ContainingPackage() != this_package)
-                {
-                    ReportSemError(SemanticError::PROTECTED_CONSTRUCTOR_NOT_ACCESSIBLE,
-                                   class_creation -> class_type -> LeftToken(),
-                                   class_creation -> right_parenthesis_token,
-                                   constructor -> Header(),
-                                   containing_type -> ContainingPackage() -> PackageName(),
-                                   containing_type -> ExternalName());
-                }
-            }
-            else if (! (constructor -> ACC_PUBLIC() || containing_type -> ContainingPackage() == this_package))
-            {
-                ReportSemError(SemanticError::DEFAULT_CONSTRUCTOR_NOT_ACCESSIBLE,
-                               class_creation -> class_type -> LeftToken(),
-                               class_creation -> right_parenthesis_token,
-                               constructor -> Header(),
-                               containing_type -> ContainingPackage() -> PackageName(),
-                               containing_type -> ExternalName());
-            }
-        }
+        return false;
     }
 
-    return;
+    //
+    // Default constructors are not accessible outside the package, and
+    // protected constructors can only be accessed by a call to super(). This
+    // includes anonymous classes, where we will later generate a super() call.
+    //
+    if (containing_type -> ContainingPackage() != this_package &&
+        ! constructor -> ACC_PUBLIC())
+    {
+        return constructor -> ACC_PROTECTED() &&
+            (! class_creation || class_creation -> class_body_opt);
+    }
+    return true;
 }
 
 
-void Semantic::MemberAccessCheck(AstFieldAccess *field_access, TypeSymbol *base_type, Symbol *symbol)
+//
+// Returns whether or not the symbol is accessible from within the innermost
+// enclosing class base_type. field_access is the qualifying expression for
+// the access, and is NULL in the case of a SimpleName access.
+//
+bool Semantic::MemberAccessCheck(AstFieldAccess *field_access,
+                                 TypeSymbol *base_type, Symbol *symbol)
 {
     TypeSymbol *this_type = ThisType();
 
@@ -1887,100 +2024,76 @@ void Semantic::MemberAccessCheck(AstFieldAccess *field_access, TypeSymbol *base_
     assert(variable_symbol || method_symbol);
 
     AccessFlags *flags = (variable_symbol ? (AccessFlags *) variable_symbol : (AccessFlags *) method_symbol);
-    TypeSymbol *containing_type = (variable_symbol ? variable_symbol -> owner -> TypeCast() : method_symbol -> containing_type);
+    TypeSymbol *containing_type = (variable_symbol ? variable_symbol -> ContainingType() : method_symbol -> containing_type);
 
     assert(containing_type);
 
-    AstExpression *base = field_access -> base;
-
     //
-    // When this function, MemberAccessCheck is invoked, it is assumed that the function TypeAccessCheck
-    // has already been invoked as follows:
+    // When this function, MemberAccessCheck is invoked, it is assumed that
+    // the function TypeAccessCheck has already been invoked as follows:
     //
     //    TypeAccessCheck(base, base_type);
     //
     // and that the check below has already been performed.
     //
-    //    if (! (base_type -> ACC_PUBLIC() || base_type -> ContainingPackage() == this_package))
+    //    if (! (base_type -> ACC_PUBLIC() ||
+    //           base_type -> ContainingPackage() == this_package))
     //        ReportTypeInaccessible(base, base_type);
     //
 
     if (this_type -> outermost_type != containing_type -> outermost_type)
     {
         if (flags -> ACC_PRIVATE())
-        {
-            ReportSemError((variable_symbol ? SemanticError::PRIVATE_FIELD_NOT_ACCESSIBLE
-                                            : SemanticError::PRIVATE_METHOD_NOT_ACCESSIBLE),
-                           field_access -> identifier_token,
-                           field_access -> identifier_token,
-                           lex_stream -> NameString(field_access -> identifier_token),
-                           containing_type -> ContainingPackage() -> PackageName(),
-                           containing_type -> ExternalName());
-        }
+            return false;
         else if (flags -> ACC_PROTECTED())
         {
             //
-            // TODO: This whole area is very Murky!!! This "feature" is not valid
-            // according to the language spec. However, its use is so widespread
-            // that we decided to accept it while issuing a strong "Caution" message
-            // to encourage the user to not use it.
+            // Within the same package, protected is accessible. Super access
+            // has special priveleges (contrary to JLS2 15.11.2,
+            // super.name != ((S)this).name; ). JLS2 6.6.2: When packages
+            // differ, subclasses may access protected static members without
+            // further restrictions, but accessing instance members requires
+            // that the qualifier be the subclass or lower.
+            // JLS 9.2: Interfaces have no protected members.
             //
-            if (flags -> ACC_STATIC() &&
-                this_package != containing_type -> ContainingPackage() &&
-                this_type -> IsSubclass(containing_type))
+            if (field_access &&
+                field_access -> base -> Type() -> ACC_INTERFACE())
             {
-                //
-                // Since "this" is a primary, it can be parenthesized. We remove all such parentheses here.
-                //
-                AstExpression *expr = base;
-                while (expr -> ParenthesizedExpressionCast())
-                    expr = expr -> ParenthesizedExpressionCast() -> expression;
-
-                if (! (expr -> ThisExpressionCast() || expr -> SuperExpressionCast()))
-                    ReportSemError((variable_symbol ? SemanticError::STATIC_PROTECTED_FIELD_ACCESS
-                                                    : SemanticError::STATIC_PROTECTED_METHOD_ACCESS),
-                                   field_access -> LeftToken(),
-                                   field_access -> RightToken(),
-                                   lex_stream -> NameString(field_access -> identifier_token),
-                                   containing_type -> ContainingPackage() -> PackageName(),
-                                   containing_type -> ExternalName());
-            } else
-
-            //
-            // TODO: This whole area is very Murky!!! This is the only test that is required
-            // according to the language spec and the inner classes document.
-            //
-            if (! (base -> IsSuperExpression() ||
-                   containing_type -> ContainingPackage() == this_package ||
-                   (this_type -> HasProtectedAccessTo(containing_type) &&
-                    (base_type -> IsSubclass(this_type) || base_type -> IsOwner(this_type)))))
-            {
-                ReportSemError((variable_symbol ? SemanticError::PROTECTED_FIELD_NOT_ACCESSIBLE
-                                                : SemanticError::PROTECTED_METHOD_NOT_ACCESSIBLE),
-                               field_access -> identifier_token,
-                               field_access -> identifier_token,
-                               lex_stream -> NameString(field_access -> identifier_token),
-                               containing_type -> ContainingPackage() -> PackageName(),
-                               containing_type -> ExternalName());
+                assert(method_symbol); // Object has no fields.
+                return false;
             }
+            if (containing_type -> ContainingPackage() == this_package ||
+                (field_access && field_access -> base -> IsSuperExpression()))
+            {
+                return true;
+            }
+            if (this_type -> HasProtectedAccessTo(containing_type))
+            {
+                if (flags -> ACC_STATIC())
+                    return true;
+                for (SemanticEnvironment *env = this_type -> semantic_environment;
+                     env; env = env -> previous)
+                {
+                    if (base_type -> IsSubclass(env -> Type()))
+                        return true;
+                }
+            }
+            return false;
         }
-        else if (! (flags -> ACC_PUBLIC() || containing_type -> ContainingPackage() == this_package))
+        else if (! flags -> ACC_PUBLIC() &&
+                 containing_type -> ContainingPackage() != this_package)
         {
-            ReportSemError((variable_symbol ? SemanticError::DEFAULT_FIELD_NOT_ACCESSIBLE
-                                            : SemanticError::DEFAULT_METHOD_NOT_ACCESSIBLE),
-                           field_access -> identifier_token,
-                           field_access -> identifier_token,
-                           lex_stream -> NameString(field_access -> identifier_token),
-                           containing_type -> ContainingPackage() -> PackageName(),
-                           containing_type -> ExternalName());
+            return false;
         }
     }
 
-    return;
+    return true;
 }
 
 
-void Semantic::SimpleNameAccessCheck(AstSimpleName *simple_name, TypeSymbol *containing_type, Symbol *symbol)
+void Semantic::SimpleNameAccessCheck(AstSimpleName *simple_name,
+                                     TypeSymbol *containing_type,
+                                     Symbol *symbol)
 {
     TypeSymbol *this_type = ThisType();
 
@@ -1998,75 +2111,84 @@ void Semantic::SimpleNameAccessCheck(AstSimpleName *simple_name, TypeSymbol *con
     {
         if (flags -> ACC_PRIVATE())
         {
-            ReportSemError((variable_symbol ? SemanticError::PRIVATE_FIELD_NOT_ACCESSIBLE
-                                            : SemanticError::PRIVATE_METHOD_NOT_ACCESSIBLE),
+            ReportSemError((variable_symbol ? SemanticError::FIELD_NOT_ACCESSIBLE
+                                            : SemanticError::METHOD_NOT_ACCESSIBLE),
                            simple_name -> identifier_token,
                            simple_name -> identifier_token,
                            lex_stream -> NameString(simple_name -> identifier_token),
                            containing_type -> ContainingPackage() -> PackageName(),
-                           containing_type -> ExternalName());
+                           containing_type -> ExternalName(),
+                           StringConstant::US_private);
         }
         else if (flags -> ACC_PROTECTED())
         {
             if (! (containing_type -> ContainingPackage() == this_package || this_type -> IsSubclass(containing_type)))
             {
-                ReportSemError((variable_symbol ? SemanticError::PROTECTED_FIELD_NOT_ACCESSIBLE
-                                                : SemanticError::PROTECTED_METHOD_NOT_ACCESSIBLE),
+                ReportSemError((variable_symbol ? SemanticError::FIELD_NOT_ACCESSIBLE
+                                                : SemanticError::METHOD_NOT_ACCESSIBLE),
                                simple_name -> identifier_token,
                                simple_name -> identifier_token,
                                lex_stream -> NameString(simple_name -> identifier_token),
                                containing_type -> ContainingPackage() -> PackageName(),
-                               containing_type -> ExternalName());
+                               containing_type -> ExternalName(),
+                               StringConstant::US_protected);
             }
         }
         else if (! (flags -> ACC_PUBLIC() || containing_type -> ContainingPackage() == this_package))
         {
-            ReportSemError((variable_symbol ? SemanticError::DEFAULT_FIELD_NOT_ACCESSIBLE
-                                            : SemanticError::DEFAULT_METHOD_NOT_ACCESSIBLE),
+            ReportSemError((variable_symbol ? SemanticError::FIELD_NOT_ACCESSIBLE
+                                            : SemanticError::METHOD_NOT_ACCESSIBLE),
                            simple_name -> identifier_token,
                            simple_name -> identifier_token,
                            lex_stream -> NameString(simple_name -> identifier_token),
                            containing_type -> ContainingPackage() -> PackageName(),
-                           containing_type -> ExternalName());
+                           containing_type -> ExternalName(),
+                           StringConstant::US_default);
         }
     }
-
-
-
-    return;
 }
 
 
-void Semantic::FindVariableMember(TypeSymbol *type, TypeSymbol *environment_type, AstFieldAccess *field_access)
+//
+// Returns true if the current type can access a protected member declared in
+// the containing type, without an accessor method. This does not test
+// whether the target type and member are accessible, since those checks are
+// assumed to be already done.
+//
+bool Semantic::ProtectedAccessCheck(TypeSymbol *containing_type)
 {
     TypeSymbol *this_type = ThisType();
+    return (this_type -> IsSubclass(containing_type) ||
+            this_type -> ContainingPackage() == containing_type -> ContainingPackage());
+}
 
+
+//
+// FindVariableMember resolves a qualified field reference. The parameter
+// type is the type of the qualifying expression, field_access is the
+// expression being resolved.
+//
+void Semantic::FindVariableMember(TypeSymbol *type,
+                                  AstFieldAccess *field_access)
+{
     //
     // TypeCast() returns true for super, this, and instance creation as
     // well as true type names, hence the extra check
     //
+    assert(field_access -> base);
     bool base_is_type = field_access -> base -> symbol -> TypeCast() != NULL &&
                         field_access -> base -> IsName();
-
-    //
-    // TODO: Is this needed ?
-    //
-    // This operation may throw NullPointerException
-    //
-    SymbolSet *exception_set = TryExceptionTableStack().Top();
-    if (exception_set && ! field_access -> base -> symbol -> TypeCast())
-        exception_set -> AddElement(control.RuntimeException());
 
     if (type -> Bad())
     {
         //
-        // If no error has been detected so far, report this as an error so that
-        // we don't try to generate code later. On the other hand, if an error
-        // had been detected prior to this, don't flood the user with spurious
-        // messages.
+        // If no error has been detected so far, report this as an error so
+        // that we don't try to generate code later. On the other hand, if an
+        // error had been detected prior to this, don't flood the user with
+        // spurious messages.
         //
         if (NumErrors() == 0)
-            ReportAccessedFieldNotFound(field_access, type);
+            ReportVariableNotFound(field_access, type);
         field_access -> symbol = control.no_type;
     }
     else if (type == control.null_type || type -> Primitive())
@@ -2079,102 +2201,102 @@ void Semantic::FindVariableMember(TypeSymbol *type, TypeSymbol *environment_type
     }
     else
     {
-        TypeAccessCheck(field_access -> base, type);
-
-        VariableSymbol *variable_symbol = FindVariableInType(type, field_access);
-        if (variable_symbol)
+        TypeSymbol *this_type = ThisType();
+        if (! TypeAccessCheck(field_access -> base, type))
         {
-            assert(variable_symbol -> IsTyped());
+            field_access -> symbol = control.no_type;
+            return;
+        }
 
-            if (base_is_type)
+        VariableSymbol *variable = FindVariableInType(type, field_access);
+        if (variable)
+        {
+            assert(variable -> IsTyped());
+
+            if (base_is_type && ! variable -> ACC_STATIC())
             {
-                if (! variable_symbol -> ACC_STATIC())
+                ReportSemError(SemanticError::NAME_NOT_CLASS_VARIABLE,
+                               field_access -> identifier_token,
+                               field_access -> identifier_token,
+                               lex_stream -> NameString(field_access -> identifier_token));
+                field_access -> symbol = control.no_type;
+                return;
+            }
+            //
+            // If a variable is FINAL, initialized with a constant expression,
+            // and of the form TypeName.Identifier, we substitute the
+            // expression here - JLS 15.28. If it is of any other form, we
+            // still compute the initial value, which will be inlined in
+            // bytecode, but do not treat the expression as a constant - JLS2
+            // clarifications.
+            //
+            if (variable -> ACC_FINAL())
+            {
+                if (! variable -> IsInitialized())
+                    ComputeFinalValue(variable);
+                if (base_is_type)
                 {
-                    ReportSemError(SemanticError::NAME_NOT_CLASS_VARIABLE,
-                                   field_access -> identifier_token,
-                                   field_access -> identifier_token,
-                                   lex_stream -> NameString(field_access -> identifier_token));
-                    field_access -> symbol = control.no_type;
-                    return;
-                }
-                //
-                // If a variable is FINAL, initialized with a constant
-                // expression, and of the form TypeName.Identifier, we
-                // substitute the expression here. - JLS 15.28
-                //
-                if (variable_symbol -> ACC_FINAL())
-                {
-                    //
-                    // If the field declaration of the type has been completely processed,
-                    // simply retrieve the value. Otherwise, compute the value of the
-                    // initialization expression in question on the fly if the variable
-                    // in question is not in the same type. Recall that static variables
-                    // must be processed in the textual order in which they appear in the
-                    // body of a type. Therefore, if the static initialization of a field
-                    // refers to another variable in the same type it must have appeared
-                    // before the current field declaration otherwise we will emit an error
-                    // message later...
-                    //
-                    if (variable_symbol -> IsDeclarationComplete())
-                        field_access -> value = variable_symbol -> initial_value;
-                    else if (variable_symbol -> declarator)
-                    {
-                        AstVariableDeclarator *declarator = variable_symbol -> declarator -> VariableDeclaratorCast();
-                        //
-                        // If the variable declarator in question exists and its computation is not
-                        // pending (to avoid looping) and it has a simple expression initializer.
-                        //
-                        if (declarator && (! declarator -> pending) &&
-                            declarator -> variable_initializer_opt &&
-                            (! declarator -> variable_initializer_opt -> ArrayInitializerCast()))
-                        {
-                            TypeSymbol *variable_type = (TypeSymbol *) variable_symbol -> owner;
-                            Semantic *sem = variable_type -> semantic_environment -> sem;
-                            field_access -> value = sem -> ComputeFinalValue(declarator);
-                        }
-                    }
+                    assert(variable -> IsInitialized());
+                    field_access -> value = variable -> initial_value;
                 }
             }
 
-            TypeSymbol *containing_type = (TypeSymbol *) variable_symbol -> owner;
             //
             // Access to a private or protected variable in an enclosing type ?
             //
+            TypeSymbol *containing_type = (TypeSymbol *) variable -> owner;
             if (this_type != containing_type &&
-                this_type -> outermost_type == environment_type -> outermost_type &&
-                (variable_symbol -> ACC_PRIVATE() ||
-                 (variable_symbol -> ACC_PROTECTED() &&
-                  containing_type -> ContainingPackage() != environment_type -> ContainingPackage())))
+                (variable -> ACC_PRIVATE() ||
+                 (variable -> ACC_PROTECTED() &&
+                  ! ProtectedAccessCheck(containing_type))))
             {
-                assert((! variable_symbol -> ACC_PRIVATE()) || containing_type == environment_type);
-
                 if (field_access -> IsConstant())
-                    field_access -> symbol = variable_symbol;
+                    field_access -> symbol = variable;
                 else
                 {
-                    AstFieldAccess *method_name = compilation_unit -> ast_pool -> GenFieldAccess();
-                    method_name -> base = field_access -> base; // TODO: WARNING: sharing of Ast subtree !!!
-                    method_name -> dot_token = field_access -> identifier_token;
+                    //
+                    // Find the right enclosing class to place the accessor
+                    // method in. For private fields, the containing type; for
+                    // protected fields, an enclosing class which is related
+                    // to the containing type.
+                    //
+                    TypeSymbol *environment_type = containing_type;
+                    if (variable -> ACC_PROTECTED())
+                    {
+                        for (SemanticEnvironment *env = this_type -> semantic_environment;
+                             env; env = env -> previous)
+                        {
+                            if (env -> Type() -> IsSubclass(containing_type))
+                            {
+                                environment_type = env -> Type();
+                                break;
+                            }
+                        }
+                        assert(environment_type != containing_type);
+                    }
+
+                    AstFieldAccess *method_name     = compilation_unit -> ast_pool -> GenFieldAccess();
+                    method_name -> base             = field_access -> base; // TODO: WARNING: sharing of Ast subtree !!!
+                    method_name -> dot_token        = field_access -> identifier_token;
                     method_name -> identifier_token = field_access -> identifier_token;
-                    method_name -> symbol = variable_symbol;
+                    method_name -> symbol           = variable;
 
-                    AstMethodInvocation *p       = compilation_unit -> ast_pool -> GenMethodInvocation();
-                    p -> method                  = method_name;
-                    p -> left_parenthesis_token  = field_access -> identifier_token;
-                    p -> right_parenthesis_token = field_access -> identifier_token;
-                    p -> symbol                  = environment_type -> GetReadAccessMethod(variable_symbol);
+                    AstMethodInvocation *accessor       = compilation_unit -> ast_pool -> GenMethodInvocation();
+                    accessor -> method                  = method_name;
+                    accessor -> left_parenthesis_token  = field_access -> identifier_token;
+                    accessor -> right_parenthesis_token = field_access -> identifier_token;
+                    accessor -> symbol                  = environment_type -> GetReadAccessMethod(variable, field_access -> base -> Type());
 
-                    if (! variable_symbol -> ACC_STATIC())
-                        p -> AddArgument(field_access -> base);
+                    if (! variable -> ACC_STATIC())
+                        accessor -> AddArgument(field_access -> base);
 
-                    field_access -> resolution_opt = p;
-                    field_access -> symbol = p -> symbol;
+                    field_access -> resolution_opt = accessor;
+                    field_access -> symbol = accessor -> symbol;
                 }
             }
             else
             {
-                field_access -> symbol = variable_symbol;
-                MemberAccessCheck(field_access, type, variable_symbol);
+                field_access -> symbol = variable;
             }
         }
         else
@@ -2198,38 +2320,40 @@ void Semantic::FindVariableMember(TypeSymbol *type, TypeSymbol *environment_type
             }
             else
             {
-                ReportAccessedFieldNotFound(field_access, type);
+                ReportVariableNotFound(field_access, type);
                 field_access -> symbol = control.no_type;
             }
         }
     }
-
-    return;
 }
 
 //
 // NOTE that method names are not processed here but by the function
-// ProcessMethodName.
+// ProcessMethodName. Also, for ease in parsing, we treat name.class,
+// name.super, and name.this like field accesses, so those cases are covered
+// here under qualified names.
 //
 void Semantic::ProcessAmbiguousName(Ast *name)
 {
     TypeSymbol *this_type = ThisType();
 
-    AstSimpleName *simple_name;
+    AstSimpleName *simple_name = name -> SimpleNameCast();
 
     //
-    // ...If the ambiguous name is a simple name,...
+    // JLS2 6.5.2: If the ambiguous name is a simple name,...
     //
-    if ((simple_name = name -> SimpleNameCast()))
+    if (simple_name)
     {
         TypeSymbol *type;
         //
-        // ... If the Identifier appears within the scope (6.3) if a local variable declaration (14.3)
-        // or parameter declaration (8.4.1, 8.6.1, 14.18) with that name, then the ambiguous name is
+        // ... If the Identifier appears within the scope (6.3) if a local
+        // variable declaration (14.3) or parameter declaration (8.4.1,
+        // 8.6.1, 14.18) with that name, then the ambiguous name is
         // reclassified as an ExpressionName...
         //
-        // ...Otherwise, consider the class or interface C within whose declaration the Identifier occurs.
-        // If C has one or more fields with that name, which may be either declared within it or inherited,
+        // ...Otherwise, consider the class or interface C within whose
+        // declaration the Identifier occurs. If C has one or more fields
+        // with that name, which may be either declared within it or inherited,
         // then the Ambiguous name is reclassified as an ExpressionName....
         //
         SemanticEnvironment *where_found;
@@ -2252,42 +2376,57 @@ void Semantic::ProcessAmbiguousName(Ast *name)
             // pointer dereferences (and method access in the case of a
             // private variable) necessary to  get to it.
             //
-            if (where_found != state_stack.Top())
+            if (where_found != state_stack.Top() && ! simple_name -> value)
                 CreateAccessToScopedVariable(simple_name, where_found -> Type());
         }
         //
-        // ...Otherwise, if a type of that name is declared in the compilation unit (7.3) containing
-        // the Identifier, either by a single-type-import declaration (7.5.1) or by a class or interface
-        // type declaration (7.6), then the Ambiguous name is reclassified as a TypeName...
+        // ...Otherwise, if a type of that name is declared in the compilation
+        // unit (7.3) containing the Identifier, either by a
+        // single-type-import declaration (7.5.1) or by a class or interface
+        // type declaration (7.6), then the Ambiguous name is reclassified as
+        // a TypeName...
         //
-        // ...Otherwise, if a type of that name is declared in another compilation unit (7.3) of the
-        // package (7.1) of the compilation unit containing the Identifier, then the Ambiguous Name
-        // is reclassified as a TypeName...
+        // ...Otherwise, if a type of that name is declared in another
+        // compilation unit (7.3) of the package (7.1) of the compilation unit
+        // containing the Identifier, then the Ambiguous Name is reclassified
+        // as a TypeName...
         //
-        // ...Otherwise, if a type of that name is declared by exactly one type-import-on-demand declaration
-        // (7.5.2) of the compilation unit containing the Identifier, then the AmbiguousName is reclassified
+        // ...Otherwise, if a type of that name is declared by exactly one
+        // type-import-on-demand declaration (7.5.2) of the compilation unit
+        // containing the Identifier, then the AmbiguousName is reclassified
         // as a TypeName
         //
-        // ...Otherwise, if a type of that name is declared by more than one type-import-on-demand declaration
-        // of the compilation unit containing the Identifier, then a compile-time error results.
+        // ...Otherwise, if a type of that name is declared by more than one
+        // type-import-on-demand declaration of the compilation unit
+        // containing the Identifier, then a compile-time error results.
         //
         else if ((type = FindType(simple_name -> identifier_token)))
              simple_name -> symbol = type;
         //
-        // ...Otherwise, the Ambiguous name is reclassified as a PackageName. A later step determines
-        // whether or not a package of that name actually exists.
+        // ...Otherwise, the Ambiguous name is reclassified as a PackageName.
+        // While the JLS claims a later step determines whether or not
+        // a package of that name actually exists, it is pointless to defer
+        // the error that long, as a package cannot qualify a method or field
+        // access, and a subpackage requires the base package to exist.
         //
         else
         {
             NameSymbol *name_symbol = lex_stream -> NameSymbol(simple_name -> identifier_token);
             PackageSymbol *package = control.external_table.FindPackageSymbol(name_symbol);
-            if (package)
+            if (! package)
+            {
+                //
+                // One last check in case the package was not imported.
+                //
+                package = control.external_table.InsertPackageSymbol(name_symbol, NULL);
+                control.FindPathsToDirectory(package);
+            }
+            if (package -> directory.Length())
                 simple_name -> symbol = package;
             else
             {
-                package = control.external_table.InsertPackageSymbol(name_symbol, NULL);
-                control.FindPathsToDirectory(package);
-                simple_name -> symbol = package;
+                ReportVariableNotFound(simple_name, this_type);
+                simple_name -> symbol = control.no_type;
             }
         }
     }
@@ -2297,80 +2436,90 @@ void Semantic::ProcessAmbiguousName(Ast *name)
     else
     {
         AstFieldAccess *field_access = (AstFieldAccess *) name;
-
         assert(name -> FieldAccessCast());
 
-        TypeSymbol *type = NULL;
+        //
+        // ...First, classify the name or expression to the left of the '.'...
+        // If there are more names to the left, we short-circuit
+        // ProcessFieldAccess, since we already know what context the name
+        // is in.
+        //
+        AstExpression *base = field_access -> base;
+        if (base -> FieldAccessCast() || base -> SimpleNameCast())
+        {
+            assert(field_access -> IsNameAccess());
+            ProcessAmbiguousName(base);
+        }
+        else ProcessExpression(base);
 
+        TypeSymbol *type = base -> Type();
+        assert(type || base -> symbol -> PackageCast());
+
+        if (type == control.no_type)
+        {
+            field_access -> symbol = control.no_type;
+            return;
+        }
+
+        //
+        // Class literal access
+        //
         if (field_access -> IsClassAccess())
         {
             AddDependence(this_type, control.NoClassDefFoundError(), field_access -> identifier_token);
             AddDependence(this_type, control.ClassNotFoundException(), field_access -> identifier_token);
 
-            AstTypeExpression *base = (AstTypeExpression *) field_access -> base;
-
-            AstArrayType *array_type = base -> type -> ArrayTypeCast();
-            if (array_type)
-            {
-                AstPrimitiveType *primitive_type = array_type -> type -> PrimitiveTypeCast();
-                TypeSymbol *unit = (primitive_type ? FindPrimitiveType(primitive_type) : MustFindType(array_type -> type));
-                type = unit -> GetArrayType((Semantic *) this, array_type -> NumBrackets());
-            }
-            else
-            {
-                AstPrimitiveType *primitive_type = base -> type -> PrimitiveTypeCast();
-                type = (primitive_type ? FindPrimitiveType(primitive_type) : MustFindType(base -> type));
-            }
-
-            TypeSymbol *outermost_type = this_type -> outermost_type;
-
             if (type -> Primitive())
             {
                 if (type == control.int_type)
-                     type = control.Integer();
+                    type = control.Integer();
                 else if (type == control.double_type)
-                     type = control.Double();
+                    type = control.Double();
                 else if (type == control.char_type)
-                     type = control.Character();
+                    type = control.Character();
                 else if (type == control.long_type)
-                     type = control.Long();
+                    type = control.Long();
                 else if (type == control.float_type)
-                     type = control.Float();
+                    type = control.Float();
                 else if (type == control.byte_type)
-                     type = control.Byte();
+                    type = control.Byte();
                 else if (type == control.short_type)
-                     type = control.Short();
+                    type = control.Short();
                 else if (type == control.boolean_type)
-                     type = control.Boolean();
+                    type = control.Boolean();
                 else // (type == control.void_type)
-                     type = control.Void();
-                base -> symbol = type;
+                    type = control.Void();
 
-                VariableSymbol *variable_symbol = type -> FindVariableSymbol(control.type_name_symbol);
+                VariableSymbol *variable_symbol =
+                    type -> FindVariableSymbol(control.type_name_symbol);
 
-                assert(variable_symbol);
-
-                if (control.option.deprecation &&
-                    variable_symbol -> IsDeprecated() &&
-                    variable_symbol -> owner -> TypeCast() -> outermost_type != ThisType() -> outermost_type)
+                if (variable_symbol)
                 {
-                    ReportSemError(SemanticError::DEPRECATED_FIELD,
-                                   field_access -> identifier_token,
-                                   field_access -> identifier_token,
-                                   variable_symbol -> Name(),
-                                   variable_symbol -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
-                                   variable_symbol -> owner -> TypeCast() -> ExternalName());
+                    if (! variable_symbol -> IsTyped())
+                    {
+                        variable_symbol ->
+                            ProcessVariableSignature(this, field_access ->
+                                                     identifier_token);
+                    }
+                    variable_symbol -> MarkInitialized();
+                    field_access -> symbol = variable_symbol;
                 }
-
-                if (! variable_symbol -> IsTyped())
-                    variable_symbol -> ProcessVariableSignature((Semantic *) this, field_access -> identifier_token);
-
-                field_access -> symbol = variable_symbol;
+                else
+                {
+                    ReportSemError(SemanticError::NON_STANDARD_LIBRARY_TYPE,
+                                   0,
+                                   0,
+                                   type -> ContainingPackage() -> PackageName(),
+                                   type -> ExternalName());
+                    field_access -> symbol = control.no_type;
+                }
             }
             else
             {
-                TypeAccessCheck(base, array_type ? type -> base_type : type);
-                base -> symbol = type;
+                //
+                // We have already checked that the type is accessible
+                //
+                TypeSymbol *outermost_type = this_type -> outermost_type;
 
                 if (outermost_type -> ACC_INTERFACE())
                 {
@@ -2404,127 +2553,89 @@ void Semantic::ProcessAmbiguousName(Ast *name)
                     AddDependence(this_type, control.Class(), field_access -> identifier_token);
 
                     VariableSymbol *variable_symbol = outermost_type -> FindOrInsertClassLiteral(type);
-                    if (this_type == outermost_type)
-                    {
-                        AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(field_access -> identifier_token);
-                        simple_name -> symbol = variable_symbol;
+                    AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(field_access -> identifier_token);
+                    simple_name -> symbol = variable_symbol;
 
-                        field_access -> symbol = variable_symbol;
-                        field_access -> resolution_opt = simple_name;
-                    }
-                    else
-                    {
-                        AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(field_access -> identifier_token);
-                        simple_name -> symbol      = outermost_type;
-
-                        AstFieldAccess *method_access     = compilation_unit -> ast_pool -> GenFieldAccess();
-                        method_access -> base             = simple_name;
-                        method_access -> dot_token        = field_access -> identifier_token;
-                        method_access -> identifier_token = field_access -> identifier_token;
-                        method_access -> symbol           = variable_symbol; // the variable in question
-
-                        //
-                        // Recall that the variable is static...
-                        //
-                        assert(variable_symbol -> ACC_STATIC());
-
-                        AstMethodInvocation *method_call       = compilation_unit -> ast_pool -> GenMethodInvocation();
-                        method_call -> method                  = method_access;
-                        method_call -> left_parenthesis_token  = field_access -> identifier_token;
-                        method_call -> right_parenthesis_token = field_access -> identifier_token;
-                        method_call -> symbol                  = outermost_type -> GetWriteAccessMethod(variable_symbol);
-
-                        field_access -> resolution_opt = method_call;
-                        field_access -> symbol = outermost_type -> GetReadAccessMethod(variable_symbol);
-                    }
+                    field_access -> symbol = variable_symbol;
+                    field_access -> resolution_opt = simple_name;
                 }
             }
         }
+        //
+        // Qualified this or super access (simple this and super are covered
+        // elsewhere).
+        //
+        else if (field_access -> IsThisAccess() ||
+                 field_access -> IsSuperAccess())
+        {
+            TypeSymbol *enclosing_type = base -> symbol -> TypeCast();
+            if (! enclosing_type)
+            {
+                ReportSemError(SemanticError::NOT_A_TYPE,
+                               base -> LeftToken(),
+                               base -> RightToken());
+                field_access -> symbol = control.no_type;
+            }
+            else if (enclosing_type -> ACC_INTERFACE())
+            {
+                ReportSemError(SemanticError::NOT_A_CLASS,
+                               base -> LeftToken(),
+                               base -> RightToken(),
+                               enclosing_type -> ContainingPackage() -> PackageName(),
+                               enclosing_type -> ExternalName());
+                field_access -> symbol = control.no_type;
+            }
+            else if (this_type == control.Object() &&
+                     field_access -> IsSuperAccess())
+            {
+                ReportSemError(SemanticError::OBJECT_HAS_NO_SUPER_TYPE,
+                               field_access -> LeftToken(),
+                               field_access -> RightToken());
+                field_access -> symbol = control.no_type;
+            }
+            else if (ExplicitConstructorInvocation() &&
+                     enclosing_type == this_type)
+            {
+                ReportSemError(SemanticError::SELF_IN_EXPLICIT_CONSTRUCTOR,
+                               field_access -> LeftToken(),
+                               field_access -> RightToken(),
+                               (field_access -> IsSuperAccess() ?
+                                StringConstant::US_super :
+                                StringConstant::US_this));
+                field_access -> symbol = control.no_type;
+            }
+            else if (! this_type -> IsNestedIn(enclosing_type))
+            {
+                ReportSemError(SemanticError::ILLEGAL_THIS_FIELD_ACCESS,
+                               field_access -> LeftToken(),
+                               field_access -> RightToken(),
+                               enclosing_type -> ContainingPackage() -> PackageName(),
+                               enclosing_type -> ExternalName(),
+                               this_type -> ContainingPackage() -> PackageName(),
+                               this_type -> ExternalName());
+                field_access -> symbol = control.no_type;
+            }
+            else
+            {
+                field_access -> resolution_opt =
+                    CreateAccessToType(field_access, enclosing_type);
+                field_access -> symbol =
+                    field_access -> resolution_opt -> symbol;
+            }
+        }
+        //
+        // Regular field access
+        //
         else
         {
-            AstExpression* base = field_access -> base;
-            AstFieldAccess *sub_field_access = base -> FieldAccessCast();
-            simple_name = base -> SimpleNameCast();
+            PackageSymbol *package = base -> symbol -> PackageCast();
 
-            //
-            // ...First, classify the name or expression to the left of the '.'...
-            //
-            if (simple_name || sub_field_access)
-                ProcessAmbiguousName(base);
-            else // The qualifier might be a complex String constant
-                ProcessExpressionOrStringConstant(base);
-
-            if (base -> symbol == control.no_type)
-            {
-                field_access -> symbol = control.no_type;
-                return;
-            }
-
-            PackageSymbol *package;
-            Symbol *symbol = base -> symbol;
-
-            if (field_access -> IsThisAccess() || field_access -> IsSuperAccess())
-            {
-                TypeSymbol *enclosing_type = symbol -> TypeCast();
-                if (enclosing_type == control.no_type)
-                    field_access -> symbol = control.no_type;
-                else
-                {
-                    if (! enclosing_type)
-                    {
-                        ReportSemError(SemanticError::NOT_A_TYPE,
-                                       base -> LeftToken(),
-                                       base -> RightToken());
-                        field_access -> symbol = control.no_type;
-                    }
-                    else if (enclosing_type -> ACC_INTERFACE())
-                    {
-                        ReportSemError(SemanticError::NOT_A_CLASS,
-                                       base -> LeftToken(),
-                                       base -> RightToken(),
-                                       enclosing_type -> ContainingPackage() -> PackageName(),
-                                       enclosing_type -> ExternalName());
-                        field_access -> symbol = control.no_type;
-                    }
-                    else
-                    {
-                        if (! (this_type -> IsNestedIn(enclosing_type) && this_type -> CanAccess(enclosing_type)))
-                        {
-                            if (this_type == enclosing_type && field_access -> IsThisAccess())
-                            {
-                                ReportSemError(SemanticError::MISPLACED_THIS_EXPRESSION,
-                                               field_access -> LeftToken(),
-                                               field_access -> RightToken());
-                            }
-                            else
-                            {
-                                ReportSemError(SemanticError::ILLEGAL_THIS_FIELD_ACCESS,
-                                               field_access -> LeftToken(),
-                                               field_access -> RightToken(),
-                                               enclosing_type -> ContainingPackage() -> PackageName(),
-                                               enclosing_type -> ExternalName(),
-                                               this_type -> ContainingPackage() -> PackageName(),
-                                               this_type -> ExternalName());
-                            }
-
-                            field_access -> symbol = control.no_type;
-                        }
-                        else
-                        {
-                            //
-                            // Note that in the case of a Super access, there will be further resolution later.
-                            //
-                            field_access -> resolution_opt = CreateAccessToType(field_access, enclosing_type);
-                            field_access -> symbol = field_access -> resolution_opt -> symbol;
-                        }
-                    }
-                }
-            }
-            else if ((package = symbol -> PackageCast()))
+            if (package)
             {
                 //
-                // ... If there is a package whose name is the name to the left of the '.' and that package
-                // contains a declaration of a type whose name is the same as the Identifier, then the
+                // ... If there is a package whose name is the name to the
+                // left of the '.' and that package contains a declaration of
+                // a type whose name is the same as the Identifier, then the
                 // AmbiguousName is reclassified as a TypeName...
                 //
                 NameSymbol *name_symbol = lex_stream -> NameSymbol(field_access -> identifier_token);
@@ -2545,89 +2656,54 @@ void Semantic::ProcessAmbiguousName(Ast *name)
                         field_access -> symbol = type;
                     }
                     //
-                    // ... Otherwise, this AmbiguousName is reclassified as a PackageName. A later step determines
-                    // whether or not a package of that name actually exists...
+                    // ... Otherwise, this AmbiguousName is reclassified as a
+                    // PackageName. While the JLS claims a later step
+                    // determines whether or not a package of that name
+                    // actually exists, it is pointless to defer the error
+                    // that long, as a package cannot qualify a method or field
+                    // access, and a subpackage requires the base package to
+                    // exist.
                     //
                     else
                     {
                         PackageSymbol *subpackage = package -> FindPackageSymbol(name_symbol);
-                        if (! subpackage) // A new package ?
+                        if (! subpackage)
                         {
+                            //
+                            // One last check in case the subpackage was not
+                            // imported.
+                            //
                             subpackage = package -> InsertPackageSymbol(name_symbol);
                             control.FindPathsToDirectory(subpackage);
                         }
-                        field_access -> symbol = subpackage;
+                        if (subpackage -> directory.Length())
+                            field_access -> symbol = subpackage;
+                        else
+                        {
+                            ReportSemError(SemanticError::UNKNOWN_AMBIGUOUS_NAME,
+                                           field_access -> LeftToken(),
+                                           field_access -> RightToken(),
+                                           name_symbol -> Name());
+                            field_access -> symbol = control.no_type;
+                        }
                     }
                 }
             }
-            else if (sub_field_access && sub_field_access -> IsSuperAccess())
-            {
-                if (sub_field_access -> Type() == control.no_type)
-                    field_access -> symbol = control.no_type;
-                else if (sub_field_access -> Type() == control.Object())
-                {
-                    ReportSemError(SemanticError::OBJECT_HAS_NO_SUPER_TYPE,
-                                   sub_field_access -> LeftToken(),
-                                   sub_field_access -> RightToken(),
-                                   sub_field_access -> Type() -> ContainingPackage() -> PackageName(),
-                                   sub_field_access -> Type() -> ExternalName());
-                    field_access -> symbol = control.no_type;
-                }
-                else
-                {
-                    type = sub_field_access -> Type() -> super;
-                    FindVariableMember(type, sub_field_access -> Type(), field_access);
-                }
-            }
+            // ...Whether the qualifier is a type name, variable, or method
+            // call, this is a regular field access
             //
-            // ...If the name to the left of the '.' is reclassified as a TypeName, then this AmbiguousName is
-            // reclassified as an ExpressionName
-            //
-            else if ((type = symbol -> TypeCast()))
+            else
             {
-                FindVariableMember(type, base -> Type(), field_access);
+                FindVariableMember(type, field_access);
+                TypeSymbol *parent_type = (type -> IsArray()
+                                           ? type -> base_type : type);
+                if (! parent_type -> Primitive())
+                    AddDependence(this_type, parent_type,
+                                  field_access -> identifier_token,
+                                  field_access -> IsConstant());
             }
-            //
-            // ...If the name to the left of the '.' is reclassified as an ExpressionName, then this
-            // AmbiguousName is reclassified as an instance member field reference. Note that we have two subcases to
-            // consider: the case where the subexpression to the left is resolved to a variable and
-            // the case where the subexpression is resolved to a method call.
-            //
-            else if (symbol -> VariableCast())
-            {
-                assert(symbol -> VariableCast() -> IsTyped());
-
-                type = symbol -> VariableCast() -> Type();
-
-                FindVariableMember(type, type, field_access);
-            }
-            else if (symbol -> MethodCast())
-            {
-                assert(symbol -> MethodCast() -> IsTyped());
-
-                type = symbol -> MethodCast() -> Type();
-
-                FindVariableMember(type, type, field_access);
-            }
-            else // illegal Name !!!
-            {
-                ReportSemError(SemanticError::UNKNOWN_QUALIFIED_NAME_BASE,
-                               base -> LeftToken(),
-                               base -> RightToken(),
-                               symbol -> Name());
-                field_access -> symbol = control.no_type;
-            }
-        }
-
-        if (type)
-        {
-            TypeSymbol *parent_type = (type -> IsArray() ? type -> base_type : type);
-            if (! parent_type -> Primitive())
-                AddDependence(this_type, parent_type, field_access -> identifier_token, field_access -> IsConstant());
         }
     }
-
-    return;
 }
 
 
@@ -2663,8 +2739,6 @@ void Semantic::ProcessFieldAccess(Ast *expr)
             assert((! field_access -> symbol -> VariableCast()) || field_access -> symbol -> VariableCast() -> IsTyped());
         }
     }
-
-    return;
 }
 
 
@@ -2676,18 +2750,9 @@ void Semantic::ProcessCharacterLiteral(Ast *expr)
 
     if (! literal -> value)
         control.int_pool.FindOrInsertChar(literal);
-    if (literal -> value == control.BadValue())
-    {
-        ReportSemError(SemanticError::INVALID_CHARACTER_VALUE,
-                       char_literal -> LeftToken(),
-                       char_literal -> RightToken());
-        char_literal -> symbol = control.no_type;
-    }
-    else
-    {
-        char_literal -> value = literal -> value;
-        char_literal -> symbol = control.char_type;
-    }
+    assert(literal -> value != control.BadValue());
+    char_literal -> value = literal -> value;
+    char_literal -> symbol = control.char_type;
 }
 
 
@@ -2737,11 +2802,12 @@ void Semantic::ProcessLongLiteral(Ast *expr)
 }
 
 
-void Semantic::ProcessFloatingPointLiteral(Ast *expr)
+void Semantic::ProcessFloatLiteral(Ast *expr)
 {
-    AstFloatingPointLiteral *float_literal = (AstFloatingPointLiteral *) expr;
+    AstFloatLiteral *float_literal = (AstFloatLiteral *) expr;
 
-    LiteralSymbol *literal = lex_stream -> LiteralSymbol(float_literal -> floating_point_literal_token);
+    LiteralSymbol *literal =
+        lex_stream -> LiteralSymbol(float_literal -> float_literal_token);
 
     if (! literal -> value)
         control.float_pool.FindOrInsertFloat(literal);
@@ -2764,7 +2830,8 @@ void Semantic::ProcessDoubleLiteral(Ast *expr)
 {
     AstDoubleLiteral *double_literal = (AstDoubleLiteral *) expr;
 
-    LiteralSymbol *literal = lex_stream -> LiteralSymbol(double_literal -> double_literal_token);
+    LiteralSymbol *literal =
+        lex_stream -> LiteralSymbol(double_literal -> double_literal_token);
 
     if (! literal -> value)
         control.double_pool.FindOrInsertDouble(literal);
@@ -2805,39 +2872,20 @@ void Semantic::ProcessStringLiteral(Ast *expr)
 {
     AstStringLiteral *string_literal = (AstStringLiteral *) expr;
 
-    LiteralSymbol *literal = lex_stream -> LiteralSymbol(string_literal -> string_literal_token);
+    LiteralSymbol *literal =
+        lex_stream -> LiteralSymbol(string_literal -> string_literal_token);
 
     if (! literal -> value)
         control.Utf8_pool.FindOrInsertString(literal);
-    if (literal -> value == control.BadValue())
-    {
-        ReportSemError(SemanticError::INVALID_STRING_VALUE,
-                       string_literal -> LeftToken(),
-                       string_literal -> RightToken());
-        string_literal -> symbol = control.no_type;
-    }
-    else
-    {
-        string_literal -> value = literal -> value;
-        string_literal -> symbol = control.String();
-    }
+    assert(literal -> value != control.BadValue());
+    string_literal -> value = literal -> value;
+    string_literal -> symbol = control.String();
 }
 
 
 void Semantic::ProcessArrayAccess(Ast *expr)
 {
     AstArrayAccess *array_access = (AstArrayAccess *) expr;
-
-    //
-    // TODO: Is this needed ?
-    //
-    // This operation may throw NullPointerException or IndefOutOfBoundsException
-    //
-    SymbolSet *exception_set = TryExceptionTableStack().Top();
-    if (exception_set)
-    {
-        exception_set -> AddElement(control.RuntimeException());
-    }
 
     ProcessExpression(array_access -> base);
     ProcessExpression(array_access -> expression);
@@ -2862,26 +2910,32 @@ void Semantic::ProcessArrayAccess(Ast *expr)
                            array_access -> base -> Type() -> Name());
         array_access -> symbol = control.no_type;
     }
-
-    return;
 }
 
 
-MethodSymbol *Semantic::FindMethodMember(TypeSymbol *type, TypeSymbol *environment_type, AstMethodInvocation *method_call)
+void Semantic::FindMethodMember(TypeSymbol *type,
+                                AstMethodInvocation *method_call)
 {
-    MethodSymbol *method = NULL;
     AstFieldAccess *field_access = method_call -> method -> FieldAccessCast();
+
+    //
+    // TypeCast() returns true for super, this, and instance creation as
+    // well as true type names, hence the extra check
+    //
+    assert(field_access && field_access -> base);
+    bool base_is_type = field_access -> base -> symbol -> TypeCast() != NULL &&
+                        field_access -> base -> IsName();
 
     if (type -> Bad())
     {
         //
-        // If no error has been detected so far, report this as an error so that
-        // we don't try to generate code later. On the other hand, if an error
-        // had been detected prior to this, don't flood the user with spurious
-        // messages.
+        // If no error has been detected so far, report this as an error so
+        // that we don't try to generate code later. On the other hand, if an
+        // error had been detected prior to this, don't flood the user with
+        // spurious messages.
         //
         if (NumErrors() == 0)
-            ReportMethodNotFound(method_call, lex_stream -> NameString(field_access -> identifier_token));
+            ReportMethodNotFound(method_call, type);
         method_call -> symbol = control.no_type;
     }
     else if (type == control.null_type || type -> Primitive())
@@ -2895,57 +2949,97 @@ MethodSymbol *Semantic::FindMethodMember(TypeSymbol *type, TypeSymbol *environme
     else
     {
         TypeSymbol *this_type = ThisType();
-        TypeAccessCheck(field_access -> base, type);
+        if (! TypeAccessCheck(field_access -> base, type))
+        {
+            method_call -> symbol = control.no_type;
+            return;
+        }
 
-        method = FindMethodInType(type, method_call);
-
+        MethodSymbol *method = FindMethodInType(type, method_call);
         if (method)
         {
             assert(method -> IsTyped());
 
+            if (base_is_type && (! method -> ACC_STATIC()))
+            {
+                ReportSemError(SemanticError::METHOD_NOT_CLASS_METHOD,
+                               field_access -> LeftToken(),
+                               field_access -> identifier_token,
+                               lex_stream -> NameString(field_access -> identifier_token));
+                method_call -> symbol = control.no_type;
+                return;
+            }
+
             //
-            // Access to an private or protected method in an enclosing type ?
+            // Apply method invocation conversion to the parameters
             //
-            if (this_type != method -> containing_type &&
-                this_type -> outermost_type == environment_type -> outermost_type &&
+            assert(method_call -> NumArguments() == method -> NumFormalParameters());
+
+            for (int i = 0; i < method_call -> NumArguments(); i++)
+            {
+                AstExpression *expr = method_call -> Argument(i);
+                method_call -> Argument(i) =
+                    ConvertToType(expr,
+                                  method -> FormalParameter(i) -> Type());
+            }
+
+            //
+            // Access to a private or protected method in an enclosing type ?
+            //
+            TypeSymbol *containing_type = (TypeSymbol *) method -> containing_type;
+            if (this_type != containing_type &&
                 (method -> ACC_PRIVATE() ||
                  (method -> ACC_PROTECTED() &&
-                  method -> containing_type -> ContainingPackage() != environment_type -> ContainingPackage())))
+                  ! ProtectedAccessCheck(containing_type)) ||
+                 (field_access -> base -> IsSuperExpression() &&
+                  ! method -> ACC_STATIC() &&
+                  ! this_type -> IsSubclass(containing_type))))
             {
-                assert((! method -> ACC_PRIVATE()) || method -> containing_type == environment_type);
-
-                if (method -> ACC_STATIC())
-                    method_call -> symbol = environment_type -> GetReadAccessMethod(method);
-                else
+                //
+                // Find the right enclosing class to place the accessor method
+                // in. For private methods, the containing type; for protected
+                // methods or superclass methods, an enclosing class which is
+                // related to the containing type.
+                //
+                TypeSymbol *environment_type = containing_type;
+                if (! method -> ACC_PRIVATE())
                 {
-                    AstMethodInvocation *old_method_call = method_call;
-
-                    //
-                    // TODO: WARNING: sharing of subtrees...
-                    //
-                    AstMethodInvocation *method_call       = compilation_unit -> ast_pool -> GenMethodInvocation();
-                    method_call -> method                  = old_method_call -> method;
-                    method_call -> left_parenthesis_token  = old_method_call -> left_parenthesis_token;
-                    method_call -> right_parenthesis_token = old_method_call -> right_parenthesis_token;
-                    method_call -> symbol                  = environment_type -> GetReadAccessMethod(method);
-                    method_call -> AddArgument(field_access -> base);
-                    for (int i = 0; i < old_method_call -> NumArguments(); i++)
-                        method_call -> AddArgument(old_method_call -> Argument(i));
-
-                    old_method_call -> symbol = method;
-                    old_method_call -> resolution_opt = method_call;
+                    for (SemanticEnvironment *env = this_type -> semantic_environment;
+                         env; env = env -> previous)
+                    {
+                        if (env -> Type() -> IsSubclass(containing_type))
+                        {
+                            environment_type = env -> Type();
+                            break;
+                        }
+                    }
+                    assert(environment_type != containing_type);
                 }
+
+                AstMethodInvocation *accessor       = compilation_unit -> ast_pool -> GenMethodInvocation();
+                accessor -> method                  = method_call -> method; // TODO: WARNING: sharing of subtrees...
+                accessor -> left_parenthesis_token  = method_call -> left_parenthesis_token;
+                accessor -> right_parenthesis_token = method_call -> right_parenthesis_token;
+                accessor -> symbol = environment_type -> GetReadAccessMethod(method, field_access -> base -> Type());
+
+                if (! method -> ACC_STATIC())
+                    accessor -> AddArgument(field_access -> base);
+                for (int i = 0; i < method_call -> NumArguments(); i++)
+                    accessor -> AddArgument(method_call -> Argument(i));
+
+                method_call -> symbol = method;
+                method_call -> resolution_opt = accessor;
             }
             else
             {
                 method_call -> symbol = method;
-                MemberAccessCheck(field_access, type, method);
             }
         }
-        else method_call -> symbol = control.no_type;
+        else
+        {
+            method_call -> symbol = control.no_type;
+        }
     }
-
-    return method;
 }
 
 
@@ -2953,24 +3047,8 @@ void Semantic::ProcessMethodName(AstMethodInvocation *method_call)
 {
     TypeSymbol *this_type = ThisType();
 
-    //
-    // TODO: Is this needed ?
-    //
-    // This operation may throw:
-    //
-    //        OutOfMemoryError
-    //        NoSuchMethodError
-    //        IllegalAccessError
-    //        IncompatibleClassChangeError
-    //
-    SymbolSet *exception_set = TryExceptionTableStack().Top();
-    if (exception_set)
-    {
-        exception_set -> AddElement(control.Error());
-    }
-
-    AstSimpleName *simple_name;
-    if ((simple_name = method_call -> method -> SimpleNameCast()))
+    AstSimpleName *simple_name = method_call -> method -> SimpleNameCast();
+    if (simple_name)
     {
         SemanticEnvironment *where_found;
         MethodSymbol *method = FindMethodInEnvironment(where_found, state_stack.Top(), method_call);
@@ -2983,22 +3061,32 @@ void Semantic::ProcessMethodName(AstMethodInvocation *method_call)
 
             if (! method -> ACC_STATIC())
             {
-                //
-                // We are in a static region if we are:
-                //     . in the body of a static method
-                //     . in the body of a static initializer
-                //     . processing an initializer expression for a static variable.
-                //
-                // See StaticRegion() Semantic.h for more detail.
-                //
-                // Note that a constructor is never static.
-                //
                 if (StaticRegion())
                 {
-                    ReportSemError(SemanticError::METHOD_NOT_CLASS_METHOD,
-                                   simple_name -> identifier_token,
-                                   method_call -> right_parenthesis_token,
-                                   lex_stream -> NameString(simple_name -> identifier_token));
+                    if (ExplicitConstructorInvocation() &&
+                        this_type -> IsSubclass(method -> containing_type))
+                    {
+                        //
+                        // If the method in question is an instance method
+                        // that is declared in this_type (this_type is
+                        // definitely a class) or one of its super classes,
+                        // then we have an error.
+                        //
+                        ReportSemError(SemanticError::INSTANCE_METHOD_IN_EXPLICIT_CONSTRUCTOR,
+                                       method_call -> LeftToken(),
+                                       method_call -> RightToken(),
+                                       method -> Header(),
+                                       method -> containing_type -> Name());
+                    }
+                    else
+                    {
+                        ReportSemError(SemanticError::METHOD_NOT_CLASS_METHOD,
+                                       simple_name -> identifier_token,
+                                       method_call -> right_parenthesis_token,
+                                       lex_stream -> NameString(simple_name -> identifier_token));
+                    }
+                    method_call -> symbol = control.no_type;
+                    return;
                 }
                 else if (ExplicitConstructorInvocation())
                 {
@@ -3006,16 +3094,39 @@ void Semantic::ProcessMethodName(AstMethodInvocation *method_call)
                     {
                         //
                         // If the method in question is an instance method
-                        // that is declared in this_type (this_type is definitely
-                        // a class) or one of its super classes, then we have an error ->
+                        // that is declared in this_type (this_type is
+                        // definitely a class) or one of its super classes,
+                        // then we have an error.
                         //
-                        ReportSemError(SemanticError::INSTANCE_METHOD_IN_EXPLICIT_CONSTRUCTOR_INVOCATION,
+                        ReportSemError(SemanticError::INSTANCE_METHOD_IN_EXPLICIT_CONSTRUCTOR,
                                        method_call -> LeftToken(),
                                        method_call -> RightToken(),
                                        method -> Header(),
                                        method -> containing_type -> Name());
                     }
+                    else
+                    {
+                        ReportSemError(SemanticError::METHOD_NOT_CLASS_METHOD,
+                                       simple_name -> identifier_token,
+                                       method_call -> right_parenthesis_token,
+                                       lex_stream -> NameString(simple_name -> identifier_token));
+                    }
+                    method_call -> symbol = control.no_type;
+                    return;
                 }
+            }
+
+            //
+            // Apply method invocation conversion to the parameters
+            //
+            assert(method_call -> NumArguments() == method -> NumFormalParameters());
+
+            for (int i = 0; i < method_call -> NumArguments(); i++)
+            {
+                AstExpression *expr = method_call -> Argument(i);
+                method_call -> Argument(i) =
+                    ConvertToType(expr,
+                                  method -> FormalParameter(i) -> Type());
             }
 
             method_call -> symbol = method;
@@ -3030,197 +3141,57 @@ void Semantic::ProcessMethodName(AstMethodInvocation *method_call)
     }
     else
     {
+        //
+        // ...First, classify the name or expression to the left of the '.'...
+        // If there are more names to the left, we short-circuit
+        // ProcessFieldAccess, since we already know what context the name
+        // is in.
+        //
         AstFieldAccess *field_access = method_call -> method -> FieldAccessCast();
         AstExpression* base = field_access -> base;
-        AstFieldAccess *sub_field_access = base -> FieldAccessCast();
-
-        if (base -> SimpleNameCast() || sub_field_access)
+        if (base -> FieldAccessCast() || base -> SimpleNameCast())
             ProcessAmbiguousName(base);
         else // The qualifier might be a complex String constant
             ProcessExpressionOrStringConstant(base);
 
-        if (base -> symbol == control.no_type)
+        if (base -> symbol -> PackageCast())
         {
+            ReportSemError(SemanticError::UNKNOWN_AMBIGUOUS_NAME,
+                           base -> LeftToken(),
+                           base -> RightToken(),
+                           base -> symbol -> PackageCast() -> PackageName());
             method_call -> symbol = control.no_type;
             return;
         }
 
-        TypeSymbol *type = NULL;
-        Symbol *symbol = base -> symbol;
+        TypeSymbol *type = base -> Type();
+        assert(type);
 
-        //
-        // If the base is a "super" field access, resolve it before proceeding
-        //
-        if (sub_field_access && sub_field_access -> IsSuperAccess())
+        if (type == control.no_type)
         {
-            if (sub_field_access -> Type() == control.no_type)
-                method_call -> symbol = control.no_type;
-            else if (sub_field_access -> Type() == control.Object())
-            {
-                ReportSemError(SemanticError::OBJECT_HAS_NO_SUPER_TYPE,
-                               sub_field_access -> LeftToken(),
-                               sub_field_access -> RightToken(),
-                               sub_field_access -> Type() -> ContainingPackage() -> PackageName(),
-                               sub_field_access -> Type() -> ExternalName());
-                method_call -> symbol = control.no_type;
-            }
-            else
-            {
-                MethodSymbol *method = FindMethodMember(sub_field_access -> Type() -> super, sub_field_access -> Type(), method_call);
-                field_access -> base = ConvertToType(sub_field_access, sub_field_access -> Type() -> super);
-
-                //
-                // TODO: This test was added in order to pass the test in section 8.4.3.1, page 159.
-                //       All I can find in the spec is that one example. Nowhere else could I find a
-                //       more formal statement.
-                //
-                if (method && method -> ACC_ABSTRACT())
-                {
-                    ReportSemError(SemanticError::ABSTRACT_METHOD_INVOCATION,
-                                   field_access -> LeftToken(),
-                                   field_access -> identifier_token,
-                                   lex_stream -> NameString(field_access -> identifier_token));
-                }
-            }
-        }
-        else if ((type = symbol -> TypeCast()))
-        {
-            if (type -> Bad())
-            {
-                //
-                // If no error has been detected so far, report this as an error so that
-                // we don't try to generate code later. On the other hand, if an error
-                // had been detected prior to this, don't flood the user with spurious
-                // messages.
-                //
-                if (NumErrors() == 0)
-                    ReportMethodNotFound(method_call, lex_stream -> NameString(field_access -> identifier_token));
-                method_call -> symbol = control.no_type;
-            }
-            else if (type == control.null_type || type -> Primitive())
-            {
-                ReportSemError(SemanticError::TYPE_NOT_REFERENCE,
-                               base -> LeftToken(),
-                               base -> RightToken(),
-                               type -> Name());
-                method_call -> symbol = control.no_type;
-            }
-            else
-            {
-                TypeAccessCheck(base, type);
-
-                MethodSymbol *method = FindMethodInType(type, method_call);
-
-                if (method)
-                {
-                    assert(method -> IsTyped());
-
-                    if (base -> IsName() && (! method -> ACC_STATIC()))
-                    {
-                        ReportSemError(SemanticError::METHOD_NOT_CLASS_METHOD,
-                                       field_access -> LeftToken(),
-                                       field_access -> identifier_token,
-                                       lex_stream -> NameString(field_access -> identifier_token));
-                    }
-                    //
-                    // TODO: This test was added in order to pass the test in section 8.4.3.1, page 159.
-                    //       All I can find in the spec is that one example. Nowhere else could I find a
-                    //       more formal statement.
-                    //
-                    else if (base -> IsSuperExpression() && method -> ACC_ABSTRACT())
-                        ReportSemError(SemanticError::ABSTRACT_METHOD_INVOCATION,
-                                       field_access -> LeftToken(),
-                                       field_access -> identifier_token,
-                                       lex_stream -> NameString(field_access -> identifier_token));
-
-                    //
-                    // Access to an private or protected method in an enclosing type ?
-                    //
-                    if ( this_type != method -> containing_type &&
-                         this_type -> outermost_type == type -> outermost_type &&
-                         (method -> ACC_PRIVATE() ||
-                          (method -> ACC_PROTECTED() &&
-                           type -> ContainingPackage() != method -> containing_type -> ContainingPackage())))
-                    {
-                        assert((! method -> ACC_PRIVATE()) || type == method -> containing_type);
-
-                        if (method -> ACC_STATIC())
-                            method_call -> symbol = type -> GetReadAccessMethod(method);
-                        else
-                        {
-                            AstMethodInvocation *old_method_call = method_call;
-
-                            //
-                            // TODO: WARNING: sharing of subtrees...
-                            //
-                            AstMethodInvocation *method_call       = compilation_unit -> ast_pool -> GenMethodInvocation();
-                            method_call -> method                  = old_method_call -> method;
-                            method_call -> left_parenthesis_token  = old_method_call -> left_parenthesis_token;
-                            method_call -> right_parenthesis_token = old_method_call -> right_parenthesis_token;
-                            method_call -> symbol                  = type -> GetReadAccessMethod(method);
-                            method_call -> AddArgument(field_access -> base);
-                            for (int i = 0; i < old_method_call -> NumArguments(); i++)
-                                method_call -> AddArgument(old_method_call -> Argument(i));
-
-                            old_method_call -> symbol = method;
-                            old_method_call -> resolution_opt = method_call;
-                        }
-                    }
-                    else
-                    {
-                        method_call -> symbol = method;
-                        MemberAccessCheck(field_access, type, method);
-                    }
-                }
-                else method_call -> symbol = control.no_type;
-            }
-        }
-        //
-        // ...If the name to the left of the '.' is reclassified as an ExpressionName, then this
-        // method call is reclassified as an instance member method call. Note that we have two subcases to
-        // consider: the case where the subexpression to the left is resolved to a variable and
-        // the case where the subexpression is resolved to a method call.
-        //
-        else if (symbol -> VariableCast())
-        {
-            assert(symbol -> VariableCast() -> IsTyped());
-
-            type = symbol -> VariableCast() -> Type();
-
-            (void) FindMethodMember(type, type, method_call);
-        }
-        else if (symbol -> MethodCast())
-        {
-            assert(symbol -> MethodCast() -> IsTyped());
-
-            type = symbol -> MethodCast() -> Type();
-
-            (void) FindMethodMember(type, type, method_call);
-        }
-        else // illegal Name !!!
-        {
-            PackageSymbol *package = symbol -> PackageCast();
-            NameSymbol *name_symbol = lex_stream -> NameSymbol(field_access -> identifier_token);
-
-            if (package && (package -> FindTypeSymbol(name_symbol) || Control::GetFile(control, package, name_symbol)))
-            {
-                ReportSemError(SemanticError::TYPE_NOT_METHOD,
-                               field_access -> identifier_token,
-                               field_access -> identifier_token,
-                               name_symbol -> Name());
-            }
-            else
-            {
-                ReportSemError(SemanticError::UNKNOWN_QUALIFIED_NAME_BASE,
-                               field_access -> base -> LeftToken(),
-                               field_access -> base -> RightToken(),
-                               symbol -> Name());
-            }
             method_call -> symbol = control.no_type;
+            return;
         }
-
-        if (type)
+        if (base -> IsSuperExpression())
         {
+            FindMethodMember(type, method_call);
+
+            //
+            // JLS2 15.12.3 requires this test
+            //
+            MethodSymbol *method = method_call -> symbol -> MethodCast();
+            if (method && method -> ACC_ABSTRACT())
+            {
+                ReportSemError(SemanticError::ABSTRACT_METHOD_INVOCATION,
+                               field_access -> LeftToken(),
+                               field_access -> identifier_token,
+                               lex_stream -> NameString(field_access -> identifier_token));
+            }
+        }
+        else
+        {
+            FindMethodMember(type, method_call);
+
             TypeSymbol *parent_type = (type -> IsArray() ? type -> base_type : type);
             if (! parent_type -> Primitive())
                 AddDependence(this_type, parent_type, field_access -> identifier_token);
@@ -3231,69 +3202,24 @@ void Semantic::ProcessMethodName(AstMethodInvocation *method_call)
     {
         MethodSymbol *method = (MethodSymbol *) method_call -> symbol;
 
+        SymbolSet *exception_set = TryExceptionTableStack().Top();
         if (exception_set)
-        {
             for (int i = method -> NumThrows() - 1; i >= 0; i--)
                 exception_set -> AddElement(method -> Throws(i));
 
-            //
-            // This operation may throw:
-            //
-            //        NullPointerException
-            //
-            if (! method -> ACC_STATIC())
-                exception_set -> AddElement(control.RuntimeException());
-
-            //
-            // This operation may throw:
-            //
-            //        UnsatisfiedLinkError
-            //
-            // However Error was already added to the exception set for other possible causes. See Above
-            //
-            // if (method -> ACC_NATIVE())
-            //    exception_set -> AddElement(control.Error());
-            //
-        }
-
-        //
-        // Recall that an instance initializer in the body of an anonymous type can
-        // throw any exception. The test below allows us to skip such blocks.
-        //
-        if (! (this_type -> Anonymous() && ThisMethod() && ThisMethod() -> Identity() == control.block_init_name_symbol))
+        for (int k = method -> NumThrows() - 1; k >= 0; k--)
         {
-            for (int k = method -> NumThrows() - 1; k >= 0; k--)
-            {
-                TypeSymbol *exception = method -> Throws(k);
-                if (! CatchableException(exception))
-                {
-                    ReportSemError(SemanticError::UNCATCHABLE_METHOD_THROWN_CHECKED_EXCEPTION,
-                                   method_call -> LeftToken(),
-                                   method_call -> RightToken(),
-                                   method -> Header(),
-                                   exception -> ContainingPackage() -> PackageName(),
-                                   exception -> ExternalName());
-                }
-            }
-        }
-
-        //
-        // If the method was resolved to another method, process the resolved method.
-        //
-        method_call = (method_call -> resolution_opt ? (AstMethodInvocation *) method_call -> resolution_opt : method_call);
-        method = (MethodSymbol *) method_call -> symbol;
-
-        assert(method_call -> NumArguments() == method -> NumFormalParameters());
-
-        for (int i = 0; i < method_call -> NumArguments(); i++)
-        {
-            AstExpression *expr = method_call -> Argument(i);
-            if (expr -> Type() != method -> FormalParameter(i) -> Type())
-                method_call -> Argument(i) = ConvertToType(expr, method -> FormalParameter(i) -> Type());
+            TypeSymbol *exception = method -> Throws(k);
+            if (UncaughtException(exception))
+                ReportSemError(SemanticError::UNCAUGHT_METHOD_EXCEPTION,
+                               method_call -> LeftToken(),
+                               method_call -> RightToken(),
+                               method -> Header(),
+                               exception -> ContainingPackage() -> PackageName(),
+                               exception -> ExternalName(),
+                               UncaughtExceptionContext());
         }
     }
-
-    return;
 }
 
 
@@ -3307,16 +3233,24 @@ void Semantic::ProcessMethodInvocation(Ast *expr)
     {
         AstExpression *expr = method_call -> Argument(i);
         ProcessExpressionOrStringConstant(expr);
-        no_bad_argument = no_bad_argument && (expr -> symbol != control.no_type);
+        if (expr -> symbol == control.no_type)
+            no_bad_argument = false;
+        else if (expr -> Type() == control.void_type)
+        {
+            no_bad_argument = false;
+            ReportSemError(SemanticError::TYPE_IS_VOID,
+                           expr -> LeftToken(),
+                           expr -> RightToken(),
+                           expr -> Type() -> Name());
+        }
     }
 
     if (no_bad_argument)
          ProcessMethodName(method_call);
     else method_call -> symbol = control.no_type;
 
-    assert(method_call -> symbol == control.no_type || ((MethodSymbol *) method_call -> symbol) -> IsTyped());
-
-    return;
+    assert(method_call -> symbol == control.no_type ||
+           ((MethodSymbol *) method_call -> symbol) -> IsTyped());
 }
 
 
@@ -3327,8 +3261,6 @@ void Semantic::ProcessNullLiteral(Ast *expr)
     //
     AstNullLiteral *null_literal = (AstNullLiteral *) expr;
     null_literal -> symbol = control.null_type;
-
-    return;
 }
 
 
@@ -3336,24 +3268,22 @@ void Semantic::ProcessThisExpression(Ast *expr)
 {
     AstThisExpression *this_expression = (AstThisExpression *) expr;
 
-    if (StaticRegion())
+    if (ExplicitConstructorInvocation())
+    {
+        ReportSemError(SemanticError::SELF_IN_EXPLICIT_CONSTRUCTOR,
+                       this_expression -> LeftToken(),
+                       this_expression -> RightToken(),
+                       StringConstant::US_this);
+        this_expression -> symbol = control.no_type;
+    }
+    else if (StaticRegion())
     {
         ReportSemError(SemanticError::MISPLACED_THIS_EXPRESSION,
                        this_expression -> LeftToken(),
                        this_expression -> RightToken());
         this_expression -> symbol = control.no_type;
     }
-    else if (ExplicitConstructorInvocation())
-    {
-        ReportSemError(SemanticError::THIS_IN_EXPLICIT_CONSTRUCTOR_INVOCATION,
-                       this_expression -> LeftToken(),
-                       this_expression -> RightToken(),
-                       lex_stream -> NameString(this_expression -> this_token));
-        this_expression -> symbol = control.no_type;
-    }
     else this_expression -> symbol = ThisType();
-
-    return;
 }
 
 
@@ -3361,19 +3291,26 @@ void Semantic::ProcessSuperExpression(Ast *expr)
 {
     AstSuperExpression *super_expression = (AstSuperExpression *) expr;
 
-    if (StaticRegion() || ThisType() == control.Object())
+    if (ThisType() == control.Object())
+    {
+        ReportSemError(SemanticError::OBJECT_HAS_NO_SUPER_TYPE,
+                       super_expression -> LeftToken(),
+                       super_expression -> RightToken());
+        super_expression -> symbol = control.no_type;
+    }
+    else if (ExplicitConstructorInvocation())
+    {
+        ReportSemError(SemanticError::SELF_IN_EXPLICIT_CONSTRUCTOR,
+                       super_expression -> LeftToken(),
+                       super_expression -> RightToken(),
+                       StringConstant::US_super);
+         super_expression -> symbol = control.no_type;
+    }
+    else if (StaticRegion())
     {
          ReportSemError(SemanticError::MISPLACED_SUPER_EXPRESSION,
                         super_expression -> LeftToken(),
                         super_expression -> RightToken());
-         super_expression -> symbol = control.no_type;
-    }
-    else if (ExplicitConstructorInvocation())
-    {
-        ReportSemError(SemanticError::SUPER_IN_EXPLICIT_CONSTRUCTOR_INVOCATION,
-                       super_expression -> LeftToken(),
-                       super_expression -> RightToken(),
-                       lex_stream -> NameString(super_expression -> super_token));
          super_expression -> symbol = control.no_type;
     }
     else super_expression -> symbol = ThisType() -> super;
@@ -3394,641 +3331,298 @@ void Semantic::ProcessParenthesizedExpression(Ast *expr)
 }
 
 
-void Semantic::UpdateGeneratedLocalConstructor(MethodSymbol *constructor)
-{
-    if (! constructor) // because of an earlier error
-        return;
-
-    TypeSymbol *local_type = constructor -> containing_type;
-    MethodSymbol *local_constructor = constructor -> LocalConstructor();
-
-    assert(local_constructor -> IsGeneratedLocalConstructor());
-
-    BlockSymbol *block_symbol = local_constructor -> block_symbol;
-
-    for (int i = 0; i < constructor -> NumFormalParameters(); i++)
-    {
-        VariableSymbol *param = constructor -> FormalParameter(i),
-                       *symbol = block_symbol -> FindVariableSymbol(param -> Identity());
-
-        assert(symbol);
-
-        symbol -> SetExternalIdentity(param -> ExternalIdentity()); // TODO: do we really need this ?
-        symbol -> SetLocalVariableIndex(block_symbol -> max_variable_index++);
-        if (control.IsDoubleWordType(symbol -> Type()))
-            block_symbol -> max_variable_index++;
-        local_constructor -> AddFormalParameter(symbol);
-    }
-
-    //
-    // If we are dealing with a constructor generated for an anonymous type and
-    // the super type of the anonymous type is an inner type then the generated
-    // constructor accepts an additional formal parameter which is the containing
-    // type of the super type, and the name of the parameter is #0.
-    //
-    VariableSymbol *super_this0_variable = block_symbol -> FindVariableSymbol(control.MakeParameter(0));
-    if (super_this0_variable)
-    {
-        super_this0_variable -> SetLocalVariableIndex(block_symbol -> max_variable_index++);
-        local_constructor -> AddFormalParameter(super_this0_variable);
-    }
-    local_constructor -> SetSignature(control);
-
-    //
-    //
-    //
-    AstConstructorDeclaration *constructor_declaration = (AstConstructorDeclaration *)
-                                                         constructor -> method_or_constructor_declaration;
-
-    assert(constructor_declaration -> ConstructorDeclarationCast());
-
-    AstConstructorBlock *constructor_block = constructor_declaration -> constructor_body;
-
-    if (! (constructor_block -> explicit_constructor_invocation_opt &&
-           constructor_block -> explicit_constructor_invocation_opt -> ThisCallCast()))
-    {
-        constructor_block -> AllocateLocalInitStatements(local_type -> NumConstructorParameters());
-
-        //
-        // Generate an assignment statement for each local variable parameter.
-        // Note that we do not initialize the this$0 here as the real constructor
-        // will do that. If the local_type is static, its constructor_parameters
-        // list does not start with this$0.
-        //
-        for (int i = (local_type -> ACC_STATIC() ? 0 : 1); i < local_type -> NumConstructorParameters(); i++)
-        {
-            VariableSymbol *param = local_type -> ConstructorParameter(i),
-                           *symbol = block_symbol -> FindVariableSymbol(param -> Identity());
-
-            assert(symbol);
-
-            AstSimpleName *lhs = compilation_unit -> ast_pool -> GenSimpleName(constructor_block -> left_brace_token);
-            lhs -> symbol = param;
-
-            AstSimpleName *rhs = compilation_unit -> ast_pool -> GenSimpleName(constructor_block -> left_brace_token);
-            rhs -> symbol = symbol;
-
-            AstAssignmentExpression *assign = compilation_unit -> ast_pool
-                                                               -> GenAssignmentExpression(AstAssignmentExpression::SIMPLE_EQUAL,
-                                                                                          constructor_block -> left_brace_token);
-            assign -> left_hand_side = lhs;
-            assign -> expression     = rhs;
-            assign -> symbol         = lhs -> Type();
-
-            AstExpressionStatement *stmt = compilation_unit -> ast_pool -> GenExpressionStatement();
-            stmt -> expression           = assign;
-            stmt -> semicolon_token_opt  = constructor_block -> left_brace_token;
-
-            stmt -> is_reachable = true;
-            stmt -> can_complete_normally = true;
-
-            constructor_block -> AddLocalInitStatement(stmt);
-        }
-    }
-
-    //
-    //
-    //
-    AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(constructor_block -> left_brace_token);
-    simple_name -> symbol = constructor;
-
-    assert(! constructor -> IsGeneratedLocalConstructor());
-
-    AstMethodInvocation *method_call       = compilation_unit -> ast_pool -> GenMethodInvocation();
-    method_call -> method                  = simple_name;
-    method_call -> left_parenthesis_token  = constructor_block -> left_brace_token;
-    method_call -> right_parenthesis_token = constructor_block -> left_brace_token;
-    method_call -> symbol                  = simple_name -> symbol;
-
-    method_call -> AllocateArguments(constructor -> NumFormalParameters() + 1);
-    if (! local_type -> ACC_STATIC())
-    {
-        AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(constructor_block -> left_brace_token);
-        simple_name -> symbol = block_symbol -> FindVariableSymbol(control.this0_name_symbol);
-
-        assert(simple_name -> symbol);
-
-        method_call -> AddArgument(simple_name);
-    }
-
-    for (int k = 0; k < constructor -> NumFormalParameters(); k++)
-    {
-        VariableSymbol *param = constructor -> FormalParameter(k),
-                       *symbol = block_symbol -> FindVariableSymbol(param -> Identity());
-        AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(constructor_block -> left_brace_token);
-        simple_name -> symbol = symbol;
-        method_call -> AddArgument(simple_name);
-    }
-
-    AstExpressionStatement *stmt  = compilation_unit -> ast_pool -> GenExpressionStatement();
-    stmt -> expression            = method_call;
-    stmt -> semicolon_token_opt   = constructor_block -> left_brace_token;
-
-    stmt -> is_reachable          = true;
-    stmt -> can_complete_normally = true;
-
-    constructor_block -> original_constructor_invocation = stmt;
-
-    return;
-}
-
-
 void Semantic::UpdateLocalConstructors(TypeSymbol *inner_type)
 {
-    if (! ThisType() -> IsLocal()) // the method containing inner_type is not itself embedded in another method
+    assert(inner_type -> IsLocal() &&
+           (! inner_type -> Anonymous() || ! inner_type -> EnclosingType()));
+
+    //
+    // Update the constructor signatures to account for local shadow
+    // parameters.
+    //
+    inner_type -> MarkLocalClassProcessingCompleted();
+    int param_count = inner_type -> NumConstructorParameters();
+    if (param_count)
     {
-        //
-        // Compute the set of local_classes we need to process here - they are
-        // the inner_type itself and all the classes that are embedded in its body.
-        //
-        Tuple<TypeSymbol *> local_classes(8);
-
-        TypeSymbol *outermost_type = inner_type -> outermost_type;
-        if (outermost_type -> local) // The set of local types in the outermost type is not empty?
+        for (MethodSymbol *ctor = inner_type -> FindConstructorSymbol();
+             ctor; ctor = ctor -> next_method)
         {
-            for (TypeSymbol *local_type = (TypeSymbol *) outermost_type -> local -> FirstElement();
-                             local_type;
-                             local_type = (TypeSymbol *) outermost_type -> local -> NextElement())
-            {
-                if (local_type -> CanAccess(inner_type))
-                    local_classes.Next() = local_type;
-            }
+            ctor -> SetSignature(control);
         }
-
-        for (int j = 0; j < outermost_type -> num_anonymous_types(); j++)
-        {
-            if (outermost_type -> AnonymousType(j) -> CanAccess(inner_type))
-                local_classes.Next() = outermost_type -> AnonymousType(j);
-        }
-
-        //
-        // We now update each type T2 containing a call to a constructor of
-        // T1 to make sure that T2 has a copy of or access to all the local
-        // variables required by T1.
-        //
-        for (int k = 0; k < local_classes.Length(); k++)
-        {
-            TypeSymbol *target_local_type = local_classes[k];
-
-            for (int i = 0; i < target_local_type -> NumLocalConstructorCallEnvironments(); i++)
-            {
-                SemanticEnvironment *env = target_local_type -> LocalConstructorCallEnvironment(i);
-                TypeSymbol *source_local_type = env -> Type();
-                if (! source_local_type -> CanAccess(target_local_type))
-                {
-                    for (int j = (target_local_type -> ACC_STATIC() ? 0 : 1);
-                         j < target_local_type -> NumConstructorParameters(); j++)
-                    {
-                        VariableSymbol *local = target_local_type -> ConstructorParameter(j) -> accessed_local;
-
-                        //
-                        // If there does not exist a variable with the same identity as the local or
-                        // there exists such a variable but it is not the local then make a copy of
-                        // the local in the source type.
-                        //
-                        if (env -> symbol_table.FindVariableSymbol(local -> Identity()) != local)
-                            (void) source_local_type -> FindOrInsertLocalShadow(local);
-                    }
-                }
-            }
-        }
-
-        //
-        // Now update the constructor bodies to reflect the new local variable counts and mark the local_type completed.
-        //
-        for (int l = 0; l < local_classes.Length(); l++)
-        {
-            TypeSymbol *local_type = local_classes[l];
-
-            AstClassDeclaration *class_declaration = local_type -> declaration -> ClassDeclarationCast();
-            AstClassInstanceCreationExpression *class_creation = local_type -> declaration -> ClassInstanceCreationExpressionCast();
-
-            assert(class_declaration || class_creation);
-
-            AstClassBody *class_body = (class_declaration ? class_declaration -> class_body : class_creation -> class_body_opt);
-
-            if (class_body -> default_constructor)
-                 UpdateGeneratedLocalConstructor(class_body -> default_constructor -> constructor_symbol);
-            else
-            {
-                for (int i = 0; i < class_body -> NumConstructors(); i++)
-                    UpdateGeneratedLocalConstructor(class_body -> Constructor(i) -> constructor_symbol);
-
-                for (int k = 0; k < local_type -> NumPrivateAccessConstructors(); k++)
-                    UpdateGeneratedLocalConstructor(local_type -> PrivateAccessConstructor(k));
-            }
-
-            local_type -> MarkLocalClassProcessingCompleted();
-        }
-
-        //
-        // Now update the constructor calls
-        //
-        for (int m = 0; m < local_classes.Length(); m++)
-        {
-            TypeSymbol *target_local_type = local_classes[m];
-
-            assert(target_local_type -> LocalClassProcessingCompleted());
-
-            for (int i = 0; i < target_local_type -> NumLocalConstructorCallEnvironments(); i++)
-            {
-                Ast *call = target_local_type -> LocalConstructorCallEnvironment(i) -> ast_construct;
-                SemanticEnvironment *env = target_local_type -> LocalConstructorCallEnvironment(i);
-                TypeSymbol *source_local_type = env -> Type();
-
-                AstClassInstanceCreationExpression *class_creation;
-                AstSuperCall *super_call;
-                AstThisCall *this_call;
-
-                if ((class_creation = call -> ClassInstanceCreationExpressionCast()))
-                {
-                    if (class_creation -> symbol != control.no_type)
-                    {
-                        if (source_local_type -> CanAccess(target_local_type))
-                        {
-                            for (int j = (target_local_type -> ACC_STATIC() ? 0 : 1);
-                                 j < target_local_type -> NumConstructorParameters(); j++)
-                            {
-                                AstSimpleName *simple_name = compilation_unit -> ast_pool
-                                                                              -> GenSimpleName(class_creation -> new_token);
-                                VariableSymbol *variable_symbol = target_local_type -> ConstructorParameter(j);
-                                simple_name -> symbol = variable_symbol;
-                                if (source_local_type != target_local_type)
-                                {
-                                    simple_name -> symbol = variable_symbol -> accessed_local;
-
-                                    state_stack.Push(source_local_type -> semantic_environment);
-                                    CreateAccessToScopedVariable(simple_name, target_local_type);
-                                    state_stack.Pop();
-                                }
-                                class_creation -> AddLocalArgument(simple_name);
-                            }
-                        }
-                        else
-                        {
-                            for (int j = (target_local_type -> ACC_STATIC() ? 0 : 1);
-                                 j < target_local_type -> NumConstructorParameters(); j++)
-                            {
-                                VariableSymbol *local = target_local_type -> ConstructorParameter(j) -> accessed_local;
-
-                                AstSimpleName *simple_name = compilation_unit -> ast_pool
-                                                                              -> GenSimpleName(class_creation -> new_token);
-                                //
-                                // If there does not exist a variable with the same identity as the local or
-                                // there exists such a variable but it is not the local then make a copy of
-                                // the local in the source type.
-                                //
-                                simple_name -> symbol = (env -> symbol_table.FindVariableSymbol(local -> Identity()) == local
-                                                              ? local
-                                                              : source_local_type -> FindOrInsertLocalShadow(local));
-
-                                assert(simple_name -> symbol -> VariableCast());
-
-                                class_creation -> AddLocalArgument(simple_name);
-                            }
-                        }
-
-                        MethodSymbol *constructor = (MethodSymbol *) class_creation -> class_type -> symbol;
-
-                        assert(constructor);
-                        assert(constructor -> MethodCast());
-                        assert(! constructor -> IsGeneratedLocalConstructor());
-                        assert(constructor -> LocalConstructor());
-
-                        class_creation -> class_type -> symbol = constructor -> LocalConstructor();
-                    }
-                }
-                else if ((super_call = call -> SuperCallCast()))
-                {
-                    if (super_call -> symbol -> MethodCast())
-                    {
-                        for (int j = (target_local_type -> ACC_STATIC() ? 0 : 1);
-                             j < target_local_type -> NumConstructorParameters(); j++)
-                        {
-                            VariableSymbol *local = target_local_type -> ConstructorParameter(j) -> accessed_local,
-                                           *local_shadow = source_local_type -> FindOrInsertLocalShadow(local);
-
-                            AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(super_call -> super_token);
-                            simple_name -> symbol = env -> symbol_table.FindVariableSymbol(local_shadow -> Identity());
-
-                            assert(simple_name -> symbol -> VariableCast());
-
-                            super_call -> AddLocalArgument(simple_name);
-                        }
-
-                        MethodSymbol *constructor = (MethodSymbol *) super_call -> symbol;
-
-                        assert(constructor -> MethodCast() && (! constructor -> IsGeneratedLocalConstructor()));
-                        assert(constructor -> LocalConstructor());
-
-                        super_call -> symbol = constructor -> LocalConstructor();
-                    }
-                }
-                else
-                {
-                    this_call = (AstThisCall *) call;
-
-                    assert(this_call -> ThisCallCast());
-
-                    if (this_call -> symbol -> MethodCast())
-                    {
-                        for (int j = (target_local_type -> ACC_STATIC() ? 0 : 1);
-                             j < target_local_type -> NumConstructorParameters(); j++)
-                        {
-                            VariableSymbol *local = target_local_type -> ConstructorParameter(j);
-
-                            AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(this_call -> this_token);
-                            simple_name -> symbol = env -> symbol_table.FindVariableSymbol(local -> Identity());
-
-                            assert(simple_name -> symbol -> VariableCast());
-
-                            this_call -> AddLocalArgument(simple_name);
-                        }
-
-                        MethodSymbol *constructor = (MethodSymbol *) this_call -> symbol;
-
-                        assert(constructor -> MethodCast() && (! constructor -> IsGeneratedLocalConstructor()));
-                        assert(constructor -> LocalConstructor());
-
-                        this_call -> symbol = constructor -> LocalConstructor();
-                    }
-                }
-            }
-        }
+        for (int j = 0; j < inner_type -> NumPrivateAccessConstructors(); j++)
+            inner_type -> PrivateAccessConstructor(j) ->
+                SetSignature(control, (inner_type -> outermost_type ->
+                                       GetPlaceholderType()));
     }
 
-    return;
+    //
+    // Update all constructor call contexts that were pending on this class.
+    // These calls are necessarily located within the body of inner_type, and
+    // are calling a constructor in inner_type.
+    //
+    for (int i = 0;
+         i < inner_type -> NumLocalConstructorCallEnvironments(); i++)
+    {
+        SemanticEnvironment *env =
+            inner_type -> LocalConstructorCallEnvironment(i);
+        state_stack.Push(env);
+        Ast *call = env -> ast_construct;
+
+        AstClassInstanceCreationExpression *class_creation =
+            call -> ClassInstanceCreationExpressionCast();
+        AstSuperCall *super_call = call -> SuperCallCast();
+
+        if (class_creation)
+        {
+            if (class_creation -> symbol != control.no_type && param_count)
+            {
+                class_creation -> AllocateLocalArguments(param_count);
+                for (int k = 0; k < param_count; k++)
+                {
+                    AstSimpleName *simple_name = compilation_unit ->
+                        ast_pool -> GenSimpleName(class_creation -> new_token);
+                    VariableSymbol *accessor =
+                        FindLocalVariable(inner_type -> ConstructorParameter(k),
+                                          ThisType());
+                    simple_name -> symbol = accessor;
+                    TypeSymbol *owner = accessor -> ContainingType();
+                    if (owner != ThisType())
+                        CreateAccessToScopedVariable(simple_name, owner);
+                    class_creation -> AddLocalArgument(simple_name);
+                }
+            }
+        }
+        else
+        {
+            assert(super_call);
+            if (super_call -> symbol && param_count)
+            {
+                super_call -> AllocateLocalArguments(param_count);
+                for (int k = 0; k < param_count; k++)
+                {
+                    AstSimpleName *simple_name = compilation_unit ->
+                        ast_pool -> GenSimpleName(super_call -> super_token);
+                    VariableSymbol *accessor =
+                        FindLocalVariable(inner_type -> ConstructorParameter(k),
+                                          ThisType());
+                    simple_name -> symbol = accessor;
+                    TypeSymbol *owner = accessor -> ContainingType();
+                    if (owner != ThisType())
+                        CreateAccessToScopedVariable(simple_name, owner);
+                    super_call -> AddLocalArgument(simple_name);
+                }
+            }
+            if (ThisType() -> Anonymous() &&
+                ! ThisType() -> LocalClassProcessingCompleted())
+            {
+                UpdateLocalConstructors(ThisType());
+            }
+        }
+        state_stack.Pop();
+    }
 }
 
 
-void Semantic::GetAnonymousConstructor(AstClassInstanceCreationExpression *class_creation, TypeSymbol *anonymous_type)
+//
+// This creates the default constructor for an anonymous class, and sets
+// the resolution_opt field of the original to a generated instance creation
+// expression that has been adjusted for compilation purposes.
+//
+void Semantic::GetAnonymousConstructor(AstClassInstanceCreationExpression *class_creation,
+                                       TypeSymbol *anonymous_type)
 {
     LexStream::TokenIndex left_loc  = class_creation -> class_type -> LeftToken(),
                           right_loc = class_creation -> right_parenthesis_token;
 
+    state_stack.Push(anonymous_type -> semantic_environment);
     TypeSymbol *super_type = anonymous_type -> super;
-    MethodSymbol *super_constructor = FindConstructor(super_type, class_creation, left_loc, right_loc);
+    MethodSymbol *super_constructor = FindConstructor(super_type,
+                                                      class_creation,
+                                                      left_loc, right_loc);
     if (! super_constructor)
     {
         class_creation -> class_type -> symbol = control.no_type;
+        state_stack.Pop();
         return;
     }
-
     assert(super_constructor -> IsTyped());
 
     //
-    // Make constructor symbol. The associated symbol table will not contain too many elements...
+    // Make replacement class instance creation expression.
     //
-    BlockSymbol *block_symbol = new BlockSymbol(super_constructor -> NumFormalParameters() + 3);
-    block_symbol -> max_variable_index = 1; // All types need a spot for "this".
+    AstClassInstanceCreationExpression *resolution =
+        compilation_unit -> ast_pool -> GenClassInstanceCreationExpression();
+    resolution -> new_token = class_creation -> new_token;
+    // TODO: WARNING: sharing of subtrees...
+    resolution -> class_type = class_creation -> class_type;
+    resolution -> left_parenthesis_token =
+        class_creation -> left_parenthesis_token;
+    resolution -> right_parenthesis_token =
+        class_creation -> right_parenthesis_token;
+    resolution -> symbol = anonymous_type;
+    class_creation -> resolution_opt = resolution;
 
-    MethodSymbol *constructor = anonymous_type -> InsertConstructorSymbol(control.init_name_symbol);
+    //
+    // Make constructor symbol. The associated symbol table will not contain
+    // too many elements...
+    //
+    BlockSymbol *block_symbol =
+        new BlockSymbol(super_constructor -> NumFormalParameters() + 3);
+    block_symbol -> max_variable_index = 1; // A spot for "this".
+
+    MethodSymbol *constructor =
+        anonymous_type -> InsertConstructorSymbol(control.init_name_symbol);
     constructor -> SetType(control.void_type);
     constructor -> SetContainingType(anonymous_type);
     constructor -> SetBlockSymbol(block_symbol);
-    constructor -> SetACC_PUBLIC();
 
     //
-    // Report error if super constructor has throws clause, but add the
-    // exceptions to the local throws clause to avoid spurious errors later !!!
+    // Anonymous class constructors may throw any exception listed in the
+    // superclass; but this list may be expanded later since the anonymous
+    // constructor also throws anything possible in instance initializers.
     //
-    int num_throws = super_constructor -> NumThrows();
-    if (num_throws > 0)
-    {
-        for (int i = 0; i < num_throws; i++)
-        {
-            TypeSymbol *exception = super_constructor -> Throws(i);
-            ReportSemError(SemanticError::CONSTRUCTOR_DOES_NOT_THROW_SUPER_EXCEPTION,
-                          class_creation -> new_token,
-                          class_creation -> RightToken(),
-                          StringConstant::US_EMPTY,
-                          exception -> ContainingPackage() -> PackageName(),
-                          exception -> ExternalName(),
-                          super_constructor -> containing_type -> ContainingPackage() -> PackageName(),
-                          super_constructor -> containing_type -> ExternalName());
+    for (int i = 0; i < super_constructor -> NumThrows(); i++)
+        constructor -> AddThrows(super_constructor -> Throws(i));
 
-            constructor -> AddThrows(exception);
-        }
-    }
-
-    VariableSymbol *this0_variable = NULL;
-    if (anonymous_type -> IsInner())
+    //
+    // If we are in a static region, the anonymous constructor does not need
+    // a this$0 argument. Otherwise, a this$0 argument that points to an
+    // instance of the immediately enclosing class is required.
+    //
+    if (anonymous_type -> EnclosingType())
     {
-        this0_variable = block_symbol -> InsertVariableSymbol(control.this0_name_symbol);
+        VariableSymbol *this0_variable =
+            block_symbol -> InsertVariableSymbol(control.this0_name_symbol);
         this0_variable -> MarkSynthetic();
-        this0_variable -> SetType(anonymous_type -> ContainingType());
+        this0_variable -> SetType(anonymous_type -> EnclosingType());
         this0_variable -> SetOwner(constructor);
-        this0_variable -> SetLocalVariableIndex(block_symbol -> max_variable_index++);
+        this0_variable -> SetACC_FINAL();
+        this0_variable -> SetLocalVariableIndex(block_symbol ->
+                                                max_variable_index++);
+        this0_variable -> MarkComplete();
+        AstThisExpression *this0_expression =
+            compilation_unit -> ast_pool -> GenThisExpression(left_loc);
+        this0_expression -> symbol = anonymous_type -> EnclosingType();
+        resolution -> base_opt = this0_expression;
     }
 
-    for (int j = 0; j < super_constructor -> NumFormalParameters(); j++)
+    //
+    // Create an explicit call to the superconstructor, passing any necessary
+    // shadow variables or enclosing instances.
+    //
+    AstSuperCall *super_call = compilation_unit -> ast_pool -> GenSuperCall();
+    if (super_constructor -> ACC_PRIVATE())
     {
-        VariableSymbol *param = super_constructor -> FormalParameter(j),
-                       *symbol = block_symbol -> InsertVariableSymbol(param -> Identity());
-        symbol -> SetType(param -> Type());
-        symbol -> SetOwner(constructor);
-        symbol -> SetLocalVariableIndex(block_symbol -> max_variable_index++);
-        if (control.IsDoubleWordType(symbol -> Type()))
-            block_symbol -> max_variable_index++;
-        constructor -> AddFormalParameter(symbol);
+        super_constructor =
+            super_type -> GetReadAccessConstructor(super_constructor);
+        super_call -> AddNullArgument();
     }
 
-    //
-    //
-    //
-    AstSuperCall *super_call              = compilation_unit -> ast_pool -> GenSuperCall();
-    super_call -> base_opt                = class_creation -> base_opt; // save initial base_opt
-    super_call -> dot_token_opt           = class_creation -> new_token;
-    super_call -> super_token             = class_creation -> new_token;
-    super_call -> left_parenthesis_token  = class_creation -> new_token;
-    super_call -> right_parenthesis_token = class_creation -> new_token;
-    super_call -> semicolon_token         = class_creation -> new_token;
-
-    super_call -> is_reachable            = true;
-    super_call -> can_complete_normally   = true;
-    super_call -> symbol                  = super_constructor;
-
-    //
-    // If we are in a static region, the anonymous constructor does not need a this$0 argument.
-    // Otherwise, a this$0 argument that points to an instance of the immediately enclosing
-    // class is required.
-    //
-    if (anonymous_type -> ACC_STATIC())
-        class_creation -> base_opt = NULL;
-    else
-    {
-        //
-        // Within an explicit constructor invocation, a class that is immediately nested
-        // in the class being created is not accessible.
-        //
-        if (ExplicitConstructorInvocation() && anonymous_type -> ContainingType() == ThisType())
-        {
-            ReportSemError(SemanticError::INNER_CONSTRUCTOR_IN_EXPLICIT_CONSTRUCTOR_INVOCATION,
-                           class_creation -> LeftToken(),
-                           class_creation -> RightToken(),
-                           anonymous_type -> ContainingPackage() -> PackageName(),
-                           anonymous_type -> ExternalName(),
-                           ThisType() -> ContainingPackage() -> PackageName(),
-                           ThisType() -> ExternalName());
-            class_creation -> base_opt = NULL;
-        }
-        else class_creation -> base_opt = CreateAccessToType(class_creation, anonymous_type -> ContainingType());
-    }
+    // Use initial base_opt.
+    super_call -> base_opt = class_creation -> base_opt;
+    super_call -> dot_token_opt = class_creation -> new_token;
+    super_call -> super_token = class_creation -> new_token;
+    super_call -> left_parenthesis_token =
+        class_creation -> left_parenthesis_token;
+    super_call -> right_parenthesis_token =
+        class_creation -> right_parenthesis_token;
+    super_call -> semicolon_token = class_creation -> right_parenthesis_token;
+    super_call -> symbol = super_constructor;
 
     AstClassBody *class_body = class_creation -> class_body_opt;
 
-    AstReturnStatement *return_statement = compilation_unit -> ast_pool -> GenReturnStatement();
-    return_statement -> return_token     = class_body -> left_brace_token;
-    return_statement -> expression_opt   = NULL;
-    return_statement -> semicolon_token  = class_body -> left_brace_token;
-    return_statement -> is_reachable     = true;
+    //
+    // Construct the default constructor of the anonymous type.
+    //
+    AstMethodBody *constructor_block =
+        compilation_unit -> ast_pool -> GenMethodBody();
+    // This symbol table will be empty.
+    constructor_block -> block_symbol =
+        constructor -> block_symbol -> InsertBlockSymbol(0);
+    constructor_block -> left_brace_token = class_body -> left_brace_token;
+    constructor_block -> right_brace_token = class_body -> left_brace_token;
+    constructor_block -> explicit_constructor_opt = super_call;
 
-    AstBlock *block                = compilation_unit -> ast_pool -> GenBlock();
-    block -> block_symbol          = constructor -> block_symbol -> InsertBlockSymbol(1); // this symbol table will be empty
-    block -> left_brace_token      = class_body -> left_brace_token;
-    block -> right_brace_token     = class_body -> left_brace_token;
-
-    block -> is_reachable          = true;
-    block -> can_complete_normally = false;
-    block -> AllocateBlockStatements(1); // this block contains one statement
-    block -> AddStatement(return_statement);
-
-    AstConstructorBlock *constructor_block                   = compilation_unit -> ast_pool -> GenConstructorBlock();
-    constructor_block -> left_brace_token                    = class_body -> left_brace_token;
-    constructor_block -> explicit_constructor_invocation_opt = super_call;
-    constructor_block -> block                               = block;
-    constructor_block -> right_brace_token                   = class_body -> left_brace_token;
-
-    AstMethodDeclarator *method_declarator       = compilation_unit -> ast_pool -> GenMethodDeclarator();
-    method_declarator -> identifier_token        = left_loc;
-    method_declarator -> left_parenthesis_token  = class_creation -> left_parenthesis_token;
+    AstMethodDeclarator *method_declarator =
+        compilation_unit -> ast_pool -> GenMethodDeclarator();
+    method_declarator -> identifier_token = left_loc;
+    method_declarator -> left_parenthesis_token =
+        class_creation -> left_parenthesis_token;
     method_declarator -> right_parenthesis_token = right_loc;
 
-    AstConstructorDeclaration *constructor_declaration  = compilation_unit -> ast_pool -> GenConstructorDeclaration();
-    constructor_declaration -> constructor_declarator   = method_declarator;
-    constructor_declaration -> constructor_body         = constructor_block;
-
+    AstConstructorDeclaration *constructor_declaration  =
+        compilation_unit -> ast_pool -> GenConstructorDeclaration();
+    constructor_declaration -> constructor_declarator = method_declarator;
+    constructor_declaration -> constructor_body = constructor_block;
     constructor_declaration -> constructor_symbol = constructor;
-    constructor -> method_or_constructor_declaration = constructor_declaration;
+
+    constructor -> declaration = constructor_declaration;
+    class_body -> default_constructor = constructor_declaration;
+
 
     //
-    // Note that the constructor for the anonymous type is not added to the class body here
-    // beacause we've already completely compiled it and the arguments to its super call
-    // do not contain "valid" SimpleName Ast expressions. It is added to the constructor
-    // body later in get_anonymous_type...
+    // Update the enclosing instance of the supertype.
     //
-    // class_body -> default_constructor = constructor_declaration;
-    //
-    VariableSymbol *super_this0_variable = NULL;
-
-    if (anonymous_type -> IsLocal())
+    if (class_creation -> base_opt)
     {
-        GenerateLocalConstructor(constructor);
-
-        MethodSymbol *generated_constructor = constructor -> LocalConstructor();
-
-        assert(! constructor -> IsGeneratedLocalConstructor());
-        assert(generated_constructor);
-
-        block_symbol = generated_constructor -> block_symbol; // use the environment of the generated constructor...
-
-        if (super_call -> base_opt)
-        {
-            //
-            // Add the this$0 parameter for the super type. However, only mark it complete and
-            // do not yet assign a number to it. This will be done after we know
-            // how many extra "local" variable shadows are needed. See UpdateGeneratedLocalConstructor
-            //
-            super_this0_variable = block_symbol -> InsertVariableSymbol(control.MakeParameter(0));
-            super_this0_variable -> MarkSynthetic();
-            super_this0_variable -> SetType(super_call -> base_opt -> Type());
-            super_this0_variable -> SetOwner(generated_constructor);
-            super_this0_variable -> MarkComplete();
-        }
-
-        if (super_type -> IsLocal()) // a local type may use enclosed local variables?
-        {
-            if (super_type -> LocalClassProcessingCompleted())
-            {
-                assert(super_constructor -> LocalConstructor() && (! super_constructor -> IsGeneratedLocalConstructor()));
-
-                super_call -> symbol = super_constructor -> LocalConstructor();
-
-                //
-                // TODO: Should we set the size for the super_call arguments here ???
-                //
-                for (int i = (super_type -> ACC_STATIC() ? 0 : 1); i < super_type -> NumConstructorParameters(); i++)
-                {
-                    VariableSymbol *local = super_type -> ConstructorParameter(i) -> accessed_local,
-                                   *local_shadow = anonymous_type -> FindOrInsertLocalShadow(local);
-
-                    AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(super_call -> super_token);
-                    simple_name -> symbol = block_symbol -> FindVariableSymbol(local_shadow -> Identity());
-
-                    assert(simple_name -> symbol);
-
-                    super_call -> AddLocalArgument(simple_name);
-                }
-            }
-            else // are we currently within the body of the type in question ?
-                super_type -> AddLocalConstructorCallEnvironment(GetEnvironment(super_call));
-        }
-    }
-    else if (super_call -> base_opt)
-    {
-        super_this0_variable = block_symbol -> InsertVariableSymbol(control.MakeParameter(0));
+        VariableSymbol *super_this0_variable =
+            block_symbol -> InsertVariableSymbol(control.MakeParameter(0));
         super_this0_variable -> MarkSynthetic();
         super_this0_variable -> SetType(super_call -> base_opt -> Type());
         super_this0_variable -> SetOwner(constructor);
-        super_this0_variable -> SetLocalVariableIndex(block_symbol -> max_variable_index++);
+        super_this0_variable -> SetLocalVariableIndex(block_symbol ->
+                                                      max_variable_index++);
+        super_this0_variable -> MarkComplete();
 
+        resolution -> AllocateArguments(class_creation -> NumArguments() + 1);
+        resolution -> AddArgument(class_creation -> base_opt);
         constructor -> AddFormalParameter(super_this0_variable);
-    }
 
-    //
-    // Complete the definition of the constructor and update the super call accordingly.
-    //
-    if (super_this0_variable)
-    {
-        class_creation -> AddArgument(super_call -> base_opt); // pass the original base expression as argument to anonymous class.
-
-        AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(class_creation -> new_token);
+        AstSimpleName *simple_name = compilation_unit -> ast_pool ->
+            GenSimpleName(class_creation -> new_token);
         simple_name -> symbol = super_this0_variable;
-        super_call -> base_opt = simple_name; // pass the base expression argument to the super class
+        super_call -> base_opt = simple_name;
     }
-
-    constructor -> SetSignature(control, this0_variable); // we now have all the information to set the signature of the constructor.
+    else resolution -> AllocateArguments(class_creation -> NumArguments());
 
     //
-    // Are we guaranteed to have all the info available here? Yes,
-    // because if the anonymous type is not local to a method, then its super
-    // type cannot be local to a method. Therefore, no extra argument (other than
-    // the proper this$0 specified in the base) is needed. If on the other hand the
-    // anonymous type is local and its supertype is also local, it must have appeared
-    // before the anonymous type and therefore its information has already been computed.
+    // Next, simply pass all parameters through to the superclass.
     //
-    for (int k = 0; k < super_constructor -> NumFormalParameters(); k++)
+    for (int j = 0; j < super_constructor -> NumFormalParameters(); j++)
     {
-        VariableSymbol *param = super_constructor -> FormalParameter(k),
-                       *symbol = block_symbol -> FindVariableSymbol(param -> Identity());
+        VariableSymbol *param = super_constructor -> FormalParameter(j);
+        VariableSymbol *symbol =
+            block_symbol -> InsertVariableSymbol(param -> Identity());
+        symbol -> SetType(param -> Type());
+        symbol -> SetOwner(constructor);
+        symbol -> SetLocalVariableIndex(block_symbol -> max_variable_index++);
+        symbol -> MarkComplete();
+        if (control.IsDoubleWordType(symbol -> Type()))
+            block_symbol -> max_variable_index++;
 
-        assert(symbol);
-
-        AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(class_creation -> new_token);
+        resolution -> AddArgument(class_creation -> Argument(j));
+        constructor -> AddFormalParameter(symbol);
+        AstSimpleName *simple_name = compilation_unit -> ast_pool ->
+            GenSimpleName(class_creation -> new_token);
         simple_name -> symbol = symbol;
         super_call -> AddArgument(simple_name);
     }
 
+    //
+    // We set the signature of the constructor now, although it may be modified
+    // later if this is in a local constructor call environment.
+    //
+    constructor -> SetSignature(control);
     class_creation -> class_type -> symbol = constructor;
-
-    return;
+    state_stack.Pop();
 }
 
 //
 // super_type is the type specified in the anonymous constructor,
 // which is the supertype of the created anonymous type.
 //
-TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class_creation, TypeSymbol *super_type)
+TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class_creation,
+                                       TypeSymbol *super_type)
 {
     TypeSymbol *this_type = ThisType();
 
@@ -4039,77 +3633,94 @@ TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class
                         class_creation -> class_type -> RightToken(),
                         super_type -> ContainingPackage() -> PackageName(),
                         super_type -> ExternalName());
+         return control.no_type;
     }
 
     AstClassBody *class_body = class_creation -> class_body_opt;
+    assert(class_body);
     TypeSymbol *outermost_type = this_type -> outermost_type;
 
     //
-    // Make up a proper name for the anonymous type
+    // Anonymous and local classes can clash if we don't use both when
+    // determining the id number of this class.
     //
-    IntToWstring value(outermost_type -> num_anonymous_types() + 1);
+    IntToWstring value(this_type -> NumLocalTypes() +
+                       this_type -> NumAnonymousTypes() + 1);
 
-    int length = value.Length() + outermost_type -> NameLength() + 1; // +1 for $
-    wchar_t *anonymous_name = new wchar_t[length + 1];
-    wcscpy(anonymous_name, outermost_type -> Name());
-    wcscat(anonymous_name, StringConstant::US__DS);
+    int length = this_type -> ExternalNameLength() + 1 +
+        value.Length(); // +1 for $
+    wchar_t *anonymous_name = new wchar_t[length + 1]; // +1 for '\0'
+    wcscpy(anonymous_name, this_type -> ExternalName());
+    wcscat(anonymous_name, StringConstant::US_DS);
     wcscat(anonymous_name, value.String());
 
     NameSymbol *name_symbol = control.FindOrInsertName(anonymous_name, length);
+    delete [] anonymous_name;
 
-    assert((! ThisMethod()) || LocalSymbolTable().Top());
+    assert(! ThisMethod() || LocalSymbolTable().Top());
 
-    TypeSymbol *inner_type = (ThisMethod() ? LocalSymbolTable().Top() -> InsertAnonymousTypeSymbol(name_symbol)
-                                           : this_type -> InsertAnonymousTypeSymbol(name_symbol));
-    inner_type -> SetACC_PRIVATE();
-    inner_type -> MarkAnonymous();
-    inner_type -> outermost_type = outermost_type;
-    inner_type -> supertypes_closure = new SymbolSet;
-    inner_type -> subtypes_closure = new SymbolSet;
-    inner_type -> semantic_environment = new SemanticEnvironment((Semantic *) this, inner_type, state_stack.Top());
-    inner_type -> declaration = class_creation;
-    inner_type -> file_symbol = source_file_symbol;
-    inner_type -> SetOwner(ThisMethod() ? (Symbol *) ThisMethod() : (Symbol *) this_type);
+    TypeSymbol *anon_type =
+        this_type -> InsertAnonymousTypeSymbol(name_symbol);
+    anon_type -> MarkAnonymous();
+    anon_type -> outermost_type = outermost_type;
+    anon_type -> supertypes_closure = new SymbolSet;
+    anon_type -> subtypes_closure = new SymbolSet;
+    anon_type -> semantic_environment = new SemanticEnvironment(this, anon_type, state_stack.Top());
+    anon_type -> declaration = class_creation;
+    anon_type -> file_symbol = source_file_symbol;
+    anon_type -> SetOwner(ThisMethod() ? (Symbol *) ThisMethod() : (Symbol *) this_type);
     //
-    // Add 3 extra elements for padding. May need a default constructor and other support elements.
+    // Add 3 extra elements for padding. Need a default constructor and
+    // other support elements.
     //
-    inner_type -> SetSymbolTable(class_body -> NumClassBodyDeclarations() + 3);
-    inner_type -> SetLocation();
-    inner_type -> SetSignature(control);
+    anon_type -> SetSymbolTable(class_body -> NumClassBodyDeclarations() + 3);
+    anon_type -> SetLocation();
+    anon_type -> SetSignature(control);
 
     //
     // By JLS2 15.9.5, an anonymous class is implicitly final, but never
-    // static.  However, in a static context, error checking is much
-    // easier if the STATIC flag is temporarily set; we turn it off below.
+    // static. However, the anonymous class only needs access to its enclosing
+    // instance if it is not in a static context.
     //
-    inner_type -> SetACC_FINAL();
-    if (StaticRegion() || (ExplicitConstructorInvocation() && inner_type -> ContainingType() == ThisType()))
-         inner_type -> SetACC_STATIC();
-    else inner_type -> InsertThis(0);
+    anon_type -> SetACC_FINAL();
+    anon_type -> SetACC_SUPER();
+    if (! StaticRegion())
+        anon_type -> InsertThis0();
 
     if (super_type -> ACC_INTERFACE())
     {
-         inner_type -> AddInterface(super_type);
-         inner_type -> super = control.Object();
+        anon_type -> AddInterface(super_type);
+        anon_type -> super = control.Object();
     }
-    else inner_type -> super = super_type;
+    else anon_type -> super = super_type;
 
-    outermost_type -> AddAnonymousType(inner_type);
-    delete [] anonymous_name;
+    this_type -> AddAnonymousType(anon_type);
+
+    AstClassDeclaration *class_declaration =
+        compilation_unit -> ast_pool -> GenClassDeclaration();
+    class_declaration -> class_token = class_body -> left_brace_token;
+    class_declaration -> identifier_token = class_body -> left_brace_token;
+    class_declaration -> class_body = class_body;
+    class_creation -> anonymous_declaration = class_declaration;
 
     //
+    // Provide the default constructor. For now, we don't worry about accessors
+    // to final local variables; those are inserted later when completing
+    // the class instance creation processing. Also, the throws clause may
+    // expand after processing instance initializer blocks. We keep on
+    // processing, even if the constructor failed, to detect other semantic
+    // errors in the anonymous class body.
     //
-    //
-    GetAnonymousConstructor(class_creation, inner_type);
+    GetAnonymousConstructor(class_creation, anon_type);
 
     //
     // Now process the body of the anonymous class !!!
     //
-    CheckClassMembers(inner_type, class_body);
-    ProcessNestedTypeHeaders(inner_type, class_body);
-    if (inner_type -> owner -> MethodCast())
-         ProcessSuperTypesOfOuterType(inner_type);
-    else ProcessNestedSuperTypes(inner_type);
+    CheckClassMembers(anon_type, class_body);
+    ProcessNestedTypeHeaders(anon_type, class_body);
+    if (anon_type -> owner -> MethodCast())
+         ProcessSuperTypesOfOuterType(anon_type);
+    else ProcessNestedSuperTypes(anon_type);
 
     //
     // If the class body has not yet been parsed, do so now.
@@ -4117,66 +3728,60 @@ TypeSymbol *Semantic::GetAnonymousType(AstClassInstanceCreationExpression *class
     if (class_body -> UnparsedClassBodyCast())
     {
         if (! control.parser -> InitializerParse(lex_stream, class_body))
-             compilation_unit -> kind = Ast::BAD_COMPILATION; // mark the fact that syntax errors were detected
+             compilation_unit -> kind = Ast::BAD_COMPILATION;
         else
         {
-            inner_type -> MarkHeaderProcessed();
-            ProcessMembers(inner_type -> semantic_environment, class_body);
-            CompleteSymbolTable(inner_type -> semantic_environment, class_body -> left_brace_token, class_body);
+            anon_type -> MarkHeaderProcessed();
+            ProcessMembers(anon_type -> semantic_environment, class_body);
+            CompleteSymbolTable(anon_type -> semantic_environment,
+                                class_body -> left_brace_token, class_body);
         }
 
         if (! control.parser -> BodyParse(lex_stream, class_body))
-             compilation_unit -> kind = Ast::BAD_COMPILATION; // mark the fact that syntax errors were detected
-        else ProcessExecutableBodies(inner_type -> semantic_environment, class_body);
+             compilation_unit -> kind = Ast::BAD_COMPILATION;
+        else ProcessExecutableBodies(anon_type -> semantic_environment,
+                                     class_body);
     }
     else // The relevant bodies have already been parsed
     {
-        inner_type -> MarkHeaderProcessed();
-        ProcessMembers(inner_type -> semantic_environment, class_body);
-        CompleteSymbolTable(inner_type -> semantic_environment, class_body -> left_brace_token, class_body);
-        ProcessExecutableBodies(inner_type -> semantic_environment, class_body);
+        anon_type -> MarkHeaderProcessed();
+        ProcessMembers(anon_type -> semantic_environment, class_body);
+        CompleteSymbolTable(anon_type -> semantic_environment,
+                            class_body -> left_brace_token, class_body);
+        ProcessExecutableBodies(anon_type -> semantic_environment,
+                                class_body);
     }
 
     //
-    // Add the default constructor to the body of the anonymous type.
-    // If the symbol was resolved to "no_type" then constructor will be NULL
+    // Finally, mark the class complete, in order to add any shadow variable
+    // parameters to the constructor.
     //
-    MethodSymbol *constructor = class_creation -> class_type -> symbol -> MethodCast();
-    if (constructor)
+    if (! super_type -> IsLocal() ||
+        super_type -> LocalClassProcessingCompleted() ||
+        anon_type -> EnclosingType())
     {
-        class_body -> default_constructor = (AstConstructorDeclaration *) constructor -> method_or_constructor_declaration;
-
-        if (inner_type -> IsLocal())
+        if (anon_type -> NumConstructorParameters())
         {
-            inner_type -> AddLocalConstructorCallEnvironment(GetEnvironment(class_creation));
-            UpdateLocalConstructors(inner_type);
+            class_body -> default_constructor -> constructor_symbol ->
+                SetSignature(control);
         }
+        anon_type -> MarkLocalClassProcessingCompleted();
     }
-
-    //
-    // See above - anonymous classes are never static.
-    //
-    inner_type -> ResetACC_STATIC();
-
-    return inner_type;
+    return (class_creation -> class_type -> symbol == control.no_type
+            ? control.no_type : anon_type);
 }
 
 
 void Semantic::ProcessClassInstanceCreationExpression(Ast *expr)
 {
-    AstClassInstanceCreationExpression *class_creation = (AstClassInstanceCreationExpression *) expr;
+    AstClassInstanceCreationExpression *class_creation =
+        (AstClassInstanceCreationExpression *) expr;
 
     //
-    // TODO: Is this needed ?
+    // For an anonymous type, the qualifier determines the enclosing instance
+    // of the supertype; as the enclosing instance of the anonymous class (if
+    // present) is the current class. We update actual_type after this.
     //
-    // This operation may throw OutOfMemoryError
-    //
-    SymbolSet *exception_set = TryExceptionTableStack().Top();
-    if (exception_set)
-    {
-        exception_set -> AddElement(control.Error());
-    }
-
     Ast *actual_type = class_creation -> class_type -> type;
     TypeSymbol *type;
     if (class_creation -> base_opt)
@@ -4189,7 +3794,8 @@ void Semantic::ProcessClassInstanceCreationExpression(Ast *expr)
             class_creation -> symbol = control.no_type;
             return;
         }
-        else if (enclosing_type == control.null_type || enclosing_type -> Primitive())
+        if (enclosing_type == control.null_type ||
+            enclosing_type -> Primitive())
         {
             ReportSemError(SemanticError::TYPE_NOT_REFERENCE,
                            class_creation -> base_opt -> LeftToken(),
@@ -4227,206 +3833,175 @@ void Semantic::ProcessClassInstanceCreationExpression(Ast *expr)
     else
     {
         type = MustFindType(actual_type);
-        if (type -> IsInner())
-        {
-            //
-            // Within an explicit constructor invocation, a class that is immediately nested
-            // in the class being created is not accessible.
-            //
-            if (ExplicitConstructorInvocation() && type -> ContainingType() == ThisType())
-            {
-                ReportSemError(SemanticError::INNER_CONSTRUCTOR_IN_EXPLICIT_CONSTRUCTOR_INVOCATION,
-                               class_creation -> LeftToken(),
-                               class_creation -> RightToken(),
-                               type -> ContainingPackage() -> PackageName(),
-                               type -> ExternalName(),
-                               ThisType() -> ContainingPackage() -> PackageName(),
-                               ThisType() -> ExternalName());
-                class_creation -> symbol = control.no_type;
-                return;
-            }
-
-            class_creation -> base_opt = CreateAccessToType(class_creation, type -> ContainingType());
-        }
+        if (type -> EnclosingType())
+            class_creation -> base_opt =
+                CreateAccessToType(class_creation, type -> EnclosingType());
     }
 
-    bool no_bad_argument = true;
+    //
+    // Check the arguments to the constructor.
+    //
+    bool bad_argument = false;
     for (int i = 0; i < class_creation -> NumArguments(); i++)
     {
         AstExpression *expr = class_creation -> Argument(i);
         ProcessExpressionOrStringConstant(expr);
-        no_bad_argument = no_bad_argument && (expr -> symbol != control.no_type);
+        bad_argument = bad_argument || expr -> symbol == control.no_type;
     }
-
-    TypeSymbol *anonymous_type = NULL;
-
-    if (! no_bad_argument)
+    if (bad_argument)
     {
         class_creation -> class_type -> symbol = control.no_type;
-        class_creation -> symbol = type;
+        class_creation -> symbol = control.no_type;
+        return;
     }
-    else
-    {
-        MethodSymbol *method = FindConstructor((type -> ACC_INTERFACE() ? control.Object() : type),
-                                               class_creation,
-                                               actual_type -> LeftToken(),
-                                               class_creation -> right_parenthesis_token);
 
-        if (! method)
+    //
+    // Create the anonymous class now, if needed; then check that the type
+    // can be constructed. A side effect of creating the anonymous class is
+    // building a resolution constructor invocation that does not have a body;
+    // this new constructor is necessary to call parameters in the correct
+    // order, when the superclass of the anonymous class has an enclosing
+    // instance.
+    //
+    if (class_creation -> class_body_opt)
+    {
+        type = GetAnonymousType(class_creation, type);
+        class_creation -> symbol = type;
+        if (type == control.no_type)
+            return;
+        class_creation = class_creation -> resolution_opt;
+    }
+    else class_creation -> symbol = type;
+
+    if (type -> ACC_INTERFACE())
+    {
+        ReportSemError(SemanticError::NOT_A_CLASS,
+                       actual_type -> LeftToken(),
+                       actual_type -> RightToken(),
+                       type -> ContainingPackage() -> PackageName(),
+                       type -> ExternalName());
+        class_creation -> symbol = control.no_type;
+        return;
+    }
+    else if (type -> ACC_ABSTRACT())
+    {
+        ReportSemError(SemanticError::ABSTRACT_TYPE_CREATION,
+                       actual_type -> LeftToken(),
+                       actual_type -> RightToken(),
+                       type -> ExternalName());
+    }
+
+    MethodSymbol *ctor =
+        FindConstructor(type, class_creation, actual_type -> LeftToken(),
+                        class_creation -> right_parenthesis_token);
+    if (! ctor)
+    {
+        class_creation -> class_type -> symbol = control.no_type;
+        return;
+    }
+
+    //
+    // Convert the arguments to the correct types.
+    //
+    assert(ctor -> IsTyped());
+    class_creation -> class_type -> symbol = ctor;
+
+    if (class_creation -> base_opt && ! ctor -> containing_type -> Bad())
+    {
+        assert(CanAssignmentConvertReference(ctor -> containing_type -> EnclosingType(),
+                                             class_creation -> base_opt -> Type()));
+        class_creation -> base_opt =
+            ConvertToType(class_creation -> base_opt,
+                          ctor -> containing_type -> EnclosingType());
+    }
+
+    for (int j = 0; j < class_creation -> NumArguments(); j++)
+    {
+        AstExpression *expr = class_creation -> Argument(j);
+        class_creation -> Argument(j) =
+            ConvertToType(expr, ctor -> FormalParameter(j) -> Type());
+    }
+
+    //
+    // Process the throws clause.
+    //
+    SymbolSet *exception_set = TryExceptionTableStack().Top();
+    for (int k = ctor -> NumThrows() - 1; k >= 0; k--)
+    {
+        TypeSymbol *exception = ctor -> Throws(k);
+        if (exception_set)
+            exception_set -> AddElement(exception);
+
+        if (UncaughtException(exception))
+            ReportSemError((class_creation -> class_body_opt
+                            ? SemanticError::UNCAUGHT_CONSTRUCTOR_EXCEPTION
+                            : SemanticError::UNCAUGHT_ANONYMOUS_CONSTRUCTOR_EXCEPTION),
+                           actual_type -> LeftToken(),
+                           actual_type -> RightToken(),
+                           type -> ExternalName(),
+                           exception -> ContainingPackage() -> PackageName(),
+                           exception -> ExternalName(),
+                           UncaughtExceptionContext());
+    }
+
+    if (ctor -> ACC_PRIVATE() && ThisType() != type)
+    {
+        //
+        // Add extra argument for read access constructor.
+        //
+        assert(ThisType() -> outermost_type == type -> outermost_type);
+        ctor = type -> GetReadAccessConstructor(ctor);
+        class_creation -> class_type -> symbol = ctor;
+        class_creation -> AddNullArgument();
+    }
+
+    //
+    // A local type may use enclosed local variables. If so, we must add
+    // the parameters which allow the local type to initialize its shadows.
+    //
+    if (type -> IsLocal())
+    {
+        if (type -> LocalClassProcessingCompleted())
         {
-            class_creation -> class_type -> symbol = control.no_type;
-            class_creation -> symbol = type;
+            int param_count = type -> NumConstructorParameters();
+            if (param_count > 0)
+                class_creation -> AllocateLocalArguments(param_count);
+            for (int i = 0; i < param_count; i++)
+            {
+                //
+                // Are we currently within the body of the method that
+                // contains the local variable in question? If not, we may need
+                // to create a shadow in the outermost local class enclosing
+                // the variable.
+                //
+                AstSimpleName *simple_name = compilation_unit ->
+                    ast_pool -> GenSimpleName(class_creation -> new_token);
+                VariableSymbol *accessor =
+                    FindLocalVariable(type -> ConstructorParameter(i),
+                                      ThisType());
+                simple_name -> symbol = accessor;
+                TypeSymbol *owner = accessor -> ContainingType();
+                if (owner != ThisType())
+                    CreateAccessToScopedVariable(simple_name, owner);
+                class_creation -> AddLocalArgument(simple_name);
+            }
         }
         else
         {
-            assert(method -> IsTyped());
-
-            if (class_creation -> base_opt &&
-                (class_creation -> base_opt -> symbol != control.no_type) &&
-                (class_creation -> base_opt -> Type() != method -> containing_type -> ContainingType()))
-            {
-                assert(method -> containing_type);
-                assert(method -> containing_type -> ContainingType());
-                assert(class_creation -> base_opt -> Type());
-                assert(CanMethodInvocationConvert(method -> containing_type -> ContainingType(),
-                                                  class_creation -> base_opt -> Type()));
-
-                class_creation -> base_opt = ConvertToType(class_creation -> base_opt, method -> containing_type -> ContainingType());
-            }
-
-            for (int i = 0; i < class_creation -> NumArguments(); i++)
-            {
-                AstExpression *expr = class_creation -> Argument(i);
-                if (expr -> Type() != method -> FormalParameter(i) -> Type())
-                    class_creation -> Argument(i) = ConvertToType(expr, method -> FormalParameter(i) -> Type());
-            }
-
-            if (class_creation -> class_body_opt)
-                anonymous_type = GetAnonymousType(class_creation, type);
-            else
-            {
-                if (type -> ACC_INTERFACE())
-                {
-                    ReportSemError(SemanticError::NOT_A_CLASS,
-                                   actual_type -> LeftToken(),
-                                   actual_type -> RightToken(),
-                                   type -> ContainingPackage() -> PackageName(),
-                                   type -> ExternalName());
-                    class_creation -> symbol = control.no_type;
-                    return;
-                }
-                else if (type -> ACC_ABSTRACT())
-                {
-                    ReportSemError(SemanticError::ABSTRACT_TYPE_CREATION,
-                                   actual_type -> LeftToken(),
-                                   actual_type -> RightToken(),
-                                   type -> ExternalName());
-                }
-
-                class_creation -> class_type -> symbol = method;
-
-                if (exception_set)
-                {
-                    for (int i = method -> NumThrows() - 1; i >= 0; i--)
-                        exception_set -> AddElement(method -> Throws(i));
-                }
-
-                if (! (ThisType() -> Anonymous() && ThisMethod() && ThisMethod() -> Identity() == control.block_init_name_symbol))
-                {
-                    for (int k = method -> NumThrows() - 1; k >= 0; k--)
-                    {
-                        TypeSymbol *exception = method -> Throws(k);
-                        if (! CatchableException(exception))
-                        {
-                            ReportSemError(SemanticError::UNCATCHABLE_CONSTRUCTOR_THROWN_CHECKED_EXCEPTION,
-                                           actual_type -> LeftToken(),
-                                           actual_type -> RightToken(),
-                                           type -> ExternalName(),
-                                           exception -> ContainingPackage() -> PackageName(),
-                                           exception -> ExternalName());
-                        }
-                    }
-                }
-            }
-
-            class_creation -> symbol = (anonymous_type ? anonymous_type : type);
-
             //
-            // Note that since constructors are not inherited, we do not need
-            // to worry about the protected case here.
+            // We are within body of type; save processing for later, since
+            // not all shadows may be known yet. See ProcessClassDeclaration
+            // in body.cpp.
             //
-            if (ThisType() != type &&
-                ThisType() -> outermost_type == type -> outermost_type &&
-                method -> ACC_PRIVATE())
-            {
-                if (! method -> LocalConstructor())
-                {
-                    method = type -> GetReadAccessMethod(method);
-                    class_creation -> class_type -> symbol = method;
-
-                    //
-                    // Add extra argument for read access constructor;
-                    //
-                    class_creation -> AddNullArgument();
-                }
-            }
-            else ConstructorAccessCheck(class_creation, method);
-
-            //
-            // A local type may use enclosed local variables. So, we at least allocate the
-            // space for adding these extra arguments. If the type being created has already been
-            // fully processed, add the extra arguments here.
-            //
-            if ((! anonymous_type) && type -> IsLocal())
-            {
-                if (type -> LocalClassProcessingCompleted() && method -> LocalConstructor())
-                {
-                    assert(! method -> IsGeneratedLocalConstructor());
-
-                    class_creation -> class_type -> symbol = method -> LocalConstructor();
-
-                    assert(method -> LocalConstructor() -> signature);
-
-                    for (int i = (type -> ACC_STATIC() ? 0 : 1); i < type -> NumConstructorParameters(); i++)
-                    {
-                        VariableSymbol *local = type -> ConstructorParameter(i) -> accessed_local;
-
-                        AstSimpleName *simple_name = compilation_unit -> ast_pool -> GenSimpleName(class_creation -> new_token);
-                        //
-                        // Are we currently within the body of the method that contains
-                        // the local type in question?
-                        //
-                        simple_name -> symbol = (type -> owner == ThisMethod()
-                                                                ? local
-                                                                : ThisType() -> FindOrInsertLocalShadow(local));
-                        class_creation -> AddLocalArgument(simple_name);
-                    }
-                }
-                else // are we within body of type in question? Save processing for later. See ProcessClassDeclaration in body.cpp
-                    type -> AddLocalConstructorCallEnvironment(GetEnvironment(class_creation));
-            }
+            type -> AddLocalConstructorCallEnvironment(GetEnvironment(class_creation));
         }
     }
-
-    return;
 }
 
 
 void Semantic::ProcessArrayCreationExpression(Ast *expr)
 {
     AstArrayCreationExpression *array_creation = (AstArrayCreationExpression *) expr;
-
-    //
-    // TODO: Is this needed ?
-    //
-    // This operation may throw OutOfMemoryError or NegativeArraySizeException
-    //
-    SymbolSet *exception_set = TryExceptionTableStack().Top();
-    if (exception_set)
-    {
-        exception_set -> AddElement(control.RuntimeException());
-        exception_set -> AddElement(control.Error());
-    }
 
     AstArrayType *array_type;
 
@@ -4447,7 +4022,7 @@ void Semantic::ProcessArrayCreationExpression(Ast *expr)
                                      : array_creation -> NumDimExprs() + array_creation -> NumBrackets());
 
     if (num_dimensions > 0)
-        type = type -> GetArrayType((Semantic *) this, num_dimensions);
+        type = type -> GetArrayType(this, num_dimensions);
     array_creation -> symbol = type;
 
     for (int i = 0; i < array_creation -> NumDimExprs(); i++)
@@ -4455,7 +4030,8 @@ void Semantic::ProcessArrayCreationExpression(Ast *expr)
         AstDimExpr *dim_expr = array_creation -> DimExpr(i);
         ProcessExpression(dim_expr -> expression);
         AstExpression *expr = PromoteUnaryNumericExpression(dim_expr -> expression);
-        if (expr -> Type() != control.int_type && expr -> symbol != control.no_type)
+        if (expr -> Type() != control.int_type &&
+            expr -> symbol != control.no_type)
         {
             ReportSemError(SemanticError::TYPE_NOT_INTEGER,
                            dim_expr -> expression -> LeftToken(),
@@ -4463,25 +4039,44 @@ void Semantic::ProcessArrayCreationExpression(Ast *expr)
                            dim_expr -> expression -> Type() -> Name());
         }
         dim_expr -> expression = expr;
+        if (expr -> IsConstant() &&
+            (DYNAMIC_CAST<IntLiteralValue *> (expr -> value)) -> value < 0)
+        {
+            ReportSemError(SemanticError::NEGATIVE_ARRAY_SIZE,
+                           dim_expr -> expression -> LeftToken(),
+                           dim_expr -> expression -> RightToken());
+        }
     }
 
     if (array_creation -> array_initializer_opt)
         ProcessArrayInitializer((AstArrayInitializer *) array_creation -> array_initializer_opt, type);
-
-    return;
 }
 
 
 void Semantic::ProcessPostUnaryExpression(Ast *expr)
 {
     AstPostUnaryExpression *postfix_expression = (AstPostUnaryExpression *) expr;
+    AstExpression *expression = postfix_expression -> expression;
 
-    ProcessExpression(postfix_expression -> expression);
-    postfix_expression -> symbol = postfix_expression -> expression -> symbol;
+    ProcessExpression(expression);
+    postfix_expression -> symbol = expression -> symbol;
 
-    if (postfix_expression -> symbol != control.no_type)
+    //
+    // JLS2 added ability for parenthesized variable to remain a variable.
+    //
+    if (expression -> ParenthesizedExpressionCast())
     {
-        if (! postfix_expression -> expression -> IsLeftHandSide())
+        ReportSemError(SemanticError::UNNECESSARY_PARENTHESIS,
+                       expression -> LeftToken(),
+                       expression -> RightToken());
+        while (expression -> ParenthesizedExpressionCast())
+            expression = ((AstParenthesizedExpression *) expression) ->
+                expression;
+    }
+
+    if (expression -> symbol != control.no_type)
+    {
+        if (! expression -> IsLeftHandSide())
         {
             ReportSemError(SemanticError::NOT_A_NUMERIC_VARIABLE,
                            postfix_expression -> expression -> LeftToken(),
@@ -4489,18 +4084,18 @@ void Semantic::ProcessPostUnaryExpression(Ast *expr)
                            postfix_expression -> expression -> Type() -> Name());
             postfix_expression -> symbol = control.no_type;
         }
-        else if (! control.IsNumeric(postfix_expression -> Type()))
+        else if (! control.IsNumeric(expression -> Type()))
         {
             ReportSemError(SemanticError::TYPE_NOT_NUMERIC,
                            postfix_expression -> expression -> LeftToken(),
                            postfix_expression -> expression -> RightToken(),
-                           postfix_expression -> Type() -> Name());
+                           expression -> Type() -> Name());
             postfix_expression -> symbol = control.no_type;
         }
-        else if (! postfix_expression -> expression -> ArrayAccessCast()) // some kind of name
+        else if (! expression -> ArrayAccessCast()) // some kind of name
         {
             MethodSymbol *read_method = NULL;
-            AstSimpleName *simple_name = postfix_expression -> expression -> SimpleNameCast();
+            AstSimpleName *simple_name = expression -> SimpleNameCast();
             if (simple_name)
             {
                 if (simple_name -> resolution_opt)
@@ -4508,22 +4103,17 @@ void Semantic::ProcessPostUnaryExpression(Ast *expr)
             }
             else
             {
-                AstFieldAccess *field_access = (AstFieldAccess *) postfix_expression -> expression;
+                AstFieldAccess *field_access = (AstFieldAccess *) expression;
                 if (field_access -> resolution_opt)
                     read_method = field_access -> resolution_opt -> symbol -> MethodCast();
             }
 
-            VariableSymbol *variable_symbol;
             if (read_method)
             {
-                variable_symbol = (VariableSymbol *) read_method -> accessed_member;
-                postfix_expression -> write_method = read_method -> containing_type -> GetWriteAccessMethod(variable_symbol);
+                postfix_expression -> write_method = read_method -> containing_type -> GetWriteAccessFromReadAccess(read_method);
             }
-            else variable_symbol = postfix_expression -> expression -> symbol -> VariableCast();
         }
     }
-
-    return;
 }
 
 
@@ -4581,28 +4171,26 @@ void Semantic::ProcessMINUS(AstPreUnaryExpression *expr)
 
             if ((type == control.double_type))
             {
-                DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> expression -> value;
+                DoubleLiteralValue *literal = DYNAMIC_CAST<DoubleLiteralValue *> (expr -> expression -> value);
                 expr -> value = control.double_pool.FindOrInsert(-literal -> value);
             }
             else if ((type == control.float_type))
             {
-                FloatLiteralValue *literal = (FloatLiteralValue *) expr -> expression -> value;
+                FloatLiteralValue *literal = DYNAMIC_CAST<FloatLiteralValue *> (expr -> expression -> value);
                 expr -> value = control.float_pool.FindOrInsert(-literal -> value);
             }
             else if ((type == control.long_type))
             {
-                LongLiteralValue *literal = (LongLiteralValue *) expr -> expression -> value;
+                LongLiteralValue *literal = DYNAMIC_CAST<LongLiteralValue *> (expr -> expression -> value);
                 expr -> value = control.long_pool.FindOrInsert(-literal -> value);
             }
             else
             {
-                IntLiteralValue *literal = (IntLiteralValue *) expr -> expression -> value;
+                IntLiteralValue *literal = DYNAMIC_CAST<IntLiteralValue *> (expr -> expression -> value);
                 expr -> value = control.int_pool.FindOrInsert(-literal -> value);
             }
         }
     }
-
-    return;
 }
 
 
@@ -4626,19 +4214,17 @@ void Semantic::ProcessTWIDDLE(AstPreUnaryExpression *expr)
         {
             if (expr -> expression -> Type() == control.long_type)
             {
-                LongLiteralValue *literal = (LongLiteralValue *) expr -> expression -> value;
+                LongLiteralValue *literal = DYNAMIC_CAST<LongLiteralValue *> (expr -> expression -> value);
                 expr -> value = control.long_pool.FindOrInsert(~literal -> value);
             }
             else // assert(expr -> expression -> Type() == control.int_type)
             {
-                IntLiteralValue *literal = (IntLiteralValue *) expr -> expression -> value;
+                IntLiteralValue *literal = DYNAMIC_CAST<IntLiteralValue *> (expr -> expression -> value);
                 expr -> value = control.int_pool.FindOrInsert(~literal -> value);
             }
         }
         expr -> symbol = expr -> expression -> symbol;
     }
-
-    return;
 }
 
 
@@ -4657,43 +4243,54 @@ void Semantic::ProcessNOT(AstPreUnaryExpression *expr)
     else
     {
         if (expr -> expression -> IsConstant())
-        {
-            IntLiteralValue *literal = (IntLiteralValue *) expr -> expression -> value;
-            expr -> value = control.int_pool.FindOrInsert(literal -> value ? 0 : 1);
-        }
+            expr -> value = control.int_pool.FindOrInsert(IsConstantTrue(expr -> expression) ? 0 : 1);
         expr -> symbol = control.boolean_type;
     }
-
-    return;
 }
 
 
-void Semantic::ProcessPLUSPLUSOrMINUSMINUS(AstPreUnaryExpression *expr)
+void Semantic::ProcessPLUSPLUSOrMINUSMINUS(AstPreUnaryExpression *prefix_expression)
 {
-    ProcessExpression(expr -> expression);
+    AstExpression *expression = prefix_expression -> expression;
 
-    if (expr -> expression -> symbol != control.no_type)
+    ProcessExpression(expression);
+    prefix_expression -> symbol = expression -> symbol;
+
+    //
+    // JLS2 added ability for parenthesized variable to remain a variable.
+    //
+    if (expression -> ParenthesizedExpressionCast())
     {
-        if (! expr -> expression -> IsLeftHandSide())
+        ReportSemError(SemanticError::UNNECESSARY_PARENTHESIS,
+                       expression -> LeftToken(),
+                       expression -> RightToken());
+        while (expression -> ParenthesizedExpressionCast())
+            expression = ((AstParenthesizedExpression *) expression) ->
+                expression;
+    }
+
+    if (expression -> symbol != control.no_type)
+    {
+        if (! expression -> IsLeftHandSide())
         {
             ReportSemError(SemanticError::NOT_A_NUMERIC_VARIABLE,
-                           expr -> expression -> LeftToken(),
-                           expr -> expression -> RightToken(),
-                           expr -> expression -> Type() -> Name());
-            expr -> symbol = control.no_type;
+                           prefix_expression -> expression -> LeftToken(),
+                           prefix_expression -> expression -> RightToken(),
+                           prefix_expression -> expression -> Type() -> Name());
+            prefix_expression -> symbol = control.no_type;
         }
-        else if (! control.IsNumeric(expr -> expression -> Type()))
+        else if (! control.IsNumeric(expression -> Type()))
         {
             ReportSemError(SemanticError::TYPE_NOT_NUMERIC,
-                           expr -> expression -> LeftToken(),
-                           expr -> expression -> RightToken(),
-                           expr -> expression -> Type() -> Name());
-            expr -> symbol = control.no_type;
+                           prefix_expression -> expression -> LeftToken(),
+                           prefix_expression -> expression -> RightToken(),
+                           expression -> Type() -> Name());
+            prefix_expression -> symbol = control.no_type;
         }
-        else if (! expr -> expression -> ArrayAccessCast()) // some kind of name
+        else if (! expression -> ArrayAccessCast()) // some kind of name
         {
             MethodSymbol *read_method = NULL;
-            AstSimpleName *simple_name = expr -> expression -> SimpleNameCast();
+            AstSimpleName *simple_name = expression -> SimpleNameCast();
             if (simple_name)
             {
                 if (simple_name -> resolution_opt)
@@ -4701,23 +4298,17 @@ void Semantic::ProcessPLUSPLUSOrMINUSMINUS(AstPreUnaryExpression *expr)
             }
             else
             {
-                AstFieldAccess *field_access = (AstFieldAccess *) expr -> expression;
+                AstFieldAccess *field_access = (AstFieldAccess *) expression;
                 if (field_access -> resolution_opt)
                     read_method = field_access -> resolution_opt -> symbol -> MethodCast();
             }
 
-            VariableSymbol *variable_symbol;
             if (read_method)
             {
-                variable_symbol = (VariableSymbol *) read_method -> accessed_member;
-                expr -> write_method = read_method -> containing_type -> GetWriteAccessMethod(variable_symbol);
+                prefix_expression -> write_method = read_method -> containing_type -> GetWriteAccessFromReadAccess(read_method);
             }
-            else variable_symbol = expr -> expression -> symbol -> VariableCast();
         }
     }
-    expr -> symbol = expr -> expression -> symbol;
-
-    return;
 }
 
 
@@ -4725,215 +4316,283 @@ void Semantic::ProcessPreUnaryExpression(Ast *expr)
 {
     AstPreUnaryExpression *prefix_expression = (AstPreUnaryExpression *) expr;
     (this ->* ProcessPreUnaryExpr[prefix_expression -> pre_unary_tag])(prefix_expression);
-
-    return;
 }
 
 
-inline bool Semantic::CanWideningPrimitiveConvert(TypeSymbol *target_type, TypeSymbol *source_type)
+//
+// Returns true if both types are primitive, and the source type can be
+// widened into the target type.
+//
+inline bool Semantic::CanWideningPrimitiveConvert(TypeSymbol *target_type,
+                                                  TypeSymbol *source_type)
 {
     if (target_type == control.double_type)
-         return (source_type == control.float_type || source_type == control.long_type  || source_type == control.int_type ||
-                 source_type == control.char_type  || source_type == control.short_type || source_type == control.byte_type);
-    else if (target_type == control.float_type)
-         return (source_type == control.long_type  || source_type == control.int_type   ||
-                 source_type == control.char_type  || source_type == control.short_type || source_type == control.byte_type);
-    else if (target_type == control.long_type)
-         return (source_type == control.int_type   || source_type == control.char_type  ||
-                 source_type == control.short_type || source_type == control.byte_type);
-    else if (target_type == control.int_type)
-         return (source_type == control.char_type  || source_type == control.short_type || source_type == control.byte_type);
-    else if (target_type == control.short_type)
-         return source_type == control.byte_type;
+        return (source_type == control.float_type ||
+                source_type == control.long_type ||
+                source_type == control.int_type ||
+                source_type == control.char_type ||
+                source_type == control.short_type ||
+                source_type == control.byte_type);
+    if (target_type == control.float_type)
+        return (source_type == control.long_type ||
+                source_type == control.int_type ||
+                source_type == control.char_type ||
+                source_type == control.short_type ||
+                source_type == control.byte_type);
+    if (target_type == control.long_type)
+        return (source_type == control.int_type ||
+                source_type == control.char_type ||
+                source_type == control.short_type ||
+                source_type == control.byte_type);
+    if (target_type == control.int_type)
+        return (source_type == control.char_type ||
+                source_type == control.short_type ||
+                source_type == control.byte_type);
+    if (target_type == control.short_type)
+        return source_type == control.byte_type;
 
     return false;
 }
 
 
-inline bool Semantic::CanNarrowingPrimitiveConvert(TypeSymbol *target_type, TypeSymbol *source_type)
+//
+// Returns true if both types are primitive, and the source type can be
+// narrowed to the target type.
+//
+inline bool Semantic::CanNarrowingPrimitiveConvert(TypeSymbol *target_type,
+                                                   TypeSymbol *source_type)
 {
     if (target_type == control.byte_type)
-         return (source_type == control.double_type || source_type == control.float_type || source_type == control.long_type ||
-                 source_type == control.int_type    || source_type == control.char_type  || source_type == control.short_type);
-    else if (target_type == control.char_type)
-         return (source_type == control.double_type || source_type == control.float_type || source_type == control.long_type ||
-                 source_type == control.int_type    || source_type == control.short_type || source_type == control.byte_type);
-    else if (target_type == control.short_type)
-         return (source_type == control.double_type || source_type == control.float_type ||
-                 source_type == control.long_type   || source_type == control.int_type   || source_type == control.char_type);
-    else if (target_type == control.int_type)
-         return (source_type == control.double_type || source_type == control.float_type || source_type == control.long_type);
-    else if (target_type == control.long_type)
-         return (source_type == control.double_type || source_type == control.float_type);
-    else if (target_type == control.float_type)
-         return source_type == control.double_type;
+        return (source_type == control.double_type ||
+                source_type == control.float_type ||
+                source_type == control.long_type ||
+                source_type == control.int_type ||
+                source_type == control.char_type ||
+                source_type == control.short_type);
+    if (target_type == control.char_type)
+        return (source_type == control.double_type ||
+                source_type == control.float_type ||
+                source_type == control.long_type ||
+                source_type == control.int_type ||
+                source_type == control.short_type ||
+                source_type == control.byte_type);
+    if (target_type == control.short_type)
+        return (source_type == control.double_type ||
+                source_type == control.float_type ||
+                 source_type == control.long_type ||
+                source_type == control.int_type ||
+                source_type == control.char_type);
+    if (target_type == control.int_type)
+        return (source_type == control.double_type ||
+                source_type == control.float_type ||
+                source_type == control.long_type);
+    if (target_type == control.long_type)
+        return (source_type == control.double_type ||
+                source_type == control.float_type);
+    if (target_type == control.float_type)
+        return source_type == control.double_type;
 
     return false;
 }
 
 
-bool Semantic::CanMethodInvocationConvert(TypeSymbol *target_type, TypeSymbol *source_type)
+//
+// Returns true if the source type can be converted to the target type in a
+// method invocation - this includes identity and widening conversions.
+//
+bool Semantic::CanMethodInvocationConvert(TypeSymbol *target_type,
+                                          TypeSymbol *source_type)
 {
-    if (target_type == control.no_type || source_type == control.no_type)
+    if (target_type == control.no_type) // Don't convert any class to bad type.
         return false;
-
-    if (source_type -> Primitive())
-    {
-        if (! target_type -> Primitive())
-            return false;
-
-        return (target_type == source_type || CanWideningPrimitiveConvert(target_type, source_type));
-    }
-    else
-    {
-        if (target_type -> Primitive())
-            return false;
-
-        if (source_type -> IsArray())
-        {
-            if (target_type -> IsArray())
-            {
-                TypeSymbol *source_subtype = source_type -> ArraySubtype();
-                TypeSymbol *target_subtype = target_type -> ArraySubtype();
-                return (source_subtype -> Primitive() && target_subtype -> Primitive()
-                                                       ? (source_subtype == target_subtype)
-                                                       : CanMethodInvocationConvert(target_subtype, source_subtype));
-            }
-            return (target_type == control.Object() ||
-                    target_type == control.Cloneable() ||
-                    //
-                    // TODO: This is an undocumented feature, but this fix appears to make sense.
-                    //
-                    (target_type == control.Serializable() && source_type -> Implements(target_type)));
-        }
-        else if (source_type -> ACC_INTERFACE())
-        {
-            if (target_type -> ACC_INTERFACE())
-                 return source_type -> IsSubinterface(target_type);
-            else if (target_type != control.Object()) // target is a class type
-                 return false;
-        }
-        else if (source_type != control.null_type) // source_type is a class
-        {
-            if (target_type -> IsArray())
-                 return false;
-            else if (target_type -> ACC_INTERFACE())
-                 return source_type -> Implements(target_type);
-            else if (! source_type -> IsSubclass(target_type))
-                 return false;
-        }
-    }
-
-    return true;
-}
-
-
-bool Semantic::CanAssignmentConvertReference(TypeSymbol *target_type, TypeSymbol *source_type)
-{
-    return (target_type == control.no_type ||
-            source_type == control.no_type ||
-            CanMethodInvocationConvert(target_type, source_type)
-           );
-}
-
-
-bool Semantic::CanAssignmentConvert(TypeSymbol *target_type, AstExpression *expr)
-{
-    return (target_type == control.no_type ||
-            expr -> symbol == control.no_type ||
-            CanMethodInvocationConvert(target_type, expr -> Type()) ||
-            IsIntValueRepresentableInType(expr, target_type)
-           );
-}
-
-
-bool Semantic::CanCastConvert(TypeSymbol *target_type, TypeSymbol *source_type, LexStream::TokenIndex tok)
-{
-    if (source_type == target_type || source_type == control.no_type || target_type == control.no_type)
+    if (source_type == control.no_type) // Allow bad type to match anything.
         return true;
 
     if (source_type -> Primitive())
     {
-        if (! target_type -> Primitive())
-            return false;
-
-        return (CanWideningPrimitiveConvert(target_type, source_type) || CanNarrowingPrimitiveConvert(target_type, source_type));
+        return (target_type -> Primitive() &&
+                (target_type == source_type ||
+                 CanWideningPrimitiveConvert(target_type, source_type)));
     }
-    else
+
+    if (target_type -> Primitive())
+        return false;
+
+    if (source_type -> IsArray())
     {
-        if (target_type -> Primitive())
+        if (target_type -> IsArray())
+        {
+            TypeSymbol *source_subtype = source_type -> ArraySubtype();
+            TypeSymbol *target_subtype = target_type -> ArraySubtype();
+            return ((source_subtype -> Primitive() &&
+                     target_subtype -> Primitive())
+                    ? (source_subtype == target_subtype)
+                    : CanMethodInvocationConvert(target_subtype,
+                                                 source_subtype));
+        }
+        return (target_type == control.Object() ||
+                target_type == control.Cloneable() ||
+                target_type == control.Serializable());
+    }
+
+    if (source_type -> ACC_INTERFACE())
+    {
+        if (target_type -> ACC_INTERFACE())
+            return source_type -> IsSubinterface(target_type);
+        return target_type == control.Object();
+    }
+
+    if (source_type != control.null_type) // source_type is a class
+    {
+        if (target_type -> IsArray())
             return false;
+        if (target_type -> ACC_INTERFACE())
+            return source_type -> Implements(target_type);
+        return source_type -> IsSubclass(target_type);
+    }
 
-        if (source_type -> IsArray())
+    return true;
+}
+
+
+//
+// Returns true if the reference source type can be automatically converted to
+// the target type in assignments. This works only for references (including
+// null), but allows a bad target type while method invocation does not.
+//
+bool Semantic::CanAssignmentConvertReference(TypeSymbol *target_type,
+                                             TypeSymbol *source_type)
+{
+    return (target_type == control.no_type ||
+            source_type == control.no_type ||
+            CanMethodInvocationConvert(target_type, source_type));
+}
+
+
+//
+// Returns true if the source expression can be automatically converted to the
+// target type. This includes all method invocation conversions, and
+// additionally allows narrowing conversions of primitive constants.
+//
+bool Semantic::CanAssignmentConvert(TypeSymbol *target_type,
+                                    AstExpression *expr)
+{
+    return (target_type == control.no_type ||
+            expr -> symbol == control.no_type ||
+            CanMethodInvocationConvert(target_type, expr -> Type()) ||
+            IsIntValueRepresentableInType(expr, target_type));
+}
+
+
+//
+// Returns true if the source type can be cast into the target type, via an
+// identity, narrowing, or widening conversion. The lexical token is needed
+// in case an error is encountered when resolving the target type.
+//
+bool Semantic::CanCastConvert(TypeSymbol *target_type,
+                              TypeSymbol *source_type,
+                              LexStream::TokenIndex tok)
+{
+    if (target_type == control.null_type)
+        return false;
+    if (source_type == target_type || source_type == control.no_type ||
+        target_type == control.no_type)
+    {
+        return true;
+    }
+
+    if (source_type -> Primitive())
+    {
+        return (target_type -> Primitive() &&
+                (CanWideningPrimitiveConvert(target_type, source_type) ||
+                 CanNarrowingPrimitiveConvert(target_type, source_type)));
+    }
+
+    if (target_type -> Primitive())
+        return false;
+
+    if (source_type -> IsArray())
+    {
+        if (target_type -> IsArray())
         {
-            if (target_type -> IsArray())
-            {
-                TypeSymbol *source_subtype = source_type -> ArraySubtype();
-                TypeSymbol *target_subtype = target_type -> ArraySubtype();
-                return (source_subtype -> Primitive() && target_subtype -> Primitive()
-                                                       ? (source_subtype == target_subtype)
-                                                       : CanCastConvert(target_subtype, source_subtype, tok));
-            }
-            return (target_type == control.Object() ||
-                    target_type == control.Cloneable() ||
-                    //
-                    // TODO: This is an undocumented feature, but this fix appears to make sense.
-                    //
-                    (target_type == control.Serializable() && source_type -> Implements(target_type)));
+            TypeSymbol *source_subtype = source_type -> ArraySubtype();
+            TypeSymbol *target_subtype = target_type -> ArraySubtype();
+            return ((source_subtype -> Primitive() &&
+                     target_subtype -> Primitive())
+                    ? (source_subtype == target_subtype)
+                    : CanCastConvert(target_subtype, source_subtype, tok));
         }
-        else if (source_type -> ACC_INTERFACE())
-        {
-            if (target_type -> ACC_INTERFACE())
-            {
-                if (! source_type -> expanded_method_table)
-                    ComputeMethodsClosure(source_type, tok);
-                if (! target_type -> expanded_method_table)
-                    ComputeMethodsClosure(target_type, tok);
+        return (target_type == control.Object() ||
+                target_type == control.Cloneable() ||
+                target_type == control.Serializable());
+    }
 
-                //
-                // Iterate over all methods in the source symbol table of the source_type interface;
-                // For each such method, if the target_type contains a method with the same signature,
-                // then make sure that the two methods have the same return type.
-                //
-                ExpandedMethodTable *source_method_table = source_type -> expanded_method_table;
-                int i;
-                for (i = 0; i < source_method_table -> symbol_pool.Length(); i++)
+    if (source_type -> ACC_INTERFACE())
+    {
+        if (target_type -> ACC_INTERFACE())
+        {
+            if (! source_type -> expanded_method_table)
+                ComputeMethodsClosure(source_type, tok);
+            if (! target_type -> expanded_method_table)
+                ComputeMethodsClosure(target_type, tok);
+
+            //
+            // Iterate over all methods in the source symbol table of the
+            // source_type interface; For each such method, if the
+            // target_type contains a method with the same signature, then
+            // make sure that the two methods have the same return type.
+            //
+            ExpandedMethodTable *source_method_table =
+                source_type -> expanded_method_table;
+            int i;
+            for (i = 0; i < source_method_table -> symbol_pool.Length(); i++)
+            {
+                MethodSymbol *method1 =
+                    source_method_table -> symbol_pool[i] -> method_symbol;
+                MethodShadowSymbol *method_shadow2 =
+                    target_type -> expanded_method_table ->
+                    FindOverloadMethodShadow(method1, this, tok);
+                if (method_shadow2)
                 {
-                    MethodSymbol *method1 = source_method_table -> symbol_pool[i] -> method_symbol;
-                    MethodShadowSymbol *method_shadow2 = target_type -> expanded_method_table
-                                                                     -> FindOverloadMethodShadow(method1, (Semantic *) this, tok);
-                    if (method_shadow2)
-                    {
-                        if (! method1 -> IsTyped())
-                            method1 -> ProcessMethodSignature((Semantic *) this, tok);
+                    if (! method1 -> IsTyped())
+                        method1 -> ProcessMethodSignature(this, tok);
 
-                        MethodSymbol *method2 = method_shadow2 -> method_symbol;
-                        if (! method2 -> IsTyped())
-                            method2 -> ProcessMethodSignature((Semantic *) this, tok);
-                        if (method1 -> Type() != method2 -> Type())
-                            break;
-                    }
+                    MethodSymbol *method2 = method_shadow2 -> method_symbol;
+                    if (! method2 -> IsTyped())
+                        method2 -> ProcessMethodSignature(this, tok);
+                    if (method1 -> Type() != method2 -> Type())
+                        break;
                 }
-
-                return (i == source_method_table -> symbol_pool.Length()); // all the methods passed the test
             }
-            else if (target_type -> ACC_FINAL() && (! target_type -> Implements(source_type)))
+
+            // All the methods passed the test.
+            return (i == source_method_table -> symbol_pool.Length());
+        }
+        else if (target_type -> ACC_FINAL() &&
+                 ! target_type -> Implements(source_type))
+        {
                  return false;
         }
-        else if (source_type != control.null_type) // source_type is a class
+    }
+    else if (source_type != control.null_type) // source_type is a class
+    {
+        if (target_type -> IsArray())
         {
-            if (target_type -> IsArray())
+            if (source_type != control.Object())
+                return false;
+        }
+        else if (target_type -> ACC_INTERFACE())
+        {
+            if (source_type -> ACC_FINAL() &&
+                ! source_type -> Implements(target_type))
             {
-                if (source_type != control.Object())
-                    return false;
+                return false;
             }
-            else if (target_type -> ACC_INTERFACE())
-            {
-                if (source_type -> ACC_FINAL() && (! source_type -> Implements(target_type)))
-                    return false;
-            }
-            else if ((! source_type -> IsSubclass(target_type)) && (! target_type -> IsSubclass(source_type)))
-                 return false;
+        }
+        else if (! source_type -> IsSubclass(target_type) &&
+                 ! target_type -> IsSubclass(source_type))
+        {
+            return false;
         }
     }
 
@@ -4941,249 +4600,283 @@ bool Semantic::CanCastConvert(TypeSymbol *target_type, TypeSymbol *source_type, 
 }
 
 
-LiteralValue *Semantic::CastPrimitiveValue(TypeSymbol *target_type, AstExpression *expr)
+//
+// Transfer a constant value across a primitive or String cast statement,
+// whether explicit or generated.
+//
+LiteralValue *Semantic::CastValue(TypeSymbol *target_type,
+                                  AstExpression *expr)
 {
-    LiteralValue *literal_value = NULL;
     TypeSymbol *source_type = expr -> Type();
 
-    if (target_type == source_type)
-        literal_value = expr -> value;
-    else if (source_type != control.no_type)
+    if (target_type == source_type || source_type == control.no_type ||
+        ! expr -> IsConstant())
     {
-        char output_string[25];
-        int len;
+        assert(target_type == source_type || ! expr -> value);
+        return expr -> value;
+    }
+    if (source_type == control.String())
+        return NULL; // A string cast to a supertype is not constant.
 
-        if (target_type == control.String())
+    LiteralValue *literal_value = NULL;
+    if (target_type == control.String())
+    {
+        if (source_type == control.double_type)
         {
-            if (source_type == control.double_type)
-            {
-                DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                DoubleToString ieee_double(literal -> value);
-                literal_value = control.Utf8_pool.FindOrInsert(ieee_double.String(), ieee_double.Length());
-            }
-            else if (source_type == control.float_type)
-            {
-                FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                FloatToString ieee_float(literal -> value);
-                literal_value = control.Utf8_pool.FindOrInsert(ieee_float.String(), ieee_float.Length());
-            }
-            else if (source_type == control.long_type)
-            {
-                LongLiteralValue *literal = (LongLiteralValue *) expr -> value;
-                LongToDecString long_integer(literal -> value);
-                literal_value = control.Utf8_pool.FindOrInsert(long_integer.String(), long_integer.Length());
-            }
-            else if (source_type == control.char_type)
-            {
-                IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                literal_value = control.Utf8_pool.FindOrInsert(literal -> value);
-            }
-            else if (source_type == control.boolean_type)
-            {
-                IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                if (literal -> value == 0)
-                {
-                    output_string[0] = U_f;
-                    output_string[1] = U_a;
-                    output_string[2] = U_l;
-                    output_string[3] = U_s;
-                    output_string[4] = U_e;
-                    len = 5;
-                }
-                else
-                {
-                    output_string[0] = U_t;
-                    output_string[1] = U_r;
-                    output_string[2] = U_u;
-                    output_string[3] = U_e;
-                    len = 4;
-                }
-                literal_value = control.Utf8_pool.FindOrInsert(output_string, len);
-            }
-            else if (control.IsSimpleIntegerValueType(source_type))
-            {
-                IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                IntToString integer(literal -> value);
-                literal_value = control.Utf8_pool.FindOrInsert(integer.String(), integer.Length());
-            }
+            DoubleLiteralValue *literal =
+                DYNAMIC_CAST<DoubleLiteralValue *> (expr -> value);
+            DoubleToString ieee_double(literal -> value);
+            literal_value =
+                control.Utf8_pool.FindOrInsert(ieee_double.String(),
+                                               ieee_double.Length());
         }
-        else if (target_type == control.double_type)
+        else if (source_type == control.float_type)
         {
-            if (source_type == control.float_type)
-            {
-                FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                literal_value = control.double_pool.FindOrInsert(literal -> value.DoubleValue());
-            }
-            else if (source_type == control.long_type)
-            {
-                LongLiteralValue *literal = (LongLiteralValue *) expr -> value;
-                IEEEdouble value(literal -> value);
-                literal_value = control.double_pool.FindOrInsert(value);
-            }
+            FloatLiteralValue *literal =
+                DYNAMIC_CAST<FloatLiteralValue *> (expr -> value);
+            FloatToString ieee_float(literal -> value);
+            literal_value =
+                control.Utf8_pool.FindOrInsert(ieee_float.String(),
+                                               ieee_float.Length());
+        }
+        else if (source_type == control.long_type)
+        {
+            LongLiteralValue *literal =
+                DYNAMIC_CAST<LongLiteralValue *> (expr -> value);
+            LongToDecString long_integer(literal -> value);
+            literal_value =
+                control.Utf8_pool.FindOrInsert(long_integer.String(),
+                                               long_integer.Length());
+        }
+        else if (source_type == control.char_type)
+        {
+            IntLiteralValue *literal =
+                DYNAMIC_CAST<IntLiteralValue *> (expr -> value);
+            literal_value = control.Utf8_pool.FindOrInsert(literal -> value);
+        }
+        else if (source_type == control.boolean_type)
+        {
+            if (IsConstantFalse(expr))
+                literal_value =
+                    control.Utf8_pool.FindOrInsert(StringConstant::U8S_false,
+                                                   5);
             else
             {
-                IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                IEEEdouble value(literal -> value);
-                literal_value = control.double_pool.FindOrInsert(value);
+                assert(IsConstantTrue(expr));
+                literal_value =
+                    control.Utf8_pool.FindOrInsert(StringConstant::U8S_true,
+                                                   4);
             }
         }
-        else if (target_type == control.float_type)
+        else if (control.IsSimpleIntegerValueType(source_type))
         {
-            if (source_type == control.double_type)
-            {
-                DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                literal_value = control.float_pool.FindOrInsert(literal -> value.FloatValue());
-            }
-            else if (source_type == control.long_type)
-            {
-                LongLiteralValue *literal = (LongLiteralValue *) expr -> value;
-                IEEEfloat value(literal -> value);
-                literal_value = control.float_pool.FindOrInsert(value);
-            }
-            else
-            {
-                IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                IEEEfloat value(literal -> value);
-                literal_value = control.float_pool.FindOrInsert(value);
-            }
+            IntLiteralValue *literal =
+                DYNAMIC_CAST<IntLiteralValue *> (expr -> value);
+            IntToString integer(literal -> value);
+            literal_value =
+                control.Utf8_pool.FindOrInsert(integer.String(),
+                                               integer.Length());
         }
-        else if (target_type == control.long_type)
+    }
+    else if (target_type == control.double_type)
+    {
+        if (source_type == control.float_type)
         {
-            if (source_type == control.double_type)
-            {
-                DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                literal_value = control.long_pool.FindOrInsert(literal -> value.LongValue());
-            }
-            else if (source_type == control.float_type)
-            {
-                FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                literal_value = control.long_pool.FindOrInsert(literal -> value.LongValue());
-            }
-            else
-            {
-                IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                literal_value = control.long_pool.FindOrInsert((LongInt) literal -> value);
-            }
+            FloatLiteralValue *literal =
+                DYNAMIC_CAST<FloatLiteralValue *> (expr -> value);
+            literal_value =
+                control.double_pool.FindOrInsert(literal -> value.DoubleValue());
         }
-        else if (target_type == control.int_type)
+        else if (source_type == control.long_type)
         {
-            if (source_type == control.double_type)
-            {
-                DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((literal -> value).IntValue());
-            }
-            else if (source_type == control.float_type)
-            {
-                FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert(literal -> value.IntValue());
-            }
-            else if (source_type == control.long_type)
-            {
-                LongLiteralValue *literal = (LongLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (literal -> value).LowWord());
-            }
-            else literal_value = expr -> value;
+            LongLiteralValue *literal =
+                DYNAMIC_CAST<LongLiteralValue *> (expr -> value);
+            IEEEdouble value(literal -> value);
+            literal_value = control.double_pool.FindOrInsert(value);
         }
-        else if (target_type == control.char_type)
+        else
         {
-            if (source_type == control.double_type)
-            {
-                DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (u2) (literal -> value.IntValue()));
-            }
-            else if (source_type == control.float_type)
-            {
-                FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (u2) (literal -> value.IntValue()));
-            }
-            else if (source_type == control.long_type)
-            {
-                LongLiteralValue *literal = (LongLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (u2) (literal -> value).LowWord());
-            }
-            else
-            {
-                IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (u2) literal -> value);
-            }
+            IntLiteralValue *literal =
+                DYNAMIC_CAST<IntLiteralValue *> (expr -> value);
+            IEEEdouble value(literal -> value);
+            literal_value = control.double_pool.FindOrInsert(value);
         }
-        else if (target_type == control.short_type)
+    }
+    else if (target_type == control.float_type)
+    {
+        if (source_type == control.double_type)
         {
-            if (source_type == control.double_type)
-            {
-                DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (i2) (literal -> value.IntValue()));
-            }
-            else if (source_type == control.float_type)
-            {
-                FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (i2) (literal -> value.IntValue()));
-            }
-            else if (source_type == control.long_type)
-            {
-                LongLiteralValue *literal = (LongLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (i2) (literal -> value).LowWord());
-            }
-            else
-            {
-                IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (i2) literal -> value);
-            }
+            DoubleLiteralValue *literal =
+                DYNAMIC_CAST<DoubleLiteralValue *> (expr -> value);
+            literal_value =
+                control.float_pool.FindOrInsert(literal -> value.FloatValue());
         }
-        else if (target_type == control.byte_type)
+        else if (source_type == control.long_type)
         {
-            if (source_type == control.double_type)
-            {
-                DoubleLiteralValue *literal = (DoubleLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (i1) (literal -> value.IntValue()));
-            }
-            else if (source_type == control.float_type)
-            {
-                FloatLiteralValue *literal = (FloatLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (i1) (literal -> value.IntValue()));
-            }
-            else if (source_type == control.long_type)
-            {
-                LongLiteralValue *literal = (LongLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((int) (i1) (literal -> value).LowWord());
-            }
-            else
-            {
-                IntLiteralValue *literal = (IntLiteralValue *) expr -> value;
-                literal_value = control.int_pool.FindOrInsert((i4) (i1) literal -> value);
-            }
+            LongLiteralValue *literal =
+                DYNAMIC_CAST<LongLiteralValue *> (expr -> value);
+            IEEEfloat value(literal -> value);
+            literal_value = control.float_pool.FindOrInsert(value);
+        }
+        else
+        {
+            IntLiteralValue *literal =
+                DYNAMIC_CAST<IntLiteralValue *> (expr -> value);
+            IEEEfloat value(literal -> value);
+            literal_value = control.float_pool.FindOrInsert(value);
+        }
+    }
+    else if (target_type == control.long_type)
+    {
+        if (source_type == control.double_type)
+        {
+            DoubleLiteralValue *literal =
+                DYNAMIC_CAST<DoubleLiteralValue *> (expr -> value);
+            literal_value =
+                control.long_pool.FindOrInsert(literal -> value.LongValue());
+        }
+        else if (source_type == control.float_type)
+        {
+            FloatLiteralValue *literal =
+                DYNAMIC_CAST<FloatLiteralValue *> (expr -> value);
+            literal_value =
+                control.long_pool.FindOrInsert(literal -> value.LongValue());
+        }
+        else
+        {
+            IntLiteralValue *literal =
+                DYNAMIC_CAST<IntLiteralValue *> (expr -> value);
+            literal_value =
+                control.long_pool.FindOrInsert((LongInt) literal -> value);
+        }
+    }
+    else if (target_type == control.int_type)
+    {
+        if (source_type == control.double_type)
+        {
+            DoubleLiteralValue *literal =
+                DYNAMIC_CAST<DoubleLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((literal -> value).IntValue());
+        }
+        else if (source_type == control.float_type)
+        {
+            FloatLiteralValue *literal =
+                DYNAMIC_CAST<FloatLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert(literal -> value.IntValue());
+        }
+        else if (source_type == control.long_type)
+        {
+            LongLiteralValue *literal =
+                DYNAMIC_CAST<LongLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (literal -> value).LowWord());
+        }
+        else literal_value = expr -> value;
+    }
+    else if (target_type == control.char_type)
+    {
+        if (source_type == control.double_type)
+        {
+            DoubleLiteralValue *literal =
+                DYNAMIC_CAST<DoubleLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (u2) (literal -> value.IntValue()));
+        }
+        else if (source_type == control.float_type)
+        {
+            FloatLiteralValue *literal =
+                DYNAMIC_CAST<FloatLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (u2) (literal -> value.IntValue()));
+        }
+        else if (source_type == control.long_type)
+        {
+            LongLiteralValue *literal =
+                DYNAMIC_CAST<LongLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (u2) (literal -> value).LowWord());
+        }
+        else
+        {
+            IntLiteralValue *literal =
+                DYNAMIC_CAST<IntLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (u2) literal -> value);
+        }
+    }
+    else if (target_type == control.short_type)
+    {
+        if (source_type == control.double_type)
+        {
+            DoubleLiteralValue *literal =
+                DYNAMIC_CAST<DoubleLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (i2) (literal -> value.IntValue()));
+        }
+        else if (source_type == control.float_type)
+        {
+            FloatLiteralValue *literal =
+                DYNAMIC_CAST<FloatLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (i2) (literal -> value.IntValue()));
+        }
+        else if (source_type == control.long_type)
+        {
+            LongLiteralValue *literal =
+                DYNAMIC_CAST<LongLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (i2) (literal -> value).LowWord());
+        }
+        else
+        {
+            IntLiteralValue *literal =
+                DYNAMIC_CAST<IntLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (i2) literal -> value);
+        }
+    }
+    else if (target_type == control.byte_type)
+    {
+        if (source_type == control.double_type)
+        {
+            DoubleLiteralValue *literal =
+                DYNAMIC_CAST<DoubleLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (i1) (literal -> value.IntValue()));
+        }
+        else if (source_type == control.float_type)
+        {
+            FloatLiteralValue *literal =
+                DYNAMIC_CAST<FloatLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (i1) (literal -> value.IntValue()));
+        }
+        else if (source_type == control.long_type)
+        {
+            LongLiteralValue *literal =
+                DYNAMIC_CAST<LongLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((int) (i1) (literal -> value).LowWord());
+        }
+        else
+        {
+            IntLiteralValue *literal =
+                DYNAMIC_CAST<IntLiteralValue *> (expr -> value);
+            literal_value =
+                control.int_pool.FindOrInsert((i4) (i1) literal -> value);
         }
     }
 
+    assert(literal_value);
     return literal_value;
-}
-
-
-//
-// We only need to cast the value of constant primitive expressions.
-//
-inline LiteralValue *Semantic::CastValue(TypeSymbol *target_type, AstExpression *expr)
-{
-    return (LiteralValue *) (expr -> IsConstant() && (target_type -> Primitive() || target_type == control.String())
-                                                   ? CastPrimitiveValue(target_type, expr)
-                                                   : NULL);
 }
 
 
 void Semantic::ProcessCastExpression(Ast *expr)
 {
     AstCastExpression *cast_expression = (AstCastExpression *) expr;
-
-    //
-    // TODO: Is this needed ?
-    //
-    // This operation may throw ClassCastException
-    //
-    SymbolSet *exception_set = TryExceptionTableStack().Top();
-    if (exception_set)
-    {
-        exception_set -> AddElement(control.RuntimeException());
-    }
 
     //
     // Do not use ProcessExpressionOrStringConstant here, to avoid generating
@@ -5197,7 +4890,8 @@ void Semantic::ProcessCastExpression(Ast *expr)
     // Recall that the type is optional only when the compiler inserts
     // a CAST conversion node into the program.
     //
-    AstPrimitiveType *primitive_type = cast_expression -> type_opt -> PrimitiveTypeCast();
+    AstPrimitiveType *primitive_type =
+        cast_expression -> type_opt -> PrimitiveTypeCast();
     TypeSymbol *target_type;
     if (primitive_type)
          target_type = FindPrimitiveType(primitive_type);
@@ -5214,18 +4908,22 @@ void Semantic::ProcessCastExpression(Ast *expr)
     }
 
     int num_dimensions = cast_expression -> NumBrackets();
-    target_type = (num_dimensions == 0 ? target_type : target_type -> GetArrayType((Semantic *) this, num_dimensions));
+    target_type = (num_dimensions == 0 ? target_type
+                   : target_type -> GetArrayType(this, num_dimensions));
 
     if (CanAssignmentConvert(target_type, cast_expression -> expression))
     {
         cast_expression -> symbol = target_type;
-        cast_expression -> value = CastValue(target_type, cast_expression -> expression);
+        cast_expression -> value = CastValue(target_type,
+                                             cast_expression -> expression);
     }
-    else if (CanCastConvert(target_type, source_type, cast_expression -> right_parenthesis_token_opt))
+    else if (CanCastConvert(target_type, source_type,
+                            cast_expression -> right_parenthesis_token_opt))
     {
         cast_expression -> kind = Ast::CHECK_AND_CAST;
         cast_expression -> symbol = target_type;
-        cast_expression -> value = CastValue(target_type, cast_expression -> expression);
+        cast_expression -> value = CastValue(target_type,
+                                             cast_expression -> expression);
     }
     else
     {
@@ -5236,26 +4934,37 @@ void Semantic::ProcessCastExpression(Ast *expr)
                        target_type -> Name());
         cast_expression -> symbol = control.no_type;
     }
-
-    return;
 }
 
 
-AstExpression *Semantic::ConvertToType(AstExpression *expr, TypeSymbol *type)
+//
+// Inserts a widening conversion, if necessary.
+//
+AstExpression *Semantic::ConvertToType(AstExpression *expr,
+                                       TypeSymbol *target_type)
 {
-    if (expr -> Type() == control.null_type)
+    TypeSymbol *source_type = expr -> Type();
+    if (source_type == control.null_type || source_type == target_type ||
+        source_type == control.no_type || target_type -> Bad())
+    {
         return expr;
+    }
 
     LexStream::TokenIndex loc = expr -> LeftToken();
 
-    AstCastExpression *result = compilation_unit -> ast_pool -> GenCastExpression();
+    AstCastExpression *result =
+        compilation_unit -> ast_pool -> GenCastExpression();
     result -> left_parenthesis_token_opt = loc;
+    //
+    // Rather than generate an AstTypeExpression, we leave this NULL and rely
+    // on the resolved symbol for the type.
+    //
     result -> type_opt = NULL;
     result -> right_parenthesis_token_opt = loc;
     result -> expression = expr;
 
-    result -> symbol = type;
-    result -> value = CastValue(type, expr);
+    result -> symbol = target_type;
+    result -> value = CastValue(target_type, expr);
 
     return result;
 }
@@ -5278,9 +4987,11 @@ AstExpression *Semantic::PromoteUnaryNumericExpression(AstExpression *unary_expr
         return unary_expression;
     }
 
-    return ((type == control.byte_type || type == control.short_type || type == control.char_type)
-                                                ? ConvertToType(unary_expression, control.int_type)
-                                                : unary_expression);
+    return ((type == control.byte_type ||
+             type == control.short_type ||
+             type == control.char_type)
+            ? ConvertToType(unary_expression, control.int_type)
+            : unary_expression);
 }
 
 
@@ -5289,8 +5000,8 @@ void Semantic::BinaryNumericPromotion(AstBinaryExpression *binary_expression)
     AstExpression *left_expr = binary_expression -> left_expression;
     AstExpression *right_expr = binary_expression -> right_expression;
 
-    TypeSymbol *left_type  = left_expr -> Type(),
-               *right_type = right_expr -> Type();
+    TypeSymbol *left_type = left_expr -> Type();
+    TypeSymbol *right_type = right_expr -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
     {
@@ -5319,120 +5030,139 @@ void Semantic::BinaryNumericPromotion(AstBinaryExpression *binary_expression)
 
     if (left_type == control.double_type)
     {
-        if (right_type != control.double_type)
-            binary_expression -> right_expression = ConvertToType(binary_expression -> right_expression, control.double_type);
+        binary_expression -> right_expression =
+            ConvertToType(binary_expression -> right_expression,
+                          control.double_type);
         binary_expression -> symbol = control.double_type;
     }
     else if (right_type == control.double_type)
     {
-        if (left_type != control.double_type)
-            binary_expression -> left_expression = ConvertToType(binary_expression -> left_expression, control.double_type);
+        binary_expression -> left_expression =
+            ConvertToType(binary_expression -> left_expression,
+                          control.double_type);
         binary_expression -> symbol = control.double_type;
     }
     else if (left_type == control.float_type)
     {
-        if (right_type != control.float_type)
-            binary_expression -> right_expression = ConvertToType(binary_expression -> right_expression, control.float_type);
+        binary_expression -> right_expression =
+            ConvertToType(binary_expression -> right_expression,
+                          control.float_type);
         binary_expression -> symbol = control.float_type;
     }
     else if (right_type == control.float_type)
     {
-        if (left_type != control.float_type)
-            binary_expression -> left_expression = ConvertToType(binary_expression -> left_expression, control.float_type);
+        binary_expression -> left_expression =
+            ConvertToType(binary_expression -> left_expression,
+                          control.float_type);
         binary_expression -> symbol = control.float_type;
     }
     else if (left_type == control.long_type)
     {
-        if (right_type != control.long_type)
-            binary_expression -> right_expression = ConvertToType(binary_expression -> right_expression, control.long_type);
+        binary_expression -> right_expression =
+            ConvertToType(binary_expression -> right_expression,
+                          control.long_type);
         binary_expression -> symbol = control.long_type;
     }
     else if (right_type == control.long_type)
     {
-        if (left_type != control.long_type)
-            binary_expression -> left_expression = ConvertToType(binary_expression -> left_expression, control.long_type);
+        binary_expression -> left_expression =
+            ConvertToType(binary_expression -> left_expression,
+                          control.long_type);
         binary_expression -> symbol = control.long_type;
     }
     else
     {
-        if (left_type != control.int_type)
-            binary_expression -> left_expression = ConvertToType(binary_expression -> left_expression, control.int_type);
-        if (right_type != control.int_type)
-            binary_expression -> right_expression = ConvertToType(binary_expression -> right_expression, control.int_type);
+        binary_expression -> left_expression =
+            ConvertToType(binary_expression -> left_expression,
+                          control.int_type);
+        binary_expression -> right_expression =
+            ConvertToType(binary_expression -> right_expression,
+                          control.int_type);
         binary_expression -> symbol = control.int_type;
     }
-
-    return;
 }
 
 
 void Semantic::BinaryNumericPromotion(AstAssignmentExpression *assignment_expression)
 {
     AstExpression *left_expr = assignment_expression -> left_hand_side;
+    while (left_expr -> ParenthesizedExpressionCast())
+        left_expr = ((AstParenthesizedExpression *) left_expr) -> expression;
     AstExpression *right_expr = assignment_expression -> expression;
 
-    TypeSymbol *left_type  = left_expr -> Type(),
-               *right_type = right_expr -> Type();
+    TypeSymbol *left_type = left_expr -> Type();
+    TypeSymbol *right_type = right_expr -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
+    {
+        assignment_expression -> symbol = control.no_type;
         return;
+    }
 
     if (! control.IsNumeric(left_type))
     {
-       ReportSemError(SemanticError::TYPE_NOT_NUMERIC,
-                      left_expr -> LeftToken(),
-                      left_expr -> RightToken(),
-                      left_type -> Name());
+        ReportSemError(SemanticError::TYPE_NOT_NUMERIC,
+                       left_expr -> LeftToken(),
+                       left_expr -> RightToken(),
+                       left_type -> Name());
+        assignment_expression -> symbol = control.no_type;
         return;
     }
     else if (! control.IsNumeric(right_type))
     {
-       ReportSemError(SemanticError::TYPE_NOT_NUMERIC,
-                      right_expr -> LeftToken(),
-                      right_expr -> RightToken(),
-                      right_type -> Name());
+        ReportSemError(SemanticError::TYPE_NOT_NUMERIC,
+                       right_expr -> LeftToken(),
+                       right_expr -> RightToken(),
+                       right_type -> Name());
+        assignment_expression -> symbol = control.no_type;
         return;
     }
 
     if (left_type == control.double_type)
     {
-        if (right_type != control.double_type)
-            assignment_expression -> expression = ConvertToType(assignment_expression -> expression, control.double_type);
+        assignment_expression -> expression =
+            ConvertToType(assignment_expression -> expression,
+                          control.double_type);
     }
     else if (right_type == control.double_type)
     {
-        if (left_type != control.double_type)
-            assignment_expression -> left_hand_side = ConvertToType(assignment_expression -> left_hand_side, control.double_type);
+        assignment_expression -> left_hand_side =
+            ConvertToType(assignment_expression -> left_hand_side,
+                          control.double_type);
     }
     else if (left_type == control.float_type)
     {
-        if (right_type != control.float_type)
-            assignment_expression -> expression = ConvertToType(assignment_expression -> expression, control.float_type);
+        assignment_expression -> expression =
+            ConvertToType(assignment_expression -> expression,
+                          control.float_type);
     }
     else if (right_type == control.float_type)
     {
-        if (left_type != control.float_type)
-            assignment_expression -> left_hand_side = ConvertToType(assignment_expression -> left_hand_side, control.float_type);
+        assignment_expression -> left_hand_side =
+            ConvertToType(assignment_expression -> left_hand_side,
+                          control.float_type);
     }
     else if (left_type == control.long_type)
     {
-        if (right_type != control.long_type)
-            assignment_expression -> expression = ConvertToType(assignment_expression -> expression, control.long_type);
+        assignment_expression -> expression =
+            ConvertToType(assignment_expression -> expression,
+                          control.long_type);
     }
     else if (right_type == control.long_type)
     {
-        if (left_type != control.long_type)
-            assignment_expression -> left_hand_side = ConvertToType(assignment_expression -> left_hand_side, control.long_type);
+        assignment_expression -> left_hand_side =
+            ConvertToType(assignment_expression -> left_hand_side,
+                          control.long_type);
     }
     else
     {
-        if (left_type != control.int_type)
-            assignment_expression -> left_hand_side = ConvertToType(assignment_expression -> left_hand_side, control.int_type);
-        if (right_type != control.int_type)
-            assignment_expression -> expression = ConvertToType(assignment_expression -> expression, control.int_type);
+        assignment_expression -> left_hand_side =
+            ConvertToType(assignment_expression -> left_hand_side,
+                          control.int_type);
+        assignment_expression -> expression =
+            ConvertToType(assignment_expression -> expression,
+                          control.int_type);
     }
-
-    return;
 }
 
 
@@ -5441,8 +5171,8 @@ void Semantic::BinaryNumericPromotion(AstConditionalExpression *conditional_expr
     AstExpression *left_expr = conditional_expression -> true_expression;
     AstExpression *right_expr = conditional_expression -> false_expression;
 
-    TypeSymbol *left_type  = left_expr -> Type(),
-               *right_type = right_expr -> Type();
+    TypeSymbol *left_type = left_expr -> Type();
+    TypeSymbol *right_type = right_expr -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
     {
@@ -5471,56 +5201,56 @@ void Semantic::BinaryNumericPromotion(AstConditionalExpression *conditional_expr
 
     if (left_type == control.double_type)
     {
-        if (right_type != control.double_type)
-            conditional_expression -> false_expression =
-                        ConvertToType(conditional_expression -> false_expression, control.double_type);
+        conditional_expression -> false_expression =
+            ConvertToType(conditional_expression -> false_expression,
+                          control.double_type);
         conditional_expression -> symbol = control.double_type;
     }
     else if (right_type == control.double_type)
     {
-        if (left_type != control.double_type)
-            conditional_expression -> true_expression =
-                        ConvertToType(conditional_expression -> true_expression, control.double_type);
+        conditional_expression -> true_expression =
+            ConvertToType(conditional_expression -> true_expression,
+                          control.double_type);
         conditional_expression -> symbol = control.double_type;
     }
     else if (left_type == control.float_type)
     {
-        if (right_type != control.float_type)
-            conditional_expression -> false_expression =
-                        ConvertToType(conditional_expression -> false_expression, control.float_type);
+        conditional_expression -> false_expression =
+            ConvertToType(conditional_expression -> false_expression,
+                          control.float_type);
         conditional_expression -> symbol = control.float_type;
     }
     else if (right_type == control.float_type)
     {
-        if (left_type != control.float_type)
-            conditional_expression -> true_expression =
-                        ConvertToType(conditional_expression -> true_expression, control.float_type);
+        conditional_expression -> true_expression =
+            ConvertToType(conditional_expression -> true_expression,
+                          control.float_type);
         conditional_expression -> symbol = control.float_type;
     }
     else if (left_type == control.long_type)
     {
-        if (right_type != control.long_type)
-            conditional_expression -> false_expression =
-                        ConvertToType(conditional_expression -> false_expression, control.long_type);
+        conditional_expression -> false_expression =
+            ConvertToType(conditional_expression -> false_expression,
+                          control.long_type);
         conditional_expression -> symbol = control.long_type;
     }
     else if (right_type == control.long_type)
     {
-        if (left_type != control.long_type)
-            conditional_expression -> true_expression = ConvertToType(conditional_expression -> true_expression, control.long_type);
+        conditional_expression -> true_expression =
+            ConvertToType(conditional_expression -> true_expression,
+                          control.long_type);
         conditional_expression -> symbol = control.long_type;
     }
     else
     {
-        if (left_type != control.int_type)
-            conditional_expression -> true_expression = ConvertToType(conditional_expression -> true_expression, control.int_type);
-        if (right_type != control.int_type)
-            conditional_expression -> false_expression =
-                        ConvertToType(conditional_expression -> false_expression, control.int_type);
+        conditional_expression -> true_expression =
+            ConvertToType(conditional_expression -> true_expression,
+                          control.int_type);
+        conditional_expression -> false_expression =
+            ConvertToType(conditional_expression -> false_expression,
+                          control.int_type);
         conditional_expression -> symbol = control.int_type;
     }
-
-    return;
 }
 
 
@@ -5530,38 +5260,34 @@ void Semantic::ProcessPLUS(AstBinaryExpression *expr)
     // Do not use ProcessExpressionOrStringConstant here, to avoid generating
     // intermediate Strings - see CheckConstantString in lookup.cpp
     //
-    ProcessExpression(expr -> left_expression);
-    ProcessExpression(expr -> right_expression);
+    AstExpression *left = expr -> left_expression;
+    AstExpression *right = expr -> right_expression;
+    ProcessExpression(left);
+    ProcessExpression(right);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = left -> Type(),
+               *right_type = right -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
         expr -> symbol = control.no_type;
     else if (left_type == control.String() || right_type == control.String())
     {
         //
-        // TODO: Is this needed ?
-        //
-        // This operation may throw OutOfMemoryError
-        //
-        SymbolSet *exception_set = TryExceptionTableStack().Top();
-        if (exception_set)
-        {
-            exception_set -> AddElement(control.Error());
-        }
-
-        //
         // Convert the left expression if necessary.
         //
         if (left_type != control.String())
         {
-            AddStringConversionDependence(left_type, expr -> binary_operator_token);
+            AddStringConversionDependence(left_type,
+                                          expr -> binary_operator_token);
             if (left_type == control.void_type)
-                 ReportSemError(SemanticError::VOID_TO_STRING,
-                                expr -> left_expression -> LeftToken(),
-                                expr -> left_expression -> RightToken());
-            else expr -> left_expression = ConvertToType(expr -> left_expression, control.String());
+                ReportSemError(SemanticError::VOID_TO_STRING,
+                               left -> LeftToken(),
+                               left -> RightToken());
+            else if (left_type == control.null_type || left -> IsConstant())
+            {
+                left -> value = CastValue(control.String(), left);
+                left -> symbol = control.String();
+            }
         }
 
         //
@@ -5569,15 +5295,21 @@ void Semantic::ProcessPLUS(AstBinaryExpression *expr)
         //
         if (right_type != control.String())
         {
-            AddStringConversionDependence(right_type, expr -> binary_operator_token);
+            AddStringConversionDependence(right_type,
+                                          expr -> binary_operator_token);
             if (right_type == control.void_type)
-                 ReportSemError(SemanticError::VOID_TO_STRING,
-                                expr -> right_expression -> LeftToken(),
-                                expr -> right_expression -> RightToken());
-            else expr -> right_expression = ConvertToType(expr -> right_expression, control.String());
+                ReportSemError(SemanticError::VOID_TO_STRING,
+                               right -> LeftToken(),
+                               right -> RightToken());
+            else if (right_type == control.null_type || right -> IsConstant())
+            {
+                right -> value = CastValue(control.String(), right);
+                right -> symbol = control.String();
+            }
         }
 
-        AddDependence(ThisType(), control.StringBuffer(), expr -> binary_operator_token);
+        AddDependence(ThisType(), control.StringBuffer(),
+                      expr -> binary_operator_token);
 
         //
         // If both subexpressions are strings constants, identify the result as
@@ -5586,9 +5318,10 @@ void Semantic::ProcessPLUS(AstBinaryExpression *expr)
         //
         //  s1 + s2 + ... + sn
         //
-        // where each subexpression s(i) is a string constant, we want to perform
-        // one concatenation and enter a single result into the constant pool instead
-        // of n-1 subresults. See CheckStringConstant in lookup.cpp.
+        // where each subexpression s(i) is a string constant, we want to
+        // perform one concatenation and enter a single result into the
+        // constant pool instead of n-1 subresults. See CheckStringConstant
+        // in lookup.cpp.
         //
 
         expr -> symbol = control.String();
@@ -5596,41 +5329,57 @@ void Semantic::ProcessPLUS(AstBinaryExpression *expr)
     else
     {
         BinaryNumericPromotion(expr);
+        left = expr -> left_expression;
+        right = expr -> right_expression;
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (left -> IsConstant() && right -> IsConstant())
         {
              if (expr -> Type() == control.double_type)
              {
-                 DoubleLiteralValue *left = (DoubleLiteralValue *) expr -> left_expression -> value;
-                 DoubleLiteralValue *right = (DoubleLiteralValue *) expr -> right_expression -> value;
+                 DoubleLiteralValue *left_value =
+                     DYNAMIC_CAST<DoubleLiteralValue *> (left -> value);
+                 DoubleLiteralValue *right_value =
+                     DYNAMIC_CAST<DoubleLiteralValue *> (right -> value);
 
-                 expr -> value = control.double_pool.FindOrInsert(left -> value + right -> value);
+                 expr -> value =
+                     control.double_pool.FindOrInsert(left_value -> value +
+                                                      right_value -> value);
              }
              else if (expr -> Type() == control.float_type)
              {
-                 FloatLiteralValue *left = (FloatLiteralValue *) expr -> left_expression -> value;
-                 FloatLiteralValue *right = (FloatLiteralValue *) expr -> right_expression -> value;
+                 FloatLiteralValue *left_value =
+                     DYNAMIC_CAST<FloatLiteralValue *> (left -> value);
+                 FloatLiteralValue *right_value =
+                     DYNAMIC_CAST<FloatLiteralValue *> (right -> value);
 
-                 expr -> value = control.float_pool.FindOrInsert(left -> value + right -> value);
+                 expr -> value =
+                     control.float_pool.FindOrInsert(left_value -> value +
+                                                     right_value -> value);
              }
              else if (expr -> Type() == control.long_type)
              {
-                 LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                 LongLiteralValue *right = (LongLiteralValue *) expr -> right_expression -> value;
+                 LongLiteralValue *left_value =
+                     DYNAMIC_CAST<LongLiteralValue *> (left -> value);
+                 LongLiteralValue *right_value =
+                     DYNAMIC_CAST<LongLiteralValue *> (right -> value);
 
-                 expr -> value = control.long_pool.FindOrInsert(left -> value + right -> value);
+                 expr -> value =
+                     control.long_pool.FindOrInsert(left_value -> value +
+                                                    right_value -> value);
              }
              else // assert(expr -> Type() == control.int_type)
              {
-                 IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                 IntLiteralValue *left_value =
+                     DYNAMIC_CAST<IntLiteralValue *> (left -> value);
+                 IntLiteralValue *right_value =
+                     DYNAMIC_CAST<IntLiteralValue *> (right -> value);
 
-                 expr -> value = control.int_pool.FindOrInsert(left -> value + right -> value);
+                 expr -> value =
+                     control.int_pool.FindOrInsert(left_value -> value +
+                                                   right_value -> value);
              }
         }
     }
-
-    return;
 }
 
 
@@ -5639,8 +5388,8 @@ void Semantic::ProcessLEFT_SHIFT(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
         expr -> symbol = control.no_type;
@@ -5662,32 +5411,44 @@ void Semantic::ProcessLEFT_SHIFT(AstBinaryExpression *expr)
     }
     else
     {
-        expr -> left_expression  = PromoteUnaryNumericExpression(expr -> left_expression);
-        expr -> right_expression = PromoteUnaryNumericExpression(expr -> right_expression);
-        if (expr -> right_expression -> Type() == control.long_type)
-            expr -> right_expression = ConvertToType(expr -> right_expression, control.int_type);
+        expr -> left_expression =
+            PromoteUnaryNumericExpression(expr -> left_expression);
+        //
+        // This call captures both unary numeric conversion (widening) of
+        // byte, char, or short, and narrowing of long, since the bytecode
+        // requires an int shift amount.
+        //
+        expr -> right_expression = ConvertToType(expr -> right_expression,
+                                                 control.int_type);
         expr -> symbol = expr -> left_expression -> symbol;
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (expr -> left_expression -> IsConstant() &&
+            expr -> right_expression -> IsConstant())
         {
             if (expr -> Type() == control.long_type)
             {
-                LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.long_pool.FindOrInsert(left -> value << (right -> value & LONG_SHIFT_MASK));
+                expr -> value =
+                    control.long_pool.FindOrInsert(left -> value <<
+                                                   (right -> value & LONG_SHIFT_MASK));
             }
             else // assert(expr -> Type() == control.int_type)
             {
-                IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value << (right -> value & INT_SHIFT_MASK));
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value <<
+                                                  (right -> value & INT_SHIFT_MASK));
             }
         }
     }
-
-    return;
 }
 
 
@@ -5696,8 +5457,8 @@ void Semantic::ProcessRIGHT_SHIFT(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
         expr -> symbol = control.no_type;
@@ -5719,32 +5480,44 @@ void Semantic::ProcessRIGHT_SHIFT(AstBinaryExpression *expr)
     }
     else
     {
-        expr -> left_expression  = PromoteUnaryNumericExpression(expr -> left_expression);
-        expr -> right_expression = PromoteUnaryNumericExpression(expr -> right_expression);
-        if (expr -> right_expression -> Type() == control.long_type)
-            expr -> right_expression = ConvertToType(expr -> right_expression, control.int_type);
+        expr -> left_expression =
+            PromoteUnaryNumericExpression(expr -> left_expression);
+        //
+        // This call captures both unary numeric conversion (widening) of
+        // byte, char, or short, and narrowing of long, since the bytecode
+        // requires an int shift amount.
+        //
+        expr -> right_expression = ConvertToType(expr -> right_expression,
+                                                 control.int_type);
         expr -> symbol = expr -> left_expression -> symbol;
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (expr -> left_expression -> IsConstant() &&
+            expr -> right_expression -> IsConstant())
         {
             if (expr -> Type() == control.long_type)
             {
-                LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.long_pool.FindOrInsert(left -> value >> (right -> value & LONG_SHIFT_MASK));
+                expr -> value =
+                    control.long_pool.FindOrInsert(left -> value >>
+                                                   (right -> value & LONG_SHIFT_MASK));
             }
             else // assert(expr -> Type() == control.int_type)
             {
-                IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value >> (right -> value & INT_SHIFT_MASK));
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value >>
+                                                  (right -> value & INT_SHIFT_MASK));
             }
         }
     }
-
-    return;
 }
 
 
@@ -5753,8 +5526,8 @@ void Semantic::ProcessUNSIGNED_RIGHT_SHIFT(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
         expr -> symbol = control.no_type;
@@ -5776,34 +5549,42 @@ void Semantic::ProcessUNSIGNED_RIGHT_SHIFT(AstBinaryExpression *expr)
     }
     else
     {
-        expr -> left_expression  = PromoteUnaryNumericExpression(expr -> left_expression);
-        expr -> right_expression = PromoteUnaryNumericExpression(expr -> right_expression);
-        if (expr -> right_expression -> Type() == control.long_type)
-            expr -> right_expression = ConvertToType(expr -> right_expression, control.int_type);
+        expr -> left_expression =
+            PromoteUnaryNumericExpression(expr -> left_expression);
+        //
+        // This call captures both unary numeric conversion (widening) of
+        // byte, char, or short, and narrowing of long, since the bytecode
+        // requires an int shift amount.
+        //
+        expr -> right_expression = ConvertToType(expr -> right_expression,
+                                                 control.int_type);
         expr -> symbol = expr -> left_expression -> symbol;
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (expr -> left_expression -> IsConstant() &&
+            expr -> right_expression -> IsConstant())
         {
             if (expr -> Type() == control.long_type)
             {
-                LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> right_expression -> value);
 
                 expr -> value = control.long_pool.FindOrInsert((LongInt)
                     ((ULongInt) left -> value >> (right -> value & LONG_SHIFT_MASK)));
             }
             else // assert(expr -> Type() == control.int_type)
             {
-                IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> right_expression -> value);
 
                 expr -> value = control.int_pool.FindOrInsert((i4)
                     ((u4) left -> value >> (right -> value & INT_SHIFT_MASK)));
             }
         }
     }
-
-    return;
 }
 
 
@@ -5812,49 +5593,64 @@ void Semantic::ProcessLESS(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type != control.no_type && right_type != control.no_type)
     {
         BinaryNumericPromotion(expr);
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (expr -> left_expression -> IsConstant() &&
+            expr -> right_expression -> IsConstant())
         {
             if (expr -> Type() == control.double_type)
             {
-                DoubleLiteralValue *left = (DoubleLiteralValue *) expr -> left_expression -> value;
-                DoubleLiteralValue *right = (DoubleLiteralValue *) expr -> right_expression -> value;
+                DoubleLiteralValue *left = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> left_expression -> value);
+                DoubleLiteralValue *right = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value < right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value <
+                                                  right -> value ? 1 : 0);
             }
             else if (expr -> Type() == control.float_type)
             {
-                FloatLiteralValue *left = (FloatLiteralValue *) expr -> left_expression -> value;
-                FloatLiteralValue *right = (FloatLiteralValue *) expr -> right_expression -> value;
+                FloatLiteralValue *left = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> left_expression -> value);
+                FloatLiteralValue *right = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value < right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value <
+                                                  right -> value ? 1 : 0);
             }
             else if (expr -> Type() == control.long_type)
            {
-                LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                LongLiteralValue *right = (LongLiteralValue *) expr -> right_expression -> value;
+                LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> left_expression -> value);
+                LongLiteralValue *right = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value < right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value <
+                                                  right -> value ? 1 : 0);
             }
             else // assert(expr -> Type() == control.int_type)
             {
-                IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value < right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value <
+                                                  right -> value ? 1 : 0);
             }
         }
     }
 
     expr -> symbol = control.boolean_type;
-
-    return;
 }
 
 
@@ -5863,49 +5659,64 @@ void Semantic::ProcessGREATER(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type != control.no_type && right_type != control.no_type)
     {
         BinaryNumericPromotion(expr);
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (expr -> left_expression -> IsConstant() &&
+            expr -> right_expression -> IsConstant())
         {
             if (expr -> Type() == control.double_type)
             {
-                DoubleLiteralValue *left = (DoubleLiteralValue *) expr -> left_expression -> value;
-                DoubleLiteralValue *right = (DoubleLiteralValue *) expr -> right_expression -> value;
+                DoubleLiteralValue *left = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> left_expression -> value);
+                DoubleLiteralValue *right = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value > right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value >
+                                                  right -> value ? 1 : 0);
             }
             else if (expr -> Type() == control.float_type)
             {
-                FloatLiteralValue *left = (FloatLiteralValue *) expr -> left_expression -> value;
-                FloatLiteralValue *right = (FloatLiteralValue *) expr -> right_expression -> value;
+                FloatLiteralValue *left = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> left_expression -> value);
+                FloatLiteralValue *right = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value > right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value >
+                                                  right -> value ? 1 : 0);
             }
             else if (expr -> Type() == control.long_type)
             {
-                LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                LongLiteralValue *right = (LongLiteralValue *) expr -> right_expression -> value;
+                LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> left_expression -> value);
+                LongLiteralValue *right = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value > right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value >
+                                                  right -> value ? 1 : 0);
             }
             else // assert(expr -> Type() == control.int_type)
             {
-                IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value > right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value >
+                                                  right -> value ? 1 : 0);
             }
         }
     }
 
     expr -> symbol = control.boolean_type;
-
-    return;
 }
 
 
@@ -5914,49 +5725,64 @@ void Semantic::ProcessLESS_EQUAL(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type != control.no_type && right_type != control.no_type)
     {
         BinaryNumericPromotion(expr);
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (expr -> left_expression -> IsConstant() &&
+            expr -> right_expression -> IsConstant())
         {
             if (expr -> Type() == control.double_type)
             {
-                DoubleLiteralValue *left = (DoubleLiteralValue *) expr -> left_expression -> value;
-                DoubleLiteralValue *right = (DoubleLiteralValue *) expr -> right_expression -> value;
+                DoubleLiteralValue *left = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> left_expression -> value);
+                DoubleLiteralValue *right = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value <= right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value <=
+                                                  right -> value ? 1 : 0);
             }
             else if (expr -> Type() == control.float_type)
             {
-                FloatLiteralValue *left = (FloatLiteralValue *) expr -> left_expression -> value;
-                FloatLiteralValue *right = (FloatLiteralValue *) expr -> right_expression -> value;
+                FloatLiteralValue *left = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> left_expression -> value);
+                FloatLiteralValue *right = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value <= right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value <=
+                                                  right -> value ? 1 : 0);
             }
             else if (expr -> Type() == control.long_type)
             {
-                LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                LongLiteralValue *right = (LongLiteralValue *) expr -> right_expression -> value;
+                LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> left_expression -> value);
+                LongLiteralValue *right = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value <= right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value <=
+                                                  right -> value ? 1 : 0);
             }
             else // assert(expr -> Type() == control.int_type)
             {
-                IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value <= right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value <=
+                                                  right -> value ? 1 : 0);
             }
         }
     }
 
     expr -> symbol = control.boolean_type;
-
-    return;
 }
 
 
@@ -5965,40 +5791,43 @@ void Semantic::ProcessGREATER_EQUAL(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type != control.no_type && right_type != control.no_type)
     {
         BinaryNumericPromotion(expr);
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (expr -> left_expression -> IsConstant() &&
+            expr -> right_expression -> IsConstant())
         {
             if (expr -> Type() == control.double_type)
             {
-                DoubleLiteralValue *left = (DoubleLiteralValue *) expr -> left_expression -> value;
-                DoubleLiteralValue *right = (DoubleLiteralValue *) expr -> right_expression -> value;
+                DoubleLiteralValue *left = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> left_expression -> value);
+                DoubleLiteralValue *right = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> right_expression -> value);
 
                 expr -> value = control.int_pool.FindOrInsert(left -> value >= right -> value ? 1 : 0);
             }
             else if (expr -> Type() == control.float_type)
             {
-                FloatLiteralValue *left = (FloatLiteralValue *) expr -> left_expression -> value;
-                FloatLiteralValue *right = (FloatLiteralValue *) expr -> right_expression -> value;
+                FloatLiteralValue *left = DYNAMIC_CAST<FloatLiteralValue *> (expr -> left_expression -> value);
+                FloatLiteralValue *right = DYNAMIC_CAST<FloatLiteralValue *> (expr -> right_expression -> value);
 
                 expr -> value = control.int_pool.FindOrInsert(left -> value >= right -> value ? 1 : 0);
             }
             else if (expr -> Type() == control.long_type)
             {
-                LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                LongLiteralValue *right = (LongLiteralValue *) expr -> right_expression -> value;
+                LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *> (expr -> left_expression -> value);
+                LongLiteralValue *right = DYNAMIC_CAST<LongLiteralValue *> (expr -> right_expression -> value);
 
                 expr -> value = control.int_pool.FindOrInsert(left -> value >= right -> value ? 1 : 0);
             }
             else // assert(expr -> Type() == control.int_type)
             {
-                IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *> (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *> (expr -> right_expression -> value);
 
                 expr -> value = control.int_pool.FindOrInsert(left -> value >= right -> value ? 1 : 0);
             }
@@ -6006,8 +5835,6 @@ void Semantic::ProcessGREATER_EQUAL(AstBinaryExpression *expr)
     }
 
     expr -> symbol = control.boolean_type;
-
-    return;
 }
 
 
@@ -6016,21 +5843,24 @@ void Semantic::ProcessAND(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
         expr -> symbol = control.no_type;
     else
     {
-        if (left_type == control.boolean_type && right_type == control.boolean_type)
+        if (left_type == control.boolean_type &&
+            right_type == control.boolean_type)
         {
              expr -> symbol = control.boolean_type;
-             if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+             if (expr -> left_expression -> IsConstant() &&
+                 expr -> right_expression -> IsConstant())
              {
-                 IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
-                 expr -> value = control.int_pool.FindOrInsert(left -> value & right -> value);
+                 expr -> value =
+                     control.int_pool.FindOrInsert((IsConstantTrue(expr -> left_expression) &&
+                                                    IsConstantTrue(expr -> right_expression))
+                                                   ? 1 : 0);
              }
         }
         else
@@ -6053,15 +5883,15 @@ void Semantic::ProcessAND(AstBinaryExpression *expr)
                 {
                     if (expr_type == control.long_type)
                     {
-                        LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                        LongLiteralValue *right = (LongLiteralValue *) expr -> right_expression -> value;
+                        LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *> (expr -> left_expression -> value);
+                        LongLiteralValue *right = DYNAMIC_CAST<LongLiteralValue *> (expr -> right_expression -> value);
 
                         expr -> value = control.long_pool.FindOrInsert(left -> value & right -> value);
                     }
                     else // assert(expr_type == control.int_type)
                     {
-                        IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                        IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                        IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *> (expr -> left_expression -> value);
+                        IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *> (expr -> right_expression -> value);
 
                         expr -> value = control.int_pool.FindOrInsert(left -> value & right -> value);
                     }
@@ -6069,8 +5899,6 @@ void Semantic::ProcessAND(AstBinaryExpression *expr)
             }
         }
     }
-
-    return;
 }
 
 
@@ -6079,21 +5907,24 @@ void Semantic::ProcessXOR(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
         expr -> symbol = control.no_type;
     else
     {
-        if (left_type == control.boolean_type && right_type == control.boolean_type)
+        if (left_type == control.boolean_type &&
+            right_type == control.boolean_type)
         {
              expr -> symbol = control.boolean_type;
-             if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+             if (expr -> left_expression -> IsConstant() &&
+                 expr -> right_expression -> IsConstant())
              {
-                 IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
-                 expr -> value = control.int_pool.FindOrInsert(left -> value ^ right -> value);
+                 expr -> value =
+                     control.int_pool.FindOrInsert((IsConstantTrue(expr -> left_expression) !=
+                                                    IsConstantTrue(expr -> right_expression))
+                                                   ? 1 : 0);
              }
         }
         else
@@ -6116,15 +5947,15 @@ void Semantic::ProcessXOR(AstBinaryExpression *expr)
                 {
                     if (expr_type == control.long_type)
                     {
-                        LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                        LongLiteralValue *right = (LongLiteralValue *) expr -> right_expression -> value;
+                        LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *> (expr -> left_expression -> value);
+                        LongLiteralValue *right = DYNAMIC_CAST<LongLiteralValue *> (expr -> right_expression -> value);
 
                         expr -> value = control.long_pool.FindOrInsert(left -> value ^ right -> value);
                     }
                     else // assert(expr_type == control.int_type)
                     {
-                        IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                        IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                        IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *> (expr -> left_expression -> value);
+                        IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *> (expr -> right_expression -> value);
 
                         expr -> value = control.int_pool.FindOrInsert(left -> value ^ right -> value);
                     }
@@ -6132,8 +5963,6 @@ void Semantic::ProcessXOR(AstBinaryExpression *expr)
             }
         }
     }
-
-    return;
 }
 
 
@@ -6142,21 +5971,24 @@ void Semantic::ProcessIOR(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
         expr -> symbol = control.no_type;
     else
     {
-        if (left_type == control.boolean_type && right_type == control.boolean_type)
+        if (left_type == control.boolean_type &&
+            right_type == control.boolean_type)
         {
              expr -> symbol = control.boolean_type;
-             if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+             if (expr -> left_expression -> IsConstant() &&
+                 expr -> right_expression -> IsConstant())
              {
-                 IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                 IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
-                 expr -> value = control.int_pool.FindOrInsert(left -> value | right -> value);
+                 expr -> value =
+                     control.int_pool.FindOrInsert((IsConstantTrue(expr -> left_expression) ||
+                                                    IsConstantTrue(expr -> right_expression))
+                                                   ? 1 : 0);
              }
         }
         else
@@ -6179,15 +6011,15 @@ void Semantic::ProcessIOR(AstBinaryExpression *expr)
                 {
                     if (expr_type == control.long_type)
                     {
-                        LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                        LongLiteralValue *right = (LongLiteralValue *) expr -> right_expression -> value;
+                        LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *> (expr -> left_expression -> value);
+                        LongLiteralValue *right = DYNAMIC_CAST<LongLiteralValue *> (expr -> right_expression -> value);
 
                         expr -> value = control.long_pool.FindOrInsert(left -> value | right -> value);
                     }
                     else // assert(expr_type == control.int_type)
                     {
-                        IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                        IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                        IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *> (expr -> left_expression -> value);
+                        IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *> (expr -> right_expression -> value);
 
                         expr -> value = control.int_pool.FindOrInsert(left -> value | right -> value);
                     }
@@ -6195,8 +6027,6 @@ void Semantic::ProcessIOR(AstBinaryExpression *expr)
             }
         }
     }
-
-    return;
 }
 
 
@@ -6205,8 +6035,8 @@ void Semantic::ProcessAND_AND(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type != control.no_type && right_type != control.no_type)
     {
@@ -6224,20 +6054,21 @@ void Semantic::ProcessAND_AND(AstBinaryExpression *expr)
                            expr -> right_expression -> RightToken(),
                            right_type -> Name());
         }
-        else if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        else if (expr -> left_expression -> IsConstant() &&
+                 expr -> right_expression -> IsConstant())
         {
             //
-            // Even when evaluating false && x, x must be constant for && to be constant
+            // Even when evaluating false && x, x must be constant for && to
+            // be constant
             //
-            IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-            IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
-            expr -> value = control.int_pool.FindOrInsert(left -> value && right -> value ? 1 : 0);
+            expr -> value = control.int_pool.
+                FindOrInsert((IsConstantTrue(expr -> left_expression) &&
+                              IsConstantTrue(expr -> right_expression))
+                             ? 1 : 0);
         }
     }
 
     expr -> symbol = control.boolean_type;
-
-    return;
 }
 
 
@@ -6246,8 +6077,8 @@ void Semantic::ProcessOR_OR(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type != control.no_type && right_type != control.no_type)
     {
@@ -6265,20 +6096,21 @@ void Semantic::ProcessOR_OR(AstBinaryExpression *expr)
                            expr -> right_expression -> RightToken(),
                            right_type -> Name());
         }
-        else if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        else if (expr -> left_expression -> IsConstant() &&
+                 expr -> right_expression -> IsConstant())
         {
             //
-            // Even when evaluating true || x, x must be constant for && to be constant
+            // Even when evaluating true || x, x must be constant for && to
+            // be constant
             //
-            IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-            IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
-            expr -> value = control.int_pool.FindOrInsert(left -> value || right -> value ? 1 : 0);
+            expr -> value = control.int_pool.
+                FindOrInsert((IsConstantTrue(expr -> left_expression) ||
+                              IsConstantTrue(expr -> right_expression))
+                             ? 1 : 0);
         }
     }
 
     expr -> symbol = control.boolean_type;
-
-    return;
 }
 
 
@@ -6287,8 +6119,8 @@ void Semantic::ProcessEQUAL_EQUAL(AstBinaryExpression *expr)
     ProcessExpressionOrStringConstant(expr -> left_expression);
     ProcessExpressionOrStringConstant(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type != control.no_type && right_type != control.no_type)
     {
@@ -6296,10 +6128,14 @@ void Semantic::ProcessEQUAL_EQUAL(AstBinaryExpression *expr)
         {
             if (left_type -> Primitive() && right_type -> Primitive())
                  BinaryNumericPromotion(expr);
-            else if (CanCastConvert(left_type, right_type, expr -> binary_operator_token))
-                 expr -> right_expression = ConvertToType(expr -> right_expression, left_type);
-            else if (CanCastConvert(right_type, left_type, expr -> binary_operator_token))
-                 expr -> left_expression = ConvertToType(expr -> left_expression, right_type);
+            else if (CanCastConvert(left_type, right_type,
+                                    expr -> binary_operator_token))
+                expr -> right_expression =
+                    ConvertToType(expr -> right_expression, left_type);
+            else if (CanCastConvert(right_type, left_type,
+                                    expr -> binary_operator_token))
+                expr -> left_expression =
+                    ConvertToType(expr -> left_expression, right_type);
             else
             {
                 ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION,
@@ -6314,40 +6150,47 @@ void Semantic::ProcessEQUAL_EQUAL(AstBinaryExpression *expr)
         else
         {
             if (left_type == control.void_type)
-                ReportSemError(SemanticError::VOID_TYPE_IN_EQUALITY_EXPRESSION,
+                ReportSemError(SemanticError::TYPE_IS_VOID,
                                expr -> LeftToken(),
                                expr -> RightToken(),
-                               expr -> left_expression -> Type() -> Name(),
-                               expr -> right_expression -> Type() -> Name());
+                               expr -> Type() -> Name());
             expr -> symbol = left_type;
         }
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (expr -> left_expression -> IsConstant() &&
+            expr -> right_expression -> IsConstant())
         {
             LiteralValue *left = expr -> left_expression -> value;
             LiteralValue *right = expr -> right_expression -> value;
 
             if (expr -> Type() == control.double_type)
             {
-                DoubleLiteralValue *left = (DoubleLiteralValue *) expr -> left_expression -> value;
-                DoubleLiteralValue *right = (DoubleLiteralValue *) expr -> right_expression -> value;
+                DoubleLiteralValue *left = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> left_expression -> value);
+                DoubleLiteralValue *right = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value == right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value ==
+                                                  right -> value ? 1 : 0);
             }
             else if (expr -> Type() == control.float_type)
             {
-                FloatLiteralValue *left = (FloatLiteralValue *) expr -> left_expression -> value;
-                FloatLiteralValue *right = (FloatLiteralValue *) expr -> right_expression -> value;
+                FloatLiteralValue *left = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> left_expression -> value);
+                FloatLiteralValue *right = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value == right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value ==
+                                                  right -> value ? 1 : 0);
             }
-            else expr -> value = control.int_pool.FindOrInsert(left == right ? 1 : 0);
+            else expr -> value =
+                     control.int_pool.FindOrInsert(left == right ? 1 : 0);
         }
     }
 
     expr -> symbol = control.boolean_type;
-
-    return;
 }
 
 
@@ -6356,8 +6199,8 @@ void Semantic::ProcessNOT_EQUAL(AstBinaryExpression *expr)
     ProcessExpressionOrStringConstant(expr -> left_expression);
     ProcessExpressionOrStringConstant(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type != control.no_type && right_type != control.no_type)
     {
@@ -6365,10 +6208,14 @@ void Semantic::ProcessNOT_EQUAL(AstBinaryExpression *expr)
         {
             if (left_type -> Primitive() && right_type -> Primitive())
                  BinaryNumericPromotion(expr);
-            else if (CanCastConvert(left_type, right_type, expr -> binary_operator_token))
-                 expr -> right_expression = ConvertToType(expr -> right_expression, left_type);
-            else if (CanCastConvert(right_type, left_type, expr -> binary_operator_token))
-                 expr -> left_expression = ConvertToType(expr -> left_expression, right_type);
+            else if (CanCastConvert(left_type, right_type,
+                                    expr -> binary_operator_token))
+                expr -> right_expression =
+                    ConvertToType(expr -> right_expression, left_type);
+            else if (CanCastConvert(right_type, left_type,
+                                    expr -> binary_operator_token))
+                expr -> left_expression =
+                    ConvertToType(expr -> left_expression, right_type);
             else
             {
                 ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION,
@@ -6383,38 +6230,47 @@ void Semantic::ProcessNOT_EQUAL(AstBinaryExpression *expr)
         else
         {
             if (left_type == control.void_type)
-                ReportSemError(SemanticError::VOID_TYPE_IN_EQUALITY_EXPRESSION,
+                ReportSemError(SemanticError::TYPE_IS_VOID,
                                expr -> LeftToken(),
-                               expr -> RightToken());
+                               expr -> RightToken(),
+                               expr -> Type() -> Name());
             expr -> symbol = left_type;
         }
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (expr -> left_expression -> IsConstant() &&
+            expr -> right_expression -> IsConstant())
         {
             LiteralValue *left = expr -> left_expression -> value;
             LiteralValue *right = expr -> right_expression -> value;
 
             if (expr -> Type() == control.double_type)
             {
-                DoubleLiteralValue *left = (DoubleLiteralValue *) expr -> left_expression -> value;
-                DoubleLiteralValue *right = (DoubleLiteralValue *) expr -> right_expression -> value;
+                DoubleLiteralValue *left = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> left_expression -> value);
+                DoubleLiteralValue *right = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value != right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value !=
+                                                  right -> value ? 1 : 0);
             }
             else if (expr -> Type() == control.float_type)
             {
-                FloatLiteralValue *left = (FloatLiteralValue *) expr -> left_expression -> value;
-                FloatLiteralValue *right = (FloatLiteralValue *) expr -> right_expression -> value;
+                FloatLiteralValue *left = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> left_expression -> value);
+                FloatLiteralValue *right = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value != right -> value ? 1 : 0);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value !=
+                                                  right -> value ? 1 : 0);
             }
-            else expr -> value = control.int_pool.FindOrInsert(left != right ? 1 : 0);
+            else expr -> value =
+                     control.int_pool.FindOrInsert(left != right ? 1 : 0);
         }
     }
 
     expr -> symbol = control.boolean_type;
-
-    return;
 }
 
 
@@ -6423,8 +6279,8 @@ void Semantic::ProcessSTAR(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
         expr -> symbol = control.no_type;
@@ -6432,40 +6288,55 @@ void Semantic::ProcessSTAR(AstBinaryExpression *expr)
     {
         BinaryNumericPromotion(expr);
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (expr -> left_expression -> IsConstant() &&
+            expr -> right_expression -> IsConstant())
         {
             if (expr -> Type() == control.double_type)
             {
-                DoubleLiteralValue *left = (DoubleLiteralValue *) expr -> left_expression -> value;
-                DoubleLiteralValue *right = (DoubleLiteralValue *) expr -> right_expression -> value;
+                DoubleLiteralValue *left = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> left_expression -> value);
+                DoubleLiteralValue *right = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.double_pool.FindOrInsert(left -> value * right -> value);
+                expr -> value =
+                    control.double_pool.FindOrInsert(left -> value *
+                                                     right -> value);
             }
             else if (expr -> Type() == control.float_type)
             {
-                FloatLiteralValue *left = (FloatLiteralValue *) expr -> left_expression -> value;
-                FloatLiteralValue *right = (FloatLiteralValue *) expr -> right_expression -> value;
+                FloatLiteralValue *left = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> left_expression -> value);
+                FloatLiteralValue *right = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.float_pool.FindOrInsert(left -> value * right -> value);
+                expr -> value =
+                    control.float_pool.FindOrInsert(left -> value *
+                                                    right -> value);
             }
             else if (expr -> Type() == control.long_type)
             {
-                LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                LongLiteralValue *right = (LongLiteralValue *) expr -> right_expression -> value;
+                LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> left_expression -> value);
+                LongLiteralValue *right = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.long_pool.FindOrInsert(left -> value * right -> value);
+                expr -> value =
+                    control.long_pool.FindOrInsert(left -> value *
+                                                   right -> value);
             }
             else if (expr -> Type() == control.int_type)
             {
-                IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value * right -> value);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value *
+                                                  right -> value);
             }
         }
     }
-
-    return;
 }
 
 
@@ -6474,8 +6345,8 @@ void Semantic::ProcessMINUS(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
         expr -> symbol = control.no_type;
@@ -6483,40 +6354,55 @@ void Semantic::ProcessMINUS(AstBinaryExpression *expr)
     {
         BinaryNumericPromotion(expr);
 
-        if (expr -> left_expression -> IsConstant() && expr -> right_expression -> IsConstant())
+        if (expr -> left_expression -> IsConstant() &&
+            expr -> right_expression -> IsConstant())
         {
             if (expr -> Type() == control.double_type)
             {
-                DoubleLiteralValue *left = (DoubleLiteralValue *) expr -> left_expression -> value;
-                DoubleLiteralValue *right = (DoubleLiteralValue *) expr -> right_expression -> value;
+                DoubleLiteralValue *left = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> left_expression -> value);
+                DoubleLiteralValue *right = DYNAMIC_CAST<DoubleLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.double_pool.FindOrInsert(left -> value - right -> value);
+                expr -> value =
+                    control.double_pool.FindOrInsert(left -> value -
+                                                     right -> value);
             }
             else if (expr -> Type() == control.float_type)
             {
-                FloatLiteralValue *left = (FloatLiteralValue *) expr -> left_expression -> value;
-                FloatLiteralValue *right = (FloatLiteralValue *) expr -> right_expression -> value;
+                FloatLiteralValue *left = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> left_expression -> value);
+                FloatLiteralValue *right = DYNAMIC_CAST<FloatLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.float_pool.FindOrInsert(left -> value - right -> value);
+                expr -> value =
+                    control.float_pool.FindOrInsert(left -> value -
+                                                    right -> value);
             }
             else if (expr -> Type() == control.long_type)
             {
-                LongLiteralValue *left = (LongLiteralValue *) expr -> left_expression -> value;
-                LongLiteralValue *right = (LongLiteralValue *) expr -> right_expression -> value;
+                LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> left_expression -> value);
+                LongLiteralValue *right = DYNAMIC_CAST<LongLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.long_pool.FindOrInsert(left -> value - right -> value);
+                expr -> value =
+                    control.long_pool.FindOrInsert(left -> value -
+                                                   right -> value);
             }
             else if (expr -> Type() == control.int_type)
             {
-                IntLiteralValue *left = (IntLiteralValue *) expr -> left_expression -> value;
-                IntLiteralValue *right = (IntLiteralValue *) expr -> right_expression -> value;
+                IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> left_expression -> value);
+                IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                    (expr -> right_expression -> value);
 
-                expr -> value = control.int_pool.FindOrInsert(left -> value - right -> value);
+                expr -> value =
+                    control.int_pool.FindOrInsert(left -> value -
+                                                  right -> value);
             }
         }
     }
-
-    return;
 }
 
 
@@ -6525,8 +6411,8 @@ void Semantic::ProcessSLASH(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
         expr -> symbol = control.no_type;
@@ -6534,78 +6420,87 @@ void Semantic::ProcessSLASH(AstBinaryExpression *expr)
     {
         BinaryNumericPromotion(expr);
 
-        //
-        // TODO: Is this needed ?
-        //
-        // This operation may throw ArithmeticException
-        //
-        SymbolSet *exception_set = TryExceptionTableStack().Top();
-        if (exception_set)
-        {
-            exception_set -> AddElement(control.RuntimeException());
-        }
-
         AstExpression *left_expression = expr -> left_expression,
                       *right_expression = expr -> right_expression;
         if (right_expression -> IsConstant())
         {
             //
-            // If the type of the expression is int or long and the right-hand side is 0
-            // then issue an error message.
-            // Otherwise, if both subexpressions are constant, calculate result.
+            // If the type of the expression is int or long and the right-hand
+            // side is 0 then issue an error message. Otherwise, if both
+            // subexpressions are constant, calculate result.
             //
-            if ((expr -> Type() == control.int_type && ((IntLiteralValue *) right_expression -> value) -> value == 0) ||
-                (expr -> Type() == control.long_type && ((LongLiteralValue *) right_expression -> value) -> value == 0))
+            if ((expr -> Type() == control.int_type &&
+                 DYNAMIC_CAST<IntLiteralValue *> (right_expression -> value) -> value == 0) ||
+                (expr -> Type() == control.long_type &&
+                 DYNAMIC_CAST<LongLiteralValue *> (right_expression -> value) -> value == 0))
             {
-                ReportSemError(left_expression -> IsConstant() ? SemanticError::ZERO_DIVIDE_ERROR
-                                                               : SemanticError::ZERO_DIVIDE_CAUTION,
+                //
+                // This will guarantee a runtime exception, but the
+                // clarifications to JLS2 insist it is legal code.
+                //
+                ReportSemError(SemanticError::ZERO_DIVIDE_CAUTION,
                                expr -> LeftToken(),
                                expr -> RightToken());
-                expr -> symbol = control.no_type;
             }
             else if (left_expression -> IsConstant())
             {
                 if (expr -> Type() == control.double_type)
                 {
-                    DoubleLiteralValue *left = (DoubleLiteralValue *) left_expression -> value;
-                    DoubleLiteralValue *right = (DoubleLiteralValue *) right_expression -> value;
+                    DoubleLiteralValue *left = DYNAMIC_CAST<DoubleLiteralValue *>
+                        (left_expression -> value);
+                    DoubleLiteralValue *right = DYNAMIC_CAST<DoubleLiteralValue *>
+                        (right_expression -> value);
 
-                    expr -> value = control.double_pool.FindOrInsert(left -> value / right -> value);
+                    expr -> value =
+                        control.double_pool.FindOrInsert(left -> value /
+                                                         right -> value);
                 }
                 else if (expr -> Type() == control.float_type)
                 {
-                    FloatLiteralValue *left = (FloatLiteralValue *) left_expression -> value;
-                    FloatLiteralValue *right = (FloatLiteralValue *) right_expression -> value;
+                    FloatLiteralValue *left = DYNAMIC_CAST<FloatLiteralValue *>
+                        (left_expression -> value);
+                    FloatLiteralValue *right = DYNAMIC_CAST<FloatLiteralValue *>
+                        (right_expression -> value);
 
-                    expr -> value = control.float_pool.FindOrInsert(left -> value / right -> value);
+                    expr -> value =
+                        control.float_pool.FindOrInsert(left -> value /
+                                                        right -> value);
                 }
                 else if (expr -> Type() == control.long_type)
                 {
-                    LongLiteralValue *left = (LongLiteralValue *) left_expression -> value;
-                    LongLiteralValue *right = (LongLiteralValue *) right_expression -> value;
+                    LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *>
+                        (left_expression -> value);
+                    LongLiteralValue *right = DYNAMIC_CAST<LongLiteralValue *>
+                        (right_expression -> value);
 
-                    expr -> value = control.long_pool.FindOrInsert(left -> value / right -> value);
+                    expr -> value =
+                        control.long_pool.FindOrInsert(left -> value /
+                                                       right -> value);
                 }
                 else if (expr -> Type() == control.int_type)
                 {
-                    IntLiteralValue *left = (IntLiteralValue *) left_expression -> value;
-                    IntLiteralValue *right = (IntLiteralValue *) right_expression -> value;
+                    IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *>
+                        (left_expression -> value);
+                    IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                        (right_expression -> value);
 
                     //
-                    // There is a bug in the intel hardware where if one tries to compute ((2**32-1) / -1),
-                    // he gets a ZeroDivide exception. Thus, instead of using the straightforward code below,
-                    // we use the short-circuited one that follows:
+                    // There is a bug in the intel hardware where if one tries
+                    // to compute ((2**32-1) / -1), he gets a ZeroDivide
+                    // exception. Thus, instead of using the straightforward
+                    // code below, we use the short-circuited one that follows:
                     //
-                    //  expr -> value = control.int_pool.FindOrInsert(left -> value / right -> value);
+                    //  expr -> value = control.int_pool
+                    //      .FindOrInsert(left -> value / right -> value);
                     //
-                    expr -> value = control.int_pool.FindOrInsert(right -> value == -1 ? -(left -> value)
-                                                                                       : left -> value / right -> value);
+                    expr -> value =
+                        control.int_pool.FindOrInsert(right -> value == -1
+                                                      ? -(left -> value)
+                                                      : left -> value / right -> value);
                 }
             }
         }
     }
-
-    return;
 }
 
 
@@ -6614,8 +6509,8 @@ void Semantic::ProcessMOD(AstBinaryExpression *expr)
     ProcessExpression(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type == control.no_type || right_type == control.no_type)
         expr -> symbol = control.no_type;
@@ -6623,80 +6518,87 @@ void Semantic::ProcessMOD(AstBinaryExpression *expr)
     {
         BinaryNumericPromotion(expr);
 
-        //
-        // TODO: Is this needed ?
-        //
-        // This operation may throw ArithmeticException
-        //
-        SymbolSet *exception_set = TryExceptionTableStack().Top();
-        if (exception_set)
-        {
-            exception_set -> AddElement(control.RuntimeException());
-        }
-
         AstExpression *left_expression = expr -> left_expression,
                       *right_expression = expr -> right_expression;
         if (right_expression -> IsConstant())
         {
             //
-            // If the type of the expression is int or long and the right-hand side is 0
-            // then issue an error message.
-            // Otherwise, if both subexpressions are constant, calculate result.
+            // If the type of the expression is int or long and the right-hand
+            // side is 0 then issue an error message. Otherwise, if both
+            // subexpressions are constant, calculate result.
             //
-            if ((expr -> Type() == control.int_type && ((IntLiteralValue *) right_expression -> value) -> value == 0) ||
-                (expr -> Type() == control.long_type && ((LongLiteralValue *) right_expression -> value) -> value == 0))
+            if ((expr -> Type() == control.int_type &&
+                 DYNAMIC_CAST<IntLiteralValue *> (right_expression -> value) -> value == 0) ||
+                (expr -> Type() == control.long_type &&
+                 DYNAMIC_CAST<LongLiteralValue *> (right_expression -> value) -> value == 0))
             {
-                ReportSemError(left_expression -> IsConstant() ? SemanticError::ZERO_DIVIDE_ERROR
-                                                               : SemanticError::ZERO_DIVIDE_CAUTION,
+                //
+                // This will guarantee a runtime exception, but the
+                // clarifications to JLS2 insist it is legal code.
+                //
+                ReportSemError(SemanticError::ZERO_DIVIDE_CAUTION,
                                expr -> LeftToken(),
                                expr -> RightToken());
-                expr -> symbol = control.no_type;
             }
             else if (left_expression -> IsConstant())
             {
                 if (expr -> Type() == control.double_type)
                 {
-                    DoubleLiteralValue *left = (DoubleLiteralValue *) left_expression -> value;
-                    DoubleLiteralValue *right = (DoubleLiteralValue *) right_expression -> value;
-                    
-                    expr -> value = control.double_pool.FindOrInsert(left -> value % right -> value);
+                    DoubleLiteralValue *left = DYNAMIC_CAST<DoubleLiteralValue *>
+                        (left_expression -> value);
+                    DoubleLiteralValue *right = DYNAMIC_CAST<DoubleLiteralValue *>
+                        (right_expression -> value);
+
+                    expr -> value =
+                        control.double_pool.FindOrInsert(left -> value %
+                                                         right -> value);
                 }
                 else if (expr -> Type() == control.float_type)
                 {
-                    FloatLiteralValue *left = (FloatLiteralValue *) left_expression -> value;
-                    FloatLiteralValue *right = (FloatLiteralValue *) right_expression -> value;
+                    FloatLiteralValue *left = DYNAMIC_CAST<FloatLiteralValue *>
+                        (left_expression -> value);
+                    FloatLiteralValue *right = DYNAMIC_CAST<FloatLiteralValue *>
+                        (right_expression -> value);
 
-                    expr -> value = control.float_pool.FindOrInsert(left -> value % right -> value);
+                    expr -> value =
+                        control.float_pool.FindOrInsert(left -> value %
+                                                        right -> value);
                 }
                 else if (expr -> Type() == control.long_type)
                 {
-                    LongLiteralValue *left = (LongLiteralValue *) left_expression -> value;
-                    LongLiteralValue *right = (LongLiteralValue *) right_expression -> value;
+                    LongLiteralValue *left = DYNAMIC_CAST<LongLiteralValue *>
+                        (left_expression -> value);
+                    LongLiteralValue *right = DYNAMIC_CAST<LongLiteralValue *>
+                        (right_expression -> value);
 
-                    expr -> value = control.long_pool.FindOrInsert(left -> value % right -> value);
+                    expr -> value =
+                        control.long_pool.FindOrInsert(left -> value %
+                                                       right -> value);
                 }
                 else if (expr -> Type() == control.int_type)
                 {
-                    IntLiteralValue *left = (IntLiteralValue *) left_expression -> value;
-                    IntLiteralValue *right = (IntLiteralValue *) right_expression -> value;
+                    IntLiteralValue *left = DYNAMIC_CAST<IntLiteralValue *>
+                        (left_expression -> value);
+                    IntLiteralValue *right = DYNAMIC_CAST<IntLiteralValue *>
+                        (right_expression -> value);
 
                     //
-                    // There is a bug in the intel hardware where if one tries to compute ((2**32-1) / -1),
-                    // he gets a ZeroDivide exception. Thus, instead of using the straightforward code below,
-                    // we use the short-circuited one that follows:
+                    // There is a bug in the intel hardware where if one tries
+                    // to compute ((2**32-1) / -1), he gets a ZeroDivide
+                    // exception. Thus, instead of using the straightforward
+                    // code below, we use the short-circuited one that follows:
                     //
-                    // expr -> value = control.int_pool.FindOrInsert(left -> value % right -> value);
+                    // expr -> value = control.int_pool
+                    //     .FindOrInsert(left -> value % right -> value);
                     //
-                    expr -> value = control.int_pool.FindOrInsert((left -> value  == (signed) 0x80000000 &&
-                                                                   right -> value == (signed) 0xffffffff)
-                                                                                   ? 0
-                                                                                   : left -> value % right -> value);
+                    expr -> value =
+                        control.int_pool.FindOrInsert((left -> value  == (signed) 0x80000000 &&
+                                                       right -> value == (signed) 0xffffffff)
+                                                      ? 0 : left -> value % right -> value);
                 }
             }
         }
     }
-
-    return;
 }
 
 
@@ -6705,8 +6607,8 @@ void Semantic::ProcessINSTANCEOF(AstBinaryExpression *expr)
     ProcessExpressionOrStringConstant(expr -> left_expression);
     ProcessExpression(expr -> right_expression);
 
-    TypeSymbol *left_type  = expr -> left_expression -> Type(),
-               *right_type = expr -> right_expression -> Type();
+    TypeSymbol *left_type = expr -> left_expression -> Type();
+    TypeSymbol *right_type = expr -> right_expression -> Type();
 
     if (left_type -> Primitive())
     {
@@ -6715,7 +6617,9 @@ void Semantic::ProcessINSTANCEOF(AstBinaryExpression *expr)
                        expr -> left_expression -> RightToken(),
                        expr -> left_expression -> Type() -> Name());
     }
-    else if (! CanCastConvert(right_type, left_type, expr -> binary_operator_token)) // can left_type (source) be cast into right_type
+    // can left_type (source) be cast into right_type
+    else if (! CanCastConvert(right_type, left_type,
+                              expr -> binary_operator_token))
     {
         ReportSemError(SemanticError::INVALID_INSTANCEOF_CONVERSION,
                        expr -> LeftToken(),
@@ -6727,8 +6631,6 @@ void Semantic::ProcessINSTANCEOF(AstBinaryExpression *expr)
     }
 
     expr -> symbol = control.boolean_type;
-
-    return;
 }
 
 
@@ -6736,8 +6638,6 @@ void Semantic::ProcessBinaryExpression(Ast *expr)
 {
     AstBinaryExpression *binary_expression = (AstBinaryExpression *) expr;
     (this ->* ProcessBinaryExpr[binary_expression -> binary_tag])(binary_expression);
-
-    return;
 }
 
 
@@ -6746,23 +6646,24 @@ void Semantic::ProcessTypeExpression(Ast *expr)
     AstTypeExpression *type_expression = (AstTypeExpression *) expr;
 
     AstArrayType *array_type = type_expression -> type -> ArrayTypeCast();
-    Ast *actual_type = (array_type ? array_type -> type : type_expression -> type);
+    Ast *actual_type = (array_type ? array_type -> type
+                        : type_expression -> type);
 
     AstPrimitiveType *primitive_type = actual_type -> PrimitiveTypeCast();
-    TypeSymbol *type = (primitive_type ? FindPrimitiveType(primitive_type) : MustFindType(actual_type));
+    TypeSymbol *type = (primitive_type ? FindPrimitiveType(primitive_type)
+                        : MustFindType(actual_type));
 
     if (array_type)
-        type = type -> GetArrayType((Semantic *) this, array_type -> NumBrackets());
+        type = type -> GetArrayType(this, array_type -> NumBrackets());
 
     type_expression -> symbol = type;
-
-    return;
 }
 
 
 void Semantic::ProcessConditionalExpression(Ast *expr)
 {
-    AstConditionalExpression *conditional_expression = (AstConditionalExpression *) expr;
+    AstConditionalExpression *conditional_expression =
+        (AstConditionalExpression *) expr;
 
     ProcessExpression(conditional_expression -> test_expression);
     //
@@ -6770,15 +6671,24 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
     // until CheckStringConstant in lookup.cpp to put fewer intermediate
     // strings in the storage pools?
     //
-    ProcessExpressionOrStringConstant(conditional_expression -> true_expression);
-    ProcessExpressionOrStringConstant(conditional_expression -> false_expression);
+    ProcessExpressionOrStringConstant(conditional_expression ->
+                                      true_expression);
+    ProcessExpressionOrStringConstant(conditional_expression ->
+                                      false_expression);
 
-    TypeSymbol *test_type  = conditional_expression -> test_expression -> Type();
-    TypeSymbol *true_type  = conditional_expression -> true_expression -> Type();
-    TypeSymbol *false_type = conditional_expression -> false_expression -> Type();
+    TypeSymbol *test_type = conditional_expression -> test_expression ->
+        Type();
+    TypeSymbol *true_type = conditional_expression -> true_expression ->
+        Type();
+    TypeSymbol *false_type = conditional_expression -> false_expression ->
+        Type();
 
-    if (test_type == control.no_type || true_type == control.no_type || false_type == control.no_type)
+    if (test_type == control.no_type ||
+        true_type == control.no_type ||
+        false_type == control.no_type)
+    {
         conditional_expression -> symbol = control.no_type;
+    }
     else if (test_type != control.boolean_type)
     {
         ReportSemError(SemanticError::TYPE_NOT_BOOLEAN,
@@ -6806,7 +6716,9 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
     else if (true_type -> Primitive())
     {
         if (! false_type -> Primitive() ||
-            (true_type != false_type && (true_type == control.boolean_type || false_type == control.boolean_type)))
+            (true_type != false_type &&
+             (true_type == control.boolean_type ||
+              false_type == control.boolean_type)))
         {
             ReportSemError(SemanticError::INCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION,
                            conditional_expression -> false_expression -> LeftToken(),
@@ -6823,28 +6735,34 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
                 conditional_expression -> symbol = true_type;
             else // must be a numeric type
             {
-                if (true_type == control.byte_type && false_type == control.short_type)
+                if (true_type == control.byte_type &&
+                    false_type == control.short_type)
                 {
                     conditional_expression -> true_expression =
-                                ConvertToType(conditional_expression -> true_expression, control.short_type);
+                        ConvertToType(conditional_expression -> true_expression,
+                                      control.short_type);
                     conditional_expression -> symbol = control.short_type;
                 }
-                else if (true_type == control.short_type && false_type == control.byte_type)
+                else if (true_type == control.short_type &&
+                         false_type == control.byte_type)
                 {
                     conditional_expression -> false_expression =
-                        ConvertToType(conditional_expression -> false_expression, control.short_type);
+                        ConvertToType(conditional_expression -> false_expression,
+                                      control.short_type);
                     conditional_expression -> symbol = control.short_type;
                 }
                 else if (IsIntValueRepresentableInType(conditional_expression -> false_expression, true_type))
                 {
                     conditional_expression -> false_expression =
-                        ConvertToType(conditional_expression -> false_expression, true_type);
+                        ConvertToType(conditional_expression -> false_expression,
+                                      true_type);
                     conditional_expression -> symbol = true_type;
                 }
                 else if (IsIntValueRepresentableInType(conditional_expression -> true_expression, false_type))
                 {
                     conditional_expression -> true_expression =
-                         ConvertToType(conditional_expression -> true_expression, false_type);
+                         ConvertToType(conditional_expression -> true_expression,
+                                       false_type);
                     conditional_expression -> symbol = false_type;
                 }
                 else BinaryNumericPromotion(conditional_expression);
@@ -6854,16 +6772,15 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
             // If all the subexpressions are constants, compute the results and
             // set the value of the expression accordingly.
             //
-            if (conditional_expression -> test_expression -> IsConstant() &&
-                conditional_expression -> true_expression -> IsConstant() &&
+            if (conditional_expression -> true_expression -> IsConstant() &&
                 conditional_expression -> false_expression -> IsConstant())
             {
-                IntLiteralValue *test = (IntLiteralValue *) conditional_expression -> test_expression -> value;
-
-                if (test -> value)
-                     conditional_expression -> value = conditional_expression -> true_expression -> value;
-                else
-                     conditional_expression -> value = conditional_expression -> false_expression -> value;
+                if (IsConstantTrue(conditional_expression -> test_expression))
+                     conditional_expression -> value =
+                         conditional_expression -> true_expression -> value;
+                else if (IsConstantFalse(conditional_expression -> test_expression))
+                     conditional_expression -> value =
+                         conditional_expression -> false_expression -> value;
             }
         }
     }
@@ -6887,14 +6804,20 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
             conditional_expression -> symbol = false_type;
         else if (false_type == control.null_type)
             conditional_expression -> symbol = true_type;
-        else if (CanAssignmentConvert(false_type, conditional_expression -> true_expression))
+        else if (CanAssignmentConvert(false_type,
+                                      conditional_expression -> true_expression))
         {
-            conditional_expression -> true_expression = ConvertToType(conditional_expression -> true_expression, false_type);
+            conditional_expression -> true_expression =
+                ConvertToType(conditional_expression -> true_expression,
+                              false_type);
             conditional_expression -> symbol = false_type;
         }
-        else if (CanAssignmentConvert(true_type, conditional_expression -> false_expression))
+        else if (CanAssignmentConvert(true_type,
+                                      conditional_expression -> false_expression))
         {
-            conditional_expression -> false_expression = ConvertToType(conditional_expression -> false_expression, true_type);
+            conditional_expression -> false_expression =
+                ConvertToType(conditional_expression -> false_expression,
+                              true_type);
             conditional_expression -> symbol = true_type;
         }
         else
@@ -6916,41 +6839,79 @@ void Semantic::ProcessConditionalExpression(Ast *expr)
         // Since null should not be a compile-time constant anymore, the assert
         // should not need to check for null type, so it was removed....
         //
-        if (conditional_expression -> test_expression -> IsConstant() &&
-            conditional_expression -> true_expression -> IsConstant() &&
+        if (conditional_expression -> true_expression -> IsConstant() &&
             conditional_expression -> false_expression -> IsConstant())
         {
             assert(conditional_expression -> symbol == control.String());
             //  || conditional_expression -> symbol == control.null_type);
 
-            IntLiteralValue *test = (IntLiteralValue *) conditional_expression -> test_expression -> value;
-            
-            if (test -> value)
-                conditional_expression -> value = conditional_expression -> true_expression -> value;
-            else
-                conditional_expression -> value = conditional_expression -> false_expression -> value;
+            if (IsConstantTrue(conditional_expression -> test_expression))
+                conditional_expression -> value =
+                    conditional_expression -> true_expression -> value;
+            else if (IsConstantFalse(conditional_expression -> test_expression))
+                conditional_expression -> value =
+                    conditional_expression -> false_expression -> value;
         }
     }
-
-    return;
 }
 
 
 void Semantic::ProcessAssignmentExpression(Ast *expr)
 {
-    AstAssignmentExpression *assignment_expression = (AstAssignmentExpression *) expr;
+    AstAssignmentExpression *assignment_expression =
+        (AstAssignmentExpression *) expr;
+    ProcessExpressionOrStringConstant(assignment_expression -> expression);
 
     AstExpression *left_hand_side = assignment_expression -> left_hand_side;
+    //
+    // JLS2 added ability for parenthesized variable to remain a variable.
+    // Therefore, the grammar was changed to accept all expressions, to avoid
+    // ambiguities, and we must filter out invalid left-hand sides.
+    //
+    if (left_hand_side -> ParenthesizedExpressionCast())
+    {
+        ReportSemError(SemanticError::UNNECESSARY_PARENTHESIS,
+                       left_hand_side -> LeftToken(),
+                       left_hand_side -> RightToken());
+        while (left_hand_side -> ParenthesizedExpressionCast())
+            left_hand_side = ((AstParenthesizedExpression *) left_hand_side) ->
+                expression;
+    }
+
+    if (! left_hand_side -> IsLeftHandSide())
+    {
+        ReportSemError(SemanticError::NOT_A_VARIABLE,
+                       left_hand_side -> LeftToken(),
+                       left_hand_side -> RightToken());
+        assignment_expression -> symbol = control.no_type;
+        return;
+    }
+
+    //
+    // JLS2 8.3.2.3 permits simple assignment to a variable that has not
+    // yet been declared in an initializer.  If the left_hand_side is a
+    // variable, we use ProcessingSimpleAssignment() to inform
+    // CheckSimpleName() to treat it specially.
+    //
+    if ((assignment_expression -> assignment_tag ==
+         AstAssignmentExpression::SIMPLE_EQUAL) &&
+        left_hand_side -> SimpleNameCast())
+    {
+        ProcessingSimpleAssignment() = true;
+    }
 
     ProcessExpression(left_hand_side);
-    ProcessExpressionOrStringConstant(assignment_expression -> expression);
+    ProcessingSimpleAssignment() = false;
+
     TypeSymbol *left_type = left_hand_side -> Type(),
                *right_type = assignment_expression -> expression -> Type();
 
-    assignment_expression -> symbol = left_type;
-
     if (left_type == control.no_type || right_type == control.no_type)
+    {
+        assignment_expression -> symbol = control.no_type;
         return;
+    }
+    assignment_expression -> symbol = left_type;
 
     if (! left_hand_side -> ArrayAccessCast()) // the left-hand-side is a name
     {
@@ -6959,61 +6920,53 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
         if (simple_name)
         {
             if (simple_name -> resolution_opt)
-               read_method = simple_name -> resolution_opt -> symbol -> MethodCast();
+               read_method =
+                   simple_name -> resolution_opt -> symbol -> MethodCast();
         }
         else
         {
             AstFieldAccess *field_access = (AstFieldAccess *) left_hand_side;
             if (field_access -> resolution_opt)
-                read_method = field_access -> resolution_opt -> symbol -> MethodCast();
+                read_method =
+                    field_access -> resolution_opt -> symbol -> MethodCast();
         }
 
         if (read_method)
-        {
-            VariableSymbol *symbol = (VariableSymbol *) read_method -> accessed_member;
-            assignment_expression -> write_method = read_method -> containing_type -> GetWriteAccessMethod(symbol);
-        }
-    }
-    else // the left-hand-side is an array access
-    {
-        //
-        // TODO: Is this needed ?
-        //
-        // This operation may throw ArrayStoreException
-        //
-        SymbolSet *exception_set = TryExceptionTableStack().Top();
-        if (exception_set && (! left_type -> Primitive()))
-        {
-            exception_set -> AddElement(control.RuntimeException());
-        }
+            assignment_expression -> write_method = read_method ->
+                containing_type -> GetWriteAccessFromReadAccess(read_method);
     }
 
-    if (assignment_expression -> assignment_tag == AstAssignmentExpression::SIMPLE_EQUAL)
+    if (assignment_expression -> assignment_tag ==
+        AstAssignmentExpression::SIMPLE_EQUAL)
     {
         if (left_type != right_type)
         {
-            if (CanAssignmentConvert(left_type, assignment_expression -> expression))
-                assignment_expression -> expression = ConvertToType(assignment_expression -> expression, left_type);
+            if (CanAssignmentConvert(left_type,
+                                     assignment_expression -> expression))
+            {
+                assignment_expression -> expression =
+                    ConvertToType(assignment_expression -> expression,
+                                  left_type);
+            }
             else if (assignment_expression -> expression -> IsConstant() &&
                      control.IsSimpleIntegerValueType(left_type) &&
-                     control.IsSimpleIntegerValueType(assignment_expression -> expression -> Type()))
+                     control.IsSimpleIntegerValueType(right_type))
             {
                 if (left_type == control.byte_type)
-                     ReportSemError(SemanticError::INVALID_BYTE_VALUE,
-                                    assignment_expression -> expression -> LeftToken(),
-                                    assignment_expression -> expression -> RightToken());
+                    ReportSemError(SemanticError::INVALID_BYTE_VALUE,
+                                   assignment_expression -> expression -> LeftToken(),
+                                   assignment_expression -> expression -> RightToken());
                 else if (left_type == control.short_type)
-                     ReportSemError(SemanticError::INVALID_SHORT_VALUE,
-                                    assignment_expression -> expression -> LeftToken(),
-                                    assignment_expression -> expression -> RightToken());
-                else if (left_type == control.int_type)
-                     ReportSemError(SemanticError::INVALID_INT_VALUE,
-                                    assignment_expression -> expression -> LeftToken(),
-                                    assignment_expression -> expression -> RightToken());
-                else // assert(left_type == control.char_type);
-                     ReportSemError(SemanticError::INVALID_CHARACTER_VALUE,
-                                    assignment_expression -> expression -> LeftToken(),
-                                    assignment_expression -> expression -> RightToken());
+                    ReportSemError(SemanticError::INVALID_SHORT_VALUE,
+                                   assignment_expression -> expression -> LeftToken(),
+                                   assignment_expression -> expression -> RightToken());
+                else
+                {
+                    assert(left_type == control.char_type);
+                    ReportSemError(SemanticError::INVALID_CHARACTER_VALUE,
+                                   assignment_expression -> expression -> LeftToken(),
+                                   assignment_expression -> expression -> RightToken());
+                }
             }
             else
             {
@@ -7031,15 +6984,17 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
     }
 
     //
-    // In the current spec, it is stated that the type of both the left-hand
-    // and right-hand side of an "op=" assignment must be primitive. However,
-    // the left-hand side may be of type String if the operator is "+=" and in
-    // that case, the right-hand side may also be of type String (or anything
-    // else).
+    // In JLS 2, it states that the only reference type on the left can
+    // be String, for +=.  However, some compilers accept any type on the left
+    // that can be assigned a String, provided the right side is a String.
+    // In the process, that means an array access could then throw an
+    // ArrayStoreException when the left type is not String.
     //
-    // TODO: CONFIRM THAT THERE WAS A MISTAKE IN THE SPEC.
+    // TODO: Get the definative answer from Sun which behavior is correct
     //
-    if (left_type == control.String() && assignment_expression -> assignment_tag == AstAssignmentExpression::PLUS_EQUAL)
+    if (left_type == control.String() &&
+        (assignment_expression -> assignment_tag ==
+         AstAssignmentExpression::PLUS_EQUAL))
     {
         if (right_type != control.String())
         {
@@ -7047,7 +7002,17 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
                  ReportSemError(SemanticError::VOID_TO_STRING,
                                 assignment_expression -> expression -> LeftToken(),
                                 assignment_expression -> expression -> RightToken());
-            else assignment_expression -> expression = ConvertToType(assignment_expression -> expression, control.String());
+            else
+            {
+                assignment_expression -> expression -> value =
+                    CastValue(control.String(),
+                              assignment_expression -> expression);
+                if (assignment_expression -> expression -> IsConstant())
+                {
+                    assignment_expression -> expression -> symbol =
+                        control.String();
+                }
+            }
         }
 
         return;
@@ -7082,7 +7047,8 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
         case AstAssignmentExpression::MOD_EQUAL:
             BinaryNumericPromotion(assignment_expression);
             {
-                AstExpression *right_expression = assignment_expression -> expression;
+                AstExpression *right_expression =
+                    assignment_expression -> expression;
                 if (right_expression -> IsConstant())
                 {
                     //
@@ -7091,12 +7057,16 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
                     //
                     if (control.IsIntegral(left_type) &&
                         (right_expression -> Type() == control.int_type &&
-                         DYNAMIC_CAST<IntLiteralValue *, LiteralValue *>
+                         DYNAMIC_CAST<IntLiteralValue *>
                          (right_expression -> value) -> value == 0) ||
                         (right_expression -> Type() == control.long_type &&
-                         DYNAMIC_CAST<LongLiteralValue *, LiteralValue *>
+                         DYNAMIC_CAST<LongLiteralValue *>
                          (right_expression -> value) -> value == 0))
                     {
+                        //
+                        // This will guarantee a runtime exception, but the
+                        // clarifications to JLS2 insist it is legal code.
+                        //
                         ReportSemError(SemanticError::ZERO_DIVIDE_CAUTION,
                                        assignment_expression -> LeftToken(),
                                        assignment_expression -> RightToken());
@@ -7123,10 +7093,16 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
                                 right_type -> Name());
              }
 
-             assignment_expression -> left_hand_side = PromoteUnaryNumericExpression(left_hand_side);
-             assignment_expression -> expression = PromoteUnaryNumericExpression(assignment_expression -> expression);
-             if (assignment_expression -> expression -> Type() == control.long_type)
-                 assignment_expression -> expression = ConvertToType(assignment_expression -> expression, control.int_type);
+             assignment_expression -> left_hand_side
+                 = PromoteUnaryNumericExpression(left_hand_side);
+             //
+             // This call captures both unary numeric conversion (widening) of
+             // byte, char, or short, and narrowing of long, since the bytecode
+             // requires an int shift amount.
+             //
+             assignment_expression -> expression =
+                 ConvertToType(assignment_expression -> expression,
+                               control.int_type);
              break;
         case AstAssignmentExpression::AND_EQUAL:
         case AstAssignmentExpression::XOR_EQUAL:
@@ -7158,8 +7134,6 @@ void Semantic::ProcessAssignmentExpression(Ast *expr)
             assert(false);
             break;
     }
-
-    return;
 }
 
 #ifdef HAVE_JIKES_NAMESPACE

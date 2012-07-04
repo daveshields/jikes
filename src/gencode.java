@@ -1,15 +1,15 @@
-// $Id: gencode.java,v 1.10 2001/09/14 05:31:33 ericb Exp $
+// $Id: gencode.java,v 1.12 2002/03/06 17:12:25 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
 // http://www.ibm.com/research/jikes.
-// Copyright (C) 1999, 2000, 2001, International Business
+// Copyright (C) 1999, 2000, 2001, 2002 International Business
 // Machines Corporation and others.  All Rights Reserved.
 // You must accept the terms of that agreement to use this software.
 //
 
 import java.io.*;
-import java.util.Arrays;
+import java.util.*;
 
 /**
  * This helper class generates code.h and code.cpp, the lookup table used
@@ -19,438 +19,360 @@ import java.util.Arrays;
  */
 class gencode
 {
-    static final int NEWLINE_CODE      = 1; // \n, \r
-    static final int SPACE_CODE        = 2; // \t, \f, ' '
-    static final int BAD_CODE          = 3; // everything not covered by other codes ...
-    static final int DIGIT_CODE        = 4; // '0'..'9'                    
-    static final int OTHER_DIGIT_CODE  = 5; // all unicode digits
-    static final int LOWER_CODE        = 6; // 'a'..'z'
-    static final int UPPER_CODE        = 7; // 'A'..'Z'
-    static final int OTHER_LETTER_CODE = 8; // '$', '_', all other unicode letters
+    static final int NEWLINE_CODE      = 0; // '\n', '\r'
+    static final int SPACE_CODE        = 1; // '\t', '\f', ' '
+    static final int BAD_CODE          = 2; // everything else ...
+    static final int DIGIT_CODE        = 3; // '0'..'9'
+    static final int OTHER_DIGIT_CODE  = 4; // Character.isJavaIdentifierPart
+    static final int LOWER_CODE        = 5; // 'a'..'z'
+    static final int UPPER_CODE        = 6; // 'A'..'Z'
+    static final int OTHER_LETTER_CODE = 7; // Character.isJavaIdentifierStart
 
-    //
-    // Must be 0 for flat listing, or a value between 2..13 for 2-level listing.
-    // Larger values make smaller slots, allowing more duplication between slots,
-    // at the expense of more pointer overhead.
-    // For Unicode as of JDK 1.4-beta, manual experiments show best results with 9.
-    //
-    static final int LOG_BASE_SIZE       = 9;
+    static final String[] CODE_NAMES = {
+        "NEWLINE_CODE", "SPACE_CODE", "BAD_CODE", "DIGIT_CODE",
+        "OTHER_DIGIT_CODE", "LOWER_CODE", "UPPER_CODE", "OTHER_LETTER_CODE"
+    };
 
-    static final int LOG_COMPLEMENT_SIZE = (16 - LOG_BASE_SIZE);
-    static final int BASE_SIZE           = (1 << LOG_BASE_SIZE);
-    static final int SLOT_SIZE           = (1 << LOG_COMPLEMENT_SIZE);
-    static final int SLOT_MASK           = (SLOT_SIZE - 1);
+//      /**
+//       * The amount to shift a character by in the first level lookup.
+//       */
+//      static int LOG_BASE_SIZE       = 9;
 
-    static final int BaseIndex(int i) { return i >> LOG_COMPLEMENT_SIZE; }
-    static final int DataIndex(int i) { return i & SLOT_MASK; }
+//      static final int LOG_COMPLEMENT_SIZE = (16 - LOG_BASE_SIZE);
+//      static final int BASE_SIZE           = (1 << LOG_BASE_SIZE);
+//      static final int SLOT_SIZE           = (1 << LOG_COMPLEMENT_SIZE);
+//      static final int SLOT_MASK           = (SLOT_SIZE - 1);
 
-    static public void main(String args[]) throws FileNotFoundException, IOException
+//      static final int BaseIndex(int i) { return i >> LOG_COMPLEMENT_SIZE; }
+//      static final int DataIndex(int i) { return i & SLOT_MASK; }
+
+    static public void main(String args[])
+        throws FileNotFoundException, IOException
     {
-        int num_elements = 65536;
-        int num_slots = BASE_SIZE;
-
-        byte base[][] = new byte[BASE_SIZE][SLOT_SIZE];
-
-        char a = '\u0000';
-        for (int i = 0; i < 65536; i++, a++)
+        System.out.println("Gathering data...");
+        // Use char[] for ease in building strings, despite only using 8 bits.
+        int numElements = 65536;
+        char[] info = new char[numElements];
+        for (int i = 0; i < info.length; i++)
         {
-            if (a == '\n' || a == '\r')
-                base[BaseIndex(i)][DataIndex(i)] = NEWLINE_CODE;
-            else if (a==' ' || a=='\t' || a=='\f')
-                base[BaseIndex(i)][DataIndex(i)] = SPACE_CODE;
-            else if (a < 128 && Character.isLowerCase(a)) // Ascii lower case
-                base[BaseIndex(i)][DataIndex(i)] = LOWER_CODE;
-            else if (a < 128 && Character.isUpperCase(a)) // Ascii upper case
-                base[BaseIndex(i)][DataIndex(i)] = UPPER_CODE;
-            else if (a < 128 && Character.isDigit(a)) // Ascii digit
-                base[BaseIndex(i)][DataIndex(i)] = DIGIT_CODE;
-            else if (Character.isJavaIdentifierStart(a))
-                base[BaseIndex(i)][DataIndex(i)] = OTHER_LETTER_CODE;
-            else if (Character.isJavaIdentifierPart(a))
-                base[BaseIndex(i)][DataIndex(i)] = OTHER_DIGIT_CODE;
+            if (i == '\n' || i == '\r')
+                info[i] = NEWLINE_CODE;
+            else if (i == ' ' || i == '\t' || i == '\f')
+                info[i] = SPACE_CODE;
+            else if (i < 128 && Character.isLowerCase((char) i))
+                info[i] = LOWER_CODE; // Ascii lower case
+            else if (i < 128 && Character.isUpperCase((char) i))
+                info[i] = UPPER_CODE; // Ascii upper case
+            else if (i < 128 && Character.isDigit((char) i))
+                info[i] = DIGIT_CODE; // Ascii digit
+            else if (Character.isJavaIdentifierStart((char) i))
+                info[i] = OTHER_LETTER_CODE;
+            else if (Character.isJavaIdentifierPart((char) i))
+                info[i] = OTHER_DIGIT_CODE;
             else
             {
-                base[BaseIndex(i)][DataIndex(i)] = BAD_CODE;
-                num_elements--;
+                info[i] = BAD_CODE;
+                numElements--;
             }
+        }
+
+        System.out.println("Compressing tables...");
+        int bestShift = 0;
+        int bestEst = info.length;
+        String bestBlkStr = null;
+
+        for (int i = 3; i < 11; i++)
+        {
+            int blkSize = 1 << i;
+            Map blocks = new HashMap();
+            List blkArray = new ArrayList();
+            System.out.print("shift: " + i);
+
+            for (int j = 0; j < info.length; j += blkSize)
+            {
+                String key = new String(info, j, blkSize);
+                if (blocks.get(key) == null)
+                {
+                    blkArray.add(key);
+                    blocks.put(key, new Integer(blkArray.size()));
+                }
+            }
+            int blkNum = blkArray.size();
+            int blockLen = blkNum * blkSize;
+            System.out.print(" before " + blockLen);
+
+            //
+            // Try to pack blkArray, by finding successively smaller matches
+            // between heads and tails of blocks.
+            //
+            for (int j = blkSize - 1; j > 0; j--)
+            {
+                Map tails = new HashMap();
+                for (int k = 0; k < blkArray.size(); k++)
+                {
+                    String str = (String) blkArray.get(k);
+                    if (str == null)
+                        continue;
+                    String tail = str.substring(str.length() - j);
+                    List l = (List) tails.get(tail);
+                    if (l == null)
+                        tails.put(tail,
+                                  new LinkedList(Collections
+                                                 .singleton(new Integer(k))));
+                    else l.add(new Integer(k));
+                }
+
+                //
+                // Now calculate the heads, and merge overlapping blocks
+                //
+            block:
+                for (int k = 0; k < blkArray.size(); k++)
+                {
+                    String tomerge = (String) blkArray.get(k);
+                    if (tomerge == null)
+                        continue;
+                    while (true)
+                    {
+                        String head = tomerge.substring(0, j);
+                        LinkedList entry = (LinkedList) tails.get(head);
+                        if (entry == null)
+                            continue block;
+                        Integer other = (Integer) entry.removeFirst();
+                        if (other.intValue() == k)
+                        {
+                            if (entry.size() > 0)
+                            {
+                                entry.add(other);
+                                other = (Integer) entry.removeFirst();
+                            }
+                            else
+                            {
+                                entry.add(other);
+                                continue block;
+                            }
+                        }
+                        if (entry.size() == 0)
+                            tails.remove(head);
+
+                        //
+                        // A match was found.
+                        //
+                        String merge = blkArray.get(other.intValue()) +
+                            tomerge.substring(j);
+                        blockLen -= j;
+                        blkNum--;
+                        if (other.intValue() < k)
+                        {
+                            blkArray.set(k, null);
+                            blkArray.set(other.intValue(), merge);
+                            String tail = merge.substring(merge.length() - j);
+                            List l = (List) tails.get(tail);
+                            Collections.replaceAll(l, new Integer(k), other);
+                            continue block;
+                        }
+                        blkArray.set(k, merge);
+                        blkArray.set(other.intValue(), null);
+                        tomerge = merge;
+                    }
+                }
+            }
+            StringBuffer blockStr = new StringBuffer(blockLen);
+            for (int k = 0; k < blkArray.size(); k++)
+            {
+                String str = (String) blkArray.get(k);
+                if (str != null)
+                    blockStr.append(str);
+            }
+            if (blockStr.length() != blockLen)
+                throw new Error("Unexpected blockLen " + blockLen);
+            int estimate = blockLen + (info.length >> (i - 1));
+            System.out.println(" after merge " + blockLen + ": " + estimate +
+                               " bytes");
+            if (estimate < bestEst)
+            {
+                bestEst = estimate;
+                bestShift = i;
+                bestBlkStr = blockStr.toString();
+            }
+        }
+
+        int blkSize = 1 << bestShift;
+        char[] blocks = new char[info.length / blkSize];
+        for (int j = 0; j < info.length; j += blkSize)
+        {
+            String key = new String(info, j, blkSize);
+            int index = bestBlkStr.indexOf(key);
+            if (index == -1)
+                throw new Error("Unexpected index for " + j);
+            blocks[j >> bestShift] = (char) (index - j);
         }
 
         //
         // Process the code.h file
         //
+        System.out.println("Generating code.h with shift of " + bestShift);
         PrintStream hfile = new PrintStream(new FileOutputStream("code.h"));
         printHeader(hfile, new String[] {"\"platform.h\""});
+        hfile.println("#ifndef code_INCLUDED");
+        hfile.println("#define code_INCLUDED");
+        hfile.println();
+        hfile.println("class Code");
+        hfile.println("{");
+        hfile.println("    //");
+        hfile.println("    // To facilitate the scanning, the character set is partitioned into");
+        hfile.println("    // 8 categories using the array CODE. These are described below");
+        hfile.println("    // together with some self-explanatory functions defined on CODE.");
+        hfile.println("    //");
+        hfile.println("    enum {");
+        hfile.println("        SHIFT = " + bestShift + ",");
+        hfile.println("        NEWLINE_CODE = " + NEWLINE_CODE + ',');
+        hfile.println("        SPACE_CODE = " + SPACE_CODE + ',');
+        hfile.println("        BAD_CODE = " + BAD_CODE + ',');
+        hfile.println("        DIGIT_CODE = " + DIGIT_CODE + ',');
+        hfile.println("        OTHER_DIGIT_CODE = " + OTHER_DIGIT_CODE + ',');
+        hfile.println("        LOWER_CODE = " + LOWER_CODE + ',');
+        hfile.println("        UPPER_CODE = " + UPPER_CODE + ',');
+        hfile.println("        OTHER_LETTER_CODE = " + OTHER_LETTER_CODE);
+        hfile.println("    };");
+        hfile.println();
+        hfile.println("    static char codes[" + bestBlkStr.length() + "];");
+        hfile.println("    static u2 blocks[" +  blocks.length + "];");
+        hfile.println();
+        hfile.println();
+        hfile.println("public:");
+        hfile.println();
+        hfile.println("    static inline void SetBadCode(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        codes[(u2) (blocks[c >> SHIFT] + c)] = BAD_CODE;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline void CodeCheck(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        assert((u2) (blocks[c >> SHIFT] + c) < " +
+                      bestBlkStr.length() + ");");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline bool CodeCheck(void)");
+        hfile.println("    {");
+        hfile.println("        for (int i = 0; i <= 0xffff; i++)");
+        hfile.println("            CodeCheck((wchar_t) i);");
+        hfile.println("        return true;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    //");
+        hfile.println("    // \\r characters are replaced by \\x0a in Stream::ProcessInput().");
+        hfile.println("    //");
+        hfile.println("    static inline bool IsNewline(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return c == '\\x0a';");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline bool IsSpaceButNotNewline(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] == SPACE_CODE;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline bool IsSpace(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] <= SPACE_CODE;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline bool IsDigit(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] == DIGIT_CODE;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline bool IsOctalDigit(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return c >= U_0 && c <= U_7;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline bool IsHexDigit(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return c <= U_f && (c >= U_a ||");
+        hfile.println("                            (c >= U_A && c <= U_F) ||");
+        hfile.println("                            (c >= U_0 && c <= U_9));");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline bool IsUpper(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] == UPPER_CODE;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline bool IsLower(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] == LOWER_CODE;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline bool IsAlpha(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] >= LOWER_CODE;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("    static inline bool IsAlnum(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] >= DIGIT_CODE;");
+        hfile.println("    }");
+        hfile.println();
+        hfile.println("};");
+        hfile.println();
+        hfile.println("#endif // code_INCLUDED");
+        printFooter(hfile);
+        hfile.close();
 
         //
         // Process the code.cpp file
         //
+        System.out.println("Generating code.cpp");
         PrintStream cfile = new PrintStream(new FileOutputStream("code.cpp"));
         printHeader(cfile, new String[] {"\"code.h\""});
-
-        if (LOG_BASE_SIZE > 1 && LOG_BASE_SIZE < 14)
+        cfile.println("char Code::codes[" + bestBlkStr.length() + "] =");
+        cfile.println("{");
+        for (int j = 0; j < bestBlkStr.length(); j += 4)
         {
-            //
-            // We exploit the fact that array elements are initialized to 0.
-            //
-            int base_index[] = new int[BASE_SIZE],
-                slot_index[] = new int[BASE_SIZE],
-                overlaps[] = new int[BASE_SIZE],
-                offset = SLOT_SIZE,
-                prior = 0;
-
-            for (int i = 1; i < BASE_SIZE; i++)
-                if (! Arrays.equals(base[0], base[i]))
-                    slot_index[i] = i;
-
-            //
-            // Now, check for places to share entries.  While a more compact form
-            // can be found, this one is relatively simple: match all duplicate
-            // slots, then find largest overlap of a single category between
-            // successive slots.
-            //
-            for (int i = 1; i < BASE_SIZE; i++)
+            for (int k = 0; k < 4; k++)
             {
-                if (slot_index[i] < i) // we've already matched this slot
-                    continue;
-
-                int overlap = 0;
-                byte value = base[i][0];
-                if (base[prior][SLOT_SIZE - overlap - 1] == value)
-                {
-                    //
-                    // Find the number of repeated bytes "value" at end of prior
-                    // slot and beginning of this slot
-                    //
-                    do overlap++;
-                    while (base[prior][SLOT_SIZE - overlap - 1] == value &&
-                           base[i][overlap] == value);
-                    overlaps[i] = overlap;
-                    offset -= overlap;
-                }
-
-                base_index[i] = offset;
-                offset += SLOT_SIZE;
-                prior = i;
-
-                for (int k = i + 1; k < BASE_SIZE; k++)
-                {
-                    if (slot_index[k] < k) // we've already matched this slot
-                        continue;
-                    if (Arrays.equals(base[i], base[k])) // found new match
-                    {
-                        slot_index[k] = i;
-                        base_index[k] = base_index[i];
-                        num_slots--;
-                    }
-                }
+                if (k + j >= bestBlkStr.length())
+                    break;
+                if (k == 0)
+                    cfile.print("   ");
+                cfile.print(" " + CODE_NAMES[bestBlkStr.charAt(k + j)] + ",");
             }
-
-            hfile.println("#ifndef code_INCLUDED");
-            hfile.println("#define code_INCLUDED");
-            hfile.println();
-            hfile.println("class Code");
-            hfile.println("{");
-            hfile.println("    //");
-            hfile.println("    // To facilitate the scanning, the character set is partitioned into");
-            hfile.println("    // 8 classes using the array CODE. The classes are described below");
-            hfile.println("    // together with some self-explanatory functions defined on CODE.");
-            hfile.println("    //");
-            hfile.println("    enum {");
-
-            hfile.println("             LOG_BASE_SIZE       = " + LOG_BASE_SIZE + ',');
-            hfile.println("             LOG_COMPLEMENT_SIZE = " + LOG_COMPLEMENT_SIZE + ',');
-            hfile.println("             BASE_SIZE           = " + BASE_SIZE + ',');
-            hfile.println("             SLOT_SIZE           = " + SLOT_SIZE + ',');
-            hfile.println("             SLOT_MASK           = " + SLOT_MASK + ',');
-            hfile.println();
-            hfile.println("             NEWLINE_CODE        = " + NEWLINE_CODE + ',');
-            hfile.println("             SPACE_CODE          = " + SPACE_CODE + ',');
-            hfile.println("             BAD_CODE            = " + BAD_CODE + ',');
-            hfile.println("             DIGIT_CODE          = " + DIGIT_CODE + ',');
-            hfile.println("             OTHER_DIGIT_CODE    = " + OTHER_DIGIT_CODE + ',');
-            hfile.println("             LOWER_CODE          = " + LOWER_CODE + ',');
-            hfile.println("             UPPER_CODE          = " + UPPER_CODE + ',');
-            hfile.println("             OTHER_LETTER_CODE   = " + OTHER_LETTER_CODE);
-            hfile.println("         };");
-            hfile.println();
-            hfile.println("    static char code[" + offset + "];");
-            hfile.println("    static char *base[" +  BASE_SIZE + "];");
-            hfile.println();
-            hfile.println();
-            hfile.println("public:");
-            hfile.println();
-            hfile.println("    static inline void SetBadCode(wchar_t c)");
-            hfile.println("    {");
-            hfile.println("        base[c >> LOG_COMPLEMENT_SIZE][c] = BAD_CODE;");
-            hfile.println("    }");
-            hfile.println();
-            hfile.println("    static inline void CodeCheck(wchar_t c)");
-            hfile.println("    {");
-            hfile.println("        assert(c >> LOG_COMPLEMENT_SIZE < BASE_SIZE);");
-            hfile.println("        assert(base[c >> LOG_COMPLEMENT_SIZE] + c >= (&code[0]));");
-            hfile.println("        assert(base[c >> LOG_COMPLEMENT_SIZE] + c < (&code[" + offset + "]));");
-            hfile.println("    }");
-            hfile.println();
-            hfile.println("    static inline bool CodeCheck(void)");
-            hfile.println("    {");
-            hfile.println("        for (int i = 0; i <= 0xffff; i++)");
-            hfile.println("            CodeCheck((wchar_t) i);");
-            hfile.println("        return true;");
-            hfile.println("    }");
-            hfile.println();
-            hfile.println("    static inline bool IsNewline(wchar_t c) // \\r characters are replaced by \\x0a in Stream::ProcessInput().");
-            hfile.println("    {");
-            hfile.println("        return c == '\\x0a';");
-            hfile.println("    }");
-            hfile.println();
-            hfile.println("    static inline bool IsSpaceButNotNewline(wchar_t c)");
-            hfile.println("    {");
-            hfile.println("        return base[c >> LOG_COMPLEMENT_SIZE][c] == SPACE_CODE;");
-            hfile.println("    }");
-            hfile.println();
-            hfile.println("    static inline bool IsSpace(wchar_t c)");
-            hfile.println("    {");
-            hfile.println("        return base[c >> LOG_COMPLEMENT_SIZE][c] <= SPACE_CODE;");
-            hfile.println("    }");
-            hfile.println();
-            hfile.println("    static inline bool IsDigit(wchar_t c)");
-            hfile.println("    {");
-            hfile.println("        return base[c >> LOG_COMPLEMENT_SIZE][c] == DIGIT_CODE;");
-            hfile.println("    }");
-            hfile.println();
-            hfile.println("    static inline bool IsUpper(wchar_t c)");
-            hfile.println("    {");
-            hfile.println("        return base[c >> LOG_COMPLEMENT_SIZE][c] == UPPER_CODE;");
-            hfile.println("    }");
-            hfile.println();
-            hfile.println("    static inline bool IsLower(wchar_t c)");
-            hfile.println("    {");
-            hfile.println("        return base[c >> LOG_COMPLEMENT_SIZE][c] == LOWER_CODE;");
-            hfile.println("    }");
-            hfile.println();
-            hfile.println("    static inline bool IsAlpha(wchar_t c)");
-            hfile.println("    {");
-            hfile.println("        return base[c >> LOG_COMPLEMENT_SIZE][c] >= LOWER_CODE;");
-            hfile.println("    }");
-            hfile.println();
-            hfile.println("    static inline bool IsAlnum(wchar_t c)");
-            hfile.println("    {");
-            hfile.println("        return base[c >> LOG_COMPLEMENT_SIZE][c] >= DIGIT_CODE;");
-            hfile.println("    }");
-            hfile.println();
-            hfile.println();
-            hfile.println("};");
-            hfile.println();
-            hfile.println("#endif // code_INCLUDED");
-
-            cfile.println("char Code::code[" +  offset + "] =");
-            cfile.println("{");
-
-            for (int j = 0; j < BASE_SIZE; j++)
-            {
-                cfile.println("    //");
-                cfile.print  ("    // Slot " + j  + ":");
-
-                if (slot_index[j] < j)
-                {
-                    cfile.println(" matches Slot " + slot_index[j]);
-                    cfile.println("    //");
-                    cfile.println();
-                    continue;
-                }
-
-                if (overlaps[j] > 0)
-                    cfile.print(" overlaps prior slot by " + overlaps[j]);
-                cfile.println();
-                cfile.println("    //");
-
-                byte slot[] = base[j];
-                for (int k = overlaps[j]; k < SLOT_SIZE; k += 4)
-                {
-                    for (int l = 0; l < 4; l++)
-                    {
-                        if (k + l >= SLOT_SIZE)
-                            break;
-
-                        cfile.print(l == 0 ? "    " : " ");
-                        switch(slot[k + l])
-                        {
-                        case NEWLINE_CODE:
-                            cfile.print("NEWLINE_CODE,");
-                            break;
-                        case SPACE_CODE:
-                            cfile.print("SPACE_CODE,");
-                            break;
-                        case BAD_CODE:
-                            cfile.print("BAD_CODE,");
-                            break;
-                        case DIGIT_CODE:
-                            cfile.print("DIGIT_CODE,");
-                            break;
-                        case OTHER_DIGIT_CODE:
-                            cfile.print("OTHER_DIGIT_CODE,");
-                            break;
-                        case LOWER_CODE:
-                            cfile.print("LOWER_CODE,");
-                            break;
-                        case UPPER_CODE:
-                            cfile.print("UPPER_CODE,");
-                            break;
-                        default:
-                            cfile.print("OTHER_LETTER_CODE,");
-                            break;
-                        }
-                    }
-                    cfile.println();
-                }
-
-                cfile.println();
-            }
-
-            cfile.println("};");
-
             cfile.println();
-            cfile.println();
-            cfile.println("//");
-            cfile.println("// The Base vector:");
-            cfile.println("//");
-            cfile.println("char *Code::base[" + BASE_SIZE + "] =");
-            cfile.println("{");
-            for (int k = 0; k < BASE_SIZE; k += 4)
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    int j = k + i;
-                    cfile.print(i == 0 ? "   " : " ");
-                    cfile.print(" &code[" + base_index[j] + "] - " +
-                                (j * SLOT_SIZE) + ",");
-                }
-                cfile.println();
-            }
-            cfile.println("};");
-
-            //
-            // Print Statistics
-            //
-            System.out.println(" The number of slots used is " + num_slots);
-            System.out.println(" Total static storage utilization is " +
-                               offset + " bytes for encoding plus " +
-                               BASE_SIZE * 4 + " bytes for the base");
-            System.out.println(" Savings of " + (65536 - offset - BASE_SIZE * 4) + " bytes over flat listing");
-            System.out.println(" The number of unicode characters is " + num_elements);
         }
-        else if (LOG_BASE_SIZE == 0)
+        cfile.println("};");
+        cfile.println();
+        cfile.println();
+        cfile.println("//");
+        cfile.println("// The Blocks vector:");
+        cfile.println("//");
+        cfile.println("u2 Code::blocks[" + blocks.length + "] =");
+        cfile.println("{");
+        for (int k = 0; k < blocks.length; k += 9)
         {
-            hfile.println("#ifndef code_INCLUDED");
-            hfile.println("#define code_INCLUDED");
-            hfile.println();
-            hfile.println("class Code");
-            hfile.println("{");
-            hfile.println("    //");
-            hfile.println("    // To facilitate the scanning, the character set is partitioned into");
-            hfile.println("    // 8 classes using the array CODE. The classes are described below");
-            hfile.println("    // together with some self-explanatory functions defined on CODE.");
-            hfile.println("    //");
-            hfile.println("    enum {");
-            hfile.println("             NEWLINE_CODE      = " + NEWLINE_CODE + ",");
-            hfile.println("             SPACE_CODE        = " + SPACE_CODE + ",");
-            hfile.println("             BAD_CODE          = " + BAD_CODE + ",");
-            hfile.println("             DIGIT_CODE        = " + DIGIT_CODE + ",");
-            hfile.println("             OTHER_DIGIT_CODE  = " + OTHER_DIGIT_CODE + ",");
-            hfile.println("             LOWER_CODE        = " + LOWER_CODE + ",");
-            hfile.println("             UPPER_CODE        = " + UPPER_CODE + ",");
-            hfile.println("             OTHER_LETTER_CODE = " + OTHER_LETTER_CODE);
-            hfile.println("         };");
-            hfile.println();
-            hfile.println("    static char code[65536];");
-            hfile.println();
-            hfile.println();
-            hfile.println("public:");
-            hfile.println();
-            hfile.println("    static inline bool CodeCheck(void) { return true; }");
-            hfile.println();
-            hfile.println("    //");
-            hfile.println("    // \\r characters are replaced by \\x0a in read_input.");
-            hfile.println("    //");
-            hfile.println("    static inline bool IsNewline(wchar_t c)            { return c == '\\x0a'; }");
-            hfile.println("    static inline bool IsSpaceButNotNewline(wchar_t c) { return code[c] == SPACE_CODE; }");
-            hfile.println("    static inline bool IsSpace(wchar_t c)              { return code[c] <= SPACE_CODE; }");
-            hfile.println("    static inline bool IsDigit(wchar_t c)              { return code[c] == DIGIT_CODE; }");
-            hfile.println("    static inline bool IsUpper(wchar_t c)              { return code[c] == UPPER_CODE; }");
-            hfile.println("    static inline bool IsLower(wchar_t c)              { return code[c] == LOWER_CODE; }");
-            hfile.println("    static inline bool IsAlpha(wchar_t c)              { return code[c] >= LOWER_CODE; }");
-            hfile.println("    static inline bool IsAlnum(wchar_t c)              { return code[c] >= DIGIT_CODE; }");
-            hfile.println();
-            hfile.println("};");
-            hfile.println();
-            hfile.println("#endif // code_INCLUDED");
-
-            cfile.println("char Code::code[65536] =");
-            cfile.println("{");
-
-            int k = 0;
-            for (int i = 0; i < 65536; i += 256)
+            for (int i = 0; i < 9; i++)
             {
-                cfile.println("    //");
-                cfile.println("    // Slot " + i + ":");
-                cfile.println("    //");
-
-                for (int j = 0; j < 256; j += 4)
-                {
-                    for (int l = 0; l < 4; l++)
-                    {
-                        byte b = base[BaseIndex(k)][DataIndex(k)];
-                        k++;
-                        cfile.print(l == 0 ? "    " : " ");
-                        switch(b)
-                        {
-                            case NEWLINE_CODE:
-                                 cfile.print("NEWLINE_CODE,");
-                                 break;
-                            case SPACE_CODE:
-                                 cfile.print("SPACE_CODE,");
-                                 break;
-                            case BAD_CODE:
-                                 cfile.print("BAD_CODE,");
-                                 break;
-                            case DIGIT_CODE:
-                                 cfile.print("DIGIT_CODE,");
-                                 break;
-                            case OTHER_DIGIT_CODE:
-                                 cfile.print("OTHER_DIGIT_CODE,");
-                                 break;
-                            case LOWER_CODE:
-                                 cfile.print("LOWER_CODE,");
-                                 break;
-                            case UPPER_CODE:
-                                 cfile.print("UPPER_CODE,");
-                                 break;
-                            default:
-                                 cfile.print("OTHER_LETTER_CODE,");
-                                 break;
-                        }
-                    }
-                    cfile.println();
-                }
-
-                cfile.println();
+                if (k + i >= blocks.length)
+                    break;
+                if (i == 0)
+                    cfile.print("   ");
+                cfile.print(" 0x" + Integer.toHexString(blocks[k + i]) + ",");
             }
-
-            cfile.println("};");
-
-            //
-            // Print Statistics
-            //
-            System.out.println(" The number of unicode letters is " + num_elements);
-            System.out.println(" Total static storage utilization is 65536");
+            cfile.println();
         }
-        else throw new IllegalArgumentException("illegal LOG_BASE_SIZE");
-
-        printFooter(hfile);
+        cfile.println("};");
         printFooter(cfile);
-
-        hfile.close();
         cfile.close();
+
+        //
+        // Print statistics.
+        //
+        System.out.println("Total static storage utilization is " +
+                           blocks.length * 2 + " bytes for block lookup");
+        System.out.println("   plus " + bestBlkStr.length() +
+                           " bytes for the encodings");
+        System.out.println("The number of unicode characters legal in Java sourcecode is " +
+                           numElements);
     }
 
     static void printHeader(PrintStream file, String[] includes)
@@ -461,7 +383,7 @@ class gencode
         file.println("// This software is subject to the terms of the IBM Jikes Compiler");
         file.println("// License Agreement available at the following URL:");
         file.println("// http://www.ibm.com/research/jikes.");
-        file.println("// Copyright (C) 1999, 2000, 2001, International Business");
+        file.println("// Copyright (C) 1999, 2000, 2001, 2002, International Business");
         file.println("// Machines Corporation and others.  All Rights Reserved.");
         file.println("// You must accept the terms of that agreement to use this software.");
         file.println("//");

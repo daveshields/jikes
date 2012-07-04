@@ -1,4 +1,4 @@
-// $Id: access.h,v 1.15 2001/09/14 05:31:32 ericb Exp $ -*- c++ -*-
+// $Id: access.h,v 1.17 2001/12/08 04:56:49 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -69,11 +69,18 @@ public:
 
     void ResetFlags() { access_flags = 0; }
     void SetFlags(u2 access_flags_) { access_flags = access_flags_; }
-    void SetFlags(AccessFlags af)  { this -> access_flags = af.access_flags; }
+    void SetFlags(AccessFlags af)  { access_flags = af.access_flags; }
     u2 Flags() { return access_flags; }
 
-    AccessFlags() : access_flags(0) {}
-    AccessFlags(u2& _access_flags) : access_flags(_access_flags) {}
+    inline wchar_t *AccessString()
+    {
+        return (ACC_PUBLIC() ? StringConstant::US_public
+                : ACC_PROTECTED() ? StringConstant::US_protected
+                : ACC_PRIVATE() ? StringConstant::US_private
+                : StringConstant::US_default);
+    }
+
+    AccessFlags(u2 flags = 0) : access_flags(flags) {}
 
 #ifdef JIKES_DEBUG
     void Print()
