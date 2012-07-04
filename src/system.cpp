@@ -1,4 +1,4 @@
-// $Id: system.cpp,v 1.41 2002/05/22 06:56:45 ericb Exp $
+// $Id: system.cpp,v 1.43 2002/09/11 17:06:02 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -591,6 +591,7 @@ void Control::ProcessUnnamedPackage()
     no_type -> SetSignature(Utf8_pool.FindOrInsert(U8S_DO, strlen(U8S_DO)));
     no_type -> outermost_type = no_type;
     no_type -> SetOwner(unnamed_package);
+    no_type -> subtypes = new SymbolSet();
     no_type -> MarkBad();
 
     //
@@ -1477,7 +1478,8 @@ void Control::ProcessSystemInformation()
 
     //
     // Create an entry for each primitive type. Note that the type void is
-    // treated as a primitive.
+    // treated as a primitive. We do not set up any subtyping relationships,
+    // as that would violate the assumptions made elsewhere.
     //
     void_type = GetPrimitiveType(US_void, U8S_V);
     boolean_type = GetPrimitiveType(US_boolean, U8S_Z);

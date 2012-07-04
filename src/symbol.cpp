@@ -1,4 +1,4 @@
-// $Id: symbol.cpp,v 1.69 2002/07/09 07:28:43 cabbey Exp $
+// $Id: symbol.cpp,v 1.78 2002/09/13 20:47:11 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
 // Source License Agreement available at the following URL:
@@ -265,8 +265,9 @@ void TypeSymbol::ProcessTypeHeaders()
 
     if (class_declaration)
         semantic_environment -> sem -> ProcessTypeHeaders(class_declaration);
-    else semantic_environment -> sem ->
-             ProcessTypeHeaders((AstInterfaceDeclaration *) declaration);
+    else
+        semantic_environment -> sem ->
+            ProcessTypeHeaders((AstInterfaceDeclaration *) declaration);
 }
 
 void TypeSymbol::ProcessMembers()
@@ -275,11 +276,12 @@ void TypeSymbol::ProcessMembers()
         declaration -> ClassDeclarationCast();
 
     if (class_declaration)
-         semantic_environment -> sem ->
-             ProcessMembers(class_declaration -> semantic_environment,
-                            class_declaration -> class_body);
-    else semantic_environment -> sem ->
-             ProcessMembers((AstInterfaceDeclaration *) declaration);
+        semantic_environment -> sem ->
+            ProcessMembers(class_declaration -> semantic_environment,
+                           class_declaration -> class_body);
+    else
+        semantic_environment -> sem ->
+            ProcessMembers((AstInterfaceDeclaration *) declaration);
 }
 
 void TypeSymbol::CompleteSymbolTable()
@@ -288,12 +290,13 @@ void TypeSymbol::CompleteSymbolTable()
         declaration -> ClassDeclarationCast();
 
     if (class_declaration)
-         semantic_environment -> sem ->
-             CompleteSymbolTable(class_declaration -> semantic_environment,
-                                 class_declaration -> identifier_token,
-                                 class_declaration -> class_body);
-    else semantic_environment -> sem ->
-             CompleteSymbolTable((AstInterfaceDeclaration *) declaration);
+        semantic_environment -> sem ->
+            CompleteSymbolTable(class_declaration -> semantic_environment,
+                                class_declaration -> identifier_token,
+                                class_declaration -> class_body);
+    else
+        semantic_environment -> sem ->
+            CompleteSymbolTable((AstInterfaceDeclaration *) declaration);
 }
 
 
@@ -303,11 +306,12 @@ void TypeSymbol::ProcessExecutableBodies()
         declaration -> ClassDeclarationCast();
 
     if (class_declaration)
-         semantic_environment -> sem ->
-             ProcessExecutableBodies(class_declaration -> semantic_environment,
-                                     class_declaration -> class_body);
-    else semantic_environment -> sem ->
-             ProcessExecutableBodies((AstInterfaceDeclaration *) declaration);
+        semantic_environment -> sem ->
+            ProcessExecutableBodies(class_declaration -> semantic_environment,
+                                    class_declaration -> class_body);
+    else
+        semantic_environment -> sem ->
+            ProcessExecutableBodies((AstInterfaceDeclaration *) declaration);
 }
 
 
@@ -588,38 +592,6 @@ SymbolTable::SymbolTable(int hash_size_) : type_symbol_pool(NULL),
 
 SymbolTable::~SymbolTable()
 {
-/*
-int n;
-int num_slots = 0;
-int total = 0;
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (Symbol *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-{
-num_slots++;
-total += num;
-}
-}
-
-if (num_slots > 0)
-{
-cout << "\nDestroying a symbol table with base size " << hash_size
-     << " containing " << num_slots << " non-empty slots\n";
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (Symbol *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-cout << "    slot " << n << " contains " << num << " element(s)\n";
-}
-}
-if (hash_size < total)
-    total = total;
-*/
     for (int i = 0; i < NumAnonymousSymbols(); i++)
         delete AnonymousSym(i);
     delete anonymous_symbol_pool;
@@ -702,7 +674,6 @@ TypeSymbol::TypeSymbol(NameSymbol *name_symbol_)
     status(0),
     package(NULL),
     class_name(NULL),
-    class_literal_class(NULL),
     class_literal_method(NULL),
     class_literal_name(NULL),
     assert_variable(NULL),
@@ -776,7 +747,6 @@ MethodSymbol::~MethodSymbol()
     delete throws_signatures;
     delete formal_parameters;
     delete throws;
-    delete initializer_constructors;
 
     delete block_symbol; // overload(s)
     delete [] header;
@@ -785,7 +755,7 @@ MethodSymbol::~MethodSymbol()
 
 BlockSymbol::BlockSymbol(int hash_size)
     : max_variable_index(-1),
-      try_or_synchronized_variable_index(0),
+      try_or_synchronized_variable_index(-1),
       table(hash_size > 0 ? new SymbolTable(hash_size) : (SymbolTable *) NULL)
 {
     Symbol::_kind = BLOCK;
@@ -943,7 +913,14 @@ void DirectorySymbol::ReadDirectory()
                     (Case::Index(entry -> d_name, U_DOT) < 0 &&
                      SystemIsDirectory(entry -> d_name)))
                 {
-                    entries -> InsertEntry(this, entry -> d_name, length);
+                    int len = DirectoryNameLength() + strlen(entry -> d_name);
+                    char *filename = new char[len + 2]; // +2 for '/', NUL
+                    sprintf(filename, "%s/%s", DirectoryName(),
+                            entry -> d_name);
+                    struct stat status;
+                    if(JikesAPI::getInstance() -> stat(filename, &status) == 0)
+                        entries -> InsertEntry(this, entry -> d_name, length);
+                    delete [] filename;
                 }
             }
             closedir(directory);
@@ -988,11 +965,11 @@ void DirectorySymbol::ReadDirectory()
                         clean_name[i] = (entry.cFileName[i] == U_BACKSLASH
                                          ? U_SLASH : entry.cFileName[i]);
                     if (is_java)
-                         strcpy(&clean_name[length - FileSymbol::java_suffix_length],
-                                FileSymbol::java_suffix);
+                        strcpy(&clean_name[length - FileSymbol::java_suffix_length],
+                               FileSymbol::java_suffix);
                     else if (is_class)
-                         strcpy(&clean_name[length - FileSymbol::class_suffix_length],
-                                FileSymbol::class_suffix);
+                        strcpy(&clean_name[length - FileSymbol::class_suffix_length],
+                               FileSymbol::class_suffix);
                     DirectoryEntry *entry =
                         entries -> InsertEntry(this, clean_name, length);
                     if (! is_java)
@@ -1031,14 +1008,14 @@ void FileSymbol::SetFileName()
 
     file_name = new char[file_name_length + 1]; // +1 for '\0'
     if (dot_directory)
-         file_name[0] = U_NULL;
+        file_name[0] = U_NULL;
     else
     {
         strcpy(file_name, directory_symbol -> DirectoryName());
         if (path_symbol -> IsZip())
-             strcat(file_name, StringConstant::U8S_LP);
+            strcat(file_name, StringConstant::U8S_LP);
         else if (directory_name[directory_name_length - 1] != U_SLASH)
-             strcat(file_name, StringConstant::U8S_SL);
+            strcat(file_name, StringConstant::U8S_SL);
     }
     strcat(file_name, Utf8Name());
     strcat(file_name, kind == JAVA ? FileSymbol::java_suffix
@@ -1177,8 +1154,8 @@ void MethodSymbol::ProcessMethodThrows(Semantic *sem, LexStream::TokenIndex tok)
 
 
 //
-// In addition to (re)setting the signature, this updates the max_variable_index
-// if needed.
+// In addition to (re)setting the signature, this updates the
+// max_variable_index if needed.
 //
 void MethodSymbol::SetSignature(Control &control, TypeSymbol *placeholder)
 {
@@ -1253,7 +1230,7 @@ void MethodSymbol::SetSignature(Control &control, TypeSymbol *placeholder)
     }
     method_signature[s++] = U_RIGHT_PARENTHESIS;
     for (char *str = Type() -> SignatureString(); *str; str++, s++)
-         method_signature[s] = *str;
+        method_signature[s] = *str;
     method_signature[s] = U_NULL;
 
     signature = control.Utf8_pool.FindOrInsert(method_signature, len);
@@ -1517,69 +1494,45 @@ VariableSymbol *TypeSymbol::InsertThis0()
 }
 
 
-TypeSymbol *TypeSymbol::FindOrInsertClassLiteralClass(LexStream::TokenIndex tok)
+TypeSymbol *TypeSymbol::FindOrInsertClassLiteralClass()
 {
-    Semantic *sem = semantic_environment -> sem;
-    AstCompilationUnit *compilation_unit = sem -> compilation_unit;
-    Control &control = sem -> control;
-
-    assert(this == outermost_type && ACC_INTERFACE());
-
-    if (! class_literal_class)
-    {
-        AstClassInstanceCreationExpression *class_creation = compilation_unit ->
-            ast_pool -> GenClassInstanceCreationExpression();
-        class_creation -> base_opt = NULL;
-        class_creation -> dot_token_opt = 0;
-        class_creation -> new_token = tok;
-
-        AstSimpleName *ast_type =
-            compilation_unit -> ast_pool -> GenSimpleName(tok);
-
-        class_creation -> class_type =
-            compilation_unit -> ast_pool -> GenTypeExpression(ast_type);
-        class_creation -> left_parenthesis_token = tok;
-        class_creation -> right_parenthesis_token = tok;
-
-        AstClassBody *class_body =
-            compilation_unit -> ast_pool -> GenClassBody();
-        class_body -> left_brace_token = tok;
-        class_body -> right_brace_token = tok;
-
-        class_creation -> class_body_opt = class_body;
-
-        TypeSymbol *class_literal_type =
-            sem -> GetAnonymousType(class_creation, control.Object());
-        class_literal_type -> FindOrInsertClassLiteralMethod(control);
-
-        sem -> AddDependence(class_literal_type, control.Class(), tok);
-
-        class_literal_class = class_literal_type;
-    }
-
-    return class_literal_class;
+    //
+    // Normally, the place-holder type for invoking private constructors can
+    // be any type, because we just pass null along, avoiding static
+    // initialization. But if we use the place-holder type to store the
+    // class$() method, we must ensure it is a subclass of Object.
+    //
+    if (placeholder_type && (placeholder_type -> super !=
+                             semantic_environment -> sem -> control.Object()))
+        placeholder_type = NULL;
+    return GetPlaceholderType();
 }
 
 
 MethodSymbol *TypeSymbol::FindOrInsertClassLiteralMethod(Control &control)
 {
+    assert(! ACC_INTERFACE());
     if (! class_literal_method)
     {
         //
-        // Note that max_variable_index is initialized to 1 (instead of 0),
+        // Note that max_variable_index is initialized to 2 (instead of 1),
         // even though the class literal method is static. The reason is that
         // in generating code for this method, a try statement with a catch
         // will be used. Therefore, an extra "local" slot is required for the
-        // local Exception parameter of the catch clause.
+        // local Exception parameter of the catch clause. We do not fill in
+        // the body of this method here, because bytecode.cpp can do a much
+        // more optimal job later. The method has the signature:
         //
-        // the associated symbol table will contain 1 element
-        BlockSymbol *block_symbol = new BlockSymbol(1);
-        block_symbol -> max_variable_index = 1;
+        // /*synthetic*/ static Class class$(String name, boolean array);
+        //
+        BlockSymbol *block_symbol = new BlockSymbol(2);
+        block_symbol -> max_variable_index = 2;
 
         class_literal_method = InsertMethodSymbol(control.class_name_symbol);
         class_literal_method -> MarkSynthetic();
         class_literal_method -> SetType(control.Class());
         class_literal_method -> SetACC_STATIC();
+        // No need to worry about strictfp, since this method avoids fp math
         class_literal_method -> SetContainingType(this);
         class_literal_method -> SetBlockSymbol(block_symbol);
 
@@ -1591,9 +1544,20 @@ MethodSymbol *TypeSymbol::FindOrInsertClassLiteralMethod(Control &control)
         variable_symbol -> SetLocalVariableIndex(block_symbol ->
                                                  max_variable_index++);
         variable_symbol -> MarkComplete();
-
         class_literal_method -> AddFormalParameter(variable_symbol);
+
+        variable_symbol =
+            block_symbol -> InsertVariableSymbol(control.MakeParameter(2));
+        variable_symbol -> MarkSynthetic();
+        variable_symbol -> SetType(control.boolean_type);
+        variable_symbol -> SetOwner(class_literal_method);
+        variable_symbol -> SetLocalVariableIndex(block_symbol ->
+                                                 max_variable_index++);
+        variable_symbol -> MarkComplete();
+        class_literal_method -> AddFormalParameter(variable_symbol);
+
         class_literal_method -> SetSignature(control);
+        semantic_environment -> sem -> AddDependence(this, control.Class());
     }
 
     return class_literal_method;
@@ -1621,14 +1585,27 @@ Utf8LiteralValue *TypeSymbol::FindOrInsertClassLiteralName(Control &control)
 
 VariableSymbol *TypeSymbol::FindOrInsertClassLiteral(TypeSymbol *type)
 {
-    assert(! IsInner() && ! type -> Primitive());
+    assert(! type -> Primitive() && ! type -> Anonymous());
+    assert(! Primitive() && ! IsArray());
 
     Semantic *sem = semantic_environment -> sem;
     Control &control = sem -> control;
 
-    (void) FindOrInsertClassLiteralMethod(control);
-
-    (void) type -> FindOrInsertClassLiteralName(control);
+    //
+    // We must be careful that we do not initialize the class literal in
+    // question, or any enclosing types. True inner classes can defer to their
+    // enclosing class (since code in the inner class cannot be run without
+    // the enclosing class being initialized), but static nested types get
+    // their own class$ method and cache variables. Interfaces cannot have
+    // non-public members, so if the innermost non-local type is an interface,
+    // we use the placeholder class to hold the class$ magic.
+    //
+    TypeSymbol *owner = this;
+    while (owner -> IsInner())
+        owner = owner -> ContainingType();
+    if (owner -> ACC_INTERFACE())
+        owner = outermost_type -> FindOrInsertClassLiteralClass();
+    owner -> FindOrInsertClassLiteralMethod(control);
 
     NameSymbol *name_symbol = NULL;
     char *signature = type -> SignatureString();
@@ -1654,8 +1631,9 @@ VariableSymbol *TypeSymbol::FindOrInsertClassLiteral(TypeSymbol *type)
 
         delete [] name;
     }
-    else if (signature[0] == U_L) // a reference type ?
+    else
     {
+        assert(signature[0] == U_L); // a reference type
         int class_length = wcslen(StringConstant::US_class_DOLLAR),
             length = strlen(signature) + class_length;
 
@@ -1674,23 +1652,28 @@ VariableSymbol *TypeSymbol::FindOrInsertClassLiteral(TypeSymbol *type)
         delete [] name;
     }
 
-    VariableSymbol *variable_symbol = FindVariableSymbol(name_symbol);
+    VariableSymbol *variable_symbol = owner -> FindVariableSymbol(name_symbol);
     if (! variable_symbol)
     {
         //
         // Generate a caching variable (no need to make it private, so that
-        // nested classes can share it easily).  Foo.Bar.class is cached in:
+        // nested classes of interfaces can share it easily).
         //
-        //     /*synthetic*/ static java.lang.Class class$Foo$Bar;
+        // Foo.Bar.class is cached in:
+        //     /*synthetic*/ static Class class$Foo$Bar;
+        // int[][].class is cached in:
+        //     /*synthetic*/ static Class array$$I;
+        // Blah[].class is cached in:
+        //     /*synthetic*/ static Class array$LBlah;
         //
-        variable_symbol = InsertVariableSymbol(name_symbol);
+        variable_symbol = owner -> InsertVariableSymbol(name_symbol);
         variable_symbol -> SetType(control.Class());
         variable_symbol -> SetACC_STATIC();
-        variable_symbol -> SetOwner(this);
+        variable_symbol -> SetOwner(owner);
         variable_symbol -> MarkComplete();
         variable_symbol -> MarkSynthetic();
 
-        AddClassLiteral(variable_symbol);
+        owner -> AddClassLiteral(variable_symbol);
     }
 
     return variable_symbol;
@@ -1906,7 +1889,7 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member,
     assert((member -> ACC_PRIVATE() && this == containing_type) ||
            (member -> ACC_PROTECTED() &&
             ! semantic_environment -> sem -> ProtectedAccessCheck(containing_type)) ||
-           containing_type == super);
+           (base_type == super && ! member -> ACC_STATIC()));
 
     MethodSymbol *read_method = ReadMethod(member, base_type);
 
@@ -1975,16 +1958,15 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member,
         // static.
         //
         BlockSymbol *block_symbol =
-            new BlockSymbol(parameter_count + (member -> ACC_STATIC() ? 0 : 1));
+            new BlockSymbol(parameter_count +
+                            (member -> ACC_STATIC() ? 0 : 1));
         block_symbol -> max_variable_index = 0;
         read_method -> SetBlockSymbol(block_symbol);
 
         for (int j = 0; j < member -> NumThrows(); j++)
             read_method -> AddThrows(member -> Throws(j));
 
-        AstSimpleName *base = ast_pool -> GenSimpleName(loc);
-
-        AstFieldAccess::FieldAccessTag tag = AstFieldAccess::NONE;
+        AstExpression *base;
         if (! member -> ACC_STATIC() && base_type == super)
         {
             //
@@ -1998,10 +1980,12 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member,
             // therefore inaccessible), so we don't have to worry about a
             // conflict in accessor methods for the same base type.
             //
-            tag = AstFieldAccess::SUPER_TAG;
+            base = ast_pool -> GenSuperExpression(loc);
         }
+        else
+            base = ast_pool -> GenSimpleName(loc);
 
-        AstFieldAccess *field_access = ast_pool -> GenFieldAccess(tag);
+        AstFieldAccess *field_access = ast_pool -> GenFieldAccess();
         field_access -> base = base;
         field_access -> dot_token = loc;
         field_access -> identifier_token = loc;
@@ -2033,13 +2017,14 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(MethodSymbol *member,
             VariableSymbol *instance =
                 block_symbol -> InsertVariableSymbol(instance_name);
             instance -> MarkSynthetic();
-            instance -> SetType(base_type);
+            instance -> SetType(base_type == super ? this : base_type);
             instance -> SetOwner(read_method);
             instance -> SetLocalVariableIndex(block_symbol ->
                                               max_variable_index++);
             instance -> MarkComplete();
             read_method -> AddFormalParameter(instance);
-            base -> symbol = instance;
+            base -> symbol = (base_type == super
+                              ? (Symbol *) super : (Symbol *) instance);
         }
 
         for (int i = 0; i < parameter_count; i++)
@@ -2315,7 +2300,8 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(VariableSymbol *member,
 
     assert((member -> ACC_PRIVATE() && this == containing_type) ||
            (member -> ACC_PROTECTED() &&
-            (! semantic_environment -> sem -> ProtectedAccessCheck(containing_type))));
+            (! semantic_environment -> sem -> ProtectedAccessCheck(containing_type) ||
+             (base_type == super && ! member -> ACC_STATIC()))));
 
     MethodSymbol *read_method = ReadMethod(member, base_type);
 
@@ -2375,7 +2361,23 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(VariableSymbol *member,
         block_symbol -> max_variable_index = 0;
         read_method -> SetBlockSymbol(block_symbol);
 
-        AstSimpleName *base = ast_pool -> GenSimpleName(loc);
+        AstExpression *base;
+        if (! member -> ACC_STATIC() && base_type == super)
+        {
+            //
+            // Special case - for Outer.super.i where i is an instance field,
+            // we mark the field access as a super access, to make sure we use
+            // the correct qualifying instance.  Notice that in this case,
+            // ((Super) Outer.this).i cannot generate an accessor method
+            // (either i is public or in the same package and thus already
+            // accessible, or i is protected in a different package and
+            // therefore inaccessible), so we don't have to worry about a
+            // conflict in accessor methods for the same base type.
+            //
+            base = ast_pool -> GenSuperExpression(loc);
+        }
+        else
+            base = ast_pool -> GenSimpleName(loc);
 
         AstFieldAccess *field_access = ast_pool -> GenFieldAccess();
         field_access -> base = base;
@@ -2402,13 +2404,14 @@ MethodSymbol *TypeSymbol::GetReadAccessMethod(VariableSymbol *member,
             VariableSymbol *instance =
                 block_symbol -> InsertVariableSymbol(instance_name);
             instance -> MarkSynthetic();
-            instance -> SetType(base_type);
+            instance -> SetType(base_type == super ? this : base_type);
             instance -> SetOwner(read_method);
             instance -> SetLocalVariableIndex(block_symbol ->
                                               max_variable_index++);
             instance -> MarkComplete();
             read_method -> AddFormalParameter(instance);
-            base -> symbol = instance;
+            base -> symbol = (base_type == super
+                              ? (Symbol *) super : (Symbol *) instance);
         }
 
         // A read access method has no throws clause !
@@ -2457,7 +2460,8 @@ MethodSymbol *TypeSymbol::GetWriteAccessMethod(VariableSymbol *member,
 
     assert((member -> ACC_PRIVATE() && this == containing_type) ||
            (member -> ACC_PROTECTED() &&
-            (! semantic_environment -> sem -> ProtectedAccessCheck(containing_type))));
+            (! semantic_environment -> sem -> ProtectedAccessCheck(containing_type) ||
+             (base_type == super && ! member -> ACC_STATIC()))));
 
     MethodSymbol *write_method = WriteMethod(member, base_type);
 
@@ -2515,7 +2519,23 @@ MethodSymbol *TypeSymbol::GetWriteAccessMethod(VariableSymbol *member,
         block_symbol -> max_variable_index = 0;
         write_method -> SetBlockSymbol(block_symbol);
 
-        AstSimpleName *base = ast_pool -> GenSimpleName(loc);
+        AstExpression *base;
+        if (! member -> ACC_STATIC() && base_type == super)
+        {
+            //
+            // Special case - for Outer.super.i where i is an instance field,
+            // we mark the field access as a super access, to make sure we use
+            // the correct qualifying instance.  Notice that in this case,
+            // ((Super) Outer.this).i cannot generate an accessor method
+            // (either i is public or in the same package and thus already
+            // accessible, or i is protected in a different package and
+            // therefore inaccessible), so we don't have to worry about a
+            // conflict in accessor methods for the same base type.
+            //
+            base = ast_pool -> GenSuperExpression(loc);
+        }
+        else
+            base = ast_pool -> GenSimpleName(loc);
 
         AstFieldAccess *left_hand_side = ast_pool -> GenFieldAccess();
         left_hand_side -> base = base;
@@ -2544,13 +2564,14 @@ MethodSymbol *TypeSymbol::GetWriteAccessMethod(VariableSymbol *member,
             VariableSymbol *instance =
                 block_symbol -> InsertVariableSymbol(instance_name);
             instance -> MarkSynthetic();
-            instance -> SetType(base_type);
+            instance -> SetType(base_type == super ? this : base_type);
             instance -> SetOwner(write_method);
             instance -> SetLocalVariableIndex(block_symbol ->
                                               max_variable_index++);
             instance -> MarkComplete();
             write_method -> AddFormalParameter(instance);
-            base -> symbol = instance;
+            base -> symbol = (base_type == super
+                              ? (Symbol *) super : (Symbol *) instance);
         }
 
         VariableSymbol *symbol =

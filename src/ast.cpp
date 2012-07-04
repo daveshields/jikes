@@ -1,4 +1,4 @@
-// $Id: ast.cpp,v 1.38 2002/07/02 15:22:14 ericb Exp $
+// $Id: ast.cpp,v 1.40 2002/08/05 23:56:24 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -299,7 +299,7 @@ Ast *AstClassBody::Clone(StoragePool *ast_pool)
 
     clone -> left_brace_token = left_brace_token;
     for (int i = 0; i < NumClassBodyDeclarations(); i++)
-        clone -> AddClassBodyDeclaration(ClassBodyDeclaration(i) -> Clone(ast_pool));
+        clone -> AddClassBodyDeclarationNicely(ClassBodyDeclaration(i) -> Clone(ast_pool));
     clone -> right_brace_token = right_brace_token;
 
     return clone;
@@ -717,7 +717,7 @@ Ast *AstAssertStatement::Clone(StoragePool *ast_pool)
 
     return clone;
 }
-                            
+
 Ast *AstCatchClause::Clone(StoragePool *ast_pool)
 {
     AstCatchClause *clone = ast_pool -> GenCatchClause();

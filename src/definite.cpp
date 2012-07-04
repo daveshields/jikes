@@ -1,4 +1,4 @@
-// $Id: definite.cpp,v 1.44 2002/07/10 04:20:35 cabbey Exp $
+// $Id: definite.cpp,v 1.47 2002/07/30 16:30:01 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -617,7 +617,7 @@ DefiniteAssignmentSet *Semantic::DefiniteAssignmentExpression(AstExpression *exp
     // The left-hand-side of an assignment expression is either a simple name,
     // a field access or an array access.  A simple name does not need further
     // action, a field access needs to descend into all qualifying expressions,
-    // and an array access needs to descend into the entire expression. 
+    // and an array access needs to descend into the entire expression.
     //
     if (! simple_name)
     {
@@ -664,10 +664,19 @@ DefiniteAssignmentSet *Semantic::DefiniteAssignmentExpression(AstExpression *exp
                                (variable -> ACC_STATIC() ? NULL
                                 : variable -> Name()));
             }
-            // are we processing the body of a loop ?
-            else if (DefiniteFinalAssignments() -> Size() > 0)
-                DefiniteFinalAssignments() -> Top().Next() =
-                    left_hand_side;
+            else if (! def_pair.da_set[index])
+            {
+                //
+                // If the variable is also DA, then this code is never
+                // executed, so it does not affect loop or try-catch analysis.
+                //
+                if (DefiniteFinalAssignments() -> Size() > 0)
+                {
+                    DefiniteFinalAssignments() -> Top().Next() =
+                        left_hand_side;
+                }
+                ReachableAssignments() -> AddElement(index);
+            }
         }
 
         def_pair.AssignElement(index);
@@ -785,7 +794,6 @@ inline void Semantic::DefiniteVariableInitializer(AstVariableDeclarator *variabl
         BlankFinals() -> AddElement(variable_declarator -> symbol ->
                                    LocalVariableIndex(this));
     }
-    
 }
 
 
@@ -813,16 +821,9 @@ inline void Semantic::DefiniteBlockStatements(AstBlock *block_body)
 void Semantic::DefiniteBlock(Ast *stmt)
 {
     AstBlock *block_body = (AstBlock *) stmt;
+    int i;
 
     DefiniteBlocks() -> Push(block_body);
-
-    for (int i = 0;
-         i < block_body -> block_symbol -> NumVariableSymbols(); i++)
-    {
-        DefiniteVisibleVariables() -> AddElement(block_body -> block_symbol ->
-                                                 VariableSym(i));
-    }
-
     DefiniteBlockStatements(block_body);
 
 #ifdef DUMP
@@ -833,26 +834,24 @@ void Semantic::DefiniteBlock(Ast *stmt)
                 << lex_stream -> Line(block_body -> RightToken())
                 << " the range for the following variables end:" << endl
                 << endl;
-        for (int j = 0; j < block_body -> NumLocallyDefinedVariables(); j++)
+        for (i = 0; i < block_body -> NumLocallyDefinedVariables(); i++)
             Coutput << "    \""
-                    << block_body -> LocallyDefinedVariable(j) -> Name()
+                    << block_body -> LocallyDefinedVariable(i) -> Name()
                     << "\"" << endl;
     }
-#endif
+#endif // DUMP
     //
     // Remove all variables that just went out of scope
     //
-    for (int k = 0;
-         k < block_body -> block_symbol -> NumVariableSymbols(); k++)
+    for (i = 0; i < block_body -> block_symbol -> NumVariableSymbols(); i++)
     {
         VariableSymbol *variable =
-            block_body -> block_symbol -> VariableSym(k);
+            block_body -> block_symbol -> VariableSym(i);
+        int index = variable -> LocalVariableIndex(this);
 
-        BlankFinals() -> RemoveElement(variable -> LocalVariableIndex(this));
-        DefinitelyAssignedVariables() ->
-            ReclaimElement(variable -> LocalVariableIndex(this));
-
-        DefiniteVisibleVariables() -> RemoveElement(variable);
+        BlankFinals() -> RemoveElement(index);
+        ReachableAssignments() -> RemoveElement(index);
+        DefinitelyAssignedVariables() -> ReclaimElement(index);
     }
 
     //
@@ -861,8 +860,7 @@ void Semantic::DefiniteBlock(Ast *stmt)
     // are labeled.
     //
     if (block_body -> label_opt)
-        *DefinitelyAssignedVariables() *=
-            DefiniteBlocks() -> TopBreakPair();
+        *DefinitelyAssignedVariables() *= DefiniteBlocks() -> TopBreakPair();
 
     DefiniteBlocks() -> Pop();
 }
@@ -883,18 +881,14 @@ void Semantic::DefiniteLocalVariableDeclarationStatement(Ast *stmt)
         int index = variable_symbol -> LocalVariableIndex(this);
         if (control.option.g & JikesOption::VARS)
         {
-            assert(! DefiniteBlocks() -> TopLocalVariables()[index]);
 #ifdef DUMP
             Coutput << "(3.5) Local Variable \"" << variable_symbol -> Name()
                     << " #" << index << "\" is declared at line "
                     << lex_stream -> Line(variable_declarator -> LeftToken())
                     << endl;
-#endif
-            DefiniteBlocks() -> TopLocalVariables()[index] = variable_symbol;
-            DefiniteBlocks() -> TopLocallyDefinedVariables() ->
-                AddElement(index);
-            AstBlock *block = DefiniteBlocks() -> TopBlock();
-            block -> AddLocallyDefinedVariable(variable_symbol);
+#endif // DUMP
+            DefiniteBlocks() -> TopBlock() ->
+                AddLocallyDefinedVariable(variable_symbol);
         }
 
         if (variable_declarator -> variable_initializer_opt)
@@ -976,36 +970,29 @@ void Semantic::DefiniteIfStatement(Ast *stmt)
 }
 
 
-void Semantic::DefiniteLoopBody(BitSet *starting_set)
+void Semantic::DefiniteLoopBody(BitSet &starting_set)
 {
-    BitSet exit_set(DefinitelyAssignedVariables() -> du_set);
-    exit_set *= DefiniteBlocks() -> TopContinuePair().du_set;
-
     //
     // Find the set of variables that were DU before the loop, but not DU
-    // before a continue or at the loop end.
+    // at the loop end. This requires the loop to have merged in the DU
+    // status before all continue statements.
     //
-    *starting_set -= exit_set;
+    starting_set -= DefinitelyAssignedVariables() -> du_set;
 
-    for (int k = 0; k < DefiniteFinalAssignments() -> Top().Length(); k++)
+    for (int i = 0; i < DefiniteFinalAssignments() -> Top().Length(); i++)
     {
-        AstExpression *name = DefiniteFinalAssignments() -> Top()[k];
+        AstExpression *name = DefiniteFinalAssignments() -> Top()[i];
         VariableSymbol *variable = (VariableSymbol *) name -> symbol;
 
-        if (DefiniteVisibleVariables() -> IsElement(variable) &&
-            (*starting_set)[variable -> LocalVariableIndex(this)])
+        if (starting_set[variable -> LocalVariableIndex(this)])
         {
-            ReportSemError(((*BlankFinals())[variable -> LocalVariableIndex(this)]
-                            ? SemanticError::VARIABLE_NOT_DEFINITELY_UNASSIGNED_IN_LOOP
-                            : SemanticError::FINAL_VARIABLE_NOT_BLANK),
+            ReportSemError(SemanticError::VARIABLE_NOT_DEFINITELY_UNASSIGNED_IN_LOOP,
                            name -> LeftToken(),
                            name -> RightToken(),
                            variable -> Name());
         }
     }
 
-    DefinitelyAssignedVariables() -> du_set =
-        exit_set * DefiniteBlocks() -> TopBreakPair().du_set;
     DefiniteFinalAssignments() -> Pop();
 }
 
@@ -1014,11 +1001,9 @@ void Semantic::DefiniteWhileStatement(Ast *stmt)
 {
     AstWhileStatement *while_statement = (AstWhileStatement *) stmt;
 
-    BreakableStatementStack().Push(DefiniteBlocks() -> TopBlock());
-    ContinuableStatementStack().Push(stmt);
     DefiniteFinalAssignments() -> Push();
 
-    BitSet *starting_set = new BitSet(DefinitelyAssignedVariables() -> du_set);
+    BitSet starting_set(DefinitelyAssignedVariables() -> du_set);
     DefiniteAssignmentSet *after_expr =
         DefiniteBooleanExpression(while_statement -> expression,
                                   *DefinitelyAssignedVariables());
@@ -1033,44 +1018,38 @@ void Semantic::DefiniteWhileStatement(Ast *stmt)
     //
     if (while_statement -> statement -> is_reachable)
         DefiniteStatement(while_statement -> statement);
+    *DefinitelyAssignedVariables() *= DefiniteBlocks() -> TopContinuePair();
     DefiniteLoopBody(starting_set);
     *DefinitelyAssignedVariables() = DefiniteBlocks() -> TopBreakPair() *
         (after_expr ? after_expr -> false_pair : before_statement);
 
     delete after_expr;
-    delete starting_set;
-
-    ContinuableStatementStack().Pop();
-    BreakableStatementStack().Pop();
 }
 
 
 void Semantic::DefiniteForStatement(Ast *stmt)
 {
     AstForStatement *for_statement = (AstForStatement *) stmt;
+    int i;
 
     //
     // Note that in constructing the Ast, the parser encloses each
-    // for-statement whose for-init-statements starts with a local
-    // variable declaration in its own block. Therefore a redeclaration
-    // of another local variable with the same name in a different loop
-    // at the same nesting level will not cause any conflict.
+    // for-statement in its own block, so that any variables defined in the
+    // for-init-statements have scope limited to the for loop. Thus, we do
+    // not need to worry about declaring or reclaiming variables in the
+    // for-init section in this method.
     //
     // For example, the following sequence of statements is legal:
     //
     //     for (int i = 0; i < 10; i++);
     //     for (int i = 10; i < 20; i++);
     //
-    for (int i = 0; i < for_statement -> NumForInitStatements(); i++)
-    {
+    for (i = 0; i < for_statement -> NumForInitStatements(); i++)
         DefiniteStatement(for_statement -> ForInitStatement(i));
-    }
 
-    BreakableStatementStack().Push(DefiniteBlocks() -> TopBlock());
-    ContinuableStatementStack().Push(stmt);
     DefiniteFinalAssignments() -> Push();
 
-    BitSet *starting_set = new BitSet(DefinitelyAssignedVariables() -> du_set);
+    BitSet starting_set(DefinitelyAssignedVariables() -> du_set);
     DefiniteAssignmentSet *after_end_expression = NULL;
     DefinitePair before_statement(Universe() -> Size());
 
@@ -1094,22 +1073,10 @@ void Semantic::DefiniteForStatement(Ast *stmt)
     // contained statement and after every continue statement that may exit
     // the body of the for statement.
     //
-    if (for_statement -> statement -> can_complete_normally)
-    {
-        *DefinitelyAssignedVariables() *=
-            DefiniteBlocks() -> TopContinuePair();
-        for (int j = 0; j < for_statement -> NumForUpdateStatements(); j++)
-            DefiniteExpressionStatement(for_statement ->
-                                        ForUpdateStatement(j));
-        DefiniteLoopBody(starting_set);
-    }
-    else
-    {
-        *DefinitelyAssignedVariables() = *Universe();
-        for (int j = 0; j < for_statement -> NumForUpdateStatements(); j++)
-            DefiniteExpressionStatement(for_statement ->
-                                        ForUpdateStatement(j));
-    }
+    *DefinitelyAssignedVariables() *= DefiniteBlocks() -> TopContinuePair();
+    for (i = 0; i < for_statement -> NumForUpdateStatements(); i++)
+        DefiniteExpressionStatement(for_statement -> ForUpdateStatement(i));
+    DefiniteLoopBody(starting_set);
 
     //
     // Compute the set of variables that belongs to both sets below:
@@ -1121,22 +1088,13 @@ void Semantic::DefiniteForStatement(Ast *stmt)
     //    . the set of variables that are DA before every
     //      break statement that may exit the for statement.
     //
-    *DefinitelyAssignedVariables() = (for_statement -> end_expression_opt
-                                      ? (after_end_expression
-                                         ? after_end_expression -> false_pair
-                                         : before_statement)
-                                      : *Universe());
-
-    //
-    // The replacement
-    //
-    *DefinitelyAssignedVariables() *= DefiniteBlocks() -> TopBreakPair();
+    *DefinitelyAssignedVariables() = DefiniteBlocks() -> TopBreakPair() *
+        (for_statement -> end_expression_opt
+         ? (after_end_expression ? after_end_expression -> false_pair
+            : before_statement)
+         : *Universe());
 
     delete after_end_expression; // harmless if NULL
-    delete starting_set;
-
-    ContinuableStatementStack().Pop();
-    BreakableStatementStack().Pop();
 }
 
 
@@ -1144,17 +1102,14 @@ void Semantic::DefiniteDoStatement(Ast *stmt)
 {
     AstDoStatement *do_statement = (AstDoStatement *) stmt;
 
-    BreakableStatementStack().Push(DefiniteBlocks() -> TopBlock());
-    ContinuableStatementStack().Push(stmt);
     DefiniteFinalAssignments() -> Push();
 
-    BitSet *starting_set = new BitSet(DefinitelyAssignedVariables() -> du_set);
+    BitSet starting_set(DefinitelyAssignedVariables() -> du_set);
 
     DefiniteStatement(do_statement -> statement);
 
     DefinitePair after_stmt(*DefinitelyAssignedVariables());
-    *DefinitelyAssignedVariables() *=
-        DefiniteBlocks() -> TopContinuePair();
+    *DefinitelyAssignedVariables() *= DefiniteBlocks() -> TopContinuePair();
     DefiniteAssignmentSet *after_expr =
         DefiniteBooleanExpression(do_statement -> expression,
                                   *DefinitelyAssignedVariables());
@@ -1169,10 +1124,6 @@ void Semantic::DefiniteDoStatement(Ast *stmt)
         (after_expr ? after_expr -> false_pair : after_loop);
 
     delete after_expr;
-    delete starting_set;
-
-    ContinuableStatementStack().Pop();
-    BreakableStatementStack().Pop();
 }
 
 
@@ -1182,7 +1133,6 @@ void Semantic::DefiniteSwitchStatement(Ast *stmt)
 
     AstBlock *block_body = switch_statement -> switch_block;
     DefiniteBlocks() -> Push(block_body);
-    BreakableStatementStack().Push(block_body);
 
     DefiniteExpression(switch_statement -> expression,
                        *DefinitelyAssignedVariables());
@@ -1200,19 +1150,7 @@ void Semantic::DefiniteSwitchStatement(Ast *stmt)
             (AstSwitchBlockStatement *) block_body -> Statement(i);
 
         *DefinitelyAssignedVariables() *= starting_pair;
-
-        for (int j = 0; j < switch_block_statement -> NumStatements(); j++)
-        {
-            AstStatement *statement =
-                (AstStatement *) switch_block_statement -> Statement(j);
-            //
-            // As unreachable statements already cause an error, we avoid
-            // them here
-            //
-            if (statement -> is_reachable)
-                DefiniteStatement(statement);
-            else break;
-        }
+        DefiniteBlockStatements(switch_block_statement);
     }
 
     //
@@ -1220,8 +1158,7 @@ void Semantic::DefiniteSwitchStatement(Ast *stmt)
     // default label?
     //
     if (switch_statement -> default_case.switch_block_statement)
-        *DefinitelyAssignedVariables() *=
-            DefiniteBlocks() -> TopBreakPair();
+        *DefinitelyAssignedVariables() *= DefiniteBlocks() -> TopBreakPair();
     else *DefinitelyAssignedVariables() = starting_pair;
 
     //
@@ -1231,15 +1168,13 @@ void Semantic::DefiniteSwitchStatement(Ast *stmt)
     {
         VariableSymbol *variable =
             block_body -> block_symbol -> VariableSym(i);
+        int index = variable -> LocalVariableIndex(this);
 
-        BlankFinals() -> RemoveElement(variable -> LocalVariableIndex(this));
-        DefinitelyAssignedVariables() ->
-            ReclaimElement(variable -> LocalVariableIndex(this));
-
-        DefiniteVisibleVariables() -> RemoveElement(variable);
+        BlankFinals() -> RemoveElement(index);
+        ReachableAssignments() -> RemoveElement(index);
+        DefinitelyAssignedVariables() -> ReclaimElement(index);
     }
 
-    BreakableStatementStack().Pop();
     DefiniteBlocks() -> Pop();
 }
 
@@ -1253,47 +1188,10 @@ void Semantic::DefiniteBreakStatement(Ast *stmt)
     // executing the break, including if the break occurs in a try or catch
     // block.
     //
-    DefiniteBlocks() -> BreakPair(break_statement -> nesting_level) *=
-        *DefinitelyAssignedVariables();
-    if (DefiniteTrys() -> Size() > 0)
+    if (AbruptFinallyStack().Top() < break_statement -> nesting_level)
     {
-        for (int i = DefiniteTrys() -> Size() - 1; i >= 0; i--)
-        {
-            AstTryStatement *try_statement =
-                DefiniteTrys() -> TryStatement(i);
-
-            if (try_statement -> block == DefiniteTrys() -> Block(i))
-            {
-                // In the main try block?
-                int k;
-                for (k = DefiniteBlocks() -> Size() - 1;
-                     DefiniteBlocks() -> Block(k) !=
-                         DefiniteTrys() -> Block(i);
-                     k--)
-                    ;
-
-                assert(k >= 0);
-
-                DefiniteBlocks() -> BreakPair(k) *=
-                    *DefinitelyAssignedVariables();
-                break;
-            }
-            else if (try_statement -> finally_clause_opt)
-            {
-                int k;
-                for (k = DefiniteBlocks() -> Size() - 1;
-                     DefiniteBlocks() -> Block(k) !=
-                         DefiniteTrys() -> Block(i);
-                     k--)
-                    ;
-
-                assert(k >= 0);
-
-                DefiniteBlocks() -> BreakPair(k) *=
-                    *DefinitelyAssignedVariables();
-                break;
-            }
-        }
+        DefiniteBlocks() -> BreakPair(break_statement -> nesting_level) *=
+            *DefinitelyAssignedVariables();
     }
 
     //
@@ -1315,47 +1213,11 @@ void Semantic::DefiniteContinueStatement(Ast *stmt)
     // executing the continue, including if the continue occurs in a try or
     // catch block.
     //
-    DefiniteBlocks() -> ContinuePair(continue_statement -> nesting_level) *=
-        *DefinitelyAssignedVariables();
-    if (DefiniteTrys() -> Size() > 0)
+    if (AbruptFinallyStack().Top() < continue_statement -> nesting_level)
     {
-        for (int i = DefiniteTrys() -> Size() - 1; i >= 0; i--)
-        {
-            AstTryStatement *try_statement =
-                DefiniteTrys() -> TryStatement(i);
-
-            if (try_statement -> block == DefiniteTrys() -> Block(i))
-            {
-                // In the main try block?
-                int k;
-                for (k = DefiniteBlocks() -> Size() - 1;
-                     DefiniteBlocks() -> Block(k) !=
-                         DefiniteTrys() -> Block(i);
-                     k--)
-                    ;
-
-                assert(k >= 0);
-
-                DefiniteBlocks() -> ContinuePair(k) *=
-                    *DefinitelyAssignedVariables();
-                break;
-            }
-            else if (try_statement -> finally_clause_opt)
-            {
-                int k;
-                for (k = DefiniteBlocks() -> Size() - 1;
-                     DefiniteBlocks() -> Block(k) !=
-                         DefiniteTrys() -> Block(i);
-                     k--)
-                    ;
-
-                assert(k >= 0);
-
-                DefiniteBlocks() -> ContinuePair(k) *=
-                    *DefinitelyAssignedVariables();
-                break;
-            }
-        }
+        DefiniteBlocks() -> ContinuePair(continue_statement ->
+                                         nesting_level) *=
+            *DefinitelyAssignedVariables();
     }
 
     //
@@ -1376,81 +1238,8 @@ void Semantic::DefiniteReturnStatement(Ast *stmt)
         DefiniteExpression(return_statement -> expression_opt,
                            *DefinitelyAssignedVariables());
 
-    //
-    // Compute the set of variables that are definitely assigned prior to
-    // executing this return statement. Note that this set is only relevant
-    // to the method or constructor block containing this statement.
-    //
-    // TODO: Do we really need this?
-    //
-    //    DefiniteBlocks() -> TopReturnSet() *= (*DefinitelyAssignedVariables());
-    //
-
-    //
-    // Compute the set of variables that are possibly assigned prior to
-    // executing this return statement.
-    // We have a few cases to consider:
-    //
-    //    1. The return statement is not contained in a try statement - the
-    //       possibly-assigned set is only relevant to the enclosing method
-    //       (or constructor) block. The definitely assigned set is updated
-    //       as if the return statement was a break statement out of the
-    //       method (or constructor) block.
-    //
-    //    2. If the return statement is contained in a try main block or a try
-    //       catch block that contains a finally clause - the possibly-assigned
-    //       block is relevant to that main try block or catch block.
-    //
-    //    3. otherwise, treat the return statement as if it immediately
-    //       followed its containing try statement
-    //
-    if (DefiniteTrys() -> Size() == 0)
-        DefiniteBlocks() -> ReturnPair(0) *= *DefinitelyAssignedVariables();
-    else
-    {
-        for (int i = DefiniteTrys() -> Size() - 1; i >= 0; i--)
-        {
-            AstTryStatement *try_statement =
-                DefiniteTrys() -> TryStatement(i);
-            //
-            // Is the return statement enclosed in a try main block or catch
-            // block that  contains a finally clause. Note that a try
-            // statement is removed from the DefiniteTrys() before its
-            // finally clause is processed. thus, a return statement that is
-            // enclosed in a finally clause will appear in an enclosing
-            // try statement, if any...
-            //
-            if (try_statement -> block == DefiniteTrys() -> Block(i))
-            {
-                // In the main try block?
-                int k;
-                for (k = DefiniteBlocks() -> Size() - 1;
-                     DefiniteBlocks() -> Block(k) !=
-                         DefiniteTrys() -> Block(i);
-                     k--);
-
-                assert(k >= 0);
-
-                DefiniteBlocks() -> ReturnPair(k) *=
-                    *DefinitelyAssignedVariables();
-                break;
-            }
-            else if (try_statement -> finally_clause_opt)
-            {
-                int k;
-                for (k = DefiniteBlocks() -> Size() - 1;
-                     DefiniteBlocks() -> Block(k) !=
-                         DefiniteTrys() -> Block(i);
-                     k--);
-
-                assert(k >= 0);
-
-                DefiniteBlocks() -> ReturnPair(k) *=
-                    *DefinitelyAssignedVariables();
-                break;
-            }
-        }
-    }
+    if (AbruptFinallyStack().Top() == 0)
+        DefiniteBlocks() -> ReturnPair() *= *DefinitelyAssignedVariables();
 
     //
     // After execution of a return statement, it is vacuously true
@@ -1470,95 +1259,6 @@ void Semantic::DefiniteThrowStatement(Ast *stmt)
                        *DefinitelyAssignedVariables());
 
     //
-    // Compute the set of variables that are definitely assigned prior to
-    // executing this throw statement. Note that this set is only relevant to
-    // the method or constructor block containing this statement.
-    //
-    // TODO: Do we really need this?
-    //
-    //    DefiniteBlocks() -> TopThrowSet() *= (*DefinitelyAssignedVariables());
-    //
-
-    //
-    // Compute the set of variables that are possibly assigned prior to
-    // executing this throw statement and update the proper enclosing block
-    // appropriately.
-    //
-    // We have a few cases to consider:
-    //
-    //    1. The throw statement is not contained in a try statement - the
-    //       possibly-assigned set is only relevant to the enclosing method
-    //       (or constructor) block. If the containing function in question
-    //       is a method (i.e., not a constructor) then the definitely
-    //       assigned set is updated as if the throw statement was a break
-    //       statement out of the method block.
-    //
-    //    2. The throw statement is enclosed in a try statement main block or
-    //       catch clause.
-    //
-    //        2a. if the nearest try-block that encloses the throw statement
-    //            is a main try-block - the possibly-assigned block is
-    //            relevant to that main block.
-    //        2b. if the nearest try-block that encloses the throw statement
-    //            is a catch-block and the try block contains a finally
-    //            clause - the possibly-assigned block is relevant to the
-    //            catch-block
-    //        2c. otherwise, treat the throw statement as if it immediately
-    //            followed its containing try statement
-    //
-    if (DefiniteTrys() -> Size() == 0)
-    {
-        if (ThisMethod() -> Identity() != control.init_name_symbol)
-            // Not a constructor
-            DefiniteBlocks() -> ThrowPair(0) *=
-                *DefinitelyAssignedVariables();
-    }
-    else
-    {
-        for (int i = DefiniteTrys() -> Size() - 1; i >= 0; i--)
-        {
-            AstTryStatement *try_statement =
-                DefiniteTrys() -> TryStatement(i);
-            //
-            // Is the return statement enclosed in a try main block or catch
-            // block that contains a finally clause. Note that a try statement
-            // is removed from the DefiniteTrys() before its finally
-            // clause is processed. thus, a return statement that is enclosed
-            // in a finally clause will appear in an enclosing try statement,
-            // if any...
-            //
-            if (try_statement -> block == DefiniteTrys() -> Block(i))
-            {
-                // Is the throw statement enclosed in main try block?
-                int k;
-                for (k = DefiniteBlocks() -> Size() - 1;
-                     DefiniteBlocks() -> Block(k) != try_statement -> block;
-                     k--);
-
-                assert(k >= 0);
-
-                DefiniteBlocks() -> ThrowPair(k) *=
-                    *DefinitelyAssignedVariables();
-                break;
-            }
-            else if (try_statement -> finally_clause_opt)
-            {
-                int k;
-                for (k = DefiniteBlocks() -> Size() - 1;
-                     DefiniteBlocks() -> Block(k) !=
-                         DefiniteTrys() -> Block(i);
-                     k--);
-
-                assert(k >= 0);
-
-                DefiniteBlocks() -> ThrowPair(k) *=
-                    *DefinitelyAssignedVariables();
-                break;
-            }
-        }
-    }
-
-    //
     // After execution of a throw statement, it is vacuously true
     // that every variable has definitely been assigned and no final
     // variable has been possibly assigned (as nothing is reachable
@@ -1571,66 +1271,24 @@ void Semantic::DefiniteThrowStatement(Ast *stmt)
 void Semantic::DefiniteTryStatement(Ast *stmt)
 {
     AstTryStatement *try_statement = (AstTryStatement *) stmt;
-    DefiniteTrys() -> Push(try_statement);
+    if (try_statement -> finally_clause_opt &&
+        (! try_statement -> finally_clause_opt -> block ->
+         can_complete_normally))
+    {
+        AbruptFinallyStack().Push(try_statement -> finally_clause_opt ->
+                                  block -> nesting_level);
+    }
 
     DefinitePair starting_pair(*DefinitelyAssignedVariables());
+    BitSet already_assigned(*ReachableAssignments());
+    ReachableAssignments() -> SetEmpty();
 
-    AstBlock *try_block_body = try_statement -> block;
-    DefiniteBlocks() -> Push(try_block_body);
-    DefiniteTrys() -> SetTopBlock(try_block_body);
+    DefiniteBlock(try_statement -> block);
 
-    for (int j = 0; j < try_block_body -> block_symbol -> NumVariableSymbols();
-         j++)
-    {
-        DefiniteVisibleVariables() ->
-            AddElement(try_block_body -> block_symbol -> VariableSym(j));
-    }
-
-    BitSet before_try_finals(DefinitelyAssignedVariables() -> du_set);
-
-    DefiniteBlockStatements(try_block_body);
-
-#ifdef DUMP
-    if ((control.option.g & JikesOption::VARS) &&
-        try_block_body -> NumLocallyDefinedVariables() > 0)
-    {
-        Coutput << "(6) At Line "
-                << lex_stream -> Line(try_block_body -> RightToken())
-                << " the range for the following variables end:" << endl
-                << endl;
-        for (int k = 0; k < try_block_body -> NumLocallyDefinedVariables(); k++)
-            Coutput << "    \""
-                    << try_block_body -> LocallyDefinedVariable(k) -> Name()
-                    << "\"" << endl;
-    }
-#endif
-    DefinitePair &exit_pair =
-        DefiniteBlocks() -> TopExitPair(*DefinitelyAssignedVariables());
-    BitSet before_catch_finals(exit_pair.du_set),
-           possibly_finals_union(exit_pair.du_set);
-
+    BitSet before_catch_finals(starting_pair.du_set - *ReachableAssignments()),
+           possibly_finals_union(DefinitelyAssignedVariables() -> du_set);
     //
-    // Once we are done with a block, its enclosed local variables are no
-    // longer visible.
-    //
-    for (int l = 0; l < try_block_body -> block_symbol -> NumVariableSymbols();
-         l++)
-    {
-        VariableSymbol *variable =
-            try_block_body -> block_symbol -> VariableSym(l);
-        int index = variable -> LocalVariableIndex(this);
-
-        BlankFinals() -> RemoveElement(index);
-        DefinitelyAssignedVariables() -> ReclaimElement(index);
-        before_catch_finals.RemoveElement(index);
-        possibly_finals_union.RemoveElement(index);
-        DefiniteVisibleVariables() -> RemoveElement(variable);
-    }
-
-    DefiniteBlocks() -> Pop();
-
-    //
-    // We initilize the variable after_blocks here. It is used to calculate
+    // We initialize the variable after_blocks here. It is used to calculate
     // intersection of the set of variables that are definitely assigned by
     // all the blocks: the try block, all the catch blocks, if any, and the
     // finally block, if there is one.
@@ -1646,102 +1304,48 @@ void Semantic::DefiniteTryStatement(Ast *stmt)
     for (int i = 0; i < try_statement -> NumCatchClauses(); i++)
     {
         DefinitelyAssignedVariables() -> da_set = starting_pair.da_set;
-
-        //
-        // We process the catch block here instead of invoking DefiniteBlock,
-        // in order to make sure that the formal parameter (which is declared)
-        // inside the block is identified as having been definitely assigned.
-        //
+        DefinitelyAssignedVariables() -> du_set = before_catch_finals;
         AstCatchClause *clause = try_statement -> CatchClause(i);
 
-        AstBlock *clause_block_body = clause -> block;
-        DefiniteBlocks() -> Push(clause_block_body);
-        DefiniteTrys() -> SetTopBlock(clause_block_body);
-
-        for (int j = 0;
-             j < clause_block_body -> block_symbol -> NumVariableSymbols(); j++)
-        {
-            DefiniteVisibleVariables() ->
-                AddElement(clause_block_body -> block_symbol -> VariableSym(j));
-        }
-
         //
-        // The parameter must be added as well
+        // The catch clause parameter must be added, in case it is final.
+        // It is already initialized.
         //
-        DefinitelyAssignedVariables() ->
-            AddElement(clause -> parameter_symbol -> LocalVariableIndex(this));
+        VariableSymbol *variable = clause -> parameter_symbol;
+        int index = variable -> LocalVariableIndex(this);
+        DefinitelyAssignedVariables() -> AddElement(index);
         if (control.option.g & JikesOption::VARS)
         {
-            VariableSymbol *variable = clause -> parameter_symbol;
-            DefiniteBlocks() -> TopLocallyDefinedVariables() ->
-                AddElement(variable -> LocalVariableIndex(this));
 #ifdef DUMP
             Coutput << "(7) Variable \"" << variable -> Name() << " #"
-                    << variable -> LocalVariableIndex(this)
-                    << "\" is defined at line "
+                    << index << "\" is defined at line "
                     << lex_stream -> Line(clause -> formal_parameter -> LeftToken())
                     << endl;
-#endif
+#endif // DUMP
         }
-        DefinitelyAssignedVariables() -> du_set = before_catch_finals;
+        DefiniteBlock(clause -> block);
 
-        DefiniteBlockStatements(clause_block_body);
-
+        //
+        // The parameter goes out of scope. We do not need to remove it from
+        // reachable assignments, since if it was final, it can't be assigned.
+        //
+        DefinitelyAssignedVariables() -> ReclaimElement(index);
 #ifdef DUMP
-        if ((control.option.g & JikesOption::VARS) &&
-            clause_block_body -> NumLocallyDefinedVariables() > 0)
-        {
-            Coutput << "(8) At Line "
-                    << lex_stream -> Line(clause_block_body -> RightToken())
-                    << " the range for the following variables end:" << endl
+        VariableSymbol *variable = clause -> parameter_symbol;
+        if (control.option.g & JikesOption::VARS)
+            Coutput << "(8) Variable \"" << variable -> Name() << " #"
+                    << index << "\" goes out of scope at line "
+                    << lex_stream -> Line(clause -> formal_parameter -> RightToken())
                     << endl;
-            for (int l = 0;
-                 l < clause_block_body -> NumLocallyDefinedVariables(); l++)
-            {
-                Coutput << "    \""
-                        << clause_block_body -> LocallyDefinedVariable(l) -> Name()
-                        << "\"" << endl;
-            }
-        }
-#endif
-        //
-        // Once we are done with a block, its enclosed local variables are no
-        // longer visible.
-        //
-        for (int k = 0;
-             k < clause_block_body -> block_symbol -> NumVariableSymbols(); k++)
-        {
-            VariableSymbol *variable =
-                clause_block_body -> block_symbol -> VariableSym(k);
-
-            BlankFinals() -> RemoveElement(variable -> LocalVariableIndex(this));
-            DefinitelyAssignedVariables() ->
-                ReclaimElement(variable -> LocalVariableIndex(this));
-            DefiniteVisibleVariables() -> RemoveElement(variable);
-        }
-        //
-        // The parameter goes out of scope as well
-        //
-        BlankFinals() -> RemoveElement(clause -> parameter_symbol ->
-                                      LocalVariableIndex(this));
-        DefinitelyAssignedVariables() ->
-            ReclaimElement(clause -> parameter_symbol -> LocalVariableIndex(this));
-        DefiniteVisibleVariables() -> RemoveElement(clause -> parameter_symbol);
-
-        possibly_finals_union *= DefiniteBlocks() ->
-            TopExitPair(*DefinitelyAssignedVariables()).du_set;
-
-        DefiniteBlocks() -> Pop();
+#endif // DUMP
 
         //
         // Process the set of variables that were definitely assigned
         // after this catch block
         //
+        possibly_finals_union *= DefinitelyAssignedVariables() -> du_set;
         after_blocks *= DefinitelyAssignedVariables() -> da_set;
     }
-
-    DefinitelyAssignedVariables() -> du_set = possibly_finals_union;
-    DefiniteTrys() -> Pop();
 
     //
     // Like the catch clauses, a finally block must not be processed
@@ -1750,13 +1354,23 @@ void Semantic::DefiniteTryStatement(Ast *stmt)
     //
     if (try_statement -> finally_clause_opt)
     {
+        if (! try_statement -> finally_clause_opt -> block ->
+            can_complete_normally)
+        {
+            AbruptFinallyStack().Pop();
+        }
         DefinitelyAssignedVariables() -> da_set = starting_pair.da_set;
-
+        DefinitelyAssignedVariables() -> du_set =
+            starting_pair.du_set - *ReachableAssignments();
         DefiniteBlock(try_statement -> finally_clause_opt -> block);
-
         DefinitelyAssignedVariables() -> da_set += after_blocks;
     }
-    else DefinitelyAssignedVariables() -> da_set = after_blocks;
+    else
+    {
+        DefinitelyAssignedVariables() -> da_set = after_blocks;
+        DefinitelyAssignedVariables() -> du_set = possibly_finals_union;
+    }
+    *ReachableAssignments() += already_assigned;
 }
 
 
@@ -1767,9 +1381,7 @@ void Semantic::DefiniteAssertStatement(Ast *stmt)
     //
     // Remember what variables were assigned beforehand.
     //
-    DefinitePair *before_assert =
-        new DefinitePair(*DefinitelyAssignedVariables());
-
+    DefinitePair before_assert(*DefinitelyAssignedVariables());
     DefiniteAssignmentSet *after_condition =
         DefiniteBooleanExpression(assert_statement -> condition,
                                   *DefinitelyAssignedVariables());
@@ -1782,74 +1394,21 @@ void Semantic::DefiniteAssertStatement(Ast *stmt)
         // iff it is DU before the assert and DU after the condition when true.
         //
         *DefinitelyAssignedVariables() = after_condition -> false_pair;
-        before_assert -> du_set *= after_condition -> true_pair.du_set;
+        before_assert.du_set *= after_condition -> true_pair.du_set;
     }
-    else
-        before_assert -> du_set *= DefinitelyAssignedVariables() -> du_set;
+    else before_assert.du_set *= DefinitelyAssignedVariables() -> du_set;
 
     if (assert_statement -> message_opt)
         DefiniteExpression(assert_statement -> message_opt,
                            *DefinitelyAssignedVariables());
 
     //
-    // Update the set of variables that are possibly assigned at the time
-    // an assert completes abruptly, which affects any definite assignment
-    // of catch and finally clauses of enclosing try statements. The assert
-    // can only complete abruptly if the condition is not constant true.
-    //
-    if (! IsConstantTrue(assert_statement -> condition))
-    {
-        for (int i = DefiniteTrys() -> Size() - 1; i >= 0; i--)
-        {
-            AstTryStatement *try_statement =
-                DefiniteTrys() -> TryStatement(i);
-            //
-            // Is the assert statement enclosed in a try block or catch block
-            // that contains a finally clause? Note that a try statement is
-            // removed from the DefiniteTrys() before its finally clause
-            // is processed; thus, an assert statement that is enclosed in a
-            // finally clause will appear in any enclosing try statement...
-            //
-            if (try_statement -> block == DefiniteTrys() -> Block(i))
-            {
-                // In the main try block?
-                int k;
-                for (k = DefiniteBlocks() -> Size() - 1;
-                     DefiniteBlocks() -> Block(k) !=
-                         DefiniteTrys() -> Block(i);
-                     k--);
-
-                assert(k >= 0);
-
-                DefiniteBlocks() -> ThrowPair(k) *=
-                    *DefinitelyAssignedVariables();
-                break;
-            }
-            else if (try_statement -> finally_clause_opt)
-            {
-                int k;
-                for (k = DefiniteBlocks() -> Size() - 1;
-                     DefiniteBlocks() -> Block(k) !=
-                         DefiniteTrys() -> Block(i);
-                     k--);
-
-                assert(k >= 0);
-
-                DefiniteBlocks() -> ThrowPair(k) *=
-                    *DefinitelyAssignedVariables();
-                break;
-            }
-        }
-     }
- 
-    //
     // Restore definitely assigned variables to what they were before,
     // since asserts may be disabled
     //
-    *DefinitelyAssignedVariables() = *before_assert;
+    *DefinitelyAssignedVariables() = before_assert;
 
     // harmless if NULL
-    delete before_assert;
     delete after_condition;
 }
 
@@ -1902,7 +1461,7 @@ void Semantic::DefiniteMethodBody(AstMethodDeclaration *method_declaration)
                 << method_declaration -> method_symbol -> Name() << "\" in "
                 << ThisType() -> ContainingPackage() -> PackageName()
                 << "/" << ThisType() -> ExternalName() << endl;
-#endif
+#endif // DUMP
     AstBlock *block_body = (AstBlock *) method_declaration -> method_body;
 
     int size = block_body -> block_symbol -> max_variable_index +
@@ -1910,9 +1469,9 @@ void Semantic::DefiniteMethodBody(AstMethodDeclaration *method_declaration)
     Universe() -> Resize(size, BitSet::UNIVERSE);
     int stack_size = method_declaration -> method_symbol -> max_block_depth;
     DefiniteBlocks() = new DefiniteBlockStack(control, stack_size, size);
-    DefiniteTrys() = new DefiniteTryStack(stack_size);
     DefinitelyAssignedVariables() -> Resize(size);
     BlankFinals() -> Resize(size, BitSet::EMPTY);
+    ReachableAssignments() -> Resize(size, BitSet::EMPTY);
 
     DefiniteBlocks() -> Push(block_body);
 
@@ -1925,29 +1484,17 @@ void Semantic::DefiniteMethodBody(AstMethodDeclaration *method_declaration)
         DefinitelyAssignedVariables() ->
             AssignElement(formal_declarator -> symbol ->
                           LocalVariableIndex(this));
+#ifdef DUMP
         if (control.option.g & JikesOption::VARS)
         {
             VariableSymbol *variable = formal_declarator -> symbol;
-            DefiniteBlocks() -> TopLocallyDefinedVariables() ->
-                AddElement(variable -> LocalVariableIndex(this));
-#ifdef DUMP
             Coutput << "(10) Variable \"" << variable -> Name() << " #"
                     << variable -> LocalVariableIndex(this)
                     << "\" is defined at line "
                     << lex_stream -> Line(formal_declarator -> LeftToken())
                     << endl;
-#endif
         }
-
-        DefiniteVisibleVariables() ->
-            AddElement(formal_declarator -> symbol);
-    }
-
-    for (i = 0; i < block_body -> block_symbol -> NumVariableSymbols(); i++)
-    {
-        VariableSymbol *variable =
-            block_body -> block_symbol -> VariableSym(i);
-        DefiniteVisibleVariables() -> AddElement(variable);
+#endif // DUMP
     }
 
     DefiniteBlockStatements(block_body);
@@ -1965,31 +1512,16 @@ void Semantic::DefiniteMethodBody(AstMethodDeclaration *method_declaration)
                     << block_body -> LocallyDefinedVariable(i) -> Name()
                     << "\"" << endl;
     }
-#endif
-    //
-    // Remove the variables that went out of scope.
-    //
-    for (i = 0; i < method_declarator -> NumFormalParameters(); i++)
-    {
-        VariableSymbol *variable = method_declarator ->
-            FormalParameter(i) -> formal_declarator -> symbol;
-        DefiniteVisibleVariables() -> RemoveElement(variable);
-    }
-    for (i = 0; i < block_body -> block_symbol -> NumVariableSymbols(); i++)
-    {
-        VariableSymbol *variable = block_body -> block_symbol -> VariableSym(i);
-        DefiniteVisibleVariables() -> RemoveElement(variable);
-    }
+#endif // DUMP
     DefiniteBlocks() -> Pop();
 
     delete DefiniteBlocks();
     DefiniteBlocks() = NULL;
-    delete DefiniteTrys();
-    DefiniteTrys() = NULL;
     size = FinalFields() -> Length();
     Universe() -> Resize(size);
     DefinitelyAssignedVariables() -> Resize(size);
     BlankFinals() -> Resize(size);
+    ReachableAssignments() -> Resize(size);
 }
 
 
@@ -2004,7 +1536,7 @@ void Semantic::DefiniteConstructorBody(AstConstructorDeclaration *constructor_de
                 << "\" in "
                 << ThisType() -> ContainingPackage() -> PackageName() << "/"
                 << ThisType() -> ExternalName() << endl;
-#endif
+#endif // DUMP
     AstMethodBody *block_body = constructor_declaration -> constructor_body;
 
     int size = block_body -> block_symbol -> max_variable_index +
@@ -2013,9 +1545,9 @@ void Semantic::DefiniteConstructorBody(AstConstructorDeclaration *constructor_de
     int stack_size =
         constructor_declaration -> constructor_symbol -> max_block_depth;
     DefiniteBlocks() = new DefiniteBlockStack(control, stack_size, size);
-    DefiniteTrys() = new DefiniteTryStack(stack_size);
     DefinitelyAssignedVariables() -> Resize(size);
     BlankFinals() -> Resize(size, BitSet::EMPTY);
+    ReachableAssignments() -> Resize(size, BitSet::EMPTY);
 
     DefiniteBlocks() -> Push(block_body);
 
@@ -2027,27 +1559,17 @@ void Semantic::DefiniteConstructorBody(AstConstructorDeclaration *constructor_de
             constructor_declarator -> FormalParameter(i) -> formal_declarator;
         DefinitelyAssignedVariables() ->
             AddElement(formal_declarator -> symbol -> LocalVariableIndex(this));
+#ifdef DUMP
         if (control.option.g & JikesOption::VARS)
         {
             VariableSymbol *variable = formal_declarator -> symbol;
-            DefiniteBlocks() -> TopLocallyDefinedVariables() ->
-                AddElement(variable -> LocalVariableIndex(this));
-#ifdef DUMP
             Coutput << "(13) Variable \"" << variable -> Name() << " #"
                     << variable -> LocalVariableIndex(this)
                     << "\" is defined at line "
                     << lex_stream -> Line(formal_declarator -> LeftToken())
                     << endl;
-#endif
         }
-
-        DefiniteVisibleVariables() -> AddElement(formal_declarator -> symbol);
-    }
-
-    for (i = 0; i < block_body -> block_symbol -> NumVariableSymbols(); i++)
-    {
-        VariableSymbol *variable = block_body -> block_symbol -> VariableSym(i);
-        DefiniteVisibleVariables() -> AddElement(variable);
+#endif // DUMP
     }
 
     if (block_body -> explicit_constructor_opt)
@@ -2073,65 +1595,42 @@ void Semantic::DefiniteConstructorBody(AstConstructorDeclaration *constructor_de
                     << block_body -> LocallyDefinedVariable(j) -> Name()
                     << "\"" << endl;
     }
-#endif
+#endif // DUMP
     //
     // Compute the set of finals that has definitely been assigned in this
-    // constructor. Also remove the variables that went out of scope.
+    // constructor.
     //
-    *DefinitelyAssignedVariables() = DefiniteBlocks() ->
-        TopExitPair(*DefinitelyAssignedVariables());
-    for (i = 0; i < constructor_declarator -> NumFormalParameters(); i++)
-    {
-        VariableSymbol *variable = constructor_declarator ->
-            FormalParameter(i) -> formal_declarator -> symbol;
-        DefiniteVisibleVariables() -> RemoveElement(variable);
-    }
-    for (i = 0; i < block_body -> block_symbol -> NumVariableSymbols(); i++)
-    {
-        VariableSymbol *variable = block_body -> block_symbol -> VariableSym(i);
-        DefiniteVisibleVariables() -> RemoveElement(variable);
-    }
+    *DefinitelyAssignedVariables() *= DefiniteBlocks() -> ReturnPair();
     DefiniteBlocks() -> Pop();
 
     delete DefiniteBlocks();
     DefiniteBlocks() = NULL;
-    delete DefiniteTrys();
-    DefiniteTrys() = NULL;
     size = FinalFields() -> Length();
     Universe() -> Resize(size);
     DefinitelyAssignedVariables() -> Resize(size);
     BlankFinals() -> Resize(size);
+    ReachableAssignments() -> Resize(size);
 }
 
 
 void Semantic::DefiniteBlockInitializer(AstBlock *block_body, int stack_size)
 {
-    int i;
     assert(FinalFields());
 #ifdef DUMP
     if (control.option.g & JikesOption::VARS)
         Coutput << "(15) Processing Initializer block in "
                 << ThisType() -> ContainingPackage() -> PackageName() << "/"
                 << ThisType() -> ExternalName() << endl;
-#endif
+#endif // DUMP
     int size = block_body -> block_symbol -> max_variable_index +
         FinalFields() -> Length();
     Universe() -> Resize(size, BitSet::UNIVERSE);
-    // +1 for absent method block
-    DefiniteBlocks() = new DefiniteBlockStack(control, stack_size + 1, size);
-    DefiniteTrys() = new DefiniteTryStack(stack_size + 1);
+    DefiniteBlocks() = new DefiniteBlockStack(control, stack_size, size);
     DefinitelyAssignedVariables() -> Resize(size);
     BlankFinals() -> Resize(size, BitSet::EMPTY);
+    ReachableAssignments() -> Resize(size, BitSet::EMPTY);
 
-    DefiniteBlocks() -> Push(NULL); // No method available
     DefiniteBlocks() -> Push(block_body);
-
-    for (i = 0; i < block_body -> block_symbol -> NumVariableSymbols(); i++)
-    {
-        VariableSymbol *variable = block_body -> block_symbol -> VariableSym(i);
-        DefiniteVisibleVariables() -> AddElement(variable);
-    }
-
     DefiniteBlockStatements(block_body);
 
 #ifdef DUMP
@@ -2147,31 +1646,16 @@ void Semantic::DefiniteBlockInitializer(AstBlock *block_body, int stack_size)
                     << block_body -> LocallyDefinedVariable(i) -> Name()
                     << "\"" << endl;
     }
-#endif
-    //
-    // For each final that has definitely or possibly been assigned a value
-    // in this block, mark it appropriately. Also remove the variables that
-    // went out of scope.
-    //
-    *DefinitelyAssignedVariables() = DefiniteBlocks() ->
-        TopExitPair(*DefinitelyAssignedVariables());
-    for (i = 0; i < block_body -> block_symbol -> NumVariableSymbols(); i++)
-    {
-        VariableSymbol *variable = block_body -> block_symbol -> VariableSym(i);
-        DefiniteVisibleVariables() -> RemoveElement(variable);
-    }
-    DefiniteBlocks() -> Pop();
-    // remove NULL that was pushed to indicate that no method is available
+#endif // DUMP
     DefiniteBlocks() -> Pop();
 
     delete DefiniteBlocks();
     DefiniteBlocks() = NULL;
-    delete DefiniteTrys();
-    DefiniteTrys() = NULL;
     size = FinalFields() -> Length();
     Universe() -> Resize(size);
     DefinitelyAssignedVariables() -> Resize(size);
     BlankFinals() -> Resize(size);
+    ReachableAssignments() -> Resize(size);
 }
 
 
@@ -2212,15 +1696,14 @@ void Semantic::DefiniteSetup()
     }
     Universe() = new DefinitePair(size, BitSet::UNIVERSE);
     DefiniteFinalAssignments() = new DefiniteFinalAssignmentStack();
-    DefiniteVisibleVariables() = new SymbolSet(size);
     DefinitelyAssignedVariables() = new DefinitePair(size);
     BlankFinals() = new BitSet(size, BitSet::EMPTY);
+    ReachableAssignments() = new BitSet(size, BitSet::EMPTY);
     for (int j = 0; j < size; j++)
     {
         VariableSymbol *final_var = (*FinalFields())[j];
         if (! final_var -> declarator -> variable_initializer_opt)
             BlankFinals() -> AddElement(j);
-        DefiniteVisibleVariables() -> AddElement(final_var);
     }
 }
 
@@ -2233,8 +1716,8 @@ void Semantic::DefiniteCleanUp()
     delete Universe();
     delete DefinitelyAssignedVariables();
     delete DefiniteFinalAssignments();
-    delete DefiniteVisibleVariables();
     delete BlankFinals();
+    delete ReachableAssignments();
 }
 
 #ifdef HAVE_JIKES_NAMESPACE

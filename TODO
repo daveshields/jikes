@@ -1,12 +1,5 @@
 *** TBD for Jikes future releases:
 
-Fix problem with debug line number tables. Newer
-versions of java don't like our line numbers.
-This is commonly known as "Jikes and JPDA".
-
-(partially fixed, got a new test case at the last minute
-that shows another failure)
-
 It is not clear if iconv is only a little
 broken or totally busted.
 
@@ -24,13 +17,6 @@ one at a time?
 (it would, this is part of the stream changes cabbey was
 working on before he lost his raid, just got access back,
 and will continue to investigate.)
-
-
-command line UI issues, including the classpath
-handling options, to make us a drop in replacement
-for javac (as near as possible)
-
-(some command line flag work still remains)
 
 
 Use new casting operations instead of C style
@@ -128,6 +114,9 @@ crashes, but it would be nice to look into the fix again.
 Drop OLDCSO support from the compiler, but not untill after
 major public discusion... there are a number of major users who
 swear by this feature as much as some of us swore *at* it.
+
+
+Stop and smell the roses.
 
 
 Why does jikes treat the catching of exceptions

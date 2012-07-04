@@ -1,4 +1,4 @@
-// $Id: set.cpp,v 1.15 2001/09/14 05:31:34 ericb Exp $
+// $Id: set.cpp,v 1.16 2002/07/30 16:30:02 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -30,8 +30,6 @@ void SymbolSet::Rehash()
         shadow -> next = base[i];
         base[i] = shadow;
     }
-
-    return;
 }
 
 
@@ -80,8 +78,6 @@ void SymbolSet::Union(SymbolSet &set)
                 AddElement(symbol);
         }
     }
-
-    return;
 }
 
 
@@ -109,8 +105,6 @@ void SymbolSet::Intersection(SymbolSet &set)
                 AddElement(old_symbol_pool[j]);
         }
     }
-
-    return;
 }
 
 
@@ -182,8 +176,6 @@ void SymbolSet::RemoveElement(Symbol *element)
 
         delete shadow;
     }
-
-    return;
 }
 
 
@@ -203,8 +195,6 @@ void SymbolMap::Rehash()
         element -> next = base[k];
         base[k] = element;
     }
-
-    return;
 }
 
 
@@ -247,8 +237,6 @@ void SymbolMap::Map(Symbol *symbol, Symbol *image)
     }
 
     element -> image = image;
-
-    return;
 }
 
 
@@ -274,8 +262,6 @@ SymbolMap::~SymbolMap()
         delete symbol_pool[i];
 
     delete [] base;
-
-    return;
 }
 
 #ifdef HAVE_JIKES_NAMESPACE

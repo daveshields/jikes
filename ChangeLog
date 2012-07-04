@@ -1,3 +1,491 @@
+2002-09-27  Chris Abbey  <jikes@cabbey.net>
+
+	* 1.17 release.
+
+2002-09-25  Andrew M. Inggs  <aminggs@yahoo.co.uk>
+
+	* src/m4/ac_try_encoding.m4: Use positive return values to
+	avoid a bug on MSYS (Mingw native build system) where
+	negative return values are seen as 0 at the shell level.
+
+	* configure: regen (by cabbey)
+	
+	* src/stream.cpp (DecodeNextCharacter): If byte-swapping is
+	needed, swap bytes in var next and not those pointed to by
+	chp (since chp is modified by calls to iconv).
+
+2002-09-13  Alan Donovan  <adonovan@lcs.mit.edu>
+
+	* src/symbol.cpp (ReadDirectory): Ignore unreadable files (such as
+	broken links) - bug 3207.
+
+2002-09-11  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/double.cpp (IEEEfloat(LongInt)): Fix bug in (float)long -
+	bug 3272.
+
+2002-09-11  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/bytecode.h:
+	* src/bytecode.cpp (InitializeArray, EmitArrayCreationExpression):
+	Allow for discarded creation in instanceof - bug 3267.
+	(EmitBranchIfExpression, EmitConditionalExpression): Further
+	optimizations of ?:, including a fix for VerifyError - bug 3271.
+	(EmitCastExpression, StripNops): Elide further unnecessary
+	widening casts.
+	* src/decl.cpp (CheckMethodOverride): More covariance.
+	* src/error.h (InClone): New method.
+	* src/expr.cpp (GetAnonymousType): In context of a clone, do not
+	process anonymous classes - bug 3273.
+	(CanMethodInvocationConvert, CanAssignmentConvertReference),
+	(CanCastConvert): Simplify type comparison checks.
+	* src/symbol.h (IsSubtype): New method.
+
+2002-09-09  Eric Blake  <ebb9@email.byu.edu>
+
+	General type-handling improvements, including bug 413, 426:
+	* src/decl.cpp (ProcessTypeNames): Allow java.java in the unnamed
+	package, which does not have subpackages.
+	(FindTypeInShadow): Find only accessible types.
+	(FindNestedType): Return only accessible types, without error if
+	none exists.
+	(ReadType): Look for clash with package on failure.
+	(ProcessImportQualifiedName): Improve type searching.
+	(ProcessPackageOrType): Improve searching, along with error
+	messages when not found.
+	(ImportType): Return any imported type, accessible or not.
+	(FindType): Find only accessible types.
+	(MustFindType): Improve error messages when types are not found.
+	* src/error.h:
+	* src/error.cpp (PACKAGE_NOT_TYPE): New error.
+	* src/semantic.h:
+	* src/expr.cpp (SimpleNameAccessCheck, TypeNestAccessCheck):
+	Delete dead code.
+	(TypeAccessCheck): Change to a silent check.
+
+2002-09-05  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/semantic.h:
+	* src/decl.cpp (FindTypeInLayer): Delete dead code.
+	(MustFindType): Perform type access check even when loading from
+	CLASSPATH, to fix some jacks results.
+	(CheckMethodOverride):
+	* src/getclass.cpp (ProcessClassFile): Add limited support for
+	covariance in .class files - bug 3088.
+	* src/error.h:
+	* src/error.cpp (CONSTRUCTOR_OVERLOAD_NOT_FOUND): New error.
+	* src/expr.cpp (ReportConstructorNotFound): Improve to report
+	about access and overload problems.
+
+2002-09-03  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/expr.cpp (FindMethodInEnvironment, FindVariableInEnvironment):
+	Reduce shadowing warnings to pedantic level - bugs 119, 324, 2145.
+	* src/decl.cpp (FindType): According to Neal Gafter, inherited
+	member types shadow the current type.
+	* src/error.h:
+	* src/error.cpp (INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_TYPE):
+	Add a caution to detect this case (which is opposite C++).
+
+2002-09-03  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/decl.cpp (ProcessTypeHeader, ProcessTypeHeaders),
+	(ComputeTypesClosure): Make member types visible early enough.
+	(ProcessSingleTypeImportDeclaration): Create place-holder type for
+	bad imports to silence further errors.
+	(FindNestedType): Check for inaccessible nested types before
+	reporting type not found.
+	* src/semantic.h (AddDependence): Check for bad types.
+	* src/expr.cpp (ProcessMethodName, GetAnonymousType),
+	(ProcessClassInstanceCreationExpression):
+	* src/body.cpp (ProcessTryStatement): Silence chain-reaction error
+	messages when try block contains semantic error - bug 670.
+	* src/error.h:
+	* src/error.cpp (DUPLICATE_IMPORT_NAME),
+	(ANONYMOUS_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD): New
+	error messages.
+
+2002-08-29  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/expr.cpp (ReportMethodNotFound, FindMethodInType),
+	(ProcessMethodName, FindMethodMember):
+	* src/decl.cpp (CompleteSymbolTable, CheckMethodOverride),
+	(AddInheritedMethods): Allow for multiple inheritance of abstract
+	methods, including when one of the set is not public - bug 3253.
+	* src/error.h:
+	* src/error.cpp (UNIMPLEMENTABLE_CLASS): New caution.
+
+2002-08-29  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/error.h:
+	* src/error.cpp (*_THROWS_CLAUSE_CLASS): New pedantic warnings.
+	* src/semantic.h (CheckThrow):
+	* src/body.cpp (CheckThrow): Improve to give pedantic warnings
+	regarding throws clauses - bug 3232.
+	(ProcessMethodBody, ProcessConstructorBody): Use new features.
+
+2002-08-28  Elliott Hughes  <enh@acm.org>
+
+	* src/set.h (primes): g++ 3.1 on Mac OS X 10.2 has trouble
+	with static arrays in template classes; avoid these and remove
+	duplication of hash-resizing code as a side-effect - patch 349.
+
+2002-08-28  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/expr.cpp (FindMethodMember): One more case of bug 3240.
+	(ProcessClassInstanceCreationExpression):
+	* src/body.cpp (UncaughtExceptionContext): Fix error messages.
+	* src/init.cpp (ComputeFinalValue): Provide correct context for
+	evaluating final variables - bug 3245.	
+
+2002-08-26  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/symbol.cpp (GetWriteAccessMethod, GetReadAccessMethod):
+	Special case access of field via classname.super.
+	* src/expr.cpp (FindMethodMember, FindVariableMember): Check for
+	accessor methods required for classname.super when inner class and
+	enclosing class extend same superclass - bug 3240.
+
+2002-08-26  ??  <nobody@ibm.com>
+
+	* src/option.cpp (Option): Fix bad logic with drive letters in -d
+	for Windows - bug 3238.
+
+2002-08-26  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/symbol.cpp (BlockSymbol):
+	* src/body.cpp (ProcessTryStatement),
+	(ProcessSynchronizedStatement): Fix bug when multiple synchronized
+	statements appear in static method with no params - bug 3205.
+	* src/decl.cpp: Fix typo in last commit.
+
+2002-08-26  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/decl.cpp (ProcessTypeHeader, ProcessInterface),
+	(ProcessTypeHeaders): Fix inner classes subclassing something in
+	the same .java file - bug 3202.
+	* src/scanner.cpp (ScanSlashComment): Comment dead code.
+	* src/stream.h (LAST_CHARACTER_NOT_NEWLINE): New warning.
+	* src/stream.cpp (ProcessInputAscii, ProcessInputUnicode): Give
+	pedantic warning if file doesn't end in \n (or its variants).
+
+2002-08-22  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/scanner.cpp (ScanSlashComment): Revert change that gave
+	error on //EOF, based on Sun bug 4386773.
+
+2002-08-21  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/bytecode.cpp (StripNops): Minor bytecode optimization -
+	assignment conversion to superinterfaces was emitting useless
+	checkcast.
+
+2002-08-15  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/error.cpp:
+	* src/error.h (TYPE_NOT_PRIMITIVE, TYPE_NOT_VALID_FOR_SWITCH),
+	(TYPE_NOT_CONVERTIBLE_TO_SWITCH_TYPE): Delete.
+	(TYPE_NOT_*): Improve wording.
+	* src/body.cpp: Use improved error wording.
+	(ProcessSwitchStatement): Improve handling of sub-integer cases.
+	(ProcessThisCall, ProcessSuperCall): Detect void arguments to
+	constructors.
+	* src/semantic.h (BinaryNumericPromotion): New method, to collapse
+	common code from existing 3 overloads.
+	* src/expr.cpp (Process*): General cleanup: detect more cases of
+	void subexpressions, don't cause errors in outer expression if
+	inner one was bad, use improved error wording, improve formatting.
+	(ProcessEQUAL_EQUAL, ProcessNOT_EQUAL): Fix
+	problems when void or reference types compared - bug 3201.
+	(ProcessConditionalExpression): Fix problems with sub-integer
+	cases in ?:.
+	* src/bytecode.cpp (DefineLabel): Undo optimization of goto next
+	bytecode when local variable table is created, as that was the
+	cause of bug 3212.
+	(VariableTypeResolution): Add -target 1.4 control to static fields
+	of interfaces, bug 3218.
+	(EmitConditionalExpression): Fix bug in cond?0:-0.0.
+
+2002-08-06  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/lookup.h (Hash): Improve hash function for strings.
+	* src/lookup.cpp: Use improved hashing for compilation speed-up on
+	large number of classes with similar string constants (for
+	example, the code in bug 222).
+
+2002-08-06  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/ast.h:
+	* src/bytecode.cpp: Formatting.
+	(EndMethod): Fix assertion with oversize method body.
+	* src/decl.cpp (GetStaticInitializerMethod),
+	(ProcessInstanceInitializers): Assign return type to generated
+	methods to avoid coredump with oversize initializer body.
+
+2002-08-05  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/ast.cpp (AstClassBody::Clone): Correctly clone.
+	* src/bytecode.h (last_parameter_index):
+	* src/expr.cpp (ProcessCastExpression):
+	* src/semantic.h:
+	* src/symbol.h (initializer_constructors):
+	* src/symbol.cpp:
+	* src/ast.h (CHECK_AND_CAST): Delete dead code.
+	(AstMethodBody, AstSwitchBlock):
+	* src/parser.cpp (Initializer):
+	* src/unparse.cpp: Fix unparsing bugs, related to switch blocks
+	and instance initializers.
+	* src/error.cpp:
+	* src/bytecode.cpp: Add more JVMS violation tests, for array
+	dimensions and method parameter count.
+	(EmitCastExpression): Improve to handle all casts within a single
+	method.
+	* src/segment.h:
+	* src/segment.cpp: Fix constant pool overflow - bug 222.
+
+2002-08-02  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/bytecode.h (EmitCheckForNull):
+	* src/bytecode.cpp (EmitCheckForNull, EmitSuperInvocation),
+	(LoadVariable, EmitInstanceCreationExpression): Fix two corner
+	cases of null checks - bugs 2991, 3170.
+
+2002-08-02  Eric Blake  <ebb9@email.byu.edu>
+
+	Overhaul line ending and error message output. Solves bug 2879,
+	and makes errors more unified in appearance.
+	* src/gencode.java (IsNewline): Redefine.
+	(IsWhitespace): New category, necessary for @deprecated - bug 519.
+	* src/code.cpp:
+	* src/code.h: Regenerate.
+	* src/control.cpp (ProcessBodies): Do not output .class file after
+	parse error, even if we were able to recover.
+	* src/diagnose.h (ParseErrorInfo):
+	* src/diagnose.cpp:
+	* src/error.h (ErrorInfo):
+	* src/error.cpp:
+	* src/stream.h (StreamError):
+	* src/stream.cpp: Unify, using new features of LexStream.
+	* src/option.cpp:
+	* src/parser.cpp:
+	* src/unparse.cpp:
+	* src/dump.cpp: Fix outputting bugs, plus file formatting.
+	* src/expr.cpp (ProcessCharacterLiteral, ProcessStringLiteral):
+	Allow a known bad token to not kill semantic analysis.
+	* src/lookup.cpp (FindOrInsertChar, FindOrInsertString): Keep the
+	quotes surrounding literals.
+	* src/platform.h (operator<<): Make sure non-printable characters
+	do not cause display problems.
+	* src/scanner.cpp: Improve comment and literal parsing.
+	* src/stream.cpp (ProcessInputAscii, ProcessInputUnicode): Improve
+	parsing, especially with end-of-file issues.
+	* src/stream.h (RightColumn, OutputLine, OutputSource): Added.
+	(ComputeColumns, InitializeColumns): Deleted.
+	* src/tab.h:
+	* src/tab.cpp (Tab): Improve tab expansion.
+
+2002-07-31  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/symbol.cpp (FindOrInsertClassLiteral): Fix coredump with
+	class literal in static local class, reported on jikes list.
+
+2002-07-31  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/option.cpp (Option): Formatting, and some option
+	improvements. Fix memory leak on repeated options - bug 2813.
+	* src/jikesapi.h:
+	* src/jikesapi.cpp: Formatting.
+	* src/jikes.cpp:
+	* doc/jikes.1: Improve documentation of options.
+
+2002-07-30  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/ast.cpp:
+	* src/control.cpp:
+	* src/decl.cpp:
+	* src/definite.cpp:
+	* src/depend.cpp:
+	* src/diagnose.cpp:
+	* src/diagnose.h:
+	* src/double.h:
+	* src/dump.cpp:
+	* src/error.h:
+	* src/getclass.cpp:
+	* src/init.cpp:
+	* src/javaprs.h:
+	* src/jikes.cpp:
+	* src/jikesapi.cpp:
+	* src/jikesapi.h:
+	* src/long.cpp:
+	* src/long.h:
+	* src/modifier.cpp:
+	* src/op.cpp:
+	* src/option.cpp:
+	* src/parser.h:
+	* src/platform.cpp:
+	* src/platform.h:
+	* src/scanner.cpp:
+	* src/stream.cpp:
+	* src/stream.h:
+	* src/symbol.h:
+	* src/tuple.h:
+	* src/unzip.cpp:
+	* src/unzip.h:
+	* src/zip.cpp: Formatting changes.
+
+2002-07-29  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/semantic.h: Various method signature updates.
+	* src/expr.cpp (MoreSpecific, NoMethodMoreSpecific),
+	(FindMethodInType, FindMethodInEnvironment, FindMethodMember),
+	(ProcessMethodName): When a type inherits multiple methods with
+	the same signature, merge the throws clauses together - bug 2395.
+	* src/bytecode.cpp (GenerateClassAccess): Optimize class literal
+	when result is not needed.
+
+2002-07-26  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/symbol.h (class_literal_class): Share with placeholder
+	class, when possible.
+	* src/symbol.cpp (FindOrInsertClassLiteralClass),
+	(FindOrInsertClassLiteralMethod, FindOrInsertClassLiteral):
+	* src/expr.cpp (ProcessAmbiguousName):
+	* src/bytecode.cpp (EmitExpression, GenerateClassAccessMethod)
+	(GenerateClassAccess): Don't initialize classes when using class
+	literals - bug 3142.
+	(EmitCheckForNull): Optimize null check to use less bytecode.
+	(GenerateAssertVariableInitializer): Optimize assert
+	initialization to use less bytecode.
+
+2002-07-25  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/definite.cpp: Improve definite assignment analysis to use
+	the updated rules of try-catch blocks - bug 3125. In the process,
+	remove lots of dead code.
+	* src/semantic.h (DefinitePairs, DefiniteTryStack): Delete unused
+	classes.
+	(DefiniteBlocks): Prune unused structures.
+	(ReachableAssignments): New for try-catch blocks.
+	* src/set.h (DefinitePair): Add default constructor.
+
+2002-07-23  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/definite.cpp (DefiniteBreakStatement),
+	(DefiniteContinueStatement, DefiniteTryStatement): Fix definite
+	assignment when break or continue is interrupted by an abrupt
+	finally clause - bug 3117.
+	* src/expr.cpp (ProcessAmbiguousName): Fix bug when method is
+	qualified by constant string variable - bug 3124.
+
+2002-07-22  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/expr.cpp (CheckSimpleName): Fix use of shadow variables in
+	explicit constructor - bug 3119.
+	* src/error.cpp (PrintEXPRESSION_NOT_CONSTANT): Improve message -
+	bug 655.
+	(PrintBLOCKED_CATCH_CLAUSE): Improve message - bug 1858.
+	* src/body.cpp (ProcessTryStatement): Use improved message.
+
+2002-07-19  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/ast.h (processing_try_block): Add.
+	* src/body.cpp (UncaughtException, ProcessTryStatement): 
+	Fix try-block handling, when a catch clause is interrupted by an
+	abrupt finally, and when a try-finally is the sole statement in a
+	do-while loop - bug 613.
+
+2002-07-19  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/decl.cpp (CheckMethodOverride, AddInheritedMethods): Fix
+	method overriding to detect package scope method conflicts when
+	the method was not inherited.
+	* src/error.cpp: Improve error message wording related to method
+	inheritance.
+
+2002-07-19  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/scanner.cpp (ScanStarComment): Only the most recent doc
+	comment applies to a declaration.
+	* src/getclass.cpp (ReadTypeFromSignature): 
+	* src/symbol.cpp (FindOrInsertClassLiteralClass): Missed a case in
+	previous commit.
+	* src/expr.cpp (FindConstructor, FindMethodInType),
+	(FindMethodInEnvironment, FindVariableInType),
+	(FindVariableInEnvironment, ProcessAmbiguousName):
+	* src/decl.cpp (ProcessTypeHeader, ProcessInterface),
+	(ProcessFieldDeclaration, ProcessMethodDeclaration),
+	(MustFindType):
+	* src/semantic.h (InDeprecatedContext):
+	* src/stream.h (ResetDeprecated):
+	* src/symbol.h (TypeSymbol::ResetDeprecated): Silence deprecation
+	warnings inside a deprecated context.
+
+2002-07-18  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/expr.cpp (FindConstructor, FindMethodInType),
+	(FindVariableInType, ProcessAmbiguousName),
+	(GetAnonymousConstructor): Improve error messages for @deprecated.
+	* src/body.cpp (ProcessSuperCall): Avoid repeating work, and thus
+	duplicate error messages.
+	* src/scanner.cpp (ScanStarComment): Fix @deprecated parsing - bug
+	519.
+
+2002-07-18  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/bytecode.cpp (EmitStatement): Fix case of infinite do-while
+	loop emitting dead code - bug 3085.
+	* src/expr.cpp (ProcessMethodName): Fix handling of non-inherited
+	enclosing instance methods in explicit constructors - bug 3082.
+	(CreateAccessToType): Fix access of non-inherited members.
+	* src/symbol.cpp (GetReadAccessMethod): More fixes of X.super.m(),
+	detected by bug 246.
+	* src/depend.cpp (ProcessSubtypes):
+	* src/error.cpp (CIRCULAR_*):
+	* src/getclass.cpp (ProcessClassFile):
+	* src/decl.cpp: Fix handling of cyclic inheritance - bug 338.
+	(AddInheritedMethods): Make warning become pedantic.
+	* src/semantic.h: Improve some documentation, as well as redo
+	methods involved in cyclic inheritance changes.
+
+2002-07-15  Mo DeJong  <supermo@bayarea.net>
+
+	* configure: Regen.
+	* configure.in: Set CXXFLAGS when compiling
+	with VC++. This gets us closer to being able
+	to compile with VC++, but does not yet work.
+	An autoconf patch will be required since
+	VC++ thinks .cc files are object files.
+
+2002-07-12  Mo DeJong  <supermo@bayarea.net>
+
+	* configure: Regen.
+	* configure.in: Define HAVE_ENCODING if iconv or icu is supported.
+	* src/config.h.in: Regen.
+	* src/jikes.cpp:
+	* src/option.cpp:
+	* src/stream.cpp:
+	* src/stream.h: Replace HAVE_LIBICU_UC || HAVE_ICONV_H
+	checks with HAVE_ENCODING check.
+
+2002-07-12  Eric Blake  <ebb9@email.byu.edu>
+
+	* src/bytecode.cpp (EmitTryStatement): Fix case with empty try
+	statement - bug 3071.
+	(EmitStatement): Fix case with empty if clause - bug 3076.
+	(EmitBinaryExpression): Fix case with mixed-type addition and
+	subtraction with constant 0 on left - bug 3078.
+	(EmitSwitchStatement, DefineLabel): Fix case with infinite loop
+	caused by if() continue; - bug 3077.
+	* src/symbol.cpp (GetReadAccessMethod): Fix case with X.super.m()
+	in an accessor method - bug 169.
+
+2002-07-11  Chris Abbey  <jikes@cabbey.net>
+
+	* configure.in: redefine version number to differentiate
+	cvs builds post 1.16.
+	* jikes.spec: ditto
+	* configure: regen
+
 2002-07-10  Chris Abbey  <jikes@cabbey.net>
 
 	* 1.16 release.
@@ -18,7 +506,7 @@
 	(EmitSynchronizedStatement): Use newer form of exception handling,
 	to solve bug 3055.
 	* src/ast.h (AstBlock::TRY_CLAUSE_WITH_CATCH): New block tag.
-	
+
 2002-07-09  Eric Blake  <ebb9@email.byu.edu>
 
 	* src/definite.cpp (DefiniteAssignmentExpression),
@@ -238,7 +726,7 @@
 2002-06-18  Eric Blake  <ebb9@email.byu.edu>
 
 	* src/symbol.h (HasEnclosingInstance):
-	* src/symbol.cpp (HasEnclosingInstance): 
+	* src/symbol.cpp (HasEnclosingInstance):
 	* src/expr.cpp (CreateAccessToType, ProcessAmbiguousName),
 	(ProcessThisExpression, ProcessSuperExpression): Fix test of
 	enclosing instances to not bypass uninitialized current
@@ -247,7 +735,7 @@
 
 2002-06-18  Eric Blake  <ebb9@email.byu.edu>
 
-	* src/bytecode.cpp (AppendString): 
+	* src/bytecode.cpp (AppendString):
 	* src/expr.cpp (ProcessAssignmentExpression):
 	* src/lookup.cpp (EndsInKnownString): Correctly concatenate
 	1-character constant strings - bug 2919.
@@ -481,7 +969,7 @@
 
 	* src/bytecode.cpp (CompileClass): Fix bug 2256 for default
 	private constructors, jacks test 8.8.7-runtime-default-3.
-	(CompileClass): 
+	(CompileClass):
 	* src/expr.cpp (UpdateLocalConstructors): Fix bug 206, when
 	accessing private superconstructor from local class.
 
@@ -600,7 +1088,7 @@
 
 2002-03-06  Eric Blake  <ebb9@email.byu.edu>
 
-	* src/ast.h: 
+	* src/ast.h:
 	* src/ast.cpp:
 	* src/dump.cpp:
 	* src/semantic.h:
@@ -673,7 +1161,7 @@
 
 	* src/expr.cpp (ProcessMethodInvocation): Check for void
 	arguments.
-	(ProcessNOT_EQUAL, ProcessEQUAL_EQUAL): 
+	(ProcessNOT_EQUAL, ProcessEQUAL_EQUAL):
 	* src/error.cpp:
 	* src/error.h (VOID_TYPE_IN_EQUALITY_EXPRESSION): Use TYPE_IS_VOID
 	instead.
@@ -683,7 +1171,7 @@
 	* src/jikesapi.cpp (DefaultFileReader): Silence a warning.
 	* src/bytecode.cpp (GenerateClassAccessMethod): Use exception
 	chaining for class literals when -source == 1.4.
-	* src/control.cpp: 
+	* src/control.cpp:
 	* src/control.h (Throwable_initCauseMethod),
 	(NoClassDefFoundError_InitStringMethod): Add methods.
 	* src/platform.cpp:
@@ -776,11 +1264,11 @@
 	-nowarn specified.
 	* src/parser.cpp (PackageHeaderParse): Allocate memory to prevent
 	core dump when compiling GNU's Classpath.
-	* src/lookup.cpp (IsConstantString): 
+	* src/lookup.cpp (IsConstantString):
 	* src/expr.cpp (CastValue, IsIntValueRepresentableInType): Fix
 	missing cases in previous commit, exposed by Classpath.
 	(ProtectedAccessCheck):
-	* src/symbol.cpp (GetWriteAccessMethod): 
+	* src/symbol.cpp (GetWriteAccessMethod):
 	* src/semantic.h (ProtectedAccessCheck): Update rules to fix bug
 	exposed by Classpath.
 	* src/decl.cpp (CompleteSymbolTable): Special case
@@ -891,7 +1379,7 @@
 	delete useless conditionals.
 	* src/bytecode.h (IsNull): Delete dead code.
 	(IsOne): Add for better optimizing.
-	(EmitCastExpression): Add argument to track optimized expression. 
+	(EmitCastExpression): Add argument to track optimized expression.
 	* src/bytecode.cpp: Fix incorrect code generation when optimizing
 	&, *, <<, >>, and ?:, also perform more optimizations of binary
 	operations - bugs 2509, 2513, patch 249.
@@ -1319,7 +1807,7 @@
 	error message in protected access violation.
 	(STATIC_PROTECTED_FIELD_ACCESS, STATIC_PROTECTED_METHOD_ACCESS):
 	Delete these errors, as JLS2 made them legal.
-	* src/symbol.h: 
+	* src/symbol.h:
 	* src/symbol.cpp (GetReadAccessConstructor): Split from
 	GetReadAccessMethod.
 	* src/expr.cpp:
@@ -1563,9 +2051,9 @@
 
 2001-10-16  Michael Ernst  <mernst@alum.mit.edu>
 
-	* src/bytecode.cpp (EmitAssignmentExpression): 
-	* src/control.cpp (Serializable_type): 
-	* src/depend.cpp (OutputMake): 
+	* src/bytecode.cpp (EmitAssignmentExpression):
+	* src/control.cpp (Serializable_type):
+	* src/depend.cpp (OutputMake):
 	* src/dump.cpp (Dump): Disambiguate error messages - patch 200.
 
 2001-10-16  Michael Ernst  <mernst@alum.mit.edu>
@@ -1575,7 +2063,7 @@
 
 2001-10-16  Michael Ernst  <mernst@alum.mit.edu>
 
-	* src/decl.cpp (ProcessFieldDeclaration): 
+	* src/decl.cpp (ProcessFieldDeclaration):
 	* src/diagnose.cpp (getErrorMessage):
 	* src/stream.cpp (ProcessInputUnicode): Explicitly initialize some
 	variables, restrict scope of temporaries, and fix some comment
@@ -1665,13 +2153,13 @@
 	the user - patch 192.
 	* configure: Regen.
 
-2001-09-20  Chris Abbey  <jikes@cabbey.net> 
+2001-09-20  Chris Abbey  <jikes@cabbey.net>
 
 	* src/double.h (BigInt): Fixed friend class issues, to correct
 	build breakage with compilers stricter than gcc is (like AIX) -
 	patch 186.
 
-2001-09-20  Mo DeJong  <supermo@bayarea.net> 
+2001-09-20  Mo DeJong  <supermo@bayarea.net>
 
 	* configure.in: Add check for __int64 type which is supported by
 	VC++ under Windows - patch 191.
@@ -1823,13 +2311,13 @@
 	Added the flag need_value, for optimal code
 	generation when a qualifying expression to a static
 	reference is encountered - patch 90, from bug 435.
-	* src/bytecode.cpp (EmitStatementExpression): 
+	* src/bytecode.cpp (EmitStatementExpression):
 	Removed case Ast::PARENTHESIZED_EXPRESSION, since
 	the JLS forbids them as statements.
 	(EmitAssignmentExpression, EmitFieldAccess)
 	(EmitMethodInvocation, LoadVariable, LoadReference):
 	Update to use added need_value flags.
-	* src/symbol.h (AccessesInstanceMember): 
+	* src/symbol.h (AccessesInstanceMember):
 	Added a method for easier detection when a static
 	accessor method is accessing an instance member.
 
@@ -1865,17 +2353,17 @@
 
 2001-09-08  Eric Blake  <ebb9@email.byu.edu>
 
-	* src/expr.cpp (UpdateGeneratedLocalConstructor): 
+	* src/expr.cpp (UpdateGeneratedLocalConstructor):
 	Removed the cause of a core dump when a method omits a
 	return type in a local class - patch 91, from bug 179.
 	* src/error.h:
-	* src/error.cpp (PrintMISSPELLED_CONSTRUCTOR_NAME): 
+	* src/error.cpp (PrintMISSPELLED_CONSTRUCTOR_NAME):
 	Added an error to differentiate between behavior
 	taken when bad constructor is interpreted as
 	misspelling instead of missing return type.
 	Improved the wording of various constructor-related
 	error messages.
-	* src/decl.cpp (ProcessConstructorDeclaration): 
+	* src/decl.cpp (ProcessConstructorDeclaration):
 	Added some better handling of misspelled name vs.
 	missing return type.
 	* src/spell.h (Spell): Added some documentation
@@ -1906,7 +2394,7 @@
 	* src/symbol.h (TypeSymbol): Deleted IsTopLevel(), since it was
 	redundant with IsInner().  Fixed IsInner() to correctly detect
 	local and anonymous classes in static contexts.
-	* src/body.cpp (ProcessClassDeclaration): 
+	* src/body.cpp (ProcessClassDeclaration):
 	Local classes should never have the ACC_STATIC attribute set when
 	emitting bytecode.
 	(ProcessExecutableBodies): Remove cause of assertion failure when
@@ -1920,10 +2408,10 @@
 	* src/error.cpp:
 	Added PrintSTRICTFP_NATIVE_METHOD().
 	Updated error messages concerning modifiers.
-	* src/decl.cpp (ProcessMethodDeclaration): 
+	* src/decl.cpp (ProcessMethodDeclaration):
 	Uncomment code to set methods that are
 	implicitly final.
-	* src/expr.cpp (GetAnonymousType): 
+	* src/expr.cpp (GetAnonymousType):
 	Fix code so that anonymous types are implicitly
 	final, but never static.
 	* src/modifier.cpp: Update calls to improved
@@ -1986,14 +2474,14 @@
 	Split ArrayCreationExpression into two parts, to
 	allow legal array access of initialized array,
 	added in JLS2 - from bug 123.
-	* src/javaact.cpp: 
+	* src/javaact.cpp:
 	* src/javaact.h:
 	* src/javadcl.h:
 	* src/javadef.h:
 	* src/javaprs.h:
 	* src/javasym.h: Regenerate with CVS version of jikespg - from bug
 	516.
-	* src/bytecode.cpp (EmitThisInvocation): 
+	* src/bytecode.cpp (EmitThisInvocation):
 	* src/body.cpp (ProcessThisCall):
 	* src/symbol.cpp (GetReadAccessMethod):
 	Remove code for qualified explicit this constructor,
@@ -2331,7 +2819,7 @@
 	* src/bytecode.cpp (EmitCheckForNull): Add a method
 	which emits a check for null-qualified expressions,
 	shared between...
-	(EmitClassInstanceCreationExpression): 
+	(EmitClassInstanceCreationExpression):
 	(EmitSuperInvocation): Use EmitCheckForNull to
 	improve checks of qualified expressions (bugs 171,
 	419).
@@ -2384,8 +2872,8 @@
 
 2001-05-04  Eric Blake  <ebb9@email.byu.edu>
 
-	* src/lookup.h (IsConstant): 
-	* src/lookup.cpp (IsConstant, CheckStringConstant): 
+	* src/lookup.h (IsConstant):
+	* src/lookup.cpp (IsConstant, CheckStringConstant):
 	Fix the regression from 1.12, bug 417 -
 	constant string expressions should now
 	be correct.
@@ -4101,9 +4589,9 @@
 	* ChangeLog moved from doc/ to project root per
 	Mo DeJong <mdejong@cygnus.com> suggestion.
 
-	* error.cpp (PrintMISMATCHED_INHERITED_METHODS_IN_BASE): 
-	* error.h (class SemanticError): 
-	* decl.cpp (CompleteSymbolTable): corrected bug #102 related to 
+	* error.cpp (PrintMISMATCHED_INHERITED_METHODS_IN_BASE):
+	* error.h (class SemanticError):
+	* decl.cpp (CompleteSymbolTable): corrected bug #102 related to
 	not reporting return type conflicts for same signature methods
 	inherited from 2 super-interfaces.
 	Added new error message MISMATCHED_INHERITED_METHODS_IN_BASE to
@@ -4134,8 +4622,8 @@
 
 2000-04-02  Chris Abbey <cabbey@home.net>
 
-	* config.cpp: 
-	* configure.in (EXEEXT): Correcting problem copiling jikes on non x86 
+	* config.cpp:
+	* configure.in (EXEEXT): Correcting problem copiling jikes on non x86
 	architecture using --with-icc option.
 
 2000-03-30  Gregory Steuck <greg@nest.cx>
@@ -4148,13 +4636,13 @@
 
 2000-03-15  Vadim Zaliva  <lord@crocodile.org>
 
-	* stream.cpp (ProcessInputUnicode): corrected problem with losing last source file 
+	* stream.cpp (ProcessInputUnicode): corrected problem with losing last source file
 	character when using 'iconv' function for charset conversion.
 
 2000-03-14  Vadim Zaliva  <lord@crocodile.org>
 
 	* modifier.cpp (ProcessStaticNestedInterfaceModifiers): simplification.
-	(ProcessNestedInterfaceModifiers): possibility of specifying duplicate 'static' 
+	(ProcessNestedInterfaceModifiers): possibility of specifying duplicate 'static'
 	declarations removed.
 
 2000-03-08 Ziqiang Tang   <ztang@lcs.mit.edu>
@@ -4166,11 +4654,11 @@
 
 2000-03-13  Vadim Zaliva  <lord@crocodile.org>
 
-	* double.h: Commited slightly optimized version of 
+	* double.h: Commited slightly optimized version of
 	Peter Naulls <peter@erble.freeserve.co.uk> patch which corrects problem
 	with casting float/double to int.
 
-	* config.cpp: updated brief command line options description 
+	* config.cpp: updated brief command line options description
 	(inconsistency reported by Chris Abbey <cabbey@home.net>)
 
 2000-03-09  Joe Berkovitz  <joeb@atg.com>
@@ -4180,7 +4668,7 @@
 	* system.cpp: rename +CSO option and classpath_search_order
 	variable to +OLDCSO and old_classpath_search_order, and invert
 	sense of option correspondingly.
-	 
+	
 2000-02-29  Vadim Zaliva  <lord@crocodile.org>
 
 	* Switched to ICU-1.4.0
@@ -4188,14 +4676,14 @@
 	* option.cpp (Option): small problem with compilation while both ICU and
 	ICONV are present.
 
-	* stream.cpp: 
+	* stream.cpp:
 	* option.h: new ICU header names.
 
-	* configure.in (LDFLAGS): checking for u_getVersion to check is ICU is installed. 
+	* configure.in (LDFLAGS): checking for u_getVersion to check is ICU is installed.
 
 2000-02-21  Vadim Zaliva  <lord@crocodile.org>
 
-	* jikesapi.h (class JikesAPI): reader and writer factories removed - they are 
+	* jikesapi.h (class JikesAPI): reader and writer factories removed - they are
 	duplicating read/write methods functionality. read/write made virtual.
 
 	* jikesapi.cpp:
@@ -4211,7 +4699,7 @@
 	Some Vadim remarks taken in account:
 
 	1) The  default read object now always opens files with the mode "rb".
-	2) The classes to manipulate files have been renamed:   
+	2) The classes to manipulate files have been renamed:
 
 	FileReader    (Reader was causing problems)
 	DefaultFileReader
@@ -4219,23 +4707,23 @@
 	FileWriter    (Writer was causing problems)
 	DefaultFileWriter
 
-	3) Small fixes that I had overlooked in the UNIX code   
-	since I was working on an NT box.   
+	3) Small fixes that I had overlooked in the UNIX code
+	since I was working on an NT box.
 
 	* jikes.cpp: If no object of type jikesAPI is defined then main
 	will create an object of JikesAPI and use this as the default.
 
-	* jikesapi.h 
+	* jikesapi.h
 	* jikesapi.cpp: Made the methods JikesAPI::read() and
 	JikesAPI::write() non virtual. These methods now do error
 	checking.
 
-	The methods 
+	The methods
 	
-	JikesAPI::readerFactory() and   
-	JikesAPI::writerFactory() 
+	JikesAPI::readerFactory() and
+	JikesAPI::writerFactory()
 
-	are now the virtual methods that can be overridden.   
+	are now the virtual methods that can be overridden.
 
 2000-02-20  Martin York <myork202@mail.mwfree.net>
 
@@ -4297,11 +4785,11 @@
 
 2000-02-03  Vadim Zaliva  <lord@crocodile.org>
 
-	* stream.cpp (ProcessInputUnicode): 
-	* option.cpp (Option): 
+	* stream.cpp (ProcessInputUnicode):
+	* option.cpp (Option):
 	Using 'iconv' (if found) for encoding conversions.
 
-	* error.cpp (StaticInitializer): unsupported encoding is now treated 
+	* error.cpp (StaticInitializer): unsupported encoding is now treated
 	as an error, not warning.
 
 	* configure.in: added check for 'iconv.h' header.
@@ -4312,13 +4800,13 @@
 	corrected problem with buffer underflow on last character.
 	Better handling of end of input data while converting to Unicode.
 
-	* option.cpp (nowrite): better handling of -encoding option when 
+	* option.cpp (nowrite): better handling of -encoding option when
 	compiled w/o ICU.
 
 2000-02-01  C. Scott Ananian <cananian@lesser-magoo.lcs.mit.edu>
 
 	* java.g:  corrected "converting to Token" twice problem.
-	which was causing crash compiling empty case statement with 
+	which was causing crash compiling empty case statement with
 	empty default clause.
 
 2000-01-18  Vadim Zaliva  <lord@crocodile.org>
@@ -4362,7 +4850,7 @@
 	* option.cpp: Fixed an off-by-one error in a string
 	allocation.  Debugging-malloc libraries are a
 	Good Thing.
-	  
+	
 2000-01-13  Vadim Zaliva  <lord@crocodile.org>
 
 	* jikes.spec: ChangeLog included in RPM package.
@@ -4408,8 +4896,8 @@
 	Jikes macro renamed to LEX_INFINITY.
 	(suggested by Martin York <myork@oxmol.co.uk>).
 
-	* config.h: 
-	* configure.in: 
+	* config.h:
+	* configure.in:
 	More accurate check for broken USHRT_MAX as proposed
 	by Moses DeJong <mdejong@cygnus.com>.
 
@@ -4420,20 +4908,20 @@
 
 	* semantic.h: check for wchar.h header presense.
 
-	* double.cpp (operator/): Added extra () to avoid error 
+	* double.cpp (operator/): Added extra () to avoid error
 	message under FreeBSD.
-	(Divide): Added type casts suggested by 
+	(Divide): Added type casts suggested by
 	Archie Cobbs <archie@whistle.com> to compile under FreeBSD.
 
 2000-01-05  Vadim Zaliva  <lord@crocodile.org>
 
-	* configure.in: 
+	* configure.in:
 	* Makefile.in:
 	autoconf modified to use CXX, not CC macro
 	everywhere. Using standard macros to check headers presence and
 	endianess. Autoconf detected macros naming convention unified to
 	be HAVE_something instead of NEED_something. Check for wint_t and
-	w* functions now aware of possible absence of wchar.h (for FreeBSD 
+	w* functions now aware of possible absence of wchar.h (for FreeBSD
 	compatibility).
 	* libc5-fix: removed as obsoleted by last patch from Mo DeJong
 
@@ -4474,8 +4962,8 @@
 
 2000-01-04  Vadim Zaliva  <lord@crocodile.org>
 
-	* configure.in (EXECUTABLE): patch provided by 
-	Igor Khavkine <i_khavki@alcor.concordia.ca> will enable 
+	* configure.in (EXECUTABLE): patch provided by
+	Igor Khavkine <i_khavki@alcor.concordia.ca> will enable
 	Jikes to build successfully on Debian GNU/Hurd.
 
 	* jikes.cpp (main): version changed to 1.11
@@ -4487,11 +4975,11 @@
 
 1999-11-24    <shields@jikes.watson.ibm.com>
 
-	* jikes.cpp: 
+	* jikes.cpp:
 	Install patch from Mike Ernst to provide more up to date listing
 	of program options.
 
-	* option.cpp: 
+	* option.cpp:
 	* option.h:
 	Drop 'ascii' option fields. This option is no longer supported.
 	Drop 'applet_author' option fields. Also no longer supported.
@@ -4518,29 +5006,29 @@
 
 1999-11-15    <shields@jikes.watson.ibm.com>
 
-	* config.cpp: 
+	* config.cpp:
 	Add fix in conditional definition so can compile with Microsoft
 	VC++. This based on Jitterbug #27 filed by John Bley, jbley@cs.cmu.edu.
 
-	* depend.cpp: 
+	* depend.cpp:
 	Add code from Brian Jones (cbj@gnu.org) so that use of +M and -d
 	causes generated Makefiles to be written to the -d directory.
 
-	* Makefile.in: 
+	* Makefile.in:
 	* configure:
 	* configure.in:
 	* code.cpp:
 	* gencode.java:
 	Add changes from Vadim Zaliva to provide interpretation of whitespace
-	based on Java Language Specification (Jul 96) and not the use 
+	based on Java Language Specification (Jul 96) and not the use
 	of isWhiteSpace library procedure.
 	
 
 1999-11-08    <shields@jikes.watson.ibm.com>
 
-	* double.cpp: 
+	* double.cpp:
 	Add patch from Gregory Steuck (greg@nest.cx) to allow Jikes to
-	compile under the old version of egcs used by OpenBSD. 
+	compile under the old version of egcs used by OpenBSD.
 
 1999-11-03    <shields@jikes.watson.ibm.com>
 
@@ -4550,7 +5038,7 @@
 
 1999-11-03    <shields@jikes.watson.ibm.com>
 
-	* jikes.1: 
+	* jikes.1:
 	* jikes.html:
 	* jikes.spec:
 	Revise for version 1.10. Update option description to include CSO
@@ -4565,20 +5053,20 @@
 	--- Release v1.10 ---
 
 	* control.cpp:
-	* option.cpp: 
+	* option.cpp:
 	* option.h:
 	* jikes.cpp:
 	Rename +M= option to +DR= to avoid confusion of the experimental
 	dependence report with the +M option. Set version number and release
 	date.
 
-	* unparse.cpp: 
+	* unparse.cpp:
 	Minor edit to replace tabs with blanks and to follow our usual
 	indenting rules.
 
 1999-11-02    <shields@jikes.watson.ibm.com>
 
-	* ast.cpp: 
+	* ast.cpp:
 	* bytecode.cpp:
 	* class.h:
 	* config.cpp:
@@ -4592,7 +5080,7 @@
 	* long.cpp:
 	* option.h:
 	* stream.h:
-	Code from Philippe to remove detritus from prior updates, 
+	Code from Philippe to remove detritus from prior updates,
 	mostly by replacing tab characters with appropriate number of blanks.
 
 1999-11-03    <shields@jikes.watson.ibm.com>
@@ -4613,25 +5101,25 @@
 	* option.cpp:
 	* stream.cpp:
 	* stream.h:
-	Fix some problems with Unicode extensions caused by recent cvs update 
+	Fix some problems with Unicode extensions caused by recent cvs update
 	errors on my part, and also make a few changes. The former ProcessInput
 	in stream.cpp is now ProcessInputAscii. ProcessInput now just selects
-	ProcessInputAscii or ProcessInputUnicode, the encoding version under 
+	ProcessInputAscii or ProcessInputUnicode, the encoding version under
 	development. Eventually ProcessInput should be represented as an array
 	of function pointers, with the default being ProcessInputAscii.
 that
 
 1999-10-28    <shields@jikes.watson.ibm.com>
 
-	* code.h: 
+	* code.h:
 	* gencode.java:
-	Drop conditional code related to EBCDIC from gencode.java, and 
+	Drop conditional code related to EBCDIC from gencode.java, and
 	rebuild code.h (code.cpp was unchanged). The EBCDIC support will
 	be provided by Unicode extensions.
 
 1999-10-27    <shields@jikes.watson.ibm.com>
 
-	* config.cpp: 
+	* config.cpp:
 	* config.h:
 	* double.cpp:
 	* double.h:
@@ -4656,7 +5144,7 @@ that
 
 1999-10-20    <shields@jikes.watson.ibm.com>
 
-	* expr.cpp: 
+	* expr.cpp:
 	Add another fix from Mike Ernst, part of -Wall cleanup.
 
 1999-10-19    <shields@jikes.watson.ibm.com>
@@ -4696,7 +5184,7 @@ that
 
 	--- Release v1.09 ---
 
-	* control.h: 
+	* control.h:
 	* jikes.cpp:
 	* option.cpp:
 	* system.cpp:
@@ -4709,8 +5197,8 @@ that
 	* jikes.cpp: Set version to 1.08 and release date
 	* lookup.cpp: Plug a memory leak.
 
-	* decl.cpp: 
-	Use conditional ifdef ERNST to disable assertions that 
+	* decl.cpp:
+	Use conditional ifdef ERNST to disable assertions that
 	Mike Ernst inserted to stay on the safe side, but which are
 	probably not needed. Mike and I discussed this a while ago;
 	we just haven't yet had the time to sort it out.
@@ -4721,7 +5209,7 @@ that
 	* stream.cpp: delete code from Ernst that caused compilation
 	problems, using ifdef ERNST, etc.
 
-	* error.cpp: 
+	* error.cpp:
 	* error.h:
 	* incrmnt.cpp:
 	* jikes.cpp:
@@ -4730,9 +5218,9 @@ that
 	++ option. Implement Neil Martin's suggestion for divide by
 	zero, namely to treat as caution and not error. Update version date.
 
-1999-10-18    <shields@jikes.watson.ibm.com> 
+1999-10-18    <shields@jikes.watson.ibm.com>
 
-	* jikes.spec (Summary): 
+	* jikes.spec (Summary):
 	Add news_v1.html to list of documentation files.
 
 	-- Release 1.08 --
@@ -4748,19 +5236,19 @@ that
 	
 	-- Release 1.06 --
 
-	* jikes.1: 
+	* jikes.1:
 	Add 'BUGS' section for 1.06 since '++' disabled.
 
 	* contrib.htm: minor html cleanup
 
-	* jikes.spec (Summary): 
+	* jikes.spec (Summary):
 	Update version number to 1.06, add proper URL for source at
 	New Project URL (www10...)
 
 	* jikes.1: document -Xdepend (synomym for -depend)
 	Revise 'Source:' clause to use new project home 'pub' directory.
 
-	* contrib.htm: 
+	* contrib.htm:
 	Add Ken Coar to Core Team, revise format to
 	reflect new project organization.
 
@@ -4823,8 +5311,6 @@ that
 	* configure.in:
 	* configure:
 	I have applied Mo's patch to add Cygwin support.
-	
-
 
 1999-09-15    <shields@jikes.watson.ibm.com>
 
@@ -4836,7 +5322,7 @@ that
 
 1999-10-14    <shields@jikes.watson.ibm.com>
 
-	* Makefile.in: 
+	* Makefile.in:
 	* ast.cpp:
 	* ast.h:
 	* body.cpp:
@@ -4869,7 +5355,7 @@ that
 	* system.cpp:
 	* tuple.h:
 	* unparse.cpp: (new)
-	* error.h: 
+	* error.h:
 	* error.cpp:
 	Add substantial patch from Mike Ernst:
 	(1) add "unparse" function
@@ -4892,7 +5378,6 @@ that
 	Added #if defined(CYGWIN) blocks for wchar functions
 	    that are not implemented in cygwin.
 
-
 1999-10-13    <shields@jikes.watson.ibm.com>
 
 	vz1014: more unicode patches from Vadim, this one should have been
@@ -4903,18 +5388,18 @@ that
 
 	* stream.h: Delete extraneous ",' that causes AIX xlC to complain
 
-	* jikes.cpp: 
+	* jikes.cpp:
 	Update version to 1.07, and revise descriptive text printed when Jikes is
 	invoked with no arguments.
 
-	* expr.cpp: 
+	* expr.cpp:
 	* symbol.cpp:
 	* symbol.h:
 	pc1013b: add infrastructure needed for upcoming revison of access
 	functions for protected (Philippe Charles).
 
-	* stream.cpp: 
-	vz1013a: code from Vadim, who writes: 
+	* stream.cpp:
+	vz1013a: code from Vadim, who writes:
 	Attached is modified version of stream.cpp. It handles very rare situation
 	when one code page character could be repesented by more that one unicode
 	chars.
@@ -4926,13 +5411,10 @@ that
 	current implementation worse (currently it dumps core if such character
 	will be used in source).
 
-
-
-
-	* class.h: 
+	* class.h:
 	* pc1013b: add code that should have been in pc1013a.
 
-	* ast.cpp: 
+	* ast.cpp:
 	* ast.h:
 	* body.cpp:
 	* bytecode.cpp:
@@ -4951,7 +5433,7 @@ that
 
 1999-10-12    <shields@jikes.watson.ibm.com>
 
-	* control.h: 
+	* control.h:
 	* jikes.cpp:
 	* option.cpp:
 	* option.h:
@@ -4962,35 +5444,35 @@ that
 	code.
 
 1999-10-11    <shields@jikes.watson.ibm.com>
-	* bytecode.cpp: 
+	* bytecode.cpp:
 	* bytecode.h
 	* pc1011a, more mods from Philippe for unified block stack.
 
 1999-10-11    <shields@jikes.watson.ibm.com>
-	* code.h: 
+	* code.h:
 	* stream.cpp:
 	* vz1011a: more unicode code from Vadim.
 
 1999-09-10    <shields@jikes.watson.ibm.com>
 
-	* README: 
+	* README:
 	* contrib.htm:
 	* jikes.htm:
 	Drop 'Research' from name of project, just 'IBM Jikes' will do.
 
-	* jikes.htm: 
+	* jikes.htm:
 	Delete the part about VA Java and other IBM products. That may have
 	relevant back in Dec 98 when source first came out, but is no longer
 	needed.
 
 	* ChangeLog:
-	Start change log for main directory. 
+	Start change log for main directory.
 
 1999-10-10    <shields@jikes.watson.ibm.com>
 
 	* option.cpp: Fix compilation error by adding conditional defines for ICU
 
-	* stream.cpp: 
+	* stream.cpp:
 	Fix typos: TRUE->true, FALSE->false
 	
 1999-10-10  Dave Shields <shields@watson.ibm.com>
@@ -5010,28 +5492,28 @@ that
 
 1999-10-06  Vadim Zaliva  <lord@crocodile.org>
 
-	* option.h (class Option): 
-	* option.cpp (Option): 
-	* config.cpp: 
+	* option.h (class Option):
+	* option.cpp (Option):
+	* config.cpp:
 	* jikes.cpp (main): Added -encoding option
 	* Makefile.in (LIBS): added LIBS variable to link with extra libraries (detected by autoconf).
 	* configure.in (LDFLAGS): Added checks for "IBM Classes for Unicode" library.
 
 1999-10-09  Dave Shields  <shields@watson.ibm.com>
 	* Makefile.in:
-	* code.cpp 
+	* code.cpp
 	* code.h
-	* configure.in: 
+	* configure.in:
 	* depend.cpp:
 	* diagnose.cpp:
 	* dump.cpp:
-	* error.cpp: 
+	* error.cpp:
 	* error.h:
 	* option.cpp:
 	* option.h:
 	* scanner.cpp:
 	* stream.cpp:
-	* stream.h: 
+	* stream.h:
 	Merge in some, but not all, of Vadim's recent Unicode work.
 	All this code is Vadim's. The working tag is vz1009a.
 
@@ -5048,9 +5530,9 @@ that
 
 1999-10-06  Vadim Zaliva  <lord@crocodile.org>
 
-	* option.h (class Option): 
-	* option.cpp (Option): 
-	* config.cpp: 
+	* option.h (class Option):
+	* option.cpp (Option):
+	* config.cpp:
 	* jikes.cpp (main): Added -encoding option
 	* Makefile.in (LIBS): added LIBS variable to link with extra libraries (detected by autoconf).
 	* configure.in (LDFLAGS): Added checks for "IBM Classes for Unicode" library.
@@ -5075,7 +5557,7 @@ that
 	* symbol.h:
 	Install Phillipe's current updates as 'pc1009a'. This code fixes a
 	known problem in generating the LocalVariableTable, needed for -g, and
-	also contains part, but not all, of the changes needed to install a 
+	also contains part, but not all, of the changes needed to install a
 	unified block stack. This version is known to fail some tests; we are
 	working on this.
 
@@ -5084,7 +5566,7 @@ that
 	* jikes.cpp:
 	Release as version 1.06
 
-	* error.cpp: 
+	* error.cpp:
 	* error.h:
 	* option.cpp:
 	Disable '++' option due to observed erratic behavior -- will try
@@ -5107,18 +5589,18 @@ that
 
 1999-09-15    <shields@jikes.watson.ibm.com>
 
-	* expr.cpp: 
+	* expr.cpp:
 	Fix for Problem Report 483.
 
-	* jikes.cpp: 
+	* jikes.cpp:
 	Update version number to 1.05, change URLs to devloperworks.
 
 1999-09-14    <shields@jikes.watson.ibm.com>
 
-	* Makefile.in: 
+	* Makefile.in:
 	Update install section to use new home for jikes.1
 
-	* bytecode.cpp: 
+	* bytecode.cpp:
 	Fix for Problem Reports 434 and 460 related to
 	line-numbers with -g option.
 
@@ -5133,10 +5615,10 @@ that
 
 1999-09-13    <shields@jikes.watson.ibm.com>
 
-	* Makefile.hand: 
+	* Makefile.hand:
 	Update clause for use with Microsoft Visual C++ (cl) compiler
 
-	* body.cpp: 
+	* body.cpp:
 	* config.cpp:
 	* config.h:
 	* config.cpp:
@@ -5151,7 +5633,7 @@ that
 
 1999-09-12    <shields@jikes.watson.ibm.com>
 
-	* body.cpp: 
+	* body.cpp:
 	* bytecode.cpp:
 	* config.cpp:
 	* config.h:
@@ -5166,13 +5648,13 @@ that
 	Additional code related to PR 484 (array clone() problem), and
 	fixes for Problem Reports 459, 469 and 476. Set version to 1.04.
 
-	* diagnose.cpp: 
+	* diagnose.cpp:
 	Add patch from Michael Sinz (Michael.Sinz@sinz.org) to fix error
 	in reporting syntax errors when +E in effect.
 
 1999-09-10    <shields@jikes.watson.ibm.com>
 
-	* jikes.cpp: 
+	* jikes.cpp:
 	* jikes.spec
 	Drop 'Research' from project name.
 
@@ -5181,9 +5663,9 @@ that
 
 1999-09-10    <shields@jikes.watson.ibm.com>
 
-	* bytecode.cpp: 
+	* bytecode.cpp:
 	* config.cpp:
-	* config.h: 
+	* config.h:
 	* control.cpp:
 	* control.h:
 	* decl.cpp:
@@ -5199,7 +5681,7 @@ that
 
 1999-09-01    <shields@jikes.watson.ibm.com>
 
-	* bytecode.cpp: 
+	* bytecode.cpp:
 	* control.cpp:
 	* decl.cpp:
 	* getclass.cpp:
@@ -5218,10 +5700,10 @@ that
 
 1999-08-25    <shields@jikes.watson.ibm.com>
 
-	* config.h: 
+	* config.h:
 	Add include for <sys/types.h>, as is needed when use stat fields.
 
-	* control.cpp: 
+	* control.cpp:
 	* control.h:
 	* expr.cpp:
 	* lookup.cpp:
@@ -5233,7 +5715,7 @@ that
 	of classpath. This may also clear up some previously reported
 	problems in use of -d.
 
-	* configure.in: 
+	* configure.in:
 	* configure:
 	Add patch from Roman Hodek (rnhodek@faui22c.informatik.uni-erlangen.de)
 	to support m68k -- all that is needed is to specify -DBIG_ENDIAN.
@@ -5264,14 +5746,14 @@ that
 
 1999-08-20    <shields@jikes.watson.ibm.com>
 
-	* bytecode.cpp: 
+	* bytecode.cpp:
 	* jikes.cpp:
 	* Makefile.in:
 	FIx problem that caused javap to list 'null' method.
 	Update major version number to 1.
 	Add code to install man page.
 
-	* config.cpp: 
+	* config.cpp:
 	* config.h:
 	* double.cpp:
 	* expr.cpp:
@@ -5281,7 +5763,7 @@ that
 
 1999-08-19    <shields@jikes.watson.ibm.com>
 
-	* ast.cpp: 
+	* ast.cpp:
 	* ast.h
 	* body.cpp:
 	* bytecode.cpp:
@@ -5304,7 +5786,7 @@ that
 	* symbol.cpp:
 	* symbol.h:
 	* system.cpp:
-	Change handling of "builtin" procedures so bytecode.cpp no longer 
+	Change handling of "builtin" procedures so bytecode.cpp no longer
 	maintains their signatures, but have the front-end look up any
 	needed signatures from the library files. This simplifies code
 	generation for string concatenation, etc.
@@ -5317,7 +5799,7 @@ that
 
 1999-07-28    <shields@jikes.watson.ibm.com>
 
-	* body.cpp: 
+	* body.cpp:
 	* bytecode.cpp:
 	* bytecode.h:
 	* definite.cpp:
@@ -5329,7 +5811,7 @@ that
 
 1999-07-27    <shields@jikes.watson.ibm.com>
 
-	* configure.in: 
+	* configure.in:
 	* configure:
 	Applied patch from Moses DeJong:
 
@@ -5348,11 +5830,9 @@ that
 	Mo DeJong
 	dejong@cs.umn.edu
 
-
 1999-07-26    <shields@jikes.watson.ibm.com>
 
-
-	* ast.cpp: 
+	* ast.cpp:
 	* bytecode.cpp:
 	* bytecode.h:
 	* class.h:
@@ -5366,27 +5846,26 @@ that
 	* jikes.cpp:
 	* lookup.cpp:
 	* semantic.h:
-	* set.cpp: 
+	* set.cpp:
 	* symbol.h:
 	* table.h:
 	More changes for v0.54.
 
 1999-07-14    <shields@jikes.watson.ibm.com>
 
-	* jikes.spec: 
-	Include jikes.spec provided by 
-	  Henner Zeller <zeller@stud.fh-heilbronn.de> on 07/06/99 
+	* jikes.spec:
+	Include jikes.spec provided by
+	  Henner Zeller <zeller@stud.fh-heilbronn.de> on 07/06/99
 	and used by him to build a RPM file for Jikes Relocatable.
 	Also available at http://linux.fh-heilbronn.de/~zeller/download/jikes/
 
-	* configure.in: 
+	* configure.in:
 	Add patch from Larry Gensch (larry.gensch@digital.com) who wrote:
 	Date: Tue, 6 Jul 1999 14:09:30 -0400 (EDT)
 	From: larry.gensch@digital.com
 	Reply-To: larry.gensch@digital.com
 	Subject: Patch for jikes to auto-determine -DTYPE_bool
 	To: jikes-bugs@watson.ibm.com
-
 
 	I've added a test in your configure.in script in jikes-052 to
 	auto-detect the presense of the "bool" keyword (ANSI C++).  This was
@@ -5403,23 +5882,22 @@ that
 
 	     CXX=cxx ./configure
 
-	This should work with other platforms supporting the "bool" keyword as
-  well, as there is nothing really Compaq-specific in the test that I
-  have added.
+	This should work with other platforms supporting the "bool"
+	keyword as well, as there is nothing really Compaq-specific in the
+	test that I have added.
 
-  Feel free to incorporate this into a future release of Jikes. 
-
+	Feel free to incorporate this into a future release of Jikes.
 
 1999-07-13    <shields@jikes.watson.ibm.com>
 
-	* bytecode.cpp: 
+	* bytecode.cpp:
 	Revise EmitTryStatement to more closely follow the spec and
 	examples in the JVM discussion of code generation. This fixes
 	some problems reported with Jikes on Solaris.
 
 1999-07-12    <shields@jikes.watson.ibm.com>
 
-	* body.cpp: 
+	* body.cpp:
 	* bytecode.cpp
 	* bytecode.h:
 	* class.h:
@@ -5436,7 +5914,7 @@ that
 	* symbol.cpp:
 	* symbol.h:
 	* system.cpp
-	Many changes for v0.54, including some bug fixes that required 
+	Many changes for v0.54, including some bug fixes that required
 	substantial changes.
 
 1999-07-06    <shields@jikes.watson.ibm.com>
@@ -5445,26 +5923,26 @@ that
 	Miscellaneous, and extensive, changes from Philippe, including
 	revised grammar. Due to removal of files bool.h and unicode.h, almost
 	all files are affected. This revision also includes some fixes and
-	clarifications for comments from Michael Ernst 
+	clarifications for comments from Michael Ernst
 	(mernst@cs.washington.edu)
 
-	* configure.in: 
+	* configure.in:
 	* Makefile.in:
 	* Makefile:
-	Add -DBIGENDIAN for HP-UX (change from Kero van Gelder, 
+	Add -DBIGENDIAN for HP-UX (change from Kero van Gelder,
 	gelderk@natlab.research.philips.com).
 	Remove files bool.h and unicode.h.
 
 1999-06-23    <shields@jikes.watson.ibm.com>
 
-	* body.cpp: 
+	* body.cpp:
 	* jikes.cpp:
 	* unicode.h:
 	Fixes for Problem Report 427. Update build date for v0.53.
 
 1999-06-22    <shields@jikes.watson.ibm.com>
 
-	* bytecode.cpp: 
+	* bytecode.cpp:
 	* class.h:
 	* config.cpp:
 	* config.h:
@@ -5486,12 +5964,12 @@ that
 
 1999-06-21    <shields@jikes.watson.ibm.com>
 
-	* configure.in: 
+	* configure.in:
 	Add code for mips from Henner Zeller (zeller@stud.fh-heilbronn.de).
 
 1999-06-17    <shields@jikes.watson.ibm.com>
 
-	* ast.h: 
+	* ast.h:
 	* body.cpp
 	* decl.cpp:
 	* expr.cpp:
@@ -5501,14 +5979,14 @@ that
 
 1999-06-16    <shields@jikes.watson.ibm.com>
 
-	* decl.cpp: 
+	* decl.cpp:
 	* jikes.cpp:
 	* semantic.h:
 	More for v0.52, slight cleanup, new build date.
 
 1999-06-15    <shields@jikes.watson.ibm.com>
 
-	* ast.h: 
+	* ast.h:
 	* body.cpp:
 	* bytecode.cpp:
 	* control.h:
@@ -5536,23 +6014,23 @@ that
 	
 1999-06-03    <shields@jikes.watson.ibm.com>
 
-	* configure.in: 
+	* configure.in:
 	Add patch from Niels Kristian Bech Jensen (nkbj@image.dk) to use
 	the canonical way of looking for the GNU C++ compiler.
 
 1999-05-28    <shields@jikes.watson.ibm.com>
 
-	* symbol.cpp: 
+	* symbol.cpp:
 	Add version with initialization of 'unit_index'. This should have
 	been part of v0.51, but probably no harm since this field only set,
 	not yet used.
 
 1999-05-27    <shields@jikes.watson.ibm.com>
 
-	* jikes.cpp: 
+	* jikes.cpp:
 	Change version info to 0.51, 27 May 99.
 
-	* configure.in: 
+	* configure.in:
 	* libc5-fix.h (new):
 	Include patch from C. Scott Ananian (cananian@lesser-magoo.lcs.mit.edu)
 	submitted to jikes-patches on 3 April 1999, who wrote:
@@ -5560,7 +6038,7 @@ that
 	  libc5 systems -- or others where wchar.h is broken.  This has allowed me
 	  to release RPMs of jikes for RedHat 4.2 and earlier linux systems.
 
-	* jikes.1: 
+	* jikes.1:
 	Start man page, first draft generously provided by Pierpaolo
 	Fumagili (p_fumagili@fumagili.com).
 
@@ -5589,7 +6067,7 @@ that
 
 1999-05-07    <shields@jikes.watson.ibm.com>
 
-	* ast.cpp: 
+	* ast.cpp:
 	* ast.h:
 	* Fix problem due to ill-formed assert
 	* body.cpp:
@@ -5601,7 +6079,7 @@ that
 
 1999-05-05    <shields@jikes.watson.ibm.com>
 
-	* ast.cpp: 
+	* ast.cpp:
 	* ast.h:
 	* body.cpp:
 	* bytecode.cpp:
@@ -5638,30 +6116,30 @@ that
 	* tuple.h:
 	* unicode.h:
 	* zip.cpp:
-	Carry out major "spring cleaning", mainly to provide a cleaner 
-	interface between front-end and code generator, as the code 
+	Carry out major "spring cleaning", mainly to provide a cleaner
+	interface between front-end and code generator, as the code
 	generator was recomputing some information known to the front-end.
 
 1999-04-20    <shields@jikes.watson.ibm.com>
 
-	* bytecode.h: 
+	* bytecode.h:
 	* bytecode.cpp
 	* miscellaneous source cleanup
 
 1999-04-16    <shields@jikes.watson.ibm.com>
 
-	* jikes.cpp: 
+	* jikes.cpp:
 	* bytecode.cpp
 	* fix problem calling private method from inner class
 	* update version number to v0.49
 
 1999-04-12    <shields@jikes.watson.ibm.com>
 
-	* stream.cpp: 
+	* stream.cpp:
 	* Mask on input to avoid problems on systems where whcar_t is
 	* not unsigned 16 bit type.
 
-	* bytecode.cpp: 
+	* bytecode.cpp:
 	* bytecode.h:
 	* Revise to use static methods to update private fields of
 	* enclosing parent class.
@@ -5669,7 +6147,7 @@ that
 	* jikes.cpp:
 	* Update version number and date.
 
-	* ast.cpp: 
+	* ast.cpp:
 	* body.cpp:
 	* decl.cpp
 	* depend.cpp
@@ -5683,7 +6161,7 @@ that
 
 1999-04-05    <shields@jikes.watson.ibm.com>
 
-	* gencode.java: 
+	* gencode.java:
 	* code.cpp
 	* code.h
 	* Add gencode.java and use it to generate code.h and code.cpp, so
@@ -5709,7 +6187,7 @@ that
 	* error.h
 	* expr.cpp
 	* incrmnt.cpp
-	* jikes.cpp: 
+	* jikes.cpp:
 	* scanner.cpp
 	* semantic.h
 	* stream.cpp
@@ -5731,18 +6209,18 @@ that
 1999-03-12    <shields@jikes.watson.ibm.com>
 
 	* Add minor change here to provide sample commit for
-	Ken Coar to use at test for cvs mailer facility. 
+	Ken Coar to use at test for cvs mailer facility.
 
-1999-03-10    <shields@jikes.watson.ibm.com> 
+1999-03-10    <shields@jikes.watson.ibm.com>
 
-	* configure.in: 
+	* configure.in:
 	* configure
 	Add change for FreeBSD to add -DIEEE_DIV_0,
-	provided by Archie Cobbs (archie@whistle.com) 
+	provided by Archie Cobbs (archie@whistle.com)
 
-	* bytecode.cpp: 
-	* bytecode.h: 
-	* control.cpp: 
+	* bytecode.cpp:
+	* bytecode.h:
+	* control.cpp:
 	* definite.cpp
 	* depend.cpp
 	* depend.h
@@ -5753,23 +6231,22 @@ that
 	* option.h
 	* semantic.h
 	Code from Philippe to: fix some bugs in v0.46, and
-	add option +M=filename to write dependence info 
+	add option +M=filename to write dependence info
 	(this is really early stuff, and format may change soon).
 
 1999-03-09    <shields@jikes.watson.ibm.com>
 
 	* jikes.cpp: Update release date
 
-	* Makefile.in: 
+	* Makefile.in:
 	* configure
 	* configure.in
-	Add first cut at autoconf support, 
+	Add first cut at autoconf support,
 	courtesy of Moses DeJong (dejong@cs.umn.edu)
 
 	* Makefile: Comment out all clauses as suggested by many users
 
 	* README.TXT: Add short description of build process
-
 
 1999-03-08    <shields@jikes.watson.ibm.com>
 
@@ -5792,7 +6269,7 @@ that
 	* stream.cpp
 	* symbol.cpp
 	* symbol.h
-	More changes for 1.2, including strictfp, 
+	More changes for 1.2, including strictfp,
 	various bug fixes from Philippe
 
 1999-02-26    <shields@jikes.watson.ibm.com>
@@ -5808,7 +6285,7 @@ that
 
 	* spell.h: Fix problems that caused g++ to complain
 
-	* javadcl.h: 
+	* javadcl.h:
 	* javadef.h
 	* javaprs.h
 	* javasym.h
@@ -5821,12 +6298,11 @@ that
 
 1999-02-24    <shields@jikes.watson.ibm.com>
 
-
 	* jikes.cpp (main): update version number to v0.45
 
 	* Makefile: Add info for new file misspell.h
 	
-	* decl.cpp: 
+	* decl.cpp:
 	* diagnose.cpp
 	* error.h
 	* error.cpp
@@ -5834,20 +6310,20 @@ that
 	* modifier.cpp
 	* semantic.h
 	* symbol.h
-	* symbol.cpp: 
+	* symbol.cpp:
 	Misc. bug fixes, better error messages re possible misspellings
 	
 1999-02-19    <shields@jikes.watson.ibm.com>
 
-	* body.cpp: 
+	* body.cpp:
 	* config.cpp:
 	* config.h
 	* decl.cpp:
 	* error.cpp
 	* error.h
 	* expr.cpp:
-	* jikes.cpp: 
-	* option.cpp: 
+	* jikes.cpp:
+	* option.cpp:
 	Fix "swing" problem related to Section 14 of JDK 1.2 Compatibility
 	document, some other bug fixes, revise layout of option descriptions.
 
@@ -5855,102 +6331,102 @@ that
 
 1999-02-17    <shields@jikes.watson.ibm.com>
 
-	* Makefile: 
+	* Makefile:
 	Add clause for HP-UX/gcc contributed by Kero van Gelder
 	(gelderk@natlab.research.philips.com).
 
-	* double.cpp (IEEEfloat): 
+	* double.cpp (IEEEfloat):
 	Merge in code from BSD group to emulate division by zero,
 	(using conditional symbol IEEE_DIV_0) contributed by
 	Amancio Hasty (hasty@rah.star-gate.com).
 
-	* bytecode.cpp: 
+	* bytecode.cpp:
 	fix pr 350 (cute bug!)
 
 1999-02-16    <shields@jikes.watson.ibm.com>
 
-	* Makefile: 
+	* Makefile:
 	Add support for tab.cpp added in v0.43
 
 	* semantic.h: fix problem in abstract
-	* decl.cpp: 
+	* decl.cpp:
 
-	* expr.cpp: 
+	* expr.cpp:
 	fix problem with shift if right operand long
 
 	* option.h:
 	* option.cpp:
-	* jikes.cpp: 
+	* jikes.cpp:
 	* getclass.cpp
 	drop +$ option, change +V to +P
 
-	* bytecode.cpp: 
+	* bytecode.cpp:
 	delete code causing problems with abstract
 
 1999-02-12    <shields@jikes.watson.ibm.com>
 
 	* jikes.cpp: Update release date
 
-	* bytecode.cpp: 
-	* expr.cpp: 
+	* bytecode.cpp:
+	* expr.cpp:
 	* control.h: add support for null literal
 	
-	* Makefile: 
+	* Makefile:
 	* Files lcase.h and lcase.cpp no longer needed
 
 1999-02-11    <shields@jikes.watson.ibm.com>
 
-	* Makefile: 
+	* Makefile:
 	Add clause for egcs, RH 5.*, courtesy of Vadim Zaliva
 	Also add CVS Id
 
 1999-02-10    <shields@jikes.watson.ibm.com>
 
-	* Makefile: 
+	* Makefile:
 	Add clause for gcc and Solaris based on e-mail from Phil Brown
-	(phil@bolthole.com). 
+	(phil@bolthole.com).
 	
-	* decl.cpp: 
-	* error.cpp: 
-	* error.h: 
+	* decl.cpp:
+	* error.cpp:
+	* error.h:
 	Revise to reflect clarification of term "package-private", raised
 	as Query #20 to Sun.
 	
 	* jikes.cpp:
 	Update release date
 
-	* long.cpp (LongInt): 
+	* long.cpp (LongInt):
 	Add patch from Stepan Sokolov (sts@crocodile.org) to avoid
 	"internal compiler errors" while compiling jikes with gcc-2.8.1
-	under solaris 2.6. The patch replace three return 
+	under solaris 2.6. The patch replace three return
 	statements with ternary expressions with ifs statements
 	containg the expansion of the ternary expression into a form
 	more acceptable to the compiler.
 
 1999-02-09    <shields@jikes.watson.ibm.com>
 
-	* ast.h: 
-	* body.cpp: 
-	* bytecode.cpp: 
-	* decl.cpp: 
-	* error.cpp: 
-	* error.h: 
-	* expr.cpp: 
-	* java.g: 
+	* ast.h:
+	* body.cpp:
+	* bytecode.cpp:
+	* decl.cpp:
+	* error.cpp:
+	* error.h:
+	* expr.cpp:
+	* java.g:
 	* javaact.cpp:
-	* javaact.h: 
-	* javadcl.h: 
-	* javadef.h: 
-	* javasym.h: 
-	* lookup.cpp: 
-	* lookup.h: 
-	* scanner.cpp: 
-	* semantic.h: 
-	* symbol.cpp: 
-	Much new code from Philippe to support more of the new 
-	features added in 1.2,  fix regression bugs from v0.42 
-	for clone() and problem with 'protected' caused by too 
-	literal reading of 6.6.2 (fourth bullet that says 
+	* javaact.h:
+	* javadcl.h:
+	* javadef.h:
+	* javasym.h:
+	* lookup.cpp:
+	* lookup.h:
+	* scanner.cpp:
+	* semantic.h:
+	* symbol.cpp:
+	Much new code from Philippe to support more of the new
+	features added in 1.2,  fix regression bugs from v0.42
+	for clone() and problem with 'protected' caused by too
+	literal reading of 6.6.2 (fourth bullet that says
 	'or subclass of S' should be 'or superclass of S').
 
 1999-02-08    <shields@jikes.watson.ibm.com>
@@ -5959,19 +6435,18 @@ that
 
 1999-02-03    <shields@jikes.watson.ibm.com>
 
-	* bytecode.cpp: 
+	* bytecode.cpp:
 	Include fix by C. Scott Ananian (cananian@mit.edu), 8 Dec 98, for
 	array clone() problem (PR 294). Note this patch was submitted just
 	over a day after the source was first posted. Well done Scott!
 
-	* Makefile: 
-	Add clause for Sun Solaris CC (SunOS), provided by 
+	* Makefile:
+	Add clause for Sun Solaris CC (SunOS), provided by
 	mo dejong (dejong at cs.umn.edu), 2 Feb 1999
-
 
 1999-02-02    <shields@jikes.watson.ibm.com>
 
-	* symbol.h (class MethodSymbol): 
+	* symbol.h (class MethodSymbol):
 	Delete \" construct that causes MS C++ compiler to burp
 	Delete extraneous "Open" in license header text.
 

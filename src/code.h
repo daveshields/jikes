@@ -1,4 +1,4 @@
-// $Id: code.h,v 1.20 2002/03/06 17:12:24 ericb Exp $ -*- c++ -*-
+// $Id: code.h,v 1.21 2002/08/02 21:29:44 ericb Exp $ -*- c++ -*-
 // DO NOT MODIFY THIS FILE - it is generated using gencode.java.
 //
 // This software is subject to the terms of the IBM Jikes Compiler
@@ -29,15 +29,16 @@ class Code
         SHIFT = 6,
         NEWLINE_CODE = 0,
         SPACE_CODE = 1,
-        BAD_CODE = 2,
-        DIGIT_CODE = 3,
-        OTHER_DIGIT_CODE = 4,
-        LOWER_CODE = 5,
-        UPPER_CODE = 6,
-        OTHER_LETTER_CODE = 7
+        WHITESPACE_CODE = 2,
+        BAD_CODE = 3,
+        DIGIT_CODE = 4,
+        OTHER_DIGIT_CODE = 5,
+        LOWER_CODE = 6,
+        UPPER_CODE = 7,
+        OTHER_LETTER_CODE = 8
     };
 
-    static char codes[4485];
+    static char codes[4512];
     static u2 blocks[1024];
 
 
@@ -50,7 +51,7 @@ public:
 
     static inline void CodeCheck(wchar_t c)
     {
-        assert((u2) (blocks[c >> SHIFT] + c) < 4485);
+        assert((u2) (blocks[c >> SHIFT] + c) < 4512);
     }
 
     static inline bool CodeCheck(void)
@@ -60,12 +61,9 @@ public:
         return true;
     }
 
-    //
-    // \r characters are replaced by \x0a in Stream::ProcessInput().
-    //
     static inline bool IsNewline(wchar_t c)
     {
-        return c == '\x0a';
+        return codes[(u2) (blocks[c >> SHIFT] + c)] == NEWLINE_CODE;
     }
 
     static inline bool IsSpaceButNotNewline(wchar_t c)
@@ -78,6 +76,11 @@ public:
         return codes[(u2) (blocks[c >> SHIFT] + c)] <= SPACE_CODE;
     }
 
+    static inline bool IsWhitespace(wchar_t c)
+    {
+        return codes[(u2) (blocks[c >> SHIFT] + c)] <= WHITESPACE_CODE;
+    }
+
     static inline bool IsDigit(wchar_t c)
     {
         return codes[(u2) (blocks[c >> SHIFT] + c)] == DIGIT_CODE;
@@ -85,7 +88,7 @@ public:
 
     static inline bool IsOctalDigit(wchar_t c)
     {
-        return c >= U_0 && c <= U_7;
+        return c <= U_7 && c >= U_0;
     }
 
     static inline bool IsHexDigit(wchar_t c)

@@ -1,4 +1,4 @@
-// $Id: long.h,v 1.21 2001/09/21 05:06:07 ericb Exp $ -*- c++ -*-
+// $Id: long.h,v 1.22 2002/07/30 16:30:02 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -26,7 +26,7 @@ class ULongInt;
 class BaseLong
 {
 protected:
-    enum 
+    enum
     {
         MAX_INT    = 0x7FFFFFFF, // max value of i4
         MIN_INT    = 0x80000000, // min value of i4
@@ -69,7 +69,7 @@ protected:
         setHighAndLowWords(HighWord(), low);
 #endif // HAVE_64BIT_TYPES
     }
-    
+
     // Set the value for both words.
     inline void setHighAndLowWords(u4 high, u4 low) {
 #ifndef HAVE_64BIT_TYPES
@@ -183,7 +183,7 @@ public:
            LongInt (const IEEEdouble &); // narrowing conversion of double to long
 
 #ifdef HAVE_EXPLICIT
-    explicit 
+    explicit
 #endif
            LongInt (const IEEEfloat &); // narrowing conversion of float to long
 #ifdef HAVE_64BIT_TYPES

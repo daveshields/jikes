@@ -1,4 +1,4 @@
-// $Id: parser.h,v 1.14 2002/05/22 06:56:45 ericb Exp $ -*- c++ -*-
+// $Id: parser.h,v 1.15 2002/07/30 16:30:02 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -47,7 +47,7 @@ enum ParseErrorCode
 struct PrimaryRepairInfo
 {
     ParseErrorCode code;
-    
+
     int distance,
         buffer_position,
         misspell_index,

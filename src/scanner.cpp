@@ -1,4 +1,4 @@
-// $Id: scanner.cpp,v 1.27 2002/05/16 21:51:04 ericb Exp $
+// $Id: scanner.cpp,v 1.33 2002/08/26 19:21:24 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -129,7 +129,9 @@ Scanner::Scanner(Control &control_) : control(control_),
 
 
 //
-// Associate a lexical stream with this file.
+// Associate a lexical stream with this file. Remember, we doctored the stream
+// to start with \n so that we always start on a whitespace token, and so that
+// the first source code line is line 1.
 //
 void Scanner::Initialize(FileSymbol *file_symbol)
 {
@@ -283,9 +285,9 @@ void Scanner::ScanStarComment()
     // separators, and rejecting \f and \t after *<space>*.
     // This implementation also ignores /**, but treats whitespace correctly.
     //
-    // Note that we exploit, where possible, the fact that the stream is
-    // doctored to always end in U_LINE_FEED, U_CTRL_Z; but remember this
-    // sequence can legally occur before the stream end as well.
+    // Note that we exploit the fact that the stream is doctored to always
+    // end in U_CARRIAGE_RETURN, U_NULL; and that we changed all CR to LF
+    // within the file.
     //
     if (*cursor == U_STAR)
     {
@@ -295,16 +297,17 @@ void Scanner::ScanStarComment()
             STAR,
             REMAINDER
         } state = HEADER;
-        while (cursor != input_buffer_tail)
+        // Only the most recent doc comment applies to a section.
+        current_token -> ResetDeprecated();
+        while (*cursor != U_CARRIAGE_RETURN)
         {
             switch (*cursor++)
             {
-            case U_CARRIAGE_RETURN:
-                assert(false && "The stream should have converted \\r to \\n");
             case U_LINE_FEED:
                 // Record new line.
                 lex -> line_location.Next() = cursor - lex -> InputBuffer();
-                // fallthrough
+                state = HEADER;
+                break;
             case U_SPACE:
             case U_FORM_FEED:
             case U_HORIZONTAL_TAB:
@@ -342,7 +345,9 @@ void Scanner::ScanStarComment()
                         cursor[6] == U_a &&
                         cursor[7] == U_t &&
                         cursor[8] == U_e &&
-                        cursor[9] == U_d)
+                        cursor[9] == U_d &&
+                        (Code::IsWhitespace(cursor[10]) ||
+                         cursor[10] == U_STAR))
                     {
                         // Mark the token that precedes this comment.
                         current_token -> SetDeprecated();
@@ -351,9 +356,9 @@ void Scanner::ScanStarComment()
             }
         }
     }
-    else
+    else // normal /* */ comment
     {
-        while (cursor != input_buffer_tail)
+        while (*cursor != U_CARRIAGE_RETURN)
         {
             if (*cursor == U_STAR) // Potential comment closer.
             {
@@ -371,6 +376,8 @@ void Scanner::ScanStarComment()
 #endif // JIKES_DEBUG
                     return;
                 }
+                if (*cursor == U_CARRIAGE_RETURN)
+                    break;
             }
             if (Code::IsNewline(*cursor++)) // Record new line.
             {
@@ -381,15 +388,14 @@ void Scanner::ScanStarComment()
 
     //
     // If we got here, we are in an unterminated comment. Discard the
-    // U_LINE_FEED and U_CTRL_Z that end the stream.
+    // U_CARRIAGE_RETURN that ends the stream.
     //
-    cursor -= 2;
     lex -> ReportMessage(StreamError::UNTERMINATED_COMMENT,
                          location,
                          (unsigned) (cursor - lex -> InputBuffer()) - 1);
 
 #ifdef JIKES_DEBUG
-    current_comment -> length = ((cursor - lex -> InputBuffer()) -
+    current_comment -> length = ((cursor - 1 - lex -> InputBuffer()) -
                                  current_comment -> location);
     if (! control.option.debug_comments)
         delete current_comment;
@@ -402,25 +408,48 @@ void Scanner::ScanStarComment()
 // the comment and return the location of the character immediately
 // following it. CURSOR is advanced accordingly.
 //
+// Even if the grammar rule in JLS2 3.7 is changed to omit the LineTerminator
+// at the end of the comment, it is harmless to consume it here, since it
+// ends up ignored whether as a comment or as whitespace.
+//
 void Scanner::ScanSlashComment()
 {
+    //
+    // Note that we exploit the fact that the stream is doctored to always
+    // end in U_CARRIAGE_RETURN, U_NULL; and that we changed all CR to LF
+    // within the file.
+    //
+    // unsigned location = cursor - lex -> InputBuffer();
 #ifdef JIKES_DEBUG
+    LexStream::Comment *current_comment = NULL;
     if (control.option.debug_comments)
     {
-        LexStream::Comment *current_comment = &(lex -> comment_stream.Next());
+        current_comment = &(lex -> comment_stream.Next());
         current_comment -> string = NULL;
         // The token that precedes this comment.
         current_comment -> previous_token = current_token_index;
         current_comment -> location = cursor - lex -> InputBuffer();
-        for (cursor += 2; ! Code::IsNewline(*cursor); cursor++)
-            ;  // Skip all until \n
-        current_comment -> length = ((cursor - lex -> InputBuffer()) -
-                                     current_comment -> location);
-        return;
     }
 #endif // JIKES_DEBUG
-    for (cursor += 2; ! Code::IsNewline(*cursor); cursor++)
-        ; // Skip all until \n
+    while (! Code::IsNewline(*++cursor));  // Skip all until \n or EOF
+    //
+    // TODO: Verify that JLS3 allows this check to be skipped. While JLS2 3.7
+    // strictly requires that all // comments end in \n, Sun bug 4386773 claims
+    // that no compiler ever enforced it, so the grammar should be changed.
+    //
+    // if (*cursor == U_CARRIAGE_RETURN)
+    // {
+    //     lex -> ReportMessage(StreamError::UNTERMINATED_COMMENT,
+    //                          location,
+    //                          (unsigned) (cursor - lex -> InputBuffer()) - 1);
+    // }
+#ifdef JIKES_DEBUG
+    if (control.option.debug_comments)
+    {
+        current_comment -> length = ((cursor - lex -> InputBuffer()) -
+                                     current_comment -> location);
+    }
+#endif // JIKES_DEBUG
 }
 
 
@@ -432,6 +461,10 @@ void Scanner::ScanSlashComment()
 //
 inline void Scanner::SkipSpaces()
 {
+    //
+    // We exploit the fact that the stream was doctored to end in
+    // U_CARRIAGE_RETURN, U_NULL; and that all internal CR were changed to LF.
+    //
     do
     {
         while (Code::IsSpaceButNotNewline(*cursor))
@@ -767,24 +800,37 @@ int Scanner::ScanKeyword12(wchar_t *p1)
 
 //
 // This procedure is invoked to scan a character literal. After the character
-// literal has been scanned and classified, it is entered in the table
-// with both quotes stripped.
+// literal has been scanned and classified, it is entered in the table with
+// quotes intact.
 //
 void Scanner::ClassifyCharLiteral()
 {
+    //
+    // We exploit the fact that the stream was doctored to end in
+    // U_CARRIAGE_RETURN, U_NULL; and that all internal CR were changed to LF.
+    //
     current_token -> SetKind(TK_CharacterLiteral);
-
-    wchar_t *ptr = ++cursor;
-
-    if (*ptr == U_SINGLE_QUOTE)
+    bool bad = false;
+    wchar_t *ptr = cursor + 1;
+    switch (*ptr)
     {
-        lex -> ReportMessage(StreamError::EMPTY_CHARACTER_CONSTANT,
-                             current_token -> Location(),
-                             (unsigned) (ptr - lex -> InputBuffer()));
-        current_token -> SetKind(0);
-    }
-    else if (*ptr == U_BACKSLASH)
-    {
+    case U_SINGLE_QUOTE:
+        bad = true;
+        if (ptr[1] == U_SINGLE_QUOTE)
+        {
+            lex -> ReportMessage(StreamError::ESCAPE_EXPECTED,
+                                 current_token -> Location() + 1,
+                                 current_token -> Location() + 1);
+        }
+        else
+        {
+            lex -> ReportMessage(StreamError::EMPTY_CHARACTER_CONSTANT,
+                                 current_token -> Location(),
+                                 current_token -> Location() + 1);
+            ptr--;
+        }
+        break;
+    case U_BACKSLASH:
         switch (*++ptr)
         {
         case U_b:
@@ -792,9 +838,21 @@ void Scanner::ClassifyCharLiteral()
         case U_n:
         case U_r:
         case U_t:
-        case U_SINGLE_QUOTE:
         case U_DOUBLE_QUOTE:
         case U_BACKSLASH:
+            break;
+        case U_SINGLE_QUOTE:
+            //
+            // The user may have forgotten to do '\\'.
+            //
+            if (ptr[1] != U_SINGLE_QUOTE)
+            {
+                lex -> ReportMessage(StreamError::ESCAPE_EXPECTED,
+                                     current_token -> Location() + 1,
+                                     current_token -> Location() + 1);
+                ptr--;
+                bad = true;
+            }
             break;
         case U_0:
         case U_1:
@@ -812,6 +870,10 @@ void Scanner::ClassifyCharLiteral()
                 break;
             ptr++;
             break;
+        case U_CARRIAGE_RETURN:
+        case U_LINE_FEED:
+            ptr--;
+            // fallthrough
         case U_u:
             //
             // By now, Unicode escapes have already been flattened; and it is
@@ -819,53 +881,63 @@ void Scanner::ClassifyCharLiteral()
             //
         default:
             lex -> ReportMessage(StreamError::INVALID_ESCAPE_SEQUENCE,
-                                 (unsigned) (cursor - lex -> InputBuffer()),
-                                 (unsigned) (ptr - lex -> InputBuffer()));
-            current_token -> SetKind(0);
+                                 current_token -> Location() + 1,
+                                 current_token -> Location() + ptr - cursor);
+            bad = true;
         }
-    }
-
-    if (Code::IsNewline(*ptr))
-    {
-        if (current_token -> Kind())
-        {
-            lex -> ReportMessage(StreamError::UNTERMINATED_CHARACTER_CONSTANT,
-                                 current_token -> Location(),
-                                 (unsigned) (ptr - lex -> InputBuffer()));
-            current_token -> SetKind(0);
-        }
-        lex -> line_location.Next() = ptr - lex -> InputBuffer() + 1;
-    }
-    else if (*++ptr != U_SINGLE_QUOTE)
-    {
+        break;
+    case U_CARRIAGE_RETURN:
+    case U_LINE_FEED:
+        // Since the source is broken into lines before tokens (JLS 3.2), this
+        // is an unterminated quote. We complain after this switch.
         ptr--;
-        if (current_token -> Kind())
+        break;
+    default:
+        break;
+    }
+
+    if (*++ptr != U_SINGLE_QUOTE)
+    {
+        //
+        // For generally better parsing and nicer error messages, see if the
+        // user tried to do a multiple character alpha-numeric string.
+        //
+        while (Code::IsAlnum(*ptr))
+            ptr++;
+        if (Code::IsNewline(*ptr))
+            ptr--;
+        if (! bad)
         {
-            lex -> ReportMessage(StreamError::UNTERMINATED_CHARACTER_CONSTANT,
+            lex -> ReportMessage((*ptr != U_SINGLE_QUOTE || ptr == cursor
+                                  ? StreamError::UNTERMINATED_CHARACTER_CONSTANT
+                                  : StreamError::MULTI_CHARACTER_CONSTANT),
                                  current_token -> Location(),
                                  (unsigned) (ptr - lex -> InputBuffer()));
-            current_token -> SetKind(0);
         }
     }
 
+    ptr++;
     current_token ->
         SetSymbol(control.char_table.FindOrInsertLiteral(cursor,
                                                          ptr - cursor));
-
-    cursor = ptr + 1;
+    cursor = ptr;
 }
 
 
 //
 // This procedure is invoked to scan a string literal. After the string
 // literal has been scanned and classified, it is entered in the table with
-// both quotes stripped.
+// quotes intact.
 //
 void Scanner::ClassifyStringLiteral()
 {
+    //
+    // We exploit the fact that the stream was doctored to end in
+    // U_CARRIAGE_RETURN, U_NULL; and that all internal CR were changed to LF.
+    //
     current_token -> SetKind(TK_StringLiteral);
 
-    wchar_t *ptr = ++cursor;
+    wchar_t *ptr = cursor + 1;
 
     while (*ptr != U_DOUBLE_QUOTE && ! Code::IsNewline(*ptr))
     {
@@ -896,31 +968,29 @@ void Scanner::ClassifyStringLiteral()
                 // is illegal to try it twice (such as "\u005cu0000").
                 //
             default:
+                ptr--;
                 lex -> ReportMessage(StreamError::INVALID_ESCAPE_SEQUENCE,
-                                     (unsigned) (ptr - lex -> InputBuffer()) - 1,
-                                     (unsigned) (ptr - lex -> InputBuffer()));
-                current_token -> SetKind(0);
-                if (Code::IsNewline(ptr[-1]))
-                    ptr--; // This will break us out of the loop.
+                                     ((unsigned) (ptr - lex -> InputBuffer()) -
+                                      1),
+                                     ((unsigned) (ptr - lex -> InputBuffer()) -
+                                      (Code::IsNewline(*ptr) ? 1 : 0)));
             }
         }
     }
 
     if (Code::IsNewline(*ptr))
     {
-        if (current_token -> Kind())
-            lex -> ReportMessage(StreamError::UNTERMINATED_STRING_CONSTANT,
-                                 current_token -> Location(),
-                                 (unsigned) (ptr - lex -> InputBuffer()));
-        current_token -> SetKind(0);
-        lex -> line_location.Next() = ptr - lex -> InputBuffer() + 1;
+        ptr--;
+        lex -> ReportMessage(StreamError::UNTERMINATED_STRING_CONSTANT,
+                             current_token -> Location(),
+                             (unsigned) (ptr - lex -> InputBuffer()));
     }
 
+    ptr++;
     current_token ->
         SetSymbol(control.string_table.FindOrInsertLiteral(cursor,
                                                            ptr - cursor));
-
-    cursor = ptr + 1;
+    cursor = ptr;
 }
 
 
@@ -1071,7 +1141,7 @@ void Scanner::ClassifyNumericLiteral()
             if (cursor[1] == U_x || cursor[1] == U_X)
             {
                 ptr = cursor + 2;
-                // Don't us isxdigit, it's not platform independent.
+                // Don't use isxdigit, it's not platform independent.
                 if (Code::IsHexDigit(*ptr))
                 {
                     while (Code::IsHexDigit(*++ptr));
@@ -1525,7 +1595,7 @@ void Scanner::ClassifyNonAsciiUnicode()
 {
     if (Code::IsAlpha(*cursor)) // Some kind of non-ascii unicode letter
         ClassifyId();
-    else 
+    else
         ClassifyBadToken();
 }
 

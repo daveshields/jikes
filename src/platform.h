@@ -1,4 +1,4 @@
-// $Id: platform.h,v 1.35 2002/05/22 06:56:45 ericb Exp $ -*- c++ -*-
+// $Id: platform.h,v 1.37 2002/08/02 21:29:47 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -992,7 +992,10 @@ public:
 
     Ostream &operator<<(wchar_t ch)
     {
-        if (ch >> 8 == 0)
+        // output only printable characters directly
+        if (ch == U_CARRIAGE_RETURN || ch == U_LINE_FEED)
+            *os << (char) U_LINE_FEED;
+        else if (ch >= U_SPACE && ch < 0x0ff)
             *os << (char) ch;
         else
         {
@@ -1002,41 +1005,22 @@ public:
             {
                 *os << (char) U_BACKSLASH
                     << (char) U_u;
-
                 char str[4];
                 for (int i = 3; i >= 0; i--)
                 {
-                    int d = ch % 16;
+                    int d = ch & 0x0f;
                     switch (d)
                     {
-                        case 10:
-                            str[i] = U_A;
-                            break;
-                        case 11:
-                            str[i] = U_B;
-                            break;
-                        case 12:
-                            str[i] = U_C;
-                            break;
-                        case 13:
-                            str[i] = U_D;
-                            break;
-                        case 14:
-                            str[i] = U_E;
-                            break;
-                        case 15:
-                            str[i] = U_F;
-                            break;
-                        default:
-                            str[i] = U_0 + d;
-                            break;
+                    case 10: case 11: case 12: case 13: case 14: case 15:
+                        str[i] = U_A - 10 + d;
+                        break;
+                    default:
+                        str[i] = U_0 + d;
+                        break;
                     }
-                    ch /= 16;
+                    ch >>= 4;
                 }
-                *os << str[0];
-                *os << str[1];
-                *os << str[2];
-                *os << str[3];
+                *os << str[0] << str[1] << str[2] << str[3];
             }
         }
 
@@ -1166,7 +1150,7 @@ extern Ostream Coutput;
 // (lord).
 class ErrorString: public ConvertibleArray<wchar_t>
 {
- public:
+public:
     ErrorString();
 
     ErrorString &operator<<(const wchar_t *s);
@@ -1185,7 +1169,7 @@ class ErrorString: public ConvertibleArray<wchar_t>
 
     wchar_t *Array();
 
- private:
+private:
 
     void do_fill(int n);
     char fill_char;

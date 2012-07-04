@@ -1,4 +1,4 @@
-// $Id: getclass.cpp,v 1.32 2002/07/09 07:28:43 cabbey Exp $
+// $Id: getclass.cpp,v 1.36 2002/09/05 22:29:02 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -276,7 +276,7 @@ TypeSymbol *Semantic::ReadTypeFromSignature(TypeSymbol *base_type,
     //
     // Establish a dependence from base_type (read from a class file) to type.
     //
-    AddDependence(base_type, type, tok);
+    AddDependence(base_type, type);
 
     return type;
 }
@@ -445,14 +445,12 @@ void Semantic::ReadClassFile(TypeSymbol *type, LexStream::TokenIndex tok)
 #if defined(WIN32_FILE_SYSTEM)
             size = ((0xFFFFFFFF && GetLastError()) != NO_ERROR) ? 0 : size;
 #endif
-            if (! ProcessClassFile(type, classFile->getBuffer(),size, tok))
+            if (! ProcessClassFile(type, classFile -> getBuffer(), size, tok))
                 ProcessBadClass(type, tok);
 
             delete classFile;
         }
     }
-
-    return;
 }
 
 
@@ -475,12 +473,10 @@ void Semantic::ProcessBadClass(TypeSymbol *type, LexStream::TokenIndex tok)
                    tok,
                    type -> ContainingPackage() -> PackageName(),
                    type -> ExternalName());
-
-    return;
 }
 
 
-bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer,
+bool Semantic::ProcessClassFile(TypeSymbol *type, const char *buffer,
                                 int buffer_size, LexStream::TokenIndex tok)
 {
     const char *buffer_tail = &buffer[buffer_size];
@@ -700,10 +696,9 @@ bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer,
             type -> super = GetClassPool(type, class_pool, constant_pool,
                                          super_class, tok);
 
-            type -> outermost_type -> supertypes_closure ->
-                AddElement(type -> super -> outermost_type);
-            type -> outermost_type -> supertypes_closure ->
-                Union(*type -> super -> outermost_type -> supertypes_closure);
+            type -> supertypes_closure -> AddElement(type -> super);
+            type -> supertypes_closure -> Union(*type -> super ->
+                                                supertypes_closure);
         }
 
         if (! InRange(buffer, buffer_tail, 2))
@@ -716,10 +711,9 @@ bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer,
             type -> AddInterface(GetClassPool(type, class_pool, constant_pool,
                                               interface_index, tok));
 
-            type -> outermost_type -> supertypes_closure ->
-                AddElement(type -> super -> outermost_type);
-            type -> outermost_type -> supertypes_closure ->
-                Union(*type -> super -> outermost_type -> supertypes_closure);
+            type -> supertypes_closure -> AddElement(type -> super);
+            type -> supertypes_closure -> Union(*type -> super ->
+                                                supertypes_closure);
         }
 
         //
@@ -935,6 +929,8 @@ bool Semantic::ProcessClassFile(TypeSymbol *type,const char *buffer,
                         // there is no info associated with a Synthetic
                         // attribute. If the field is synthetic, remaining
                         // attributes don't matter...
+                        methods[l] = NULL;
+                        delete method;
                         break;
                     }
                     else if ((Constant_Utf8_info::Length(constant_pool[name_index]) ==

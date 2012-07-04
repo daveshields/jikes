@@ -40,6 +40,9 @@ You must accept the terms of that agreement to use this software. */
 /* define if the compiler supports dynamic_cast<> */
 #undef HAVE_DYNAMIC_CAST
 
+/* Defined if Jikes supports -encoding for input files. */
+#undef HAVE_ENCODING
+
 /* Defined when the compiler would generate an error on a call to iconv with a
    non const 2nd argument. This is a known problem on IRIX systems, as well as
    newer GNU LIBCs. */

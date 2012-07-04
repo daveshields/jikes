@@ -1455,7 +1455,7 @@ fi
 
 # Define the identity of the package.
  PACKAGE=jikes
- VERSION=1.16
+ VERSION=1.17
 
 
 cat >>confdefs.h <<_ACEOF
@@ -1583,7 +1583,7 @@ INSTALL_STRIP_PROGRAM="\${SHELL} \$(install_sh) -c -s"
 
 
 cat >>confdefs.h <<\_ACEOF
-#define JIKES_VERSION_STRING "Version 1.16 - 10 July 2002"
+#define JIKES_VERSION_STRING "Version 1.17 - 27 September 2002"
 _ACEOF
 
 
@@ -1623,28 +1623,6 @@ fi
   MAINT=$MAINTAINER_MODE_TRUE
 
 
-
-# Check whether --enable-debug or --disable-debug was given.
-if test "${enable_debug+set}" = set; then
-  enableval="$enable_debug"
-  ok=$enableval
-else
-  ok=no
-fi;
-
-if test "$ok" = "yes"; then
-
-cat >>confdefs.h <<\_ACEOF
-#define JIKES_DEBUG 1
-_ACEOF
-
-
-  # If the user did not set CXXFLAGS, set it to -g now to keep
-  # the AC_PROG_CXX macro from using -g -O2 by default.
-  if test "${CXXFLAGS+set}" != "set" ; then
-    CXXFLAGS="-g"
-  fi
-fi
 
 # Make sure we can run config.sub.
 $ac_config_sub sun4 >/dev/null 2>&1 ||
@@ -1700,6 +1678,42 @@ host_vendor=`echo $ac_cv_host | sed 's/^\([^-]*\)-\([^-]*\)-\(.*\)$/\2/'`
 host_os=`echo $ac_cv_host | sed 's/^\([^-]*\)-\([^-]*\)-\(.*\)$/\3/'`
 
 
+
+case "${host}" in
+    *windows32*)
+        jikes_vcpp=yes
+        ;;
+esac
+
+# Check whether --enable-debug or --disable-debug was given.
+if test "${enable_debug+set}" = set; then
+  enableval="$enable_debug"
+  jikes_debug=$enableval
+else
+  jikes_debug=no
+fi;
+
+if test "$jikes_debug" = "yes"; then
+
+cat >>confdefs.h <<\_ACEOF
+#define JIKES_DEBUG 1
+_ACEOF
+
+
+      if test "${CXXFLAGS+set}" != "set" ; then
+    if test "$jikes_vcpp" = "yes" ; then
+      CXXFLAGS="-Zi -MDd -GX -GR"
+    else
+      CXXFLAGS="-g"
+    fi
+  fi
+else
+      if test "${CXXFLAGS+set}" != "set" ; then
+    if test "$jikes_vcpp" = "yes" ; then
+      CXXFLAGS="-MD -GX -GR"
+    fi
+  fi
+fi
 
 ac_ext=cc
 ac_cpp='$CXXCPP $CPPFLAGS'
@@ -5152,7 +5166,7 @@ int main (int argc, char** argv) {
   if (d == (iconv_t) -1) {
     d = iconv_open( "$enc" , "ISO8859-1");
     if (d == (iconv_t) -1) {
-      return -1;
+      return 1;
     }
   }
   size_t r = iconv( d,
@@ -5161,7 +5175,7 @@ int main (int argc, char** argv) {
 #endif
 	 &src, &srcspace , &dst_ptr, &dstspace);
   if (r == (size_t) -1)
-    return -2;
+    return 2;
   wchar_t * test = (wchar_t *) dst;
 #if $byte_swap
   char tmp;
@@ -5179,14 +5193,14 @@ int main (int argc, char** argv) {
     targ[1]=targ[2];
     targ[2]=tmp;
 # else
-    return -3;
+    return 3;
 # endif //sizeof(wchar_t)
   }
 #endif //byte_swap
   if (test[0] == 'a' && test[1] == 'b' && test[2] == 'c')
     return 0;
   else
-    return -4;
+    return 4;
     }
 _ACEOF
 rm -f conftest$ac_exeext
@@ -5274,7 +5288,7 @@ int main (int argc, char** argv) {
   if (d == (iconv_t) -1) {
     d = iconv_open( "$enc" , "ISO8859-1");
     if (d == (iconv_t) -1) {
-      return -1;
+      return 1;
     }
   }
   size_t r = iconv( d,
@@ -5283,7 +5297,7 @@ int main (int argc, char** argv) {
 #endif
 	 &src, &srcspace , &dst_ptr, &dstspace);
   if (r == (size_t) -1)
-    return -2;
+    return 2;
   wchar_t * test = (wchar_t *) dst;
 #if $byte_swap
   char tmp;
@@ -5301,14 +5315,14 @@ int main (int argc, char** argv) {
     targ[1]=targ[2];
     targ[2]=tmp;
 # else
-    return -3;
+    return 3;
 # endif //sizeof(wchar_t)
   }
 #endif //byte_swap
   if (test[0] == 'a' && test[1] == 'b' && test[2] == 'c')
     return 0;
   else
-    return -4;
+    return 4;
     }
 _ACEOF
 rm -f conftest$ac_exeext
@@ -5430,6 +5444,15 @@ _ACEOF
 
 fi
 
+
+if test "$ac_cv_header_iconv_h" = "yes" || \
+   test "$ac_cv_lib_icu_uc_u_getVersion" = "yes" ; then
+
+cat >>confdefs.h <<\_ACEOF
+#define HAVE_ENCODING 1
+_ACEOF
+
+fi
 
 
 for ac_func in cygwin_win32_to_posix_path_list

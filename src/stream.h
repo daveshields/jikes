@@ -1,4 +1,4 @@
-// $Id: stream.h,v 1.38 2002/05/16 21:51:04 ericb Exp $ -*- c++ -*-
+// $Id: stream.h,v 1.43 2002/08/26 19:21:24 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -23,13 +23,13 @@
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-class Control    ;
-class Input_info ;
-class Scanner    ;
-class Symbol     ;
-class FileSymbol ;
-class ZipFile    ;
-class LexStream  ;
+class Control;
+class Input_info;
+class Scanner;
+class Symbol;
+class FileSymbol;
+class ZipFile;
+class LexStream;
 
 class StreamError : public JikesError
 {
@@ -38,28 +38,31 @@ class StreamError : public JikesError
 public:
 
     StreamError();
-    
+
     virtual const wchar_t *getErrorMessage();
     virtual const wchar_t *getErrorReport();
-    
+
     virtual JikesErrorSeverity getSeverity();
     virtual const char *getFileName();
-    
-    virtual int getLeftLineNo();
-    virtual int getLeftColumnNo();
-    virtual int getRightLineNo();
-    virtual int getRightColumnNo();
-    
+
+    virtual int getLeftLineNo() { return left_line_no; }
+    virtual int getLeftColumnNo() { return left_column_no; }
+    virtual int getRightLineNo() { return right_line_no; }
+    virtual int getRightColumnNo() { return right_column_no; }
+
     enum StreamErrorKind
     {
         BAD_TOKEN,
         EMPTY_CHARACTER_CONSTANT,
         UNTERMINATED_CHARACTER_CONSTANT,
+        MULTI_CHARACTER_CONSTANT,
+        ESCAPE_EXPECTED,
         UNTERMINATED_COMMENT,
         UNTERMINATED_STRING_CONSTANT,
         INVALID_HEX_CONSTANT,
         INVALID_UNICODE_ESCAPE,
         INVALID_ESCAPE_SEQUENCE,
+        LAST_CHARACTER_NOT_NEWLINE, // pedantic only
         DEPRECATED_IDENTIFIER_ASSERT, // from here, these are warnings only
         DOLLAR_IN_IDENTIFIER
     };
@@ -69,7 +72,7 @@ private:
     unsigned start_location;
     unsigned end_location;
     StreamErrorKind kind;
-    
+
     static bool emacs_style_report;
     LexStream *lex_stream;
 
@@ -80,25 +83,21 @@ private:
 
     wchar_t *regularErrorString();
     wchar_t *emacsErrorString();
-    
-    void PrintLargeSource(ErrorString &s);
-    void PrintSmallSource(ErrorString &s);
 
     bool initialized;
-    
-    void Initialize(StreamErrorKind kind_, unsigned start_location_,
-                    unsigned end_location_, LexStream *);
 
+    void Initialize(StreamErrorKind, unsigned start, unsigned end, LexStream *);
 };
 
 
+//
 // The stream class encapsulates details related to reading
 // a stream of possibly encoded data from the file system.
-
+//
 class Stream
 {
 public:
-  
+
     Stream();
     ~Stream();
 
@@ -110,11 +109,12 @@ public:
     inline wchar_t* InputBuffer() { return input_buffer; }
     inline size_t InputBufferLength() { return input_buffer_length; }
 
-    inline wchar_t* AllocateInputBuffer( size_t size ) {
-        return input_buffer = new wchar_t[size + 4];
+    inline wchar_t* AllocateInputBuffer(size_t size) {
+        // +3 for leading \n, trailing \r\0
+        return input_buffer = new wchar_t[size + 3];
     }
 
-#if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
+#if defined(HAVE_ENCODING)
     static bool IsSupportedEncoding(char* encoding);
     bool SetEncoding(char* encoding);
 #endif
@@ -128,16 +128,16 @@ protected:
     const char *source_tail;   // End of data buffer to be decoded
     const char *data_buffer;   // The data to be decoded
 
-    bool  error_decode_next_character;
+    bool error_decode_next_character;
 
 //private: // FIXME : Make vars private once extracted from LexStream!
 
-#if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
+#if defined(HAVE_ENCODING)
 
 #if defined(HAVE_LIBICU_UC)
-     UConverter * _decoder;
+    UConverter * _decoder;
 #elif defined(HAVE_ICONV_H)
-     iconv_t _decoder;
+    iconv_t _decoder;
 #endif
 
     void DestroyEncoding();
@@ -165,9 +165,9 @@ protected:
 #endif
     }
 
-#endif // defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
+#endif // defined(HAVE_ENCODING)
 
-    inline void InitializeDataBuffer(const char * buffer, long size) {
+    inline void InitializeDataBuffer(const char *buffer, long size) {
         data_buffer = buffer;
         source_ptr = data_buffer;
         source_tail = data_buffer + size - 1;
@@ -187,9 +187,8 @@ class LexStream : public Stream
 {
 
     friend class StreamError;
-    
- public:
-    
+
+public:
     typedef int TypeIndex;
     typedef int TokenIndex;
     typedef int CommentIndex;
@@ -229,8 +228,18 @@ class LexStream : public Stream
 
     inline unsigned Column(TokenIndex i)
     {
-        return columns ? columns[i] : (input_buffer
-                                       ? FindColumn(tokens[i].Location()) : 0);
+        // FindColumn grabs the right edge of an expanded character.
+        return input_buffer ? FindColumn(tokens[i].Location() - 1) + 1 : 0;
+    }
+    inline unsigned RightColumn(TokenIndex i)
+    {
+        if (! input_buffer)
+            return 0;
+        unsigned location = tokens[i].Location() - 1 +
+            (NameSymbol(i) || LiteralSymbol(i)
+             ? tokens[i].additional_info.symbol -> NameLength()
+             : wcslen(KeywordName(tokens[i].Kind())));
+        return FindColumn(location);
     }
 
     inline bool AfterEol(TokenIndex i)
@@ -259,8 +268,8 @@ class LexStream : public Stream
                 : wcslen(KeywordName(tokens[i].Kind())));
     }
 
+    // TODO: Rename these methods to differ from the class name?
     class LiteralSymbol *LiteralSymbol(TokenIndex);
-
     class NameSymbol *NameSymbol(TokenIndex);
 
     char *FileName();
@@ -268,7 +277,9 @@ class LexStream : public Stream
 
     inline int LineLength(unsigned line_no)
     {
-        return locations[line_no + 1] - locations[line_no];
+        assert(input_buffer && locations);
+        return Tab::Wcslen(input_buffer, locations[line_no],
+                           locations[line_no + 1] - 2); // ignore the \n
     }
     inline int LineStart(unsigned line_no)
     {
@@ -296,7 +307,7 @@ class LexStream : public Stream
         {
             for (wchar_t *str = NameString(i); *str; str++)
             {
-                 if (*str > 0xff)
+                if (*str > 0xff)
                     offset += 5;
             }
         }
@@ -310,14 +321,17 @@ class LexStream : public Stream
     //
     inline int WcharOffset(TokenIndex end)
     {
-        TokenIndex start;
+        TokenIndex start = end;
         unsigned the_line = Line(end);
-        for (start = end; Line(start) == the_line; start--)
-            ;
-        start++;
-
-        return WcharOffset(start, end);
+        while (Line(--start) == the_line);
+        return WcharOffset(start + 1, end);
     }
+
+    //
+    // Used for outputting sections of source code in error messages.
+    //
+    void OutputLine(unsigned, ErrorString &);
+    void OutputSource(JikesError *, ErrorString &);
 
     CommentIndex FirstComment(TokenIndex);
 
@@ -362,25 +376,13 @@ class LexStream : public Stream
     bool file_read;
 #endif
 
-    //*
-    //* Constructors and Destructor.
-    //*
-    LexStream(Control &control_, FileSymbol *file_symbol_);
-
-    bool ComputeColumns()
-    {
-        RereadInput();
-        if (input_buffer)
-            InitializeColumns();
-
-        DestroyInput();
-
-        return (columns != NULL);
-    }
+    //
+    // Constructors and Destructor.
+    //
+    LexStream(Control &, FileSymbol *);
 
     void RereadInput();
     ~LexStream();
-
 
     void DestroyInput()
     {
@@ -390,8 +392,8 @@ class LexStream : public Stream
         comment_buffer = NULL;
     }
 
-    void ReportMessage(StreamError::StreamErrorKind kind,
-                       unsigned start_location, unsigned end_location);
+    void ReportMessage(StreamError::StreamErrorKind,
+                       unsigned start, unsigned end);
     void SortMessages();
     void PrintMessages();
 
@@ -425,7 +427,7 @@ class LexStream : public Stream
     }
 
 #ifdef JIKES_DEBUG
-void Dump(); // temporary function used to dump token stream.
+    void Dump(); // temporary function used to dump token stream.
 #endif
 
     //
@@ -447,8 +449,8 @@ void Dump(); // temporary function used to dump token stream.
 private:
 
     int hexvalue(wchar_t ch);
-    
-#if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
+
+#if defined(HAVE_ENCODING)
     enum UnicodeLexerState
     {
         START,
@@ -461,7 +463,7 @@ private:
         UNICODE_ESCAPE_DIGIT_2
     };
 #endif
-    
+
     friend class Scanner;
 
     class Token
@@ -486,7 +488,7 @@ private:
         unsigned info;
         union
         {
-            Symbol   *symbol;
+            Symbol *symbol;
             TokenIndex right_brace;
         } additional_info;
 
@@ -508,6 +510,7 @@ private:
             info = (info & 0xFFFFFF80) | kind;
         }
         inline unsigned Kind() { return (info & 0x0000007F); }
+        inline void ResetDeprecated() { info &= ~0x00000080; }
         inline void SetDeprecated() { info |= 0x00000080; }
         inline bool Deprecated() { return ((info & 0x00000080) != 0); }
 
@@ -533,16 +536,15 @@ private:
     {
     public:
         TokenIndex previous_token;
-        unsigned   location;
-        unsigned   length;
-        wchar_t   *string;
+        unsigned location;
+        unsigned length;
+        wchar_t *string;
     };
 
     Tuple<StreamError> bad_tokens;
 
     TokenIndex index;
     Token *tokens;
-    unsigned short *columns;
     ConvertibleArray<Token> token_stream;
     Comment *comments;
     ConvertibleArray<Comment> comment_stream;
@@ -551,7 +553,6 @@ private:
     TokenIndex *types;
     ConvertibleArray<TokenIndex> type_index;
 
-    void InitializeColumns();
     void CompressSpace();
 
     bool initial_reading_of_input;
@@ -562,22 +563,25 @@ private:
 
     void ReadInput();
     void ProcessInput(const char *, long);
-#if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
+#if defined(HAVE_ENCODING)
     void ProcessInputUnicode(const char *, long);
 #else
     void ProcessInputAscii(const char *, long);
-#endif // defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
+#endif // defined(HAVE_ENCODING)
 
     wchar_t *KeywordName(int);
 
     unsigned FindLine(unsigned location);
 
-    unsigned FindColumn(unsigned location)
+    //
+    // Finds the column of the right edge of a character.
+    //
+    unsigned FindColumn(unsigned loc)
     {
         assert(locations);
 
-        return Tab::Wcslen(input_buffer, locations[FindLine(location)],
-                           location);
+        return input_buffer[loc] == U_LINE_FEED ? 0
+            : Tab::Wcslen(input_buffer, locations[FindLine(loc)], loc);
     }
 };
 

@@ -1,4 +1,4 @@
-// $Id: unzip.h,v 1.8 2001/09/14 05:31:34 ericb Exp $
+// $Id: unzip.h,v 1.9 2002/07/30 16:30:03 ericb Exp $
 
 #ifndef unzip_INCLUDED
 #define unzip_INCLUDED
@@ -186,7 +186,7 @@ namespace Jikes { // Open namespace Jikes block
 #endif
 
 #ifndef MESSAGE   /* only used twice, for fixed strings--NOT general-purpose */
-#  define MESSAGE(str,len,flag)  fprintf(stderr,(char *)(str))
+#  define MESSAGE(str, len, flag)  fprintf(stderr, (char *) (str))
 #endif
 
 #ifndef FLUSH           /* default is to simply write the buffer to stdout */
@@ -194,7 +194,7 @@ namespace Jikes { // Open namespace Jikes block
 #define FLUSH(n) memcpy(global_bufferp, slide_buffer, n); global_bufferp += n
 #endif
 /* Warning: the fwrite above might not work on 16-bit compilers, since
-   0x8000 might be interpreted as -32,768 by the library function. */
+   0x8000 might be interpreted as -32768 by the library function. */
 
 #ifndef Trace
 #  ifdef DEBUG
@@ -340,9 +340,12 @@ public:
     static int lbits;           /* bits in base literal/length lookup table */
     static int dbits;           /* bits in base distance lookup table */
 
-    static int huft_build(unsigned *b,unsigned n, unsigned s, unsigned short *d, unsigned short *e, struct huft **t, int *m);
+    static int huft_build(unsigned *b, unsigned n, unsigned s,
+                          unsigned short *d, unsigned short *e,
+                          struct huft **t, int *m);
     static int huft_free(struct huft *);
-    static int inflate_codes(struct huft *tl,struct huft * td, int  bl,int bd);
+    static int inflate_codes(struct huft *tl, struct huft * td,
+                             int  bl, int bd);
     static int inflate_stored();
     static int inflate_fixed();
     static int inflate_dynamic();

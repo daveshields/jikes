@@ -1,4 +1,4 @@
-// $Id: error.cpp,v 1.92 2002/07/09 08:14:33 cabbey Exp $
+// $Id: error.cpp,v 1.104 2002/09/09 22:52:56 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -27,7 +27,7 @@ void ErrorInfo::Initialize(LexStream *l, wchar_t *m, JikesErrorSeverity s)
     left_line_no = lex_stream -> Line(left_token);
     left_column_no = lex_stream -> Column(left_token);
     right_line_no = lex_stream -> Line(right_token);
-    right_column_no = lex_stream -> Column(right_token);
+    right_column_no = lex_stream -> RightColumn(right_token);
 
     msg = m;
     severity = s;
@@ -73,9 +73,7 @@ wchar_t *ErrorInfo::regularErrorString()
 {
     ErrorString s;
 
-    if (left_token < right_token)
-        PrintLargeSource(s);
-    else PrintSmallSource(s);
+    lex_stream -> OutputSource(this, s);
 
     s << endl << "*** " << getSeverityString() << ": "
       << getErrorMessage();
@@ -83,117 +81,6 @@ wchar_t *ErrorInfo::regularErrorString()
     return s.Array();
 }
 
-//
-// This procedure is invoked to print a large message that may
-// span more than one line. The parameter message points to the
-// starting line. The parameter k points to the error message in
-// the error structure.
-//
-void ErrorInfo::PrintLargeSource(ErrorString &s)
-{
-    if (left_line_no == right_line_no)
-    {
-        if (left_line_no == 0)
-            s << endl;
-        else
-        {
-            s << endl << endl;
-            s.width(6);
-            s << left_line_no << ". ";
-            for (int i = lex_stream -> LineStart(left_line_no);
-                 i <= lex_stream -> LineEnd(left_line_no); i++)
-            {
-                s << lex_stream -> InputBuffer()[i];
-            }
-
-            int offset = lex_stream -> WcharOffset(left_token, right_token);
-            s.width(left_column_no + 8);
-            s << "<";
-            s.width(right_column_no + right_string_length - left_column_no - 1 + offset);
-            s.fill('-');
-            s << ">";
-            s.fill(' ');
-        }
-    }
-    else
-    {
-        s << endl << endl;
-        s.width(left_column_no + 8);
-        s << "<";
-
-        s.width(lex_stream -> LineSegmentLength(left_token));
-        s.fill('-');
-        s << endl;
-        s.fill(' ');
-
-        s.width(6);
-        s << left_line_no << ". ";
-        for (int i = lex_stream -> LineStart(left_line_no);
-             i <= lex_stream -> LineEnd(left_line_no); i++)
-        {
-            s << lex_stream -> InputBuffer()[i];
-        }
-
-        if (right_line_no > left_line_no + 1)
-        {
-            s.width(left_column_no + 7);
-            s << " . . ." << endl;
-        }
-
-        s.width(6);
-        s << right_line_no << ". ";
-        for (int j = lex_stream -> LineStart(right_line_no);
-             j <= lex_stream -> LineEnd(right_line_no); j++)
-        {
-            s << lex_stream -> InputBuffer()[j];
-        }
-
-        int offset = lex_stream -> WcharOffset(right_token);
-        s.width(8);
-        s << "";
-        s.width(right_column_no + right_string_length - 1 + offset);
-        s.fill('-');
-        s << ">";
-        s.fill(' ');
-    }
-}
-
-//
-// This procedure is invoked to print a small message that may
-// only span a single line. The parameter k points to the error
-// message in the error structure.
-//
-void ErrorInfo::PrintSmallSource(ErrorString &s)
-{
-    if (left_line_no == 0)
-        s << endl;
-    else
-    {
-        s << endl << endl;
-        s.width(6);
-        s << left_line_no;
-        s << ". ";
-        for (int i = lex_stream -> LineStart(left_line_no);
-             i <= lex_stream -> LineEnd(left_line_no); i++)
-        {
-            s << lex_stream -> InputBuffer()[i];
-        }
-
-        s.width(left_column_no + 7);
-        s << "";
-        if (left_column_no == right_column_no && right_string_length == 1)
-            s << '^';
-        else
-        {
-            int offset = lex_stream -> WcharOffset(left_token, right_token);
-            s << '<';
-            s.width(right_column_no + right_string_length - left_column_no - 1 + offset);
-            s.fill('-');
-            s << ">";
-            s.fill(' ');
-        }
-    }
-}
 
 wchar_t *ErrorInfo::emacsErrorString()
 {
@@ -210,13 +97,14 @@ wchar_t *ErrorInfo::emacsErrorString()
 
 
 SemanticError::SemanticError(Control &control_,
-                             FileSymbol *file_symbol) : num_errors(0),
-                                                        num_warnings(0),
-                                                        control(control_),
-                                                        lex_stream(file_symbol -> lex_stream),
-                                                        clone_count(0),
-                                                        buffer(1024),
-                                                        error(512)
+                             FileSymbol *file_symbol)
+    : num_errors(0),
+      num_warnings(0),
+      control(control_),
+      lex_stream(file_symbol -> lex_stream),
+      clone_count(0),
+      buffer(1024),
+      error(512)
 {
     ErrorInfo::emacs_style_report = ! control.option.errors;
 }
@@ -411,10 +299,9 @@ void SemanticError::Report(SemanticErrorKind msg_code,
         }
     }
 
-    error[i].num         = i;
-    error[i].left_token  = (left_token > right_token ? right_token : left_token);
+    error[i].num = i;
+    error[i].left_token = (left_token > right_token ? right_token : left_token);
     error[i].right_token = right_token;
-    error[i].right_string_length = lex_stream -> NameStringLength(right_token);
 
     //
     // Dump the error immediately ?
@@ -445,6 +332,9 @@ void SemanticError::StaticInitializer()
     warning[REDUNDANT_MODIFIER] = 1;
     warning[RECOMMENDED_MODIFIER_ORDER] = 1;
     warning[OBSOLESCENT_BRACKETS] = 1;
+    warning[DUPLICATE_THROWS_CLAUSE_CLASS] = 1;
+    warning[REDUNDANT_THROWS_CLAUSE_CLASS] = 1;
+    warning[UNCHECKED_THROWS_CLAUSE_CLASS] = 1;
     warning[NO_TYPES] = 1;
 
     warning[DEPRECATED_TYPE] = 1;
@@ -460,15 +350,9 @@ void SemanticError::StaticInitializer()
     warning[ONE_UNNAMED_PACKAGE] = 1;
     warning[RECOMPILATION] = 1;
     warning[METHOD_WITH_CONSTRUCTOR_NAME] = 1;
-
     warning[DEFAULT_METHOD_NOT_OVERRIDDEN] = 1;
-
-    //
-    // TODO: Review the cases below. They should be flagged as errors.
-    //       However, since javac does not flag them at all, we only issue
-    //       a warning.
-    warning[INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL] = 2;
-    warning[INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER] = 2;
+    warning[INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL] = 1;
+    warning[INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER] = 1;
 
     //
     // Something stronger than a warning, but code will be generated anyway
@@ -479,6 +363,8 @@ void SemanticError::StaticInitializer()
     warning[UNNECESSARY_PARENTHESIS] = 2;
     warning[ZERO_DIVIDE_CAUTION] = 2;
     warning[UNIMPLEMENTABLE_INTERFACE] = 2;
+    warning[UNIMPLEMENTABLE_CLASS] = 2;
+    warning[INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_TYPE] = 2;
 
 #ifdef JIKES_DEBUG
     for (int i = 0; i < _num_kinds; i++)
@@ -510,7 +396,6 @@ void SemanticError::StaticInitializer()
     print_message[CODE_OVERFLOW] = PrintCODE_OVERFLOW;
     print_message[NEGATIVE_ARRAY_SIZE] = PrintNEGATIVE_ARRAY_SIZE;
     print_message[UNNECESSARY_PARENTHESIS] = PrintUNNECESSARY_PARENTHESIS;
-    print_message[CANNOT_COMPUTE_COLUMNS] = PrintCANNOT_COMPUTE_COLUMNS;
     print_message[EMPTY_DECLARATION] = PrintEMPTY_DECLARATION;
     print_message[REDUNDANT_MODIFIER] = PrintREDUNDANT_MODIFIER;
     print_message[RECOMMENDED_MODIFIER_ORDER] = PrintRECOMMENDED_MODIFIER_ORDER;
@@ -521,30 +406,40 @@ void SemanticError::StaticInitializer()
     print_message[PACKAGE_TYPE_CONFLICT] = PrintPACKAGE_TYPE_CONFLICT;
     print_message[DIRECTORY_FILE_CONFLICT] = PrintDIRECTORY_FILE_CONFLICT;
     print_message[FILE_FILE_CONFLICT] = PrintFILE_FILE_CONFLICT;
-    print_message[MISMATCHED_TYPE_AND_FILE_NAMES] = PrintMISMATCHED_TYPE_AND_FILE_NAMES;
-    print_message[REFERENCE_TO_TYPE_IN_MISMATCHED_FILE] = PrintREFERENCE_TO_TYPE_IN_MISMATCHED_FILE;
+    print_message[MISMATCHED_TYPE_AND_FILE_NAMES] =
+        PrintMISMATCHED_TYPE_AND_FILE_NAMES;
+    print_message[REFERENCE_TO_TYPE_IN_MISMATCHED_FILE] =
+        PrintREFERENCE_TO_TYPE_IN_MISMATCHED_FILE;
     print_message[DUPLICATE_INNER_TYPE_NAME] = PrintDUPLICATE_INNER_TYPE_NAME;
     print_message[DUPLICATE_TYPE_DECLARATION] = PrintDUPLICATE_TYPE_DECLARATION;
+    print_message[DUPLICATE_IMPORT_NAME] = PrintDUPLICATE_IMPORT_NAME;
     print_message[UNNECESSARY_TYPE_IMPORT] = PrintUNNECESSARY_TYPE_IMPORT;
     print_message[DUPLICATE_ACCESS_MODIFIER] = PrintDUPLICATE_ACCESS_MODIFIER;
     print_message[DUPLICATE_MODIFIER] = PrintDUPLICATE_MODIFIER;
     print_message[FINAL_ABSTRACT_CLASS] = PrintFINAL_ABSTRACT_CLASS;
     print_message[VOLATILE_FINAL_FIELD] = PrintVOLATILE_FINAL_FIELD;
-    print_message[INVALID_TOP_LEVEL_CLASS_MODIFIER] = PrintINVALID_TOP_LEVEL_CLASS_MODIFIER;
-    print_message[INVALID_INNER_CLASS_MODIFIER] = PrintINVALID_INNER_CLASS_MODIFIER;
-    print_message[INVALID_STATIC_INNER_CLASS_MODIFIER] = PrintINVALID_STATIC_INNER_CLASS_MODIFIER;
-    print_message[INVALID_LOCAL_CLASS_MODIFIER] = PrintINVALID_LOCAL_CLASS_MODIFIER;
+    print_message[INVALID_TOP_LEVEL_CLASS_MODIFIER] =
+        PrintINVALID_TOP_LEVEL_CLASS_MODIFIER;
+    print_message[INVALID_INNER_CLASS_MODIFIER] =
+        PrintINVALID_INNER_CLASS_MODIFIER;
+    print_message[INVALID_STATIC_INNER_CLASS_MODIFIER] =
+        PrintINVALID_STATIC_INNER_CLASS_MODIFIER;
+    print_message[INVALID_LOCAL_CLASS_MODIFIER] =
+        PrintINVALID_LOCAL_CLASS_MODIFIER;
     print_message[INVALID_INTERFACE_MODIFIER] = PrintINVALID_INTERFACE_MODIFIER;
     print_message[INVALID_FIELD_MODIFIER] = PrintINVALID_FIELD_MODIFIER;
     print_message[INVALID_LOCAL_MODIFIER] = PrintINVALID_LOCAL_MODIFIER;
     print_message[INVALID_METHOD_MODIFIER] = PrintINVALID_METHOD_MODIFIER;
     print_message[INVALID_SIGNATURE_MODIFIER] = PrintINVALID_SIGNATURE_MODIFIER;
-    print_message[INVALID_CONSTRUCTOR_MODIFIER] = PrintINVALID_CONSTRUCTOR_MODIFIER;
+    print_message[INVALID_CONSTRUCTOR_MODIFIER] =
+        PrintINVALID_CONSTRUCTOR_MODIFIER;
     print_message[INVALID_CONSTANT_MODIFIER] = PrintINVALID_CONSTANT_MODIFIER;
     print_message[UNINITIALIZED_FIELD] = PrintUNINITIALIZED_FIELD;
     print_message[RECOMPILATION] = PrintRECOMPILATION;
+    print_message[PACKAGE_NOT_TYPE] = PrintPACKAGE_NOT_TYPE;
     print_message[TYPE_NOT_FOUND] = PrintTYPE_NOT_FOUND;
-    print_message[IMPORT_FROM_UNNAMED_PACKAGE] = PrintIMPORT_FROM_UNNAMED_PACKAGE;
+    print_message[IMPORT_FROM_UNNAMED_PACKAGE] =
+        PrintIMPORT_FROM_UNNAMED_PACKAGE;
     print_message[DUPLICATE_ON_DEMAND_IMPORT] = PrintDUPLICATE_ON_DEMAND_IMPORT;
     print_message[UNKNOWN_ON_DEMAND_IMPORT] = PrintUNKNOWN_ON_DEMAND_IMPORT;
     print_message[IMPORT_NOT_CANONICAL] = PrintIMPORT_NOT_CANONICAL;
@@ -557,16 +452,24 @@ void SemanticError::StaticInitializer()
     print_message[DUPLICATE_FIELD] = PrintDUPLICATE_FIELD;
     print_message[DUPLICATE_METHOD] = PrintDUPLICATE_METHOD;
     print_message[DUPLICATE_CONSTRUCTOR] = PrintDUPLICATE_CONSTRUCTOR;
-    print_message[MISMATCHED_INHERITED_METHOD] = PrintMISMATCHED_INHERITED_METHOD;
+    print_message[MISMATCHED_INHERITED_METHOD] =
+        PrintMISMATCHED_INHERITED_METHOD;
     print_message[MISMATCHED_IMPLICIT_METHOD] = PrintMISMATCHED_IMPLICIT_METHOD;
     print_message[UNIMPLEMENTABLE_INTERFACE] = PrintUNIMPLEMENTABLE_INTERFACE;
-    print_message[MISMATCHED_INHERITED_METHOD_EXTERNALLY] = PrintMISMATCHED_INHERITED_METHOD_EXTERNALLY;
+    print_message[UNIMPLEMENTABLE_CLASS] = PrintUNIMPLEMENTABLE_CLASS;
+    print_message[MISMATCHED_INHERITED_METHOD_EXTERNALLY] =
+        PrintMISMATCHED_INHERITED_METHOD_EXTERNALLY;
     print_message[DUPLICATE_FORMAL_PARAMETER] = PrintDUPLICATE_FORMAL_PARAMETER;
-    print_message[MISSPELLED_CONSTRUCTOR_NAME] = PrintMISSPELLED_CONSTRUCTOR_NAME;
-    print_message[MISMATCHED_CONSTRUCTOR_NAME] = PrintMISMATCHED_CONSTRUCTOR_NAME;
-    print_message[METHOD_WITH_CONSTRUCTOR_NAME] = PrintMETHOD_WITH_CONSTRUCTOR_NAME;
-    print_message[DUPLICATE_LOCAL_VARIABLE_DECLARATION] = PrintDUPLICATE_LOCAL_VARIABLE_DECLARATION;
-    print_message[DUPLICATE_LOCAL_TYPE_DECLARATION] = PrintDUPLICATE_LOCAL_TYPE_DECLARATION;
+    print_message[MISSPELLED_CONSTRUCTOR_NAME] =
+        PrintMISSPELLED_CONSTRUCTOR_NAME;
+    print_message[MISMATCHED_CONSTRUCTOR_NAME] =
+        PrintMISMATCHED_CONSTRUCTOR_NAME;
+    print_message[METHOD_WITH_CONSTRUCTOR_NAME] =
+        PrintMETHOD_WITH_CONSTRUCTOR_NAME;
+    print_message[DUPLICATE_LOCAL_VARIABLE_DECLARATION] =
+        PrintDUPLICATE_LOCAL_VARIABLE_DECLARATION;
+    print_message[DUPLICATE_LOCAL_TYPE_DECLARATION] =
+        PrintDUPLICATE_LOCAL_TYPE_DECLARATION;
     print_message[MULTIPLE_DEFAULT_LABEL] = PrintMULTIPLE_DEFAULT_LABEL;
     print_message[UNDECLARED_LABEL] = PrintUNDECLARED_LABEL;
     print_message[DUPLICATE_LABEL] = PrintDUPLICATE_LABEL;
@@ -585,47 +488,69 @@ void SemanticError::StaticInitializer()
     print_message[METHOD_OVERLOAD_NOT_FOUND] = PrintMETHOD_OVERLOAD_NOT_FOUND;
     print_message[METHOD_NOT_FOUND] = PrintMETHOD_NOT_FOUND;
     print_message[METHOD_NAME_MISSPELLED] = PrintMETHOD_NAME_MISSPELLED;
-    print_message[HIDDEN_METHOD_IN_ENCLOSING_CLASS] = PrintHIDDEN_METHOD_IN_ENCLOSING_CLASS;
+    print_message[HIDDEN_METHOD_IN_ENCLOSING_CLASS] =
+        PrintHIDDEN_METHOD_IN_ENCLOSING_CLASS;
     print_message[FIELD_NOT_METHOD] = PrintFIELD_NOT_METHOD;
     print_message[TYPE_NOT_METHOD] = PrintTYPE_NOT_METHOD;
     print_message[TYPE_NOT_FIELD] = PrintTYPE_NOT_FIELD;
     print_message[METHOD_NOT_CLASS_METHOD] = PrintMETHOD_NOT_CLASS_METHOD;
-    print_message[AMBIGUOUS_CONSTRUCTOR_INVOCATION] = PrintAMBIGUOUS_CONSTRUCTOR_INVOCATION;
-    print_message[AMBIGUOUS_METHOD_INVOCATION] = PrintAMBIGUOUS_METHOD_INVOCATION;
+    print_message[AMBIGUOUS_CONSTRUCTOR_INVOCATION] =
+        PrintAMBIGUOUS_CONSTRUCTOR_INVOCATION;
+    print_message[AMBIGUOUS_METHOD_INVOCATION] =
+        PrintAMBIGUOUS_METHOD_INVOCATION;
     print_message[CONSTRUCTOR_NOT_FOUND] = PrintCONSTRUCTOR_NOT_FOUND;
-    print_message[METHOD_FOUND_FOR_CONSTRUCTOR] = PrintMETHOD_FOUND_FOR_CONSTRUCTOR;
+    print_message[METHOD_FOUND_FOR_CONSTRUCTOR] =
+        PrintMETHOD_FOUND_FOR_CONSTRUCTOR;
+    print_message[CONSTRUCTOR_OVERLOAD_NOT_FOUND] =
+        PrintCONSTRUCTOR_OVERLOAD_NOT_FOUND;
     print_message[ABSTRACT_TYPE_CREATION] = PrintABSTRACT_TYPE_CREATION;
-    print_message[INVALID_INSTANCEOF_CONVERSION] = PrintINVALID_INSTANCEOF_CONVERSION;
+    print_message[INVALID_INSTANCEOF_CONVERSION] =
+        PrintINVALID_INSTANCEOF_CONVERSION;
     print_message[INVALID_CAST_CONVERSION] = PrintINVALID_CAST_CONVERSION;
     print_message[INVALID_CAST_TYPE] = PrintINVALID_CAST_TYPE;
-    print_message[INCOMPATIBLE_TYPE_FOR_INITIALIZATION] = PrintINCOMPATIBLE_TYPE_FOR_INITIALIZATION;
-    print_message[INCOMPATIBLE_TYPE_FOR_ASSIGNMENT] = PrintINCOMPATIBLE_TYPE_FOR_ASSIGNMENT;
-    print_message[INCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION] = PrintINCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION;
-    print_message[INCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION] = PrintINCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION;
+    print_message[INCOMPATIBLE_TYPE_FOR_INITIALIZATION] =
+        PrintINCOMPATIBLE_TYPE_FOR_INITIALIZATION;
+    print_message[INCOMPATIBLE_TYPE_FOR_ASSIGNMENT] =
+        PrintINCOMPATIBLE_TYPE_FOR_ASSIGNMENT;
+    print_message[INCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION] =
+        PrintINCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION;
+    print_message[INCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION] =
+        PrintINCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION;
     print_message[VOID_ARRAY] = PrintVOID_ARRAY;
+    print_message[DUPLICATE_THROWS_CLAUSE_CLASS] =
+        PrintDUPLICATE_THROWS_CLAUSE_CLASS;
+    print_message[REDUNDANT_THROWS_CLAUSE_CLASS] =
+        PrintREDUNDANT_THROWS_CLAUSE_CLASS;
+    print_message[UNCHECKED_THROWS_CLAUSE_CLASS] =
+        PrintUNCHECKED_THROWS_CLAUSE_CLASS;
     print_message[TYPE_NOT_THROWABLE] = PrintTYPE_NOT_THROWABLE;
-    print_message[TYPE_NOT_PRIMITIVE] = PrintTYPE_NOT_PRIMITIVE;
     print_message[TYPE_NOT_INTEGRAL] = PrintTYPE_NOT_INTEGRAL;
     print_message[TYPE_NOT_NUMERIC] = PrintTYPE_NOT_NUMERIC;
     print_message[TYPE_NOT_INTEGER] = PrintTYPE_NOT_INTEGER;
     print_message[TYPE_NOT_BOOLEAN] = PrintTYPE_NOT_BOOLEAN;
     print_message[TYPE_NOT_ARRAY] = PrintTYPE_NOT_ARRAY;
     print_message[TYPE_NOT_REFERENCE] = PrintTYPE_NOT_REFERENCE;
-    print_message[TYPE_NOT_VALID_FOR_SWITCH] = PrintTYPE_NOT_VALID_FOR_SWITCH;
     print_message[TYPE_IS_VOID] = PrintTYPE_IS_VOID;
-    print_message[VALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE] = PrintVALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE;
-    print_message[TYPE_NOT_CONVERTIBLE_TO_SWITCH_TYPE] = PrintTYPE_NOT_CONVERTIBLE_TO_SWITCH_TYPE;
+    print_message[VALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE] =
+        PrintVALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE;
     print_message[DUPLICATE_CASE_VALUE] = PrintDUPLICATE_CASE_VALUE;
     print_message[MISPLACED_THIS_EXPRESSION] = PrintMISPLACED_THIS_EXPRESSION;
     print_message[MISPLACED_SUPER_EXPRESSION] = PrintMISPLACED_SUPER_EXPRESSION;
-    print_message[VARIABLE_NOT_DEFINITELY_UNASSIGNED] = PrintVARIABLE_NOT_DEFINITELY_UNASSIGNED;
-    print_message[VARIABLE_NOT_DEFINITELY_UNASSIGNED_IN_LOOP] = PrintVARIABLE_NOT_DEFINITELY_UNASSIGNED_IN_LOOP;
+    print_message[VARIABLE_NOT_DEFINITELY_UNASSIGNED] =
+        PrintVARIABLE_NOT_DEFINITELY_UNASSIGNED;
+    print_message[VARIABLE_NOT_DEFINITELY_UNASSIGNED_IN_LOOP] =
+        PrintVARIABLE_NOT_DEFINITELY_UNASSIGNED_IN_LOOP;
     print_message[FINAL_VARIABLE_NOT_BLANK] = PrintFINAL_VARIABLE_NOT_BLANK;
-    print_message[FINAL_FIELD_ASSIGNMENT_NOT_SIMPLE] = PrintFINAL_FIELD_ASSIGNMENT_NOT_SIMPLE;
-    print_message[UNINITIALIZED_FINAL_VARIABLE] = PrintUNINITIALIZED_FINAL_VARIABLE;
-    print_message[UNINITIALIZED_STATIC_FINAL_VARIABLE] = PrintUNINITIALIZED_STATIC_FINAL_VARIABLE;
-    print_message[UNINITIALIZED_FINAL_VARIABLE_IN_CONSTRUCTOR] = PrintUNINITIALIZED_FINAL_VARIABLE_IN_CONSTRUCTOR;
-    print_message[UNINITIALIZED_FINAL_VARIABLE_IN_INTERFACE] = PrintUNINITIALIZED_FINAL_VARIABLE_IN_INTERFACE;
+    print_message[FINAL_FIELD_ASSIGNMENT_NOT_SIMPLE] =
+        PrintFINAL_FIELD_ASSIGNMENT_NOT_SIMPLE;
+    print_message[UNINITIALIZED_FINAL_VARIABLE] =
+        PrintUNINITIALIZED_FINAL_VARIABLE;
+    print_message[UNINITIALIZED_STATIC_FINAL_VARIABLE] =
+        PrintUNINITIALIZED_STATIC_FINAL_VARIABLE;
+    print_message[UNINITIALIZED_FINAL_VARIABLE_IN_CONSTRUCTOR] =
+        PrintUNINITIALIZED_FINAL_VARIABLE_IN_CONSTRUCTOR;
+    print_message[UNINITIALIZED_FINAL_VARIABLE_IN_INTERFACE] =
+        PrintUNINITIALIZED_FINAL_VARIABLE_IN_INTERFACE;
     print_message[INIT_SCALAR_WITH_ARRAY] = PrintINIT_SCALAR_WITH_ARRAY;
     print_message[INIT_ARRAY_WITH_SCALAR] = PrintINIT_ARRAY_WITH_SCALAR;
     print_message[INVALID_BYTE_VALUE] = PrintINVALID_BYTE_VALUE;
@@ -635,73 +560,110 @@ void SemanticError::StaticInitializer()
     print_message[INVALID_LONG_VALUE] = PrintINVALID_LONG_VALUE;
     print_message[INVALID_FLOAT_VALUE] = PrintINVALID_FLOAT_VALUE;
     print_message[INVALID_DOUBLE_VALUE] = PrintINVALID_DOUBLE_VALUE;
-    print_message[RETURN_STATEMENT_IN_INITIALIZER] = PrintRETURN_STATEMENT_IN_INITIALIZER;
+    print_message[RETURN_STATEMENT_IN_INITIALIZER] =
+        PrintRETURN_STATEMENT_IN_INITIALIZER;
     print_message[ABRUPT_INITIALIZER] = PrintABRUPT_INITIALIZER;
-    print_message[MISPLACED_RETURN_WITH_EXPRESSION] = PrintMISPLACED_RETURN_WITH_EXPRESSION;
-    print_message[MISPLACED_RETURN_WITH_NO_EXPRESSION] = PrintMISPLACED_RETURN_WITH_NO_EXPRESSION;
-    print_message[MISMATCHED_RETURN_AND_METHOD_TYPE] = PrintMISMATCHED_RETURN_AND_METHOD_TYPE;
+    print_message[MISPLACED_RETURN_WITH_EXPRESSION] =
+        PrintMISPLACED_RETURN_WITH_EXPRESSION;
+    print_message[MISPLACED_RETURN_WITH_NO_EXPRESSION] =
+        PrintMISPLACED_RETURN_WITH_NO_EXPRESSION;
+    print_message[MISMATCHED_RETURN_AND_METHOD_TYPE] =
+        PrintMISMATCHED_RETURN_AND_METHOD_TYPE;
     print_message[EXPRESSION_NOT_THROWABLE] = PrintEXPRESSION_NOT_THROWABLE;
     print_message[MISPLACED_BREAK_STATEMENT] = PrintMISPLACED_BREAK_STATEMENT;
-    print_message[MISPLACED_CONTINUE_STATEMENT] = PrintMISPLACED_CONTINUE_STATEMENT;
-    print_message[MISPLACED_EXPLICIT_CONSTRUCTOR] = PrintMISPLACED_EXPLICIT_CONSTRUCTOR;
+    print_message[MISPLACED_CONTINUE_STATEMENT] =
+        PrintMISPLACED_CONTINUE_STATEMENT;
+    print_message[MISPLACED_EXPLICIT_CONSTRUCTOR] =
+        PrintMISPLACED_EXPLICIT_CONSTRUCTOR;
     print_message[INVALID_CONTINUE_TARGET] = PrintINVALID_CONTINUE_TARGET;
-    print_message[NON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD] = PrintNON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD;
-    print_message[NON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD] = PrintNON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD;
-    print_message[NON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD] = PrintNON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD;
+    print_message[NON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD] =
+        PrintNON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD;
+    print_message[NON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD] =
+        PrintNON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD;
+    print_message[NON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD] =
+        PrintNON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD;
+    print_message[ANONYMOUS_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD] =
+        PrintANONYMOUS_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD;
     print_message[DUPLICATE_INTERFACE] = PrintDUPLICATE_INTERFACE;
     print_message[UNKNOWN_AMBIGUOUS_NAME] = PrintUNKNOWN_AMBIGUOUS_NAME;
     print_message[CIRCULAR_INTERFACE] = PrintCIRCULAR_INTERFACE;
     print_message[CIRCULAR_CLASS] = PrintCIRCULAR_CLASS;
     print_message[TYPE_NOT_ACCESSIBLE] = PrintTYPE_NOT_ACCESSIBLE;
     print_message[FIELD_NOT_ACCESSIBLE] = PrintFIELD_NOT_ACCESSIBLE;
-    print_message[PROTECTED_INSTANCE_FIELD_NOT_ACCESSIBLE] = PrintPROTECTED_INSTANCE_FIELD_NOT_ACCESSIBLE;
+    print_message[PROTECTED_INSTANCE_FIELD_NOT_ACCESSIBLE] =
+        PrintPROTECTED_INSTANCE_FIELD_NOT_ACCESSIBLE;
     print_message[METHOD_NOT_ACCESSIBLE] = PrintMETHOD_NOT_ACCESSIBLE;
-    print_message[PROTECTED_INSTANCE_METHOD_NOT_ACCESSIBLE] = PrintPROTECTED_INSTANCE_METHOD_NOT_ACCESSIBLE;
-    print_message[PROTECTED_INTERFACE_METHOD_NOT_ACCESSIBLE] = PrintPROTECTED_INTERFACE_METHOD_NOT_ACCESSIBLE;
+    print_message[PROTECTED_INSTANCE_METHOD_NOT_ACCESSIBLE] =
+        PrintPROTECTED_INSTANCE_METHOD_NOT_ACCESSIBLE;
+    print_message[PROTECTED_INTERFACE_METHOD_NOT_ACCESSIBLE] =
+        PrintPROTECTED_INTERFACE_METHOD_NOT_ACCESSIBLE;
     print_message[CONSTRUCTOR_NOT_ACCESSIBLE] = PrintCONSTRUCTOR_NOT_ACCESSIBLE;
     print_message[PARAMETER_REDECLARED] = PrintPARAMETER_REDECLARED;
-    print_message[BAD_ABSTRACT_METHOD_MODIFIER] = PrintBAD_ABSTRACT_METHOD_MODIFIER;
-    print_message[ABSTRACT_METHOD_MODIFIER_CONFLICT] = PrintABSTRACT_METHOD_MODIFIER_CONFLICT;
+    print_message[BAD_ABSTRACT_METHOD_MODIFIER] =
+        PrintBAD_ABSTRACT_METHOD_MODIFIER;
+    print_message[ABSTRACT_METHOD_MODIFIER_CONFLICT] =
+        PrintABSTRACT_METHOD_MODIFIER_CONFLICT;
     print_message[STRICTFP_NATIVE_METHOD] = PrintSTRICTFP_NATIVE_METHOD;
     print_message[ABSTRACT_METHOD_INVOCATION] = PrintABSTRACT_METHOD_INVOCATION;
     print_message[FINAL_METHOD_OVERRIDE] = PrintFINAL_METHOD_OVERRIDE;
-    print_message[FINAL_IMPLICIT_METHOD_OVERRIDE] = PrintFINAL_IMPLICIT_METHOD_OVERRIDE;
+    print_message[FINAL_IMPLICIT_METHOD_OVERRIDE] =
+        PrintFINAL_IMPLICIT_METHOD_OVERRIDE;
     print_message[INSTANCE_METHOD_OVERRIDE] = PrintINSTANCE_METHOD_OVERRIDE;
-    print_message[INSTANCE_METHOD_OVERRIDE_EXTERNALLY] = PrintINSTANCE_METHOD_OVERRIDE_EXTERNALLY;
+    print_message[INSTANCE_METHOD_OVERRIDE_EXTERNALLY] =
+        PrintINSTANCE_METHOD_OVERRIDE_EXTERNALLY;
     print_message[CLASS_METHOD_OVERRIDE] = PrintCLASS_METHOD_OVERRIDE;
-    print_message[MISMATCHED_OVERRIDDEN_EXCEPTION] = PrintMISMATCHED_OVERRIDDEN_EXCEPTION;
-    print_message[MISMATCHED_IMPLICIT_OVERRIDDEN_EXCEPTION] = PrintMISMATCHED_IMPLICIT_OVERRIDDEN_EXCEPTION;
-    print_message[MISMATCHED_OVERRIDDEN_EXCEPTION_EXTERNALLY] = PrintMISMATCHED_OVERRIDDEN_EXCEPTION_EXTERNALLY;
+    print_message[MISMATCHED_OVERRIDDEN_EXCEPTION] =
+        PrintMISMATCHED_OVERRIDDEN_EXCEPTION;
+    print_message[MISMATCHED_IMPLICIT_OVERRIDDEN_EXCEPTION] =
+        PrintMISMATCHED_IMPLICIT_OVERRIDDEN_EXCEPTION;
+    print_message[MISMATCHED_OVERRIDDEN_EXCEPTION_EXTERNALLY] =
+        PrintMISMATCHED_OVERRIDDEN_EXCEPTION_EXTERNALLY;
     print_message[ABSTRACT_METHOD_WITH_BODY] = PrintABSTRACT_METHOD_WITH_BODY;
-    print_message[NON_ABSTRACT_METHOD_WITHOUT_BODY] = PrintNON_ABSTRACT_METHOD_WITHOUT_BODY;
+    print_message[NON_ABSTRACT_METHOD_WITHOUT_BODY] =
+        PrintNON_ABSTRACT_METHOD_WITHOUT_BODY;
     print_message[BAD_ACCESS_METHOD_OVERRIDE] = PrintBAD_ACCESS_METHOD_OVERRIDE;
-    print_message[BAD_ACCESS_METHOD_OVERRIDE_EXTERNALLY] = PrintBAD_ACCESS_METHOD_OVERRIDE_EXTERNALLY;
+    print_message[BAD_ACCESS_METHOD_OVERRIDE_EXTERNALLY] =
+        PrintBAD_ACCESS_METHOD_OVERRIDE_EXTERNALLY;
     print_message[CIRCULAR_THIS_CALL] = PrintCIRCULAR_THIS_CALL;
-    print_message[INSTANCE_VARIABLE_IN_EXPLICIT_CONSTRUCTOR] = PrintINSTANCE_VARIABLE_IN_EXPLICIT_CONSTRUCTOR;
-    print_message[INSTANCE_METHOD_IN_EXPLICIT_CONSTRUCTOR] = PrintINSTANCE_METHOD_IN_EXPLICIT_CONSTRUCTOR;
+    print_message[INSTANCE_VARIABLE_IN_EXPLICIT_CONSTRUCTOR] =
+        PrintINSTANCE_VARIABLE_IN_EXPLICIT_CONSTRUCTOR;
+    print_message[INSTANCE_METHOD_IN_EXPLICIT_CONSTRUCTOR] =
+        PrintINSTANCE_METHOD_IN_EXPLICIT_CONSTRUCTOR;
     print_message[SYNTHETIC_VARIABLE_ACCESS] = PrintSYNTHETIC_VARIABLE_ACCESS;
-    print_message[SYNTHETIC_METHOD_INVOCATION] = PrintSYNTHETIC_METHOD_INVOCATION;
-    print_message[SYNTHETIC_CONSTRUCTOR_INVOCATION] = PrintSYNTHETIC_CONSTRUCTOR_INVOCATION;
-    print_message[SELF_IN_EXPLICIT_CONSTRUCTOR] = PrintSELF_IN_EXPLICIT_CONSTRUCTOR;
-    print_message[INNER_CONSTRUCTOR_IN_EXPLICIT_CONSTRUCTOR] = PrintINNER_CONSTRUCTOR_IN_EXPLICIT_CONSTRUCTOR;
+    print_message[SYNTHETIC_METHOD_INVOCATION] =
+        PrintSYNTHETIC_METHOD_INVOCATION;
+    print_message[SYNTHETIC_CONSTRUCTOR_INVOCATION] =
+        PrintSYNTHETIC_CONSTRUCTOR_INVOCATION;
+    print_message[SELF_IN_EXPLICIT_CONSTRUCTOR] =
+        PrintSELF_IN_EXPLICIT_CONSTRUCTOR;
+    print_message[INNER_CONSTRUCTOR_IN_EXPLICIT_CONSTRUCTOR] =
+        PrintINNER_CONSTRUCTOR_IN_EXPLICIT_CONSTRUCTOR;
     print_message[EXPRESSION_NOT_CONSTANT] = PrintEXPRESSION_NOT_CONSTANT;
     print_message[UNCAUGHT_METHOD_EXCEPTION] = PrintUNCAUGHT_METHOD_EXCEPTION;
-    print_message[UNCAUGHT_CONSTRUCTOR_EXCEPTION] = PrintUNCAUGHT_CONSTRUCTOR_EXCEPTION;
-    print_message[UNCAUGHT_ANONYMOUS_CONSTRUCTOR_EXCEPTION] = PrintUNCAUGHT_ANONYMOUS_CONSTRUCTOR_EXCEPTION;
+    print_message[UNCAUGHT_CONSTRUCTOR_EXCEPTION] =
+        PrintUNCAUGHT_CONSTRUCTOR_EXCEPTION;
+    print_message[UNCAUGHT_ANONYMOUS_CONSTRUCTOR_EXCEPTION] =
+        PrintUNCAUGHT_ANONYMOUS_CONSTRUCTOR_EXCEPTION;
     print_message[UNCAUGHT_THROWN_EXCEPTION] = PrintUNCAUGHT_THROWN_EXCEPTION;
-    print_message[UNCAUGHT_EXPLICIT_THIS_EXCEPTION] = PrintUNCAUGHT_EXPLICIT_THIS_EXCEPTION;
-    print_message[UNCAUGHT_EXPLICIT_SUPER_EXCEPTION] = PrintUNCAUGHT_EXPLICIT_SUPER_EXCEPTION;
+    print_message[UNCAUGHT_EXPLICIT_THIS_EXCEPTION] =
+        PrintUNCAUGHT_EXPLICIT_THIS_EXCEPTION;
+    print_message[UNCAUGHT_EXPLICIT_SUPER_EXCEPTION] =
+        PrintUNCAUGHT_EXPLICIT_SUPER_EXCEPTION;
     print_message[UNREACHABLE_CATCH_CLAUSE] = PrintUNREACHABLE_CATCH_CLAUSE;
     print_message[UNREACHABLE_STATEMENT] = PrintUNREACHABLE_STATEMENT;
     print_message[UNREACHABLE_STATEMENTS] = PrintUNREACHABLE_STATEMENTS;
     print_message[BLOCKED_CATCH_CLAUSE] = PrintBLOCKED_CATCH_CLAUSE;
-    print_message[VARIABLE_NOT_DEFINITELY_ASSIGNED] = PrintVARIABLE_NOT_DEFINITELY_ASSIGNED;
-    print_message[TYPED_METHOD_WITH_NO_RETURN] = PrintTYPED_METHOD_WITH_NO_RETURN;
+    print_message[VARIABLE_NOT_DEFINITELY_ASSIGNED] =
+        PrintVARIABLE_NOT_DEFINITELY_ASSIGNED;
+    print_message[TYPED_METHOD_WITH_NO_RETURN] =
+        PrintTYPED_METHOD_WITH_NO_RETURN;
 
-    print_message[DEFAULT_METHOD_NOT_OVERRIDDEN] = PrintDEFAULT_METHOD_NOT_OVERRIDDEN;
+    print_message[DEFAULT_METHOD_NOT_OVERRIDDEN] =
+        PrintDEFAULT_METHOD_NOT_OVERRIDDEN;
 
     print_message[ONE_UNNAMED_PACKAGE] = PrintONE_UNNAMED_PACKAGE;
-    print_message[TYPE_NOT_IN_UNNAMED_PACKAGE] = PrintTYPE_NOT_IN_UNNAMED_PACKAGE;
+    print_message[TYPE_NOT_IN_UNNAMED_PACKAGE] =
+        PrintTYPE_NOT_IN_UNNAMED_PACKAGE;
     print_message[TYPE_IN_WRONG_PACKAGE] = PrintTYPE_IN_WRONG_PACKAGE;
     print_message[TYPE_NAME_MISMATCH] = PrintTYPE_NAME_MISMATCH;
 
@@ -718,19 +680,32 @@ void SemanticError::StaticInitializer()
     print_message[STATIC_NOT_INNER_CLASS] = PrintSTATIC_NOT_INNER_CLASS;
     print_message[TYPE_NOT_INNER_CLASS] = PrintTYPE_NOT_INNER_CLASS;
     print_message[SUPER_TYPE_NOT_INNER_CLASS] = PrintSUPER_TYPE_NOT_INNER_CLASS;
-    print_message[STATIC_FIELD_IN_INNER_CLASS_NOT_FINAL] = PrintSTATIC_FIELD_IN_INNER_CLASS_NOT_FINAL;
-    print_message[STATIC_FIELD_IN_INNER_CLASS_NOT_CONSTANT] = PrintSTATIC_FIELD_IN_INNER_CLASS_NOT_CONSTANT;
-    print_message[STATIC_METHOD_IN_INNER_CLASS] = PrintSTATIC_METHOD_IN_INNER_CLASS;
+    print_message[STATIC_FIELD_IN_INNER_CLASS_NOT_FINAL] =
+        PrintSTATIC_FIELD_IN_INNER_CLASS_NOT_FINAL;
+    print_message[STATIC_FIELD_IN_INNER_CLASS_NOT_CONSTANT] =
+        PrintSTATIC_FIELD_IN_INNER_CLASS_NOT_CONSTANT;
+    print_message[STATIC_METHOD_IN_INNER_CLASS] =
+        PrintSTATIC_METHOD_IN_INNER_CLASS;
     print_message[STATIC_TYPE_IN_INNER_CLASS] = PrintSTATIC_TYPE_IN_INNER_CLASS;
-    print_message[STATIC_INITIALIZER_IN_INNER_CLASS] = PrintSTATIC_INITIALIZER_IN_INNER_CLASS;
-    print_message[INNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE] = PrintINNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE;
-    print_message[INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL] = PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL;
-    print_message[INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER] = PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER;
+    print_message[STATIC_INITIALIZER_IN_INNER_CLASS] =
+        PrintSTATIC_INITIALIZER_IN_INNER_CLASS;
+    print_message[INNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE] =
+        PrintINNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE;
+    print_message[INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL] =
+        PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL;
+    print_message[INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER] =
+        PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER;
+    print_message[INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_TYPE] =
+        PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_TYPE;
     print_message[ILLEGAL_THIS_FIELD_ACCESS] = PrintILLEGAL_THIS_FIELD_ACCESS;
-    print_message[CONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS] = PrintCONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS;
-    print_message[ENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION] = PrintENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION;
-    print_message[ENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION] = PrintENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION;
-    print_message[ENCLOSING_INSTANCE_NOT_ACCESSIBLE] = PrintENCLOSING_INSTANCE_NOT_ACCESSIBLE;
+    print_message[CONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS] =
+        PrintCONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS;
+    print_message[ENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION] =
+        PrintENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION;
+    print_message[ENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION] =
+        PrintENCLOSING_INSTANCE_ACCESS_ACROSS_STATIC_REGION;
+    print_message[ENCLOSING_INSTANCE_NOT_ACCESSIBLE] =
+        PrintENCLOSING_INSTANCE_NOT_ACCESSIBLE;
     print_message[INVALID_ENCLOSING_INSTANCE] = PrintINVALID_ENCLOSING_INSTANCE;
     print_message[ZERO_DIVIDE_CAUTION] = PrintZERO_DIVIDE_CAUTION;
     print_message[VOID_TO_STRING] = PrintVOID_TO_STRING;
@@ -855,112 +830,75 @@ int SemanticError::PrintMessages()
     //
     // If the errors have not yet been dumped,...
     //
-    if (! control.option.dump_errors)
+    if (control.option.errors) // regular error messages
     {
-        if (control.option.errors)
+        if (num_errors == 0)
         {
-            if (num_errors == 0)
-            {
-                if (control.option.nowarn) // we only had warnings and they should not be reported
-                    return return_code;
+            if (control.option.nowarn)
+                // we only had warnings and they should not be reported
+                return return_code;
 
-                Coutput << endl << "Issued "
-                        << num_warnings
-                        << (lex_stream -> file_symbol -> semantic == control.system_semantic ? " system" : " semantic")
+            Coutput << endl << "Issued " << num_warnings
+                    << (lex_stream -> file_symbol -> semantic ==
+                        control.system_semantic ? " system" : " semantic")
+                    << " warning" << (num_warnings <= 1 ? "" : "s");
+        }
+        else // we had some errors, and possibly warnings as well
+        {
+            Coutput << endl << "Found " << num_errors
+                    << (lex_stream -> file_symbol -> semantic ==
+                        control.system_semantic ? " system" : " semantic")
+                    << " error" << (num_errors <= 1 ? "" : "s");
+            if (num_warnings > 0 && !control.option.nowarn)
+            {
+                Coutput << " and issued " << num_warnings
                         << " warning" << (num_warnings <= 1 ? "" : "s");
             }
-            else // we had some errors, and possibly warnings as well
-            {
-                Coutput << endl << "Found "
-                        << num_errors
-                        << (lex_stream -> file_symbol -> semantic == control.system_semantic ? " system" : " semantic")
-                        << " error" << (num_errors <= 1 ? "" : "s");
-                if (num_warnings > 0 && !control.option.nowarn)
-                {
-                     Coutput << " and issued "
-                             << num_warnings << " warning" << (num_warnings <= 1 ? "" : "s");
-                }
-            }
-
-            if (lex_stream -> file_symbol -> semantic != control.system_semantic)
-            {
-                Coutput << " compiling \""
-                        << lex_stream -> FileName()
-                        << '\"';
-            }
-            Coutput << ':';
-
-            //
-            //
-            //
-            if (lex_stream -> file_symbol -> semantic != control.system_semantic)
-            {
-                lex_stream -> RereadInput();
-
-                if (! lex_stream -> InputBuffer())
-                {
-                    char *file_name = lex_stream -> FileName();
-                    int length = lex_stream -> FileNameLength();
-                    wchar_t *name = new wchar_t[length + 1];
-                    for (int i = 0; i < length; i++)
-                        name[i] = file_name[i];
-                    name[length] = U_NULL;
-                    control.system_semantic -> ReportSemError(SemanticError::CANNOT_REOPEN_FILE,
-                                                              0,
-                                                              0,
-                                                              name);
-                    delete [] name;
-                }
-            }
-
-            if (lex_stream -> file_symbol -> semantic == control.system_semantic ||
-                lex_stream -> InputBuffer())
-            {
-                SortMessages();
-                for (int k = 0; k < error.Length(); k++)
-                {
-                    if (warning[error[k].msg_code] != 1 ||
-                        ! control.option.nowarn)
-                    {
-                        reportError(k);
-                    }
-                }
-                lex_stream -> DestroyInput();
-            }
         }
-        else
-        {
-            if (lex_stream -> file_symbol -> semantic != control.system_semantic)
-            {
-                if (! lex_stream -> ComputeColumns())
-                {
-                    char *file_name = lex_stream -> FileName();
-                    int length = lex_stream -> FileNameLength();
-                    wchar_t *name = new wchar_t[length + 1];
-                    for (int i = 0; i < length; i++)
-                        name[i] = file_name[i];
-                    name[length] = U_NULL;
-                    control.system_semantic -> ReportSemError(SemanticError::CANNOT_COMPUTE_COLUMNS,
-                                                              0,
-                                                              0,
-                                                              name);
-                    delete [] name;
-                }
-            }
 
-            SortMessages();
-            for (int k = 0; k < error.Length(); k++)
-            {
-                if ((warning[error[k].msg_code] != 1) || (! control.option.nowarn))
-                {
-                    reportError(k);
-                }
-            }
+        if (lex_stream -> file_symbol -> semantic !=
+            control.system_semantic)
+        {
+            Coutput << " compiling \"" << lex_stream -> FileName() << '\"';
+        }
+        Coutput << ':';
+    }
+
+    //
+    // Reopen the file to report the errors, unless we didn't parse it in the
+    // first place.
+    //
+    if (lex_stream -> file_symbol -> semantic != control.system_semantic)
+    {
+        lex_stream -> RereadInput();
+
+        if (! lex_stream -> InputBuffer())
+        {
+            char *file_name = lex_stream -> FileName();
+            int length = lex_stream -> FileNameLength();
+            wchar_t *name = new wchar_t[length + 1];
+            for (int i = 0; i < length; i++)
+                name[i] = file_name[i];
+            name[length] = U_NULL;
+            control.system_semantic ->
+                ReportSemError(SemanticError::CANNOT_REOPEN_FILE, 0, 0, name);
+            delete [] name;
         }
     }
 
-    Coutput.flush();
+    if (lex_stream -> file_symbol -> semantic == control.system_semantic ||
+        lex_stream -> InputBuffer())
+    {
+        SortMessages();
+        for (int k = 0; k < error.Length(); k++)
+        {
+            if (warning[error[k].msg_code] != 1 || ! control.option.nowarn)
+                reportError(k);
+        }
+        lex_stream -> DestroyInput();
+    }
 
+    Coutput.flush();
     return return_code;
 }
 
@@ -970,12 +908,13 @@ void SemanticError::reportError(int k)
                         (print_message[error[k].msg_code]) (error[k], lex_stream, control),
                         (warning[error[k].msg_code] == 1
                          ? ErrorInfo::JIKES_WARNING
-                         : (warning[error[k].msg_code] == 2 && (! control.option.zero_defect)
+                         : ((warning[error[k].msg_code] == 2 &&
+                             ! control.option.zero_defect)
                             ? ErrorInfo::JIKES_CAUTION
                             : ErrorInfo::JIKES_ERROR))
     );
 
-    JikesAPI::getInstance()->reportError(&error[k]);
+    JikesAPI::getInstance() -> reportError(&error[k]);
 }
 
 
@@ -1183,11 +1122,11 @@ wchar_t *SemanticError::PrintCONSTANT_POOL_OVERFLOW(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "Processing of this type, \"";
+    s << "The type \"";
     if (NotDot(err.insert1))
         s << err.insert1 << "/";
     s << err.insert2
-      << "\", produced a constant pool that exceeded the limit of 65535 "
+      << "\" produced a constant pool that exceeded the limit of 65535 "
       << "elements.";
 
     return s.Array();
@@ -1203,7 +1142,8 @@ wchar_t *SemanticError::PrintINTERFACES_OVERFLOW(ErrorInfo &err,
     s << "The type \"";
     if (NotDot(err.insert1))
         s << err.insert1 << "/";
-    s << err.insert2 << "\" implements more than 65535 interfaces.";
+    s << err.insert2
+      << "\" directly implemented more than limit of 65535 interfaces.";
 
     return s.Array();
 }
@@ -1218,7 +1158,7 @@ wchar_t *SemanticError::PrintMETHODS_OVERFLOW(ErrorInfo &err,
     s << "The type \"";
     if (NotDot(err.insert1))
         s << err.insert1 << "/";
-    s << err.insert2 << "\" contains more than 65535 methods.";
+    s << err.insert2 << "\" declared more than the limit of 65535 methods.";
 
     return s.Array();
 }
@@ -1235,7 +1175,8 @@ wchar_t *SemanticError::PrintSTRING_OVERFLOW(ErrorInfo &err,
         s << err.insert1 << "/";
     s << err.insert2
       << "\" generated one or more strings whose length exceeds the maximum "
-      << "length of 65535 Utf8 chacracters.";
+      << "length of 65535 bytes when encoded in Utf8. Lengthy identifiers, "
+      << "method signatures, and string literals can all cause this problem.";
 
     return s.Array();
 }
@@ -1251,8 +1192,8 @@ wchar_t *SemanticError::PrintPARAMETER_OVERFLOW(ErrorInfo &err,
     if (NotDot(err.insert2))
         s << err.insert2 << "/";
     s << err.insert3
-      << "\" contains more than 255 formal parameters. Note that a "
-      << "parameter of type long or double counts as 2 parameters.";
+      << "\" contained more than the limit of 255 formal parameters. Note "
+      << "that a parameter of type long or double counts as 2 parameters.";
 
     return s.Array();
 }
@@ -1279,7 +1220,7 @@ wchar_t *SemanticError::PrintFIELDS_OVERFLOW(ErrorInfo &err,
     s << "The type \"";
     if (NotDot(err.insert1))
         s << err.insert1 << "/";
-    s << err.insert2 << "\" contains more than 65535 fields.";
+    s << err.insert2 << "\" declared more than the limit of 65535 fields.";
 
     return s.Array();
 }
@@ -1294,7 +1235,8 @@ wchar_t *SemanticError::PrintLOCAL_VARIABLES_OVERFLOW(ErrorInfo &err,
     s << "Method \"" << err.insert1 << "\" in type \"";
     if (NotDot(err.insert2))
         s << err.insert2 << "/";
-    s << err.insert3 << "\" contains more than 65535 local variables.";
+    s << err.insert3
+      << "\" contained more than the limit of 65535 local variables.";
 
     return s.Array();
 }
@@ -1306,12 +1248,11 @@ wchar_t *SemanticError::PrintSTACK_OVERFLOW(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "Processing of the method or constructor \"" << err.insert1
-      << "\" in type \"";
+    s << "Method \"" << err.insert1 << "\" in type \"";
     if (NotDot(err.insert2))
         s << err.insert2 << "/";
     s << err.insert3
-      << "\" requires a stack that exceeds the maximum limit of 65535.";
+      << "\" required a stack that exceeds the limit of 65535 positions.";
 
     return s.Array();
 }
@@ -1323,8 +1264,7 @@ wchar_t *SemanticError::PrintCODE_OVERFLOW(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "Processing of the method or constructor \"" << err.insert1
-      << "\" in type \"";
+    s << "Method \"" << err.insert1 << "\" in type \"";
     if (NotDot(err.insert2))
         s << err.insert2 << "/";
     s << err.insert3 << "\" produced a code attribute that exceeds the "
@@ -1354,19 +1294,6 @@ wchar_t *SemanticError::PrintUNNECESSARY_PARENTHESIS(ErrorInfo &err,
 
     s << "Parenthesis surrounding a variable are syntactically unnecessary. "
       << "While legal now, they were illegal in previous versions of Java.";
-
-    return s.Array();
-}
-
-
-wchar_t *SemanticError::PrintCANNOT_COMPUTE_COLUMNS(ErrorInfo &err,
-                                                    LexStream *lex_stream,
-                                                    Control &control)
-{
-    ErrorString s;
-
-    s << "Unable to reopen file \"" << err.insert1
-      << "\". Therefore, column positions may be incorrect.";
 
     return s.Array();
 }
@@ -1558,9 +1485,9 @@ wchar_t *SemanticError::PrintDUPLICATE_INNER_TYPE_NAME(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "The inner type named \"" << err.insert1
-      << "\" is nested in an outer class of the same name at location "
-      << err.insert2 << '.';
+    s << "The nested type name \"" << err.insert1
+      << "\" is illegal, as it is enclosed in another class with the same "
+      << "simple name at location " << err.insert2 << '.';
 
     return s.Array();
 }
@@ -1574,6 +1501,20 @@ wchar_t *SemanticError::PrintDUPLICATE_TYPE_DECLARATION(ErrorInfo &err,
 
     s << "Duplicate declaration of type \"" << err.insert1
       << "\". The other occurrence is at location " << err.insert2 << '.';
+
+    return s.Array();
+}
+
+
+wchar_t *SemanticError::PrintDUPLICATE_IMPORT_NAME(ErrorInfo &err,
+                                                   LexStream *lex_stream,
+                                                   Control &control)
+{
+    ErrorString s;
+
+    s << "The imported simple name \"" << err.insert1
+      << "\" names a different type than the other use of the name at location "
+      << err.insert2 << '.';
 
     return s.Array();
 }
@@ -1814,6 +1755,19 @@ wchar_t *SemanticError::PrintRECOMPILATION(ErrorInfo &err,
 }
 
 
+wchar_t *SemanticError::PrintPACKAGE_NOT_TYPE(ErrorInfo &err,
+                                              LexStream *lex_stream,
+                                              Control &control)
+{
+    ErrorString s;
+
+    s << "Package \"" << err.insert1
+      << "\" was found when a type was expected.";
+
+    return s.Array();
+}
+
+
 wchar_t *SemanticError::PrintTYPE_NOT_FOUND(ErrorInfo &err,
                                             LexStream *lex_stream,
                                             Control &control)
@@ -1999,8 +1953,8 @@ wchar_t *SemanticError::PrintMISMATCHED_INHERITED_METHOD(ErrorInfo &err,
     ErrorString s;
 
     s << "The return type of method \"" << err.insert1
-      << "\" does not match the return type of method \"" << err.insert2
-      << "\" inherited from type \"";
+      << "\" does not match the return type of the accessible method \""
+      << err.insert2 << "\" declared in type \"";
     if (NotDot(err.insert3))
         s << err.insert3 << "/";
     s << err.insert4 << "\".";
@@ -2029,9 +1983,36 @@ wchar_t *SemanticError::PrintUNIMPLEMENTABLE_INTERFACE(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "The interface is legal, but cannot be implemented: method \""
-      << err.insert1 << "\" has a different return type than \""
-      << err.insert2 << "\" declared in Object.";
+    s << "Interface \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2 << "\" is legal, but cannot be implemented: method \""
+      << err.insert3 << "\" has a different return type than \""
+      << err.insert4 << "\" declared in java.lang.Object.";
+
+    return s.Array();
+}
+
+
+wchar_t *SemanticError::PrintUNIMPLEMENTABLE_CLASS(ErrorInfo &err,
+                                                   LexStream *lex_stream,
+                                                   Control &control)
+{
+    ErrorString s;
+
+    s << "Class \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2 << "\" cannot be implemented: method \"" << err.insert3
+      << "\" declared in \"";
+    if (NotDot(err.insert4))
+        s << err.insert4 << '/';
+    s << err.insert5 << "\" has a different return type than the non-inherited "
+      << "default access abstract method \"" << err.insert6
+      << "\" declared in the superclass \"";
+    if (NotDot(err.insert7))
+        s << err.insert7 << '/';
+    s << err.insert8 << "\".";
 
     return s.Array();
 }
@@ -2577,21 +2558,35 @@ wchar_t *SemanticError::PrintMETHOD_FOUND_FOR_CONSTRUCTOR(ErrorInfo &err,
 }
 
 
+wchar_t *SemanticError::PrintCONSTRUCTOR_OVERLOAD_NOT_FOUND(ErrorInfo &err,
+                                                            LexStream *lex_stream,
+                                                            Control &control)
+{
+    ErrorString s;
+
+    s << "No applicable overload was found for a constructor of type \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << "/";
+    s << err.insert2 << "\". Perhaps you wanted the overloaded version \""
+      << err.insert3 << "\" instead?";
+
+    return s.Array();
+}
+
+
 wchar_t *SemanticError::PrintINCOMPATIBLE_TYPE_FOR_INITIALIZATION(ErrorInfo &err,
                                                                   LexStream *lex_stream,
                                                                   Control &control)
 {
     ErrorString s;
 
-    s << "The type of the left-hand side (or array type) in this "
-      << "initialization (or array creation expression), \"";
-    if (NotDot(err.insert1))
-        s << err.insert1 << '/';
-    s << err.insert2 << "\", is not compatible with the type of the "
-      << "right-hand side expression, \"";
+    s << "The type of the initializer, \"";
     if (NotDot(err.insert3))
         s << err.insert3 << '/';
-    s << err.insert4 << "\".";
+    s << err.insert4 << "\", is not assignable to the variable, of type \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2 << "\".";
 
     return s.Array();
 }
@@ -2603,14 +2598,13 @@ wchar_t *SemanticError::PrintINCOMPATIBLE_TYPE_FOR_ASSIGNMENT(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "The type of the left-hand side in this assignment, \"";
-    if (NotDot(err.insert1))
-        s << err.insert1 << '/';
-    s << err.insert2 << "\", is not compatible with the type of the "
-      << "right-hand side expression, \"";
+    s << "The type of the right sub-expression, \"";
     if (NotDot(err.insert3))
         s << err.insert3 << '/';
-    s << err.insert4 << "\".";
+    s << err.insert4 << "\", is not assignable to the variable, of type \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2 << "\".";
 
     return s.Array();
 }
@@ -2622,12 +2616,11 @@ wchar_t *SemanticError::PrintINCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION(ErrorI
 {
     ErrorString s;
 
-    s << "In this conditional expression, the type of the false "
-      << "subexpression, \"";
+    s << "In the conditional, the type of the true sub-expression, \"";
     if (NotDot(err.insert1))
         s << err.insert1 << '/';
     s << err.insert2
-      << "\", is not compatible with the type of the true subexpression, \"";
+      << "\", is not compatible with the type of the false sub-expression, \"";
     if (NotDot(err.insert3))
         s << err.insert3 << '/';
     s << err.insert4 << "\".";
@@ -2648,20 +2641,71 @@ wchar_t *SemanticError::PrintVOID_ARRAY(ErrorInfo &err,
 }
 
 
+wchar_t *SemanticError::PrintDUPLICATE_THROWS_CLAUSE_CLASS(ErrorInfo &err,
+                                                           LexStream *lex_stream,
+                                                           Control &control)
+{
+    ErrorString s;
+
+    s << "The duplicate listing of type \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2
+      << "\" in the throws clause is not necessary.";
+
+    return s.Array();
+}
+
+
+wchar_t *SemanticError::PrintREDUNDANT_THROWS_CLAUSE_CLASS(ErrorInfo &err,
+                                                           LexStream *lex_stream,
+                                                           Control &control)
+{
+    ErrorString s;
+
+    s << "The listing of type \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2
+      << "\" in the throws clause is not necessary, since its superclass, \"";
+    if (NotDot(err.insert3))
+        s << err.insert3 << '/';
+    s << err.insert4 << "\", is also listed.";
+
+    return s.Array();
+}
+
+
+wchar_t *SemanticError::PrintUNCHECKED_THROWS_CLAUSE_CLASS(ErrorInfo &err,
+                                                           LexStream *lex_stream,
+                                                           Control &control)
+{
+    ErrorString s;
+
+    s << "Since type \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2 << "\" is an unchecked exception, it does not need to be "
+      << "listed in the throws clause.";
+
+    return s.Array();
+}
+
+
 wchar_t *SemanticError::PrintINCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION(ErrorInfo &err,
                                                                      LexStream *lex_stream,
                                                                      Control &control)
 {
     ErrorString s;
 
-    s << "The type of the left-hand side expression, \"";
+    s << "The type of the left sub-expression, \"";
     if (NotDot(err.insert1))
         s << err.insert1 << '/';
     s << err.insert2 << "\", is not compatible with the type of the "
-      << "right-hand side expression, \"";
+      << "right sub-expression, \"";
     if (NotDot(err.insert3))
         s << err.insert3 << '/';
-    s << err.insert4 << "\" (and vice-versa).";
+    s << err.insert4 << "\".";
 
     return s.Array();
 }
@@ -2673,7 +2717,7 @@ wchar_t *SemanticError::PrintINVALID_INSTANCEOF_CONVERSION(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "The type of the left-side expression, \"";
+    s << "The type of the left sub-expression, \"";
     if (NotDot(err.insert1))
         s << err.insert1 << '/';
     s << err.insert2 << "\", cannot possibly be an instance of type \"";
@@ -2710,27 +2754,16 @@ wchar_t *SemanticError::PrintINVALID_CAST_TYPE(ErrorInfo &err,
 }
 
 
-wchar_t *SemanticError::PrintTYPE_NOT_PRIMITIVE(ErrorInfo &err,
-                                                LexStream *lex_stream,
-                                                Control &control)
-{
-    ErrorString s;
-
-    s << "The type of this expression, \"" << err.insert1
-      << "\", is not a primitive type.";
-
-    return s.Array();
-}
-
-
 wchar_t *SemanticError::PrintTYPE_NOT_INTEGRAL(ErrorInfo &err,
                                                LexStream *lex_stream,
                                                Control &control)
 {
     ErrorString s;
 
-    s << "The type of this expression, \"" << err.insert1
-      << "\", is not an integral type.";
+    s << "The type of this expression, \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2 << "\", is not an integral type.";
 
     return s.Array();
 }
@@ -2742,8 +2775,10 @@ wchar_t *SemanticError::PrintTYPE_NOT_NUMERIC(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "The type of this expression, \"" << err.insert1
-      << "\", is not numeric.";
+    s << "The type of this expression, \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2 << "\", is not numeric.";
 
     return s.Array();
 }
@@ -2755,8 +2790,11 @@ wchar_t *SemanticError::PrintTYPE_NOT_INTEGER(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "The type of this expression, \"" << err.insert1
-      << "\", cannot be promoted to \"int\" by widening conversion.";
+    s << "The type of this expression, \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2
+      << "\", is not assignable to \"int\".";
 
     return s.Array();
 }
@@ -2768,8 +2806,10 @@ wchar_t *SemanticError::PrintTYPE_NOT_BOOLEAN(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "The type of this expression, \"" << err.insert1
-      << "\", is not boolean.";
+    s << "The type of this expression, \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2 << "\", is not \"boolean\".";
 
     return s.Array();
 }
@@ -2781,8 +2821,10 @@ wchar_t *SemanticError::PrintTYPE_NOT_ARRAY(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "The type of this expression, \"" << err.insert1
-      << "\", is not an array type.";
+    s << "The type of this expression, \"";
+    if (NotDot(err.insert1))
+        s << err.insert1 << '/';
+    s << err.insert2 << "\", is not an array type.";
 
     return s.Array();
 }
@@ -2795,23 +2837,7 @@ wchar_t *SemanticError::PrintTYPE_NOT_REFERENCE(ErrorInfo &err,
     ErrorString s;
 
     s << "The type of this expression, \"" << err.insert1
-      << "\", is not a valid reference type in this context.";
-
-    return s.Array();
-}
-
-
-wchar_t *SemanticError::PrintTYPE_NOT_VALID_FOR_SWITCH(ErrorInfo &err,
-                                                       LexStream *lex_stream,
-                                                       Control &control)
-{
-    ErrorString s;
-
-    s << "The type of a switch statement expression must be either \"int\", "
-      << "\"short\", \"char\" or \"byte\". The type of this expression is \"";
-    if (NotDot(err.insert1))
-        s << err.insert1 << '/';
-    s << err.insert2 << "\".";
+      << "\", is not a reference type.";
 
     return s.Array();
 }
@@ -2823,8 +2849,8 @@ wchar_t *SemanticError::PrintTYPE_IS_VOID(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "An expression of type \"" << err.insert1
-      << "\" is not valid in this context.";
+    s << "An expression of type \"void\" is not valid in this context where "
+      << "a value is expected.";
 
     return s.Array();
 }
@@ -2839,20 +2865,6 @@ wchar_t *SemanticError::PrintVALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE(ErrorInfo &e
     s << "The value of this expression, " << err.insert1
       << ", cannot be represented in the type of the switch statement "
       << "expression, \"" << err.insert2 << "\".";
-
-    return s.Array();
-}
-
-
-wchar_t *SemanticError::PrintTYPE_NOT_CONVERTIBLE_TO_SWITCH_TYPE(ErrorInfo &err,
-                                                                 LexStream *lex_stream,
-                                                                 Control &control)
-{
-    ErrorString s;
-
-    s << "The type of this expression, \"" << err.insert1
-      << "\", is not assignment-convertible to the type of the switch "
-      << "statement expression, \"" << err.insert2 << "\".";
 
     return s.Array();
 }
@@ -3300,15 +3312,32 @@ wchar_t *SemanticError::PrintNON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_
     ErrorString s;
 
     s << "The abstract method \"" << err.insert1
+      << "\", belonging to the superclass \"";
+    if (NotDot(err.insert2))
+        s << err.insert2 << '/';
+    s << err.insert3 << "\", has default access, so it is not inherited and "
+      << "cannot be implemented in this package. Therefore, class \"";
+    if (NotDot(err.insert4))
+        s << err.insert4 << '/';
+    s << err.insert5 << "\" must be abstract.";
+
+    return s.Array();
+}
+
+
+wchar_t *SemanticError::PrintANONYMOUS_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD(ErrorInfo &err,
+                                                                                    LexStream *lex_stream,
+                                                                                    Control &control)
+{
+    ErrorString s;
+
+    s << "The abstract method \"" << err.insert1
       << "\", belonging to the class \"";
     if (NotDot(err.insert2))
         s << err.insert2 << '/';
-    s << err.insert3 << "\" has default access. Therefore, it is not "
-      << "inherited and hence, it cannot be implemented in the non-abstract "
-      << "class \"";
-    if (NotDot(err.insert4))
-        s << err.insert4 << '/';
-    s << err.insert5 << "\".";
+    s << err.insert3 << "\", has default access, so it is not inherited and "
+      << "cannot be implemented in this package. Therefore, an anonymous "
+      << "subclass cannot be created here.";
 
     return s.Array();
 }
@@ -3352,7 +3381,8 @@ wchar_t *SemanticError::PrintCIRCULAR_CLASS(ErrorInfo &err,
     s << "The class \"";
     if (NotDot(err.insert1))
         s << err.insert1 << "/";
-    s << err.insert2 << "\" is circularly defined with its super type(s).";
+    s << err.insert2 << "\" may not have a superclass or superinterface "
+      << "which extends itself, or which is enclosed by itself or a subclass.";
 
     return s.Array();
 }
@@ -3367,7 +3397,8 @@ wchar_t *SemanticError::PrintCIRCULAR_INTERFACE(ErrorInfo &err,
     s << "The interface \"";
     if (NotDot(err.insert1))
         s << err.insert1 << "/";
-    s << err.insert2 << "\" is circularly defined with its super type(s).";
+    s << err.insert2 << "\" may not have a superinterface which extends "
+      << "itself, or which is enclosed by itself or any subtype.";
 
     return s.Array();
 }
@@ -3382,8 +3413,8 @@ wchar_t *SemanticError::PrintTYPE_NOT_ACCESSIBLE(ErrorInfo &err,
     s << "The type \"";
     if (NotDot(err.insert1))
         s << err.insert1 << '/';
-    s << err.insert2 << "\" with " << err.insert3
-      << " access is not accessible here.";
+    s << err.insert2 << "\" has " << err.insert3
+      << " access and is not accessible here.";
 
     return s.Array();
 }
@@ -3398,8 +3429,8 @@ wchar_t *SemanticError::PrintFIELD_NOT_ACCESSIBLE(ErrorInfo &err,
     s << "The field \"" << err.insert1 << "\" in type \"";
     if (NotDot(err.insert2))
         s << err.insert2 << '/';
-    s << err.insert3 << "\" with " << err.insert4
-      << " access is not accessible here.";
+    s << err.insert3 << "\" has " << err.insert4
+      << " access and is not accessible here.";
 
     return s.Array();
 }
@@ -3434,8 +3465,8 @@ wchar_t *SemanticError::PrintMETHOD_NOT_ACCESSIBLE(ErrorInfo &err,
     s << "The method \"" << err.insert1 << "\" in type \"";
     if (NotDot(err.insert2))
         s << err.insert2 << '/';
-    s << err.insert3 << "\" with " << err.insert4
-      << " access is not accessible here.";
+    s << err.insert3 << "\" has " << err.insert4
+      << " access and is not accessible here.";
 
     return s.Array();
 }
@@ -3483,8 +3514,8 @@ wchar_t *SemanticError::PrintCONSTRUCTOR_NOT_ACCESSIBLE(ErrorInfo &err,
     s << "The constructor \"" << err.insert1 << "\" in type \"";
     if (NotDot(err.insert2))
         s << err.insert2 << '/';
-    s << err. insert3 << "\" with " << err.insert4
-      << " access is not accessible here.";
+    s << err. insert3 << "\" has " << err.insert4
+      << " access and is not accessible here.";
 
     return s.Array();
 }
@@ -3577,7 +3608,7 @@ wchar_t *SemanticError::PrintFINAL_METHOD_OVERRIDE(ErrorInfo &err,
     ErrorString s;
 
     s << "The method \"" << err.insert1
-      << "\" cannot override the final (or private) method \""
+      << "\" cannot replace the accessible final method \""
       << err.insert2 << "\" declared in type \"";
     if (NotDot(err.insert3))
         s << err.insert3 << "/";
@@ -3594,7 +3625,7 @@ wchar_t *SemanticError::PrintCLASS_METHOD_OVERRIDE(ErrorInfo &err,
     ErrorString s;
 
     s << "The instance method \"" << err.insert1
-      << "\" cannot override the static method \""
+      << "\" cannot override the accessible static method \""
       << err.insert2 << "\" declared in type \"";
     if (NotDot(err.insert3))
         s << err.insert3 << "/";
@@ -3611,8 +3642,8 @@ wchar_t *SemanticError::PrintINSTANCE_METHOD_OVERRIDE(ErrorInfo &err,
     ErrorString s;
 
     s << "The static method \"" << err.insert1
-      << "\" cannot hide the instance method \"" << err.insert2
-      << "\" declared in \"";
+      << "\" cannot hide the accessible instance method \"" << err.insert2
+      << "\" declared in type \"";
     if (NotDot(err.insert3))
         s << err.insert3 << "/";
     s << err.insert4 << "\".";
@@ -3648,7 +3679,7 @@ wchar_t *SemanticError::PrintBAD_ACCESS_METHOD_OVERRIDE(ErrorInfo &err,
     ErrorString s;
 
     s << "The method \"" << err.insert1 << "\" with " << err.insert2
-      << " access cannot override the method \"" << err.insert3
+      << " access cannot replace the accessible method \"" << err.insert3
       << "\" with " << err.insert4 << " access declared in type \"";
     if (NotDot(err.insert5))
         s << err.insert5 << "/";
@@ -3685,9 +3716,8 @@ wchar_t *SemanticError::PrintMISMATCHED_OVERRIDDEN_EXCEPTION(ErrorInfo &err,
     ErrorString s;
 
     s << "The checked exception \"" << err.insert1
-      << "\" is not the same as or a subclass of any exception in the "
-      << "throws clause of the overridden method \"" << err.insert2
-      << "\" declared in type \"";
+      << "\" is not assignable to any exception in the throws clause of the "
+      << "accessible method \"" << err.insert2 << "\" declared in type \"";
     if (NotDot(err.insert3))
         s << err.insert3 << "/";
     s << err.insert4 << "\".";
@@ -3721,8 +3751,8 @@ wchar_t *SemanticError::PrintMISMATCHED_OVERRIDDEN_EXCEPTION_EXTERNALLY(ErrorInf
       << "\", inherited from type \"";
     if (NotDot(err.insert4))
         s << err.insert4 << "/";
-    s << err.insert5 << "\", is not the same as or a subclass of any "
-      << "exception in the throws clause of the overridden method \""
+    s << err.insert5 << "\", is not assignable to any exception in the "
+      << "throws clause of the overridden method \""
       << err.insert6 << "\" declared in type \"";
     if (NotDot(err.insert7))
         s << err.insert7 << "/";
@@ -3885,7 +3915,9 @@ wchar_t *SemanticError::PrintEXPRESSION_NOT_CONSTANT(ErrorInfo &err,
 {
     ErrorString s;
 
-    s << "A constant expression is expected in this context.";
+    s << "A constant expression is expected in this context. A constant "
+      << "expression is built from literals, operators, and constant "
+      << "variables referenced by 'id' or 'Classname.id'.";
 
     return s.Array();
 }
@@ -4037,8 +4069,11 @@ wchar_t *SemanticError::PrintBLOCKED_CATCH_CLAUSE(ErrorInfo &err,
     s << "This catch block is unreachable: the exception \"";
     if (NotDot(err.insert1))
         s << err.insert1 << "/";
-    s << err.insert2 << "\" is a subclass of the type used in a previous "
-      << "catch clause at location " << err.insert3 << '.';
+    s << err.insert2 << "\" is a subclass of the type \"";
+    if (NotDot(err.insert3))
+        s << err.insert3 << "/";
+    s << err.insert4 << "\", caught previously at location "
+      << err.insert5 << '.';
 
     return s.Array();
 }
@@ -4081,7 +4116,7 @@ wchar_t *SemanticError::PrintDEFAULT_METHOD_NOT_OVERRIDDEN(ErrorInfo &err,
     s << "Method \"" << err.insert1 << "\" in class \"";
     if (NotDot(err.insert2))
         s << err.insert2 << "/";
-    s << err.insert3 << "\" does not override the corresponding instance "
+    s << err.insert3 << "\" does not override or hide the corresponding "
       << "method with default access in class \"";
     if (NotDot(err.insert4))
         s << err.insert4 << "/";
@@ -4429,12 +4464,13 @@ wchar_t *SemanticError::PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL
 {
     ErrorString s;
 
-    s << "Ambiguous reference to member named \"" << err.insert1
-      << "\" inherited from type \"";
+    s << "The unqualified usage of \"" << err.insert1
+      << "\" refers to the member inherited from type \"";
     if (NotDot(err.insert2))
         s << err.insert2 << "/";
-    s << err.insert3 << "\" but also declared in the enclosing method \""
-      << err.insert4 << "\". Renaming the enclosing version is suggested.";
+    s << err.insert3
+      << "\", and not the local version in the enclosing method \""
+      << err.insert4 << "\". Renaming the local version is suggested.";
 
     return s.Array();
 }
@@ -4446,12 +4482,31 @@ wchar_t *SemanticError::PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBE
 {
     ErrorString s;
 
-    s << "Ambiguous reference to member named \"" << err.insert1
-      << "\" inherited from type \"";
+    s << "The unqualified usage of \"" << err.insert1
+      << "\" refers to the member inherited from type \"";
     if (NotDot(err.insert2))
         s << err.insert2 << "/";
     s << err.insert3
-      << "\" but also declared or inherited in the enclosing type \"";
+      << "\", and not the version declared in the enclosing type \"";
+    if (NotDot(err.insert4))
+        s << err.insert4 << "/";
+    s << err.insert5 << "\". Explicit qualification is suggested.";
+
+    return s.Array();
+}
+
+
+wchar_t *SemanticError::PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_TYPE(ErrorInfo &err,
+                                                                                LexStream *lex_stream,
+                                                                                Control &control)
+{
+    ErrorString s;
+
+    s << "The unqualified usage of \"" << err.insert1
+      << "\" refers to the inherited member type \"";
+    if (NotDot(err.insert2))
+        s << err.insert2 << "/";
+    s << err.insert3 << "\", and not the enclosing type \"";
     if (NotDot(err.insert4))
         s << err.insert4 << "/";
     s << err.insert5 << "\". Explicit qualification is suggested.";

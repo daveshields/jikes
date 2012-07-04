@@ -1,4 +1,4 @@
-// $Id: segment.h,v 1.8 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
+// $Id: segment.h,v 1.9 2002/08/05 23:56:28 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -38,7 +38,7 @@ private:
     class TargetValuePair
     {
     public:
-        u2 target;
+        int target;
         u2 value;
     };
 
@@ -61,7 +61,7 @@ public:
         }
     }
 
-    u2 &Image(u2);
+    u2 &Image(int);
 };
 
 
@@ -69,15 +69,20 @@ class Pair
 {
 public:
 
-    Pair(SegmentPool &segment_pool_, int estimate = 0) : segment_pool(segment_pool_)
+    Pair(SegmentPool &segment_pool_, int estimate = 0)
+        : segment_pool(segment_pool_)
     {
         //
         // DO NOT PERFORM THESE INITIALIZATION IN THE METHOD DECLARATOR !!!
         // There appears to be a bug in the xlC compiler that causes base to
         // not be initialized properly !!!
         //
-        base_size = (estimate > 0 ? (estimate >> PairSegment::LOG_BLKSIZE) + 1 : 0);
-        base = (PairSegment **) (estimate > 0 ? memset(new PairSegment*[base_size], 0, base_size * sizeof(PairSegment *)) : NULL);
+        base_size = (estimate > 0
+                     ? (estimate >> PairSegment::LOG_BLKSIZE) + 1 : 0);
+        base = (PairSegment **) (estimate > 0
+                                 ? memset(new PairSegment*[base_size], 0,
+                                          base_size * sizeof(PairSegment *))
+                                 : NULL);
     }
 
     ~Pair()
@@ -85,7 +90,7 @@ public:
         delete [] base;
     }
 
-    u2 &operator[](const u2);
+    u2 &operator[](const int);
 
 private:
 
@@ -113,7 +118,7 @@ private:
     class TargetValuePair
     {
     public:
-        u2 target;
+        int target;
         Pair *value;
     };
 
@@ -139,7 +144,7 @@ public:
         }
     }
 
-    Pair &Image(u2);
+    Pair &Image(int);
 };
 
 
@@ -147,16 +152,21 @@ class Triplet
 {
 public:
 
-    Triplet(SegmentPool &segment_pool_, int estimate = 0) : segment_pool(segment_pool_)
+    Triplet(SegmentPool &segment_pool_, int estimate = 0)
+        : segment_pool(segment_pool_)
     {
         //
         // DO NOT PERFORM THESE INITIALIZATION IN THE METHOD DECLARATOR !!!
         // There appears to be a bug in the xlC compiler that causes base to
         // not be initialized properly !!!
         //
-        base_size = (estimate > 0 ? (estimate >> TripletSegment::LOG_BLKSIZE) + 1 : 0);
+        base_size = (estimate > 0
+                     ? (estimate >> TripletSegment::LOG_BLKSIZE) + 1 : 0);
         base = (TripletSegment **)
-               (estimate > 0 ? memset(new TripletSegment*[base_size], 0, base_size * sizeof(TripletSegment *)) : NULL);
+            (estimate > 0
+             ? memset(new TripletSegment*[base_size], 0,
+                      base_size * sizeof(TripletSegment *))
+             : NULL);
     }
 
     ~Triplet()
@@ -164,7 +174,7 @@ public:
         delete [] base;
     }
 
-    u2 &Image(const u2, const u2);
+    u2 &Image(const int, const int);
 
 private:
 
@@ -186,9 +196,18 @@ public:
 
     ~SegmentPool();
 
-    Pair *AllocatePair(int estimate = 0) { return pair_pool.Next() = new Pair(*this, estimate); }
-    PairSegment *AllocatePairSegment() { return pair_segment_pool.Next() = new PairSegment(); }
-    TripletSegment *AllocateTripletSegment() { return triplet_segment_pool.Next() = new TripletSegment(*this); }
+    Pair *AllocatePair(int estimate = 0)
+    {
+        return pair_pool.Next() = new Pair(*this, estimate);
+    }
+    PairSegment *AllocatePairSegment()
+    {
+        return pair_segment_pool.Next() = new PairSegment();
+    }
+    TripletSegment *AllocateTripletSegment()
+    {
+        return triplet_segment_pool.Next() = new TripletSegment(*this);
+    }
 };
 
 #ifdef HAVE_JIKES_NAMESPACE

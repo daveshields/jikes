@@ -1,4 +1,4 @@
-// $Id: init.cpp,v 1.20 2002/07/09 07:28:43 cabbey Exp $
+// $Id: init.cpp,v 1.22 2002/08/28 16:07:01 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -73,7 +73,7 @@ void Semantic::ProcessVariableInitializer(AstVariableDeclarator *variable_declar
                 init -> value = NULL;
             }
         }
-    
+
         if (symbol -> ACC_FINAL() &&
             (field_type -> Primitive() || field_type == control.String()))
         {
@@ -185,7 +185,6 @@ void Semantic::ComputeFinalValue(VariableSymbol *variable)
 
         //
         // Create a clone and process that, to avoid triggering errors now.
-        // Process the initializer in the 
         // Later, we will issue the errors for real when processing the field
         // initializer when we get to its source file.
         //
@@ -198,6 +197,10 @@ void Semantic::ComputeFinalValue(VariableSymbol *variable)
                 new SemanticError(control, sem -> source_file_symbol);
         sem -> error -> EnteringClone();
         sem -> state_stack.Push(type -> semantic_environment);
+        MethodSymbol *calling_method = sem -> ThisMethod();
+        VariableSymbol *calling_var = sem -> ThisVariable();
+        sem -> ThisMethod() = NULL;
+        sem -> ThisVariable() = variable;
         variable_declarator -> pending = true;
 
         AstVariableDeclarator *clone = (AstVariableDeclarator *)
@@ -207,6 +210,8 @@ void Semantic::ComputeFinalValue(VariableSymbol *variable)
         assert(variable -> IsInitialized());
 
         variable_declarator -> pending = false;
+        sem -> ThisMethod() = calling_method;
+        sem -> ThisVariable() = calling_var;
         sem -> state_stack.Pop();
         sem -> error -> ExitingClone();
     }

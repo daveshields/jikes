@@ -1,4 +1,4 @@
-// $Id: op.cpp,v 1.20 2002/02/01 06:46:19 ericb Exp $
+// $Id: op.cpp,v 1.21 2002/07/30 16:30:02 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -475,7 +475,7 @@ void Operators::OpDmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
                          val = GetI4(code, pc);
                          sprintf(argdesc, "match:%d offset:%d",
                                  low++, val + pc_start);
-                         OpLine(constant_pool,"*",pc_this, op_this, name,
+                         OpLine(constant_pool, "*", pc_this, op_this, name,
                                 argdesc, desc, INFO_NONE, 0);
                          pc += 4;
                          len--;
@@ -546,8 +546,8 @@ void Operators::OpDmp(Tuple<cp_info *> &constant_pool, Tuple<u1> &code)
 
                      assert((! au1) && "...zero byte required in this position");
 
-                     sprintf(argdesc, "%d %d", nargs,info_index);
-                     info_kind=INFO_CONST;
+                     sprintf(argdesc, "%d %d", nargs, info_index);
+                     info_kind = INFO_CONST;
                  }
                  break;
             case OP_NEWARRAY:

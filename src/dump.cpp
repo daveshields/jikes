@@ -1,4 +1,4 @@
-// $Id: dump.cpp,v 1.27 2002/05/16 06:44:29 ericb Exp $
+// $Id: dump.cpp,v 1.29 2002/08/02 21:29:44 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -211,7 +211,8 @@ static char *token_type(unsigned char kind)
     case TK_REMAINDER_EQUAL: return TK_REMAINDER_EQUAL_STRING;
     case TK_LEFT_SHIFT_EQUAL: return TK_LEFT_SHIFT_EQUAL_STRING;
     case TK_RIGHT_SHIFT_EQUAL: return TK_RIGHT_SHIFT_EQUAL_STRING;
-    case TK_UNSIGNED_RIGHT_SHIFT_EQUAL: return TK_UNSIGNED_RIGHT_SHIFT_EQUAL_STRING;
+    case TK_UNSIGNED_RIGHT_SHIFT_EQUAL:
+        return TK_UNSIGNED_RIGHT_SHIFT_EQUAL_STRING;
     case TK_OR_OR: return TK_OR_OR_STRING;
     case TK_AND_AND: return TK_AND_AND_STRING;
     case TK_PLUS: return TK_PLUS_STRING;
@@ -247,7 +248,8 @@ static char *token_type(unsigned char kind)
 void LexStream::Dump()
 {
     FILE *tokfile;
-    char *tokfile_name = new char[FileNameLength() + 5]; // +1 for '\0' +4 for length(".tok")
+    // +1 for '\0' +4 for length(".tok")
+    char *tokfile_name = new char[FileNameLength() + 5];
     strcpy(tokfile_name, FileName());
     strcat(tokfile_name, StringConstant::U8S_DO_tok);
 
@@ -263,14 +265,15 @@ void LexStream::Dump()
     SetUpComments();
 
     LexStream::TokenIndex tok = 0;
-    for (LexStream::CommentIndex com = FirstComment(tok); com < NumComments() && PrecedingToken(com) == tok; com++)
+    for (LexStream::CommentIndex com = FirstComment(tok);
+         com < NumComments() && PrecedingToken(com) == tok; com++)
     {
         fprintf(tokfile, "*%5d ", com);
         // print file name
-        fprintf(tokfile, "%s",FileName());
+        fprintf(tokfile, "%s", FileName());
         fprintf(tokfile, ", line %d.%d: ",
-                         FindLine(comments[com].location),
-                         FindColumn(comments[com].location));
+                FindLine(comments[com].location),
+                FindColumn(comments[com].location - 1) + 1);
         for (wchar_t *s = CommentString(com); *s != U_NULL; s++)
             fprintf(tokfile, "%c", *s);
         fprintf(tokfile, "\n");
@@ -281,24 +284,23 @@ void LexStream::Dump()
         tok = Gettoken();
 
         fprintf(tokfile, "%6d ", tok);
-        fprintf(tokfile, " %s",FileName());
-        fprintf(tokfile, ", %cline %d.%d: %s %s  ",
-                         (AfterEol(tok) ? '*' : ' '),
-                         Line(tok),
-                         Column(tok),
-                         token_type(Kind(tok)),
-                         (IsDeprecated(Previous(tok)) ? "(d)" : " "));
+        fprintf(tokfile, " %s", FileName());
+        fprintf(tokfile, ", %cline %d.%d: %s %s  ", (AfterEol(tok) ? '*' : ' '),
+                Line(tok), (Kind(tok) == TK_EOF ? 0 : Column(tok)),
+                token_type(Kind(tok)),
+                (IsDeprecated(Previous(tok)) ? "(d)" : " "));
         for (wchar_t *s = NameString(tok); *s != U_NULL; s++)
             fprintf(tokfile, "%c", *s);
         fprintf(tokfile, "\n");
 
-        for (LexStream::CommentIndex com = FirstComment(tok); com < NumComments() && PrecedingToken(com) == tok; com++)
+        for (LexStream::CommentIndex com = FirstComment(tok);
+             com < NumComments() && PrecedingToken(com) == tok; com++)
         {
-            fprintf(tokfile, "*%5d ",com);
-        fprintf(tokfile, " %s",FileName());
+            fprintf(tokfile, "*%5d ", com);
+            fprintf(tokfile, " %s", FileName());
             fprintf(tokfile, ", line %d.%d: ",
-                             FindLine(comments[com].location),
-                             FindColumn(comments[com].location));
+                    FindLine(comments[com].location),
+                    FindColumn(comments[com].location - 1) + 1);
             for (wchar_t *s = CommentString(com); *s != U_NULL; s++)
             fprintf(tokfile, "%c", *s);
             fprintf(tokfile, "\n");
@@ -312,8 +314,11 @@ void LexStream::Dump()
     for (int i = 0; i < control.name_table.symbol_pool.length(); i++)
     {
         fprintf(tokfile, "%4d ", i);
-        for (wchar_t *s = control.name_table.symbol_pool[i].name(); *s != U_NULL; s++)
+        for (wchar_t *s = control.name_table.symbol_pool[i].name();
+             *s != U_NULL; s++)
+        {
             fprintf(tokfile, "%c", *s);
+        }
         fprintf(tokfile, "\n");
     }
 #endif
@@ -322,8 +327,6 @@ void LexStream::Dump()
         fclose(tokfile);
 
     delete [] tokfile_name;
-
-    return;
 }
 
 
@@ -346,7 +349,9 @@ Dump(wchar_t* wstr) {
         wchar_t c = *ptr;
         if (c < 128) {
             str.Next() = (char) c;
-        } else {
+        }
+        else
+        {
             str.Next() = '\\';
             str.Next() = 'u';
             char buff[5];

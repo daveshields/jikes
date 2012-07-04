@@ -1,4 +1,4 @@
-// $Id: double.cpp,v 1.28 2002/06/05 01:23:20 cabbey Exp $
+// $Id: double.cpp,v 1.29 2002/09/11 21:57:56 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -155,14 +155,21 @@ IEEEfloat::IEEEfloat(const LongInt &a)
         *this = Normalize(sign, FRACT_SIZE, l.LowWord());
     else
     {
-        int exponent = FRACT_SIZE, round = 0;
+        int exponent = FRACT_SIZE - 1, sticky = 0;
         while (l.HighWord())
         {
-            round |= (l.LowWord() & BYTE_MASK) ? 1 : 0;
+            sticky |= (l.LowWord() & BYTE_MASK) ? 1 : 0;
             l >>= 8;
             exponent += 8;
         }
-        *this = Normalize(sign, exponent, l.LowWord() | round);
+        u4 low = l.LowWord();
+        if ((i4) low < 0)
+        {
+            sticky |= (low & BYTE_MASK) ? 1 : 0;
+            low >>= 8;
+            exponent += 8;
+        }
+        *this = Normalize(sign, exponent, low + low + sticky);
     }
 #endif // HAVE_IEEE754
 }

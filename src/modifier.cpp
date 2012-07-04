@@ -1,4 +1,4 @@
-// $Id: modifier.cpp,v 1.21 2002/05/22 08:23:28 ericb Exp $
+// $Id: modifier.cpp,v 1.22 2002/07/30 16:30:02 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -769,7 +769,7 @@ AccessFlags Semantic::ProcessStaticNestedInterfaceModifiers(AstInterfaceDeclarat
                                modifier -> modifier_kind_token,
                                modifier -> modifier_kind_token,
                                StringConstant::US_public);
-            else 
+            else
             {
                 if (control.option.pedantic)
                     ReportSemError(SemanticError::REDUNDANT_MODIFIER,
@@ -1645,7 +1645,6 @@ AccessFlags Semantic::ProcessMethodModifiers(AstMethodDeclaration *method_declar
                 ReportSemError(SemanticError::STRICTFP_NATIVE_METHOD,
                                modifier -> modifier_kind_token,
                                modifier -> modifier_kind_token);
-            
             break;
         case Ast::SYNCHRONIZED:
             if (access_flags.ACC_SYNCHRONIZED())
@@ -1685,7 +1684,7 @@ AccessFlags Semantic::ProcessMethodModifiers(AstMethodDeclaration *method_declar
             break;
         }
     }
-    
+
     return access_flags;
 }
 

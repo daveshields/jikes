@@ -17,7 +17,10 @@ by the Jikes Project.
 At this time, jikes only recognizes the full name of options; you
 cannot abbreviate or group them. You can give different argument types
 in any order. Options are global, so they affect compilation of files
-listed earlier on the command line.
+listed earlier on the command line. Duplicated options override the
+previous one, unless otherwise listed. If an option is listed in the
+form \fB\+T\=n\fP, it can also be specified as \fB\+T n\fP or even
+\fB\+Tn\fP.
 
 .SH OPTIONS
 \fBJikes\fP may be invoked with the following command-line options:
@@ -107,7 +110,8 @@ parameters, as well as their scope.
 \fB\-h
 .TP
 \fB\-\|?
-Prints a helpful summary of options, then exit.
+Prints a helpful summary of options, then exit. Overrides all other
+options, and nothing is compiled.
 
 .TP
 \fB\-J\fP\&.\|.\|.
@@ -181,13 +185,16 @@ dry run to track dependencies.
 \fB\-\-version
 .TP
 \fB\-V
-Print a version message, and contact information, then exit.
+Print a version message, and contact information, then exit. Overrides
+all other options except \fB\-\-help\fP, and nothing is compiled.
 
 .TP
 \fB\-Xstdout
 Write error messages to standard output, not stderr. At the moment,
 this is incompatible with javac, which takes an argument as the name
 of the file where it will direct compiler message output.
+
+.\" We ought to give the enhanced versions long names...
 
 .TP
 \fB\+\+
@@ -204,6 +211,7 @@ Report errors immediately in emacs-form without buffering.
 .TP
 \fB\+DR\=\fIfilename\fP
 Write report of dependencies to specified file.
+.\" We ought to change this to be a one-letter name...
 
 .TP
 \fB\+E
@@ -215,7 +223,8 @@ Do full dependence check except for Zip and Jar files.
 
 .TP
 \fB\+K\fIname\fB\=\fITypeKeyWord\fP
-Map name to type keyword.
+Map name to type keyword. Multiple options are needed to change more
+than one type keyword.
 
 .TP
 \fB\+M
@@ -236,12 +245,13 @@ then turn on or off a particular warning, depending on the presence of
 the \fIno-\fP prefix. At present, the only recognized flag is
 \fBmodifier-order\fP, which warns about the recommended ordering of
 multiple modifiers, and is turned on by default in pedantic
-compilation mode. Thus, to get all pedantic warnings except this, use
-\fB\+P \+Pno-modifier-order\fP.
+compilation mode. Multiple \fB\+P\fP options are cumulative in
+effect. Thus, to get all pedantic warnings except modifier ordering,
+use \fB\+P \+Pno-modifier-order\fP.
 
 .TP
-\fB\+T\fInn\fP
-Set value of tab to \fInn\fP spaces.
+\fB\+T\f\=In\fP
+Set value of tab to \fIn\fP spaces. If not specified, the default is 8.
 
 .TP
 \fB\+U

@@ -1,4 +1,4 @@
-// $Id: gencode.java,v 1.12 2002/03/06 17:12:25 ericb Exp $
+// $Id: gencode.java,v 1.13 2002/08/02 21:29:46 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -21,30 +21,19 @@ class gencode
 {
     static final int NEWLINE_CODE      = 0; // '\n', '\r'
     static final int SPACE_CODE        = 1; // '\t', '\f', ' '
-    static final int BAD_CODE          = 2; // everything else ...
-    static final int DIGIT_CODE        = 3; // '0'..'9'
-    static final int OTHER_DIGIT_CODE  = 4; // Character.isJavaIdentifierPart
-    static final int LOWER_CODE        = 5; // 'a'..'z'
-    static final int UPPER_CODE        = 6; // 'A'..'Z'
-    static final int OTHER_LETTER_CODE = 7; // Character.isJavaIdentifierStart
+    static final int WHITESPACE_CODE   = 2; // Character.isWhitespace
+    static final int BAD_CODE          = 3; // everything else ...
+    static final int DIGIT_CODE        = 4; // '0'..'9'
+    static final int OTHER_DIGIT_CODE  = 5; // Character.isJavaIdentifierPart
+    static final int LOWER_CODE        = 6; // 'a'..'z'
+    static final int UPPER_CODE        = 7; // 'A'..'Z'
+    static final int OTHER_LETTER_CODE = 8; // Character.isJavaIdentifierStart
 
     static final String[] CODE_NAMES = {
-        "NEWLINE_CODE", "SPACE_CODE", "BAD_CODE", "DIGIT_CODE",
-        "OTHER_DIGIT_CODE", "LOWER_CODE", "UPPER_CODE", "OTHER_LETTER_CODE"
+        "NEWLINE_CODE", "SPACE_CODE", "WHITESPACE_CODE", "BAD_CODE",
+        "DIGIT_CODE", "OTHER_DIGIT_CODE", "LOWER_CODE", "UPPER_CODE",
+        "OTHER_LETTER_CODE"
     };
-
-//      /**
-//       * The amount to shift a character by in the first level lookup.
-//       */
-//      static int LOG_BASE_SIZE       = 9;
-
-//      static final int LOG_COMPLEMENT_SIZE = (16 - LOG_BASE_SIZE);
-//      static final int BASE_SIZE           = (1 << LOG_BASE_SIZE);
-//      static final int SLOT_SIZE           = (1 << LOG_COMPLEMENT_SIZE);
-//      static final int SLOT_MASK           = (SLOT_SIZE - 1);
-
-//      static final int BaseIndex(int i) { return i >> LOG_COMPLEMENT_SIZE; }
-//      static final int DataIndex(int i) { return i & SLOT_MASK; }
 
     static public void main(String args[])
         throws FileNotFoundException, IOException
@@ -59,6 +48,8 @@ class gencode
                 info[i] = NEWLINE_CODE;
             else if (i == ' ' || i == '\t' || i == '\f')
                 info[i] = SPACE_CODE;
+            else if (Character.isWhitespace((char) i))
+                info[i] = WHITESPACE_CODE;
             else if (i < 128 && Character.isLowerCase((char) i))
                 info[i] = LOWER_CODE; // Ascii lower case
             else if (i < 128 && Character.isUpperCase((char) i))
@@ -227,6 +218,7 @@ class gencode
         hfile.println("        SHIFT = " + bestShift + ",");
         hfile.println("        NEWLINE_CODE = " + NEWLINE_CODE + ',');
         hfile.println("        SPACE_CODE = " + SPACE_CODE + ',');
+        hfile.println("        WHITESPACE_CODE = " + WHITESPACE_CODE + ',');
         hfile.println("        BAD_CODE = " + BAD_CODE + ',');
         hfile.println("        DIGIT_CODE = " + DIGIT_CODE + ',');
         hfile.println("        OTHER_DIGIT_CODE = " + OTHER_DIGIT_CODE + ',');
@@ -259,12 +251,9 @@ class gencode
         hfile.println("        return true;");
         hfile.println("    }");
         hfile.println();
-        hfile.println("    //");
-        hfile.println("    // \\r characters are replaced by \\x0a in Stream::ProcessInput().");
-        hfile.println("    //");
         hfile.println("    static inline bool IsNewline(wchar_t c)");
         hfile.println("    {");
-        hfile.println("        return c == '\\x0a';");
+        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] == NEWLINE_CODE;");
         hfile.println("    }");
         hfile.println();
         hfile.println("    static inline bool IsSpaceButNotNewline(wchar_t c)");
@@ -277,6 +266,11 @@ class gencode
         hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] <= SPACE_CODE;");
         hfile.println("    }");
         hfile.println();
+        hfile.println("    static inline bool IsWhitespace(wchar_t c)");
+        hfile.println("    {");
+        hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] <= WHITESPACE_CODE;");
+        hfile.println("    }");
+        hfile.println();
         hfile.println("    static inline bool IsDigit(wchar_t c)");
         hfile.println("    {");
         hfile.println("        return codes[(u2) (blocks[c >> SHIFT] + c)] == DIGIT_CODE;");
@@ -284,7 +278,7 @@ class gencode
         hfile.println();
         hfile.println("    static inline bool IsOctalDigit(wchar_t c)");
         hfile.println("    {");
-        hfile.println("        return c >= U_0 && c <= U_7;");
+        hfile.println("        return c <= U_7 && c >= U_0;");
         hfile.println("    }");
         hfile.println();
         hfile.println("    static inline bool IsHexDigit(wchar_t c)");

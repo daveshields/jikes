@@ -1,4 +1,4 @@
-// $Id: jikesapi.h,v 1.14 2001/10/31 14:51:49 ericb Exp $ -*- c++ -*-
+// $Id: jikesapi.h,v 1.16 2002/07/31 21:05:24 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -12,9 +12,9 @@
 #define _JIKES_API_H_FLAG_
 
 class JikesOption
-{    
- public:
-    
+{
+public:
+
     char *bootclasspath; // Location of the libraries
     char *extdirs;       // Location of external drop-in jars
     char *classpath;     // Location of source and user class files
@@ -58,20 +58,19 @@ class JikesOption
     //
     // The JDK release number of the syntax rules to obey (for example,
     // assert was added in 1.4), as well as the VM level to target.
-    // 
+    //
     ReleaseLevel source;
     ReleaseLevel target;
 
     virtual ~JikesOption();
 
- protected:
-    
+protected:
     JikesOption();
 };
 
 class JikesError
 {
- public:
+public:
 
     enum JikesErrorSeverity
     {
@@ -79,10 +78,10 @@ class JikesError
         JIKES_CAUTION,
         JIKES_WARNING
     };
-        
+
     virtual JikesErrorSeverity getSeverity() = 0;
     virtual const char *getFileName() = 0;
-    
+
     virtual int getLeftLineNo() = 0;
     virtual int getLeftColumnNo() = 0;
     virtual int getRightLineNo() = 0;
@@ -94,11 +93,11 @@ class JikesError
     virtual const wchar_t *getErrorMessage() = 0;
 
     /**
-     * Returns formatter error report. 
+     * Returns formatted error report.
      */
     virtual const wchar_t *getErrorReport() = 0;
 
- protected:
+protected:
 
     const char *getSeverityString();
 };
@@ -108,19 +107,18 @@ class JikesError
  */
 class JikesAPI
 {
- public:
+public:
 
     JikesAPI();
-    
     virtual ~JikesAPI();
-       
+
     /**
      * Returns instance of current compiler options.
      * returned pointer can be used to modify current
      * compiler options.
      */
     virtual JikesOption *getOptions();
-    
+
     /**
      * Creates instance of compiler options,
      * corresponding to given command line parameters.
@@ -147,8 +145,7 @@ class JikesAPI
      * This method will be called for each error reported.
      */
     virtual void reportError(JikesError *error);
-    
-    
+
     /**
      * Define the virtual base class for all Readers.
      * A pointer to an object of this type is returned by JikesAPI::read()
@@ -157,7 +154,7 @@ class JikesAPI
     {
     public:
         virtual ~FileReader() {}
-            
+
         // If the file is unreadable an object should still be created but
         // GetBuffer() should return NULL.
         virtual const char *getBuffer() = 0;
@@ -172,26 +169,26 @@ class JikesAPI
     class FileWriter
     {
     public:
-        FileWriter(size_t mS) : maxSize(mS) {} 
+        FileWriter(size_t mS) : maxSize(mS) {}
         virtual  ~FileWriter() {}
-            
+
         size_t write(const unsigned char *data, size_t size);
         virtual int isValid() = 0;
-            
+
     private:
-            
+
         // Guaranteed not to be called with a combined total of more than
         // maxSize bytes during the lifespan of the object.
         virtual size_t doWrite(const unsigned char *data, size_t size) = 0;
         size_t maxSize;
     };
-        
+
     virtual int stat(const char *filename, struct stat *status);
-    
+
     virtual FileReader *read(const char *filename);
     virtual FileWriter *write(const char *filename, size_t bytes);
-    
- private:
+
+private:
 
     void cleanupOptions(); // Helper to delete option and parsedOptions
 

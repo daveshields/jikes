@@ -1,4 +1,4 @@
-// $Id: tab.cpp,v 1.8 2001/09/14 05:31:34 ericb Exp $
+// $Id: tab.cpp,v 1.9 2002/08/02 21:29:48 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -17,11 +17,12 @@ namespace Jikes { // Open namespace Jikes block
 int Tab::tab_size = Tab::DEFAULT_TAB_SIZE;
 
 //
-// Compute the length of a wide character string segment
-// after expanding tabs.
+// Compute the length of a wide character string segment after expanding tabs,
+// and any non-printable ASCII characters in unicode expansion mode.
 //
 int Tab::Wcslen(wchar_t *line, int start, int end)
 {
+    bool expand = Coutput.ExpandWchar();
     for (int i = start--; i <= end; i++)
     {
         if (line[i] == U_HORIZONTAL_TAB)
@@ -29,8 +30,11 @@ int Tab::Wcslen(wchar_t *line, int start, int end)
             int offset = (i - start) - 1;
             start -= ((tab_size - 1) - offset % tab_size);
         }
-        else if (Coutput.ExpandWchar() && line[i] > 0xFF)
-             start -= 5;
+        else if (expand && (line[i] < U_SPACE || line[i] > 0xFF))
+        {
+            start -= 5;
+            assert(line[i] != U_CARRIAGE_RETURN && line[i] != U_LINE_FEED);
+        }
     }
 
     return (end - start);

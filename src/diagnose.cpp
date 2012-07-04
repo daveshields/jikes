@@ -1,4 +1,4 @@
-// $Id: diagnose.cpp,v 1.26 2001/12/09 01:27:36 ericb Exp $
+// $Id: diagnose.cpp,v 1.28 2002/08/02 21:29:44 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -27,38 +27,45 @@ void DiagnoseParser::ReallocateStacks()
     assert(stack_length <= SHRT_MAX);
 
     int *old_stack = stack;
-    stack = (int *) memmove(new int[stack_length], stack, old_stack_length * sizeof(int));
+    stack = (int *) memmove(new int[stack_length], stack,
+                            old_stack_length * sizeof(int));
     delete [] old_stack;
 
     Location *old_location_stack = location_stack;
-    location_stack = (Location *) memmove(new Location[stack_length], location_stack, old_stack_length * sizeof(Location));
+    location_stack = (Location *) memmove(new Location[stack_length],
+                                          location_stack,
+                                          old_stack_length * sizeof(Location));
     delete [] old_location_stack;
 
     Ast **old_parse_stack = parse_stack;
-    parse_stack = (Ast **) memmove(new Ast *[stack_length], parse_stack, old_stack_length * sizeof(Ast *));
+    parse_stack = (Ast **) memmove(new Ast *[stack_length], parse_stack,
+                                   old_stack_length * sizeof(Ast *));
     delete [] old_parse_stack;
 
     int *old_temp_stack = temp_stack;
-    temp_stack = (int *) memmove(new int[stack_length], temp_stack, old_stack_length * sizeof(int));
+    temp_stack = (int *) memmove(new int[stack_length], temp_stack,
+                                 old_stack_length * sizeof(int));
     delete [] old_temp_stack;
 
     int *old_next_stack = next_stack;
-    next_stack = (int *) memmove(new int[stack_length], next_stack, old_stack_length * sizeof(int));
+    next_stack = (int *) memmove(new int[stack_length], next_stack,
+                                 old_stack_length * sizeof(int));
     delete [] old_next_stack;
 
     int *old_prev_stack = prev_stack;
-    prev_stack = (int *) memmove(new int[stack_length], prev_stack, old_stack_length * sizeof(int));
+    prev_stack = (int *) memmove(new int[stack_length], prev_stack,
+                                 old_stack_length * sizeof(int));
     delete [] old_prev_stack;
 
     int *old_scope_index = scope_index;
-    scope_index = (int *) memmove(new int[stack_length], scope_index, old_stack_length * sizeof(int));
+    scope_index = (int *) memmove(new int[stack_length], scope_index,
+                                  old_stack_length * sizeof(int));
     delete [] old_scope_index;
 
     int *old_scope_position = scope_position;
-    scope_position = (int *) memmove(new int[stack_length], scope_position, old_stack_length * sizeof(int));
+    scope_position = (int *) memmove(new int[stack_length], scope_position,
+                                     old_stack_length * sizeof(int));
     delete [] old_scope_position;
-
-    return;
 }
 
 
@@ -284,8 +291,6 @@ void DiagnoseParser::DiagnoseParse()
     } while (act != ACCEPT_ACTION);
 
     error.PrintMessages();
-
-    return;
 }
 
 
@@ -327,7 +332,7 @@ RepairCandidate DiagnoseParser::ErrorRecovery(TokenObject error_token)
     if (lex_stream -> Kind(error_token) == EOFT_SYMBOL)
     {
         error.Report(0, EOF_CODE, terminal_index[EOFT_SYMBOL],
-                                  Loc(prevtok), prevtok);
+                     Loc(prevtok), prevtok);
         candidate.symbol = 0;
         candidate.location = Loc(error_token);
         return candidate;
@@ -356,7 +361,7 @@ RepairCandidate DiagnoseParser::ErrorRecovery(TokenObject error_token)
         ;
 
     error.Report(0, DELETION_CODE, terminal_index[lex_stream -> Kind(prevtok)],
-                                   Loc(error_token), buffer[i]);
+                 Loc(error_token), buffer[i]);
 
     candidate.symbol = 0;
     candidate.location = Loc(buffer[i]);
@@ -443,7 +448,7 @@ RepairCandidate DiagnoseParser::PrimaryPhase(TokenObject error_token)
 /*****************************************************************/
     if (next_stack_top >= 0)             /* next_stack available */
     {
-        if (SecondaryCheck(next_stack,next_stack_top,3,repair.distance))
+        if (SecondaryCheck(next_stack, next_stack_top, 3, repair.distance))
               return candidate;
     }
     else if (SecondaryCheck(stack, state_stack_top, 2, repair.distance))
@@ -647,7 +652,8 @@ PrimaryRepairInfo DiagnoseParser::CheckPrimaryDistance
         lex_stream -> AfterEol(buffer[repair.buffer_position+1]))
          k = 10;
     else k = 0;
-    if (j > repair.distance || (j == repair.distance && k > repair.misspell_index))
+    if (j > repair.distance ||
+        (j == repair.distance && k > repair.misspell_index))
     {
         repair.misspell_index = k;
         repair.code = DELETION_CODE;
@@ -855,17 +861,6 @@ RepairCandidate DiagnoseParser::PrimaryDiagnosis(PrimaryRepairInfo repair)
                                            state_stack_top,
                                            repair.symbol,
                                            repair.buffer_position);
-//
-//            TokenObject t = curtok;
-//            if (repair.code == INSERTION_CODE)
-//            {
-//                if (repair.symbol != EOLT_SYMBOL && lex_stream -> AfterEol(curtok))
-//                     repair.code = BEFORE_CODE;
-//                else t = prevtok;
-//            }
-//
-//            error.report(0, repair.code, name_index, Loc(t), t);
-//
             TokenObject t = (repair.code == INSERTION_CODE ? prevtok : curtok);
             error.Report(0, repair.code, name_index, Loc(t), t);
             break;
@@ -896,7 +891,7 @@ RepairCandidate DiagnoseParser::PrimaryDiagnosis(PrimaryRepairInfo repair)
         case MERGE_CODE:
         {
             error.Report(0, repair.code, terminal_index[repair.symbol],
-                                         Loc(curtok), lex_stream -> Next(curtok));
+                         Loc(curtok), lex_stream -> Next(curtok));
             break;
         }
 #if defined(SCOPE_REPAIR)
@@ -1391,8 +1386,6 @@ void DiagnoseParser::ScopeTrialCheck(int stck[], int stack_top,
             }
         }
     }
-
-    return;
 }
 
 /*****************************************************************/
@@ -1541,7 +1534,8 @@ RepairCandidate DiagnoseParser::SecondaryPhase(TokenObject error_token)
         buffer[k] = lex_stream -> Next(buffer[k - 1]);
 
     for (last_index = MAX_DISTANCE - 1;
-         last_index >= 1 && lex_stream -> Kind(buffer[last_index]) == EOFT_SYMBOL;
+         last_index >= 1 &&
+             lex_stream -> Kind(buffer[last_index]) == EOFT_SYMBOL;
          last_index--);
     last_index++;
 
@@ -1683,7 +1677,8 @@ RepairCandidate DiagnoseParser::SecondaryPhase(TokenObject error_token)
              candidate.location = Loc(buffer[repair.buffer_position]);
              candidate.symbol =
                        lex_stream -> Kind(buffer[repair.buffer_position]);
-             lex_stream -> Reset(lex_stream -> Next(buffer[repair.buffer_position]));
+             lex_stream -> Reset(lex_stream ->
+                                 Next(buffer[repair.buffer_position]));
 
              break;
 
@@ -1741,7 +1736,7 @@ SecondaryRepairInfo DiagnoseParser::MisplacementRecovery
 /* best misplacement recovery computed previously.               */
 /*****************************************************************/
 SecondaryRepairInfo DiagnoseParser::SecondaryRecovery
-         (int stck[],int stack_top,
+         (int stck[], int stack_top,
           int last_index, SecondaryRepairInfo repair, bool stack_flag)
 {
     int i,
@@ -1869,24 +1864,23 @@ void DiagnoseParser::SecondaryDiagnosis(SecondaryRepairInfo repair)
         default:
         {
             error.Report(0, repair.code,
-                            (repair.code == SECONDARY_CODE
-                                          ? GetNtermIndex(stack[repair.stack_position],
-                                                          repair.symbol,
-                                                          repair.buffer_position)
-                                          : terminal_index[ERROR_SYMBOL]),
-                            location_stack[repair.stack_position],
-                            buffer[repair.buffer_position - 1]);
+                         (repair.code == SECONDARY_CODE
+                          ? GetNtermIndex(stack[repair.stack_position],
+                                          repair.symbol,
+                                          repair.buffer_position)
+                          : terminal_index[ERROR_SYMBOL]),
+                         location_stack[repair.stack_position],
+                         buffer[repair.buffer_position - 1]);
             state_stack_top = repair.stack_position;
         }
     }
-
-    return;
 }
 
 
-ParseError::ParseError(Control &control_, LexStream *lex_stream_) : control(control_),
-    lex_stream(lex_stream_),
-    errors(256)
+ParseError::ParseError(Control &control_, LexStream *lex_stream_)
+    : control(control_),
+      lex_stream(lex_stream_),
+      errors(256)
 {
     ParseErrorInfo::emacs_style_report=!control_.option.errors;
 }
@@ -1987,18 +1981,16 @@ void ParseError::SortMessages()
              }
          }
      }
-
-     return;
 }
 
 
-/*****************************************************************/
-/* This procedure is invoked by an JIKES PARSER or a semantic    */
-/* routine to process an error message.  The JIKES parser always */
-/* passes the value 0 to msg_level to indicate an error.         */
-/* This routine simply stores all necessary information about    */
-/* the message into an array: error.                             */
-/*****************************************************************/
+//
+// This procedure is invoked by a JIKES PARSER or a semantic
+// routine to process an error message.  The JIKES parser always
+// passes the value 0 to msg_level to indicate an error.
+// This routine simply stores all necessary information about
+// the message into an array: error.
+//
 void ParseError::Report(int msg_level,
                         ParseErrorCode msg_code,
                         int name_index,
@@ -2008,51 +2000,51 @@ void ParseError::Report(int msg_level,
 {
     int i = errors.NextIndex();
 
-    errors[i].msg_level           = msg_level;
-    errors[i].msg_code            = msg_code;
-    errors[i].name_index          = name_index;
-    errors[i].num                 = i;
-    errors[i].left_token          = (left_token > Loc(right_token) ? Loc(right_token) : left_token);
-    errors[i].right_token         = Loc(right_token);
-    errors[i].right_string_length = lex_stream -> NameStringLength(right_token);
-    errors[i].scope_name_index    = scope_name_index;
+    errors[i].msg_level = msg_level;
+    errors[i].msg_code = msg_code;
+    errors[i].name_index = name_index;
+    errors[i].num = i;
+    errors[i].left_token = (left_token > Loc(right_token) ? Loc(right_token)
+                            : left_token);
+    errors[i].right_token = Loc(right_token);
+    errors[i].scope_name_index = scope_name_index;
 
     if (control.option.dump_errors)
     {
-        PrintPrimaryMessage(i);        
-        errors.Reset(1); // we only need to indicate that at least one error was detected... See print_messages
+        PrintMessage(i);
+        errors.Reset(1);
+        // we only need to indicate that at least one error was detected...
+        // See print_messages
     }
-
-    return;
 }
 
-void ParseErrorInfo::Initialize(LexStream *l)    
+void ParseErrorInfo::Initialize(LexStream *l)
 {
-    lex_stream   = l;
+    lex_stream = l;
 
-    left_line_no    = lex_stream -> Line   (left_token  );
-    left_column_no  = lex_stream -> Column (left_token  );
-    right_line_no   = lex_stream -> Line   (right_token );
-    right_column_no = lex_stream -> Column (right_token );
+    left_line_no = lex_stream -> Line(left_token);
+    left_column_no = lex_stream -> Column(left_token);
+    right_line_no = lex_stream -> Line(right_token);
+    right_column_no = lex_stream -> RightColumn(right_token);
 }
 
-int ParseErrorInfo::getLeftLineNo      () { return left_line_no    ; }
-int ParseErrorInfo::getLeftColumnNo    () { return left_column_no  ; }
-int ParseErrorInfo::getRightLineNo     () { return right_line_no   ; }
-int ParseErrorInfo::getRightColumnNo   () { return right_column_no ; }
+int ParseErrorInfo::getLeftLineNo() { return left_line_no; }
+int ParseErrorInfo::getLeftColumnNo() { return left_column_no; }
+int ParseErrorInfo::getRightLineNo() { return right_line_no; }
+int ParseErrorInfo::getRightColumnNo() { return right_column_no; }
 
 JikesError::JikesErrorSeverity ParseErrorInfo::getSeverity()
-{ 
-    return JikesError::JIKES_ERROR; 
+{
+    return JikesError::JIKES_ERROR;
 }
 
-const char *ParseErrorInfo::getFileName() 
-{ 
+const char *ParseErrorInfo::getFileName()
+{
     assert(lex_stream);
-    return lex_stream -> FileName();   
+    return lex_stream -> FileName();
 }
 
-const wchar_t *ParseErrorInfo::getErrorMessage() 
+const wchar_t *ParseErrorInfo::getErrorMessage()
 {
     ErrorString s;
     const char *name = NULL;
@@ -2077,17 +2069,17 @@ const wchar_t *ParseErrorInfo::getErrorMessage()
             s << name[i];
         s << " inserted before this token";
         break;
-        
+
     case INSERTION_CODE:
         for (i = 0; i < len; i++)
             s << name[i];
         s << " expected after this token";
         break;
-        
+
     case DELETION_CODE:
         if (left_token == right_token)
             s << "Unexpected symbol ignored";
-        else 
+        else
             s << "Unexpected symbols ignored";
         break;
 
@@ -2133,7 +2125,7 @@ const wchar_t *ParseErrorInfo::getErrorMessage()
             for (int j = 0; j < len; j++) // any more symbols to print?
                 s << name[j];
         }
-        else 
+        else
             s << "scope";
         break;
 #endif
@@ -2178,86 +2170,35 @@ const wchar_t *ParseErrorInfo::getErrorMessage()
     return s.Array();
 }
 
-bool ParseErrorInfo::emacs_style_report=false;
+bool ParseErrorInfo::emacs_style_report = false;
 
-const wchar_t *ParseErrorInfo::getErrorReport() 
+const wchar_t *ParseErrorInfo::getErrorReport()
 {
-    return emacs_style_report?emacsErrorString():regularErrorString();
+    return emacs_style_report ? emacsErrorString() : regularErrorString();
 }
 
-wchar_t *ParseErrorInfo::regularErrorString ()
+wchar_t *ParseErrorInfo::regularErrorString()
 {
     ErrorString s;
-    
-    if (left_line_no == right_line_no)
-    {
-        s << "\n\n";
-        s.width(6);
-        s << left_line_no << ". ";
-        for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
-            s << lex_stream -> InputBuffer()[i];
-        
-        int offset = lex_stream -> WcharOffset(left_token, right_token);
-        s.width(left_column_no + 8);
-        s << (msg_code == SCOPE_CODE || msg_code == MANUAL_CODE ? "^" : "<");
-        s.width(right_column_no + right_string_length - left_column_no + offset);
-        s.fill('-');
-        s << (msg_code == SCOPE_CODE || msg_code == MANUAL_CODE ? "^\n" : ">\n");
-        s.fill(' ');
-    }
-    else
-    {
-        s << "\n\n";
-        s.width(left_column_no + 8);
-        s << "<";
-        
-        s.width(lex_stream -> LineSegmentLength(left_token));
-        s.fill('-');
-        s << "\n";
-        s.fill(' ');
-        
-        s.width(6);
-        s << left_line_no << ". ";
-        for (int i = lex_stream -> LineStart(left_line_no); i <= lex_stream -> LineEnd(left_line_no); i++)
-            s << lex_stream -> InputBuffer()[i];
-        
-        if (right_line_no > left_line_no + 1)
-        {
-            s.width(left_column_no + 7);
-            s << " ";
-            s << ". . .\n";
-        }
-        
-        s.width(6);
-        s << right_line_no << ". ";
-        for (int j = lex_stream -> LineStart(right_line_no); j <= lex_stream -> LineEnd(right_line_no); j++)
-            s << lex_stream -> InputBuffer()[j];
-        
-        int offset = lex_stream -> WcharOffset(right_token);
-        s.width(8);
-        s << "";
-        s.width(right_column_no + right_string_length + offset);
-        s.fill('-');
-        s << (msg_code == SCOPE_CODE || msg_code == MANUAL_CODE ? "^\n" : ">\n");
-        s.fill(' ');
-    }
-    
-    s << "\n*** Syntax: " << getErrorMessage() << '\n';
-    
+
+    lex_stream -> OutputSource(this, s);
+
+    s << endl << "*** Syntax: " << getErrorMessage();
+
     return s.Array();
 }
 
 wchar_t *ParseErrorInfo::emacsErrorString()
 {
     ErrorString s;
-    
+
     s << getFileName()
       << ':' << left_line_no  << ':' << left_column_no
       << ':' << right_line_no << ':' << right_column_no
-      << ": " << getSeverityString() << ": " 
-      << getErrorMessage() << '\n';
-    
-    return s.Array();    
+      << ": " << getSeverityString() << ": "
+      << getErrorMessage() << endl;
+
+    return s.Array();
 }
 
 
@@ -2275,30 +2216,14 @@ void ParseError::PrintMessages()
 
     if (control.option.errors)
     {
-        Coutput << "\nFound " << errors.Length() << " syntax error" << (errors.Length() == 1 ? "" : "s")
-                << " in \""
-                << lex_stream -> FileName()
-                << "\":";
-
-        lex_stream -> RereadInput();
-
-        if (! lex_stream -> InputBuffer())
-        {
-            char *file_name = lex_stream -> FileName();
-            int length = lex_stream -> FileNameLength();
-            wchar_t *name = new wchar_t[length + 1];
-            for (int i = 0; i < length; i++)
-                name[i] = file_name[i];
-            name[length] = U_NULL;
-            control.system_semantic -> ReportSemError(SemanticError::CANNOT_REOPEN_FILE,
-                                                      0,
-                                                      0,
-                                                      name);
-            delete [] name;
-            return;
-        }
+        Coutput << endl << "Found " << errors.Length() << " syntax error"
+                << (errors.Length() == 1 ? "" : "s") << " in \""
+                << lex_stream -> FileName() << "\":";
     }
-    else if (! lex_stream -> ComputeColumns())
+
+    lex_stream -> RereadInput();
+
+    if (! lex_stream -> InputBuffer())
     {
         char *file_name = lex_stream -> FileName();
         int length = lex_stream -> FileNameLength();
@@ -2306,26 +2231,29 @@ void ParseError::PrintMessages()
         for (int i = 0; i < length; i++)
             name[i] = file_name[i];
         name[length] = U_NULL;
-        control.system_semantic -> ReportSemError(SemanticError::CANNOT_COMPUTE_COLUMNS,
-                                                  0,
-                                                  0,
-                                                  name);
+        control.system_semantic ->
+            ReportSemError(SemanticError::CANNOT_REOPEN_FILE, 0, 0, name);
         delete [] name;
+        return;
     }
 
     SortMessages();
 
-    int stack_top    = -1;
+    int stack_top = -1;
     int *error_stack = new int[errors.Length()];
 
     for (int k = 0; k < errors.Length(); k++)
     {
-        for ( ; stack_top >= 0 && (errors[error_stack[stack_top]].right_token <= errors[k].left_token); stack_top--)
+        for ( ; stack_top >= 0 &&
+                  (errors[error_stack[stack_top]].right_token <=
+                   errors[k].left_token);
+              stack_top--)
         {
              if (stack_top == 0)
              {
-                 PrintSecondaryMessage(error_stack[stack_top]);
-             } else
+                 PrintMessage(error_stack[stack_top]);
+             }
+             else
              {
                  int i = error_stack[stack_top],
                      j = error_stack[stack_top - 1];
@@ -2337,7 +2265,7 @@ void ParseError::PrintMessages()
                       errors[j].msg_code != MISPLACED_CODE &&
                       errors[j].msg_code != SECONDARY_CODE))
                  {
-                     PrintSecondaryMessage(i);
+                     PrintMessage(i);
                  }
              }
         }
@@ -2347,56 +2275,18 @@ void ParseError::PrintMessages()
             stack_top++;
             error_stack[stack_top] = k;
         }
-        else if (!((stack_top >= 0) &&
+        else if (!(stack_top >= 0 &&
                    (errors[error_stack[stack_top]].msg_code == SECONDARY_CODE ||
                     errors[error_stack[stack_top]].msg_code == DELETION_CODE) &&
-                   (errors[k].left_token  == errors[error_stack[stack_top]].left_token ||
+                   (errors[k].left_token == errors[error_stack[stack_top]].left_token ||
                     errors[k].right_token == errors[error_stack[stack_top]].right_token)))
         {
             /* NOTE that input_line already contains a '\n' character */
-            /*
-              if (control.option.errors)
-              {
-                int m = errors[k].left_column_no,
-                    n = errors[k].right_column_no + errors[k].right_string_length - 1;
-
-                Coutput << "\n\n";
-                Coutput.width(6);
-                Coutput << left_line_no << ". ";
-                for (int i = lex_stream -> LineStart(errors[k].left_line_no); i <= lex_stream -> LineEnd(errors[k].left_line_no); i++)
-                    Coutput << lex_stream -> InputBuffer()[i];
-
-                if ((msg_code == SUBSTITUTION_CODE) ||
-                    (n == m) ||
-                    (msg_code == BEFORE_CODE)  ||
-                    (msg_code == INVALID_CODE  && n <= (m+1)) ||
-                    (msg_code == DELETION_CODE &&
-                     errors[k].left_column_no == errors[k].right_column_no))
-                {
-                    Coutput.width(left_column_no + 9);
-                    Coutput << "^\n";
-                } else if (msg_code == INSERTION_CODE ||
-                           msg_code == EOF_CODE)
-                {
-                    Coutput.width(n + 9);
-                    Coutput << "^\n";
-                } else
-                {
-                    int offset = lex_stream -> WcharOffset(errors[k].left_token, errors[k].right_token);
-                    Coutput.width(errors[k].left_column_no + 8);
-                    Coutput << "<";
-                    Coutput.width(errors[k].right_column_no + errors[k].right_string_length - errors[k].left_column_no + offset);
-                    Coutput.fill('-');
-                    Coutput << (msg_code == SCOPE_CODE || msg_code == MANUAL_CODE ? "^\n" : ">\n");
-                    Coutput.fill(' ');
-                }
-            }
-            */
-            PrintPrimaryMessage(k);
+            PrintMessage(k);
         }
     }
 
-    for (; stack_top > 0; stack_top--)
+    for ( ; stack_top > 0; stack_top--)
     {
         int i = error_stack[stack_top],
             j = error_stack[stack_top - 1];
@@ -2405,10 +2295,12 @@ void ParseError::PrintMessages()
              errors[i].msg_code != DELETION_CODE) ||
             (errors[j].msg_code != DELETION_CODE  &&
              errors[j].msg_code != SECONDARY_CODE))
-           PrintSecondaryMessage(i);
+        {
+           PrintMessage(i);
+        }
     }
     if (stack_top == 0)
-        PrintSecondaryMessage(error_stack[stack_top]);
+        PrintMessage(error_stack[stack_top]);
 
     Coutput.flush();
 
@@ -2416,20 +2308,12 @@ void ParseError::PrintMessages()
 
     if (control.option.errors)
         lex_stream -> DestroyInput();
-
-    return;
 }
 
-void ParseError::PrintPrimaryMessage(int k)
+void ParseError::PrintMessage(int k)
 {
     errors[k].Initialize(lex_stream);
-    JikesAPI::getInstance()->reportError(&errors[k]);
-}
-
-void ParseError::PrintSecondaryMessage(int k)
-{
-    errors[k].Initialize(lex_stream);
-    JikesAPI::getInstance()->reportError(&errors[k]);
+    JikesAPI::getInstance() -> reportError(&errors[k]);
 }
 
 #ifdef HAVE_JIKES_NAMESPACE

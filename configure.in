@@ -1,11 +1,11 @@
-# $Id: configure.in,v 1.35 2002/07/06 21:18:03 cabbey Exp $
+# $Id: configure.in,v 1.39 2002/09/28 04:29:41 cabbey Exp $
 dnl	This file is an input file used by the GNU "autoconf" program to
 dnl	generate the file "configure", which is run to configure the
 dnl	Makefile in this directory.
 
 AC_INIT(ChangeLog)
-AM_INIT_AUTOMAKE(jikes, 1.16)
-AC_DEFINE(JIKES_VERSION_STRING, "Version 1.16 - 10 July 2002",
+AM_INIT_AUTOMAKE(jikes, 1.17)
+AC_DEFINE(JIKES_VERSION_STRING, "Version 1.17 - 27 September 2002",
     [A string to indicate the release of jikes: Version 1.15 - 26 Sept 2001])
 
 AC_PREREQ(2.53)
@@ -24,22 +24,47 @@ dnl	Do not autoupdate if configure.in and friends are changed
 dnl	unless the --enable-maintainer-mode flag is used.
 AM_MAINTAINER_MODE()
 
-dnl     make it easy to turn on debug, like any other project
-AC_ARG_ENABLE(debug, [  --enable-debug          Turn on internal compiler debugging.],
-          [ok=$enableval], [ok=no])
-
-if test "$ok" = "yes"; then
-  AC_DEFINE(JIKES_DEBUG, 1, [Enable internal compiler debugging])
-
-  # If the user did not set CXXFLAGS, set it to -g now to keep
-  # the AC_PROG_CXX macro from using -g -O2 by default.
-  if test "${CXXFLAGS+set}" != "set" ; then
-    CXXFLAGS="-g"
-  fi
-fi
-
 dnl	Set up host checks using config.sub and config.guess.
 AC_CANONICAL_HOST()
+
+dnl	VC++ requires special flags:
+dnl	/TP  : Treat input files as c++
+dnl	/GX  : Enable C++ exceptions
+dnl	/GR  : Enable rtti
+dnl	/MD  : Link to msvcrt.lib
+dnl	/MDd : Link to msvcrtd.lib
+dnl	/Zi  : Add debug info to .obj files
+case "${host}" in
+    *windows32*)
+        jikes_vcpp=yes
+        ;;
+esac
+
+dnl     make it easy to turn on debug, like any other project
+AC_ARG_ENABLE(debug, [  --enable-debug          Turn on internal compiler debugging.],
+          [jikes_debug=$enableval], [jikes_debug=no])
+
+if test "$jikes_debug" = "yes"; then
+  AC_DEFINE(JIKES_DEBUG, 1, [Enable internal compiler debugging])
+
+  dnl If the user did not set CXXFLAGS, set debug flags to
+  dnl keep the AC_PROG_CXX macro from defaulting to -g -O2.
+  if test "${CXXFLAGS+set}" != "set" ; then
+    if test "$jikes_vcpp" = "yes" ; then
+      CXXFLAGS="-Zi -MDd -GX -GR"
+    else
+      CXXFLAGS="-g"
+    fi
+  fi
+else
+  dnl If the user did not set CXXFLAGS and we are using VC++, set
+  dnl default flags to keep AC_PROG_CXX from defaulting to -g -O2.
+  if test "${CXXFLAGS+set}" != "set" ; then
+    if test "$jikes_vcpp" = "yes" ; then
+      CXXFLAGS="-MD -GX -GR"
+    fi
+  fi
+fi
 
 dnl	Tell the system that we are going to use the C++ language
 AC_LANG_CPLUSPLUS()
@@ -114,6 +139,12 @@ AC_CHECK_ICONV()
 
 dnl	Check if "IBM Classes for UNICODE library" is present
 AC_CHECK_LIB(icu-uc, u_getVersion)
+
+if test "$ac_cv_header_iconv_h" = "yes" || \
+   test "$ac_cv_lib_icu_uc_u_getVersion" = "yes" ; then
+   AC_DEFINE(HAVE_ENCODING,1,
+       [Defined if Jikes supports -encoding for input files.])
+fi
 
 dnl	Check for cygwin path conversion functions
 AC_CHECK_FUNCS(cygwin_win32_to_posix_path_list)

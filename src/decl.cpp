@@ -1,4 +1,4 @@
-// $Id: decl.cpp,v 1.87 2002/07/10 04:19:14 cabbey Exp $
+// $Id: decl.cpp,v 1.100 2002/09/11 17:06:00 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -273,7 +273,7 @@ void Semantic::ProcessTypeNames()
                 break;
             }
             case Ast::EMPTY_DECLARATION:
-                 break;
+                break;
             default:
                 assert(false);
                 break;
@@ -282,7 +282,7 @@ void Semantic::ProcessTypeNames()
         //
         // If we successfully processed this type, check that
         //     . its name does not conflict with a subpackage
-        //     . if it is contained in a file with a diffent name
+        //     . if it is contained in a file with a different name
         //       than its own name that there does not also exist a
         //       (java or class) file with its name.
         //
@@ -292,8 +292,14 @@ void Semantic::ProcessTypeNames()
                 lex_stream -> NameSymbol(identifier_token);
             for (int i = 0; i < this_package -> directory.Length(); i++)
             {
-                if (this_package -> directory[i] ->
-                    FindDirectorySymbol(name_symbol))
+                //
+                // The unnamed package cannot contain subpackages, as
+                // subpackages require a named top-level package. In other
+                // words, java.lang is not a subpackage of the unnamed one.
+                //
+                if ((this_package -> directory[i] ->
+                     FindDirectorySymbol(name_symbol)) &&
+                    this_package != control.unnamed_package)
                 {
                     char *file_name = type -> file_symbol -> FileName();
                     int length = type -> file_symbol -> FileNameLength();
@@ -337,8 +343,8 @@ void Semantic::ProcessTypeNames()
     ProcessImports();
 
     //
-    // Process outer type of superclasses and interfaces and make sure that
-    // compilation unit contains exactly one public type.
+    // Make sure that compilation unit contains exactly one public type, and
+    // that it matches the file name.
     //
     TypeSymbol *public_type = NULL;
     for (int i = 0; i < type_list.Length(); i++)
@@ -349,9 +355,6 @@ void Semantic::ProcessTypeNames()
             type -> declaration -> ClassDeclarationCast();
         AstInterfaceDeclaration *interface_declaration =
             type -> declaration -> InterfaceDeclarationCast();
-        if (class_declaration)
-             ProcessSuperTypeDependences(class_declaration);
-        else ProcessSuperTypeDependences(interface_declaration);
 
         if (type && type -> ACC_PUBLIC())
         {
@@ -359,8 +362,8 @@ void Semantic::ProcessTypeNames()
             {
                 public_type = type;
 
-                if  (source_file_symbol -> Identity() !=
-                     public_type -> Identity())
+                if (source_file_symbol -> Identity() !=
+                    public_type -> Identity())
                 {
                     if (class_declaration)
                     {
@@ -408,7 +411,6 @@ void Semantic::CheckClassMembers(TypeSymbol *containing_type,
     for (int i = 0; i < class_body -> NumNestedClasses(); i++)
     {
         AstClassDeclaration *class_declaration = class_body -> NestedClass(i);
-
         ProcessNestedClassName(containing_type, class_declaration);
     }
 
@@ -416,7 +418,6 @@ void Semantic::CheckClassMembers(TypeSymbol *containing_type,
     {
         AstInterfaceDeclaration *interface_declaration =
             class_body -> NestedInterface(j);
-
         ProcessNestedInterfaceName(containing_type, interface_declaration);
     }
 
@@ -432,30 +433,41 @@ void Semantic::CheckClassMembers(TypeSymbol *containing_type,
 }
 
 
+//
+// Given a type shadow symbol, returns the first accessible type, and reports
+// an error for any other accessible types.
+//
 inline TypeSymbol *Semantic::FindTypeInShadow(TypeShadowSymbol *type_shadow_symbol,
                                               LexStream::TokenIndex identifier_token)
 {
-    //
-    // Recall that even an inaccessible member x of a super class (or
-    // interface) S, in addition to not been inherited by a subclass, hides
-    // all other occurrences of x that may appear in a super class (or super
-    // interface) of S (see 8.3).
-    //
-    TypeSymbol *type_symbol = type_shadow_symbol -> type_symbol;
-
-    for (int i = 0; i < type_shadow_symbol -> NumConflicts(); i++)
+    TypeSymbol *type = type_shadow_symbol -> type_symbol;
+    int i = 0;
+    if (! TypeAccessCheck(type))
+    {
+        if (type_shadow_symbol -> NumConflicts())
+        {
+            //
+            // The conflicts are necessarily accessible, because they are
+            // public types inherited from interfaces.
+            //
+            type = type_shadow_symbol -> Conflict(0);
+            i = 1;
+        }
+        else type = NULL;
+    }
+    for ( ; i < type_shadow_symbol -> NumConflicts(); i++)
     {
         ReportSemError(SemanticError::AMBIGUOUS_TYPE,
                        identifier_token,
                        identifier_token,
-                       type_symbol -> Name(),
-                       type_symbol -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
-                       type_symbol -> owner -> TypeCast() -> ExternalName(),
+                       type -> Name(),
+                       type -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
+                       type -> owner -> TypeCast() -> ExternalName(),
                        type_shadow_symbol -> Conflict(i) -> owner -> TypeCast() -> ContainingPackage() -> PackageName(),
                        type_shadow_symbol -> Conflict(i) -> owner -> TypeCast() -> ExternalName());
     }
 
-    return type_symbol;
+    return type;
 }
 
 
@@ -622,7 +634,6 @@ void Semantic::CheckInterfaceMembers(TypeSymbol *containing_type,
     {
         AstClassDeclaration *class_declaration =
             interface_declaration -> NestedClass(i);
-
         ProcessNestedClassName(containing_type, class_declaration);
     }
 
@@ -630,7 +641,6 @@ void Semantic::CheckInterfaceMembers(TypeSymbol *containing_type,
     {
         AstInterfaceDeclaration *inner_interface_declaration =
             interface_declaration -> NestedInterface(j);
-
         ProcessNestedInterfaceName(containing_type,
                                    inner_interface_declaration);
     }
@@ -724,116 +734,9 @@ void Semantic::ProcessImports()
             compilation_unit -> ImportDeclaration(i);
 
         if (import_declaration -> star_token_opt)
-             ProcessTypeImportOnDemandDeclaration(import_declaration);
+            ProcessTypeImportOnDemandDeclaration(import_declaration);
         else ProcessSingleTypeImportDeclaration(import_declaration);
     }
-}
-
-
-//
-// Pass 1.3: Process outer types in "extends" and "implements" clauses
-// associated with the types.
-//
-void Semantic::ProcessSuperTypeDependences(AstClassDeclaration *class_declaration)
-{
-    TypeSymbol *type = class_declaration -> semantic_environment -> Type();
-
-    //
-    // Special case java.lang.Object, the only type without a supertype.
-    //
-    if (type -> Identity() == control.object_name_symbol &&
-	type -> ContainingPackage() == control.system_package &&
-	! type -> IsNested())
-    {
-	if (class_declaration -> super_opt ||
-	    class_declaration -> NumInterfaces() > 0)
-	{
-	    ReportSemError(SemanticError::OBJECT_WITH_SUPER_TYPE,
-			   class_declaration -> LeftToken(),
-			   class_declaration -> class_body -> left_brace_token - 1);
-	    type -> MarkBad();
-	}
-	return;
-    }
-
-    if (class_declaration -> super_opt)
-    {
-        TypeSymbol *super_type =
-            FindFirstType(class_declaration -> super_opt) -> symbol ->
-            TypeCast();
-        if (super_type)
-            super_type -> subtypes -> AddElement(type -> outermost_type);
-    }
-
-    for (int k = 0; k < class_declaration -> NumInterfaces(); k++)
-    {
-         TypeSymbol *super_type =
-             FindFirstType(class_declaration -> Interface(k)) -> symbol ->
-             TypeCast();
-         if (super_type)
-         {
-             assert(super_type -> subtypes);
-
-             super_type -> subtypes -> AddElement(type -> outermost_type);
-         }
-    }
-
-    SetDefaultSuperType(class_declaration);
-
-    AstClassBody *class_body = class_declaration -> class_body;
-    for (int i = 0; i < class_body -> NumNestedClasses(); i++)
-        ProcessSuperTypeDependences(class_body -> NestedClass(i));
-
-    for (int j = 0; j < class_body -> NumNestedInterfaces(); j++)
-        ProcessSuperTypeDependences(class_body -> NestedInterface(j));
-}
-
-
-void Semantic::ProcessSuperTypeDependences(AstInterfaceDeclaration *interface_declaration)
-{
-    TypeSymbol *type = interface_declaration -> semantic_environment -> Type();
-    for (int k = 0; k < interface_declaration -> NumExtendsInterfaces(); k++)
-    {
-        TypeSymbol *super_type =
-            FindFirstType(interface_declaration -> ExtendsInterface(k)) ->
-            symbol -> TypeCast();
-        if (super_type)
-            super_type -> subtypes -> AddElement(type -> outermost_type);
-    }
-
-    SetDefaultSuperType(interface_declaration);
-
-    for (int i = 0; i < interface_declaration -> NumNestedClasses(); i++)
-        ProcessSuperTypeDependences(interface_declaration -> NestedClass(i));
-
-    for (int j = 0; j < interface_declaration -> NumNestedInterfaces(); j++)
-        ProcessSuperTypeDependences(interface_declaration ->
-                                    NestedInterface(j));
-}
-
-
-void Semantic::SetDefaultSuperType(AstClassDeclaration *class_declaration)
-{
-    TypeSymbol *type = class_declaration -> semantic_environment -> Type();
-
-    //
-    // If a type has no super type, set it up properly in case
-    // it is expanded prematurely by one of its dependents.
-    //
-    if (! class_declaration -> super_opt)
-        type -> super = control.Object();
-}
-
-
-void Semantic::SetDefaultSuperType(AstInterfaceDeclaration *interface_declaration)
-{
-    TypeSymbol *type = interface_declaration -> semantic_environment -> Type();
-
-    //
-    // Set it up an interface properly in case it is
-    // expanded prematurely by one of its dependents.
-    //
-    type -> super = control.Object();
 }
 
 
@@ -843,425 +746,298 @@ void Semantic::SetDefaultSuperType(AstInterfaceDeclaration *interface_declaratio
 //
 void Semantic::ProcessTypeHeader(AstClassDeclaration *class_declaration)
 {
-    TypeSymbol *this_type = class_declaration -> semantic_environment -> Type();
+    TypeSymbol *type = class_declaration -> semantic_environment -> Type();
 
-    assert(! this_type -> HeaderProcessed() || this_type -> Bad());
-    if (this_type -> Bad())
+    assert(! type -> HeaderProcessed() || type -> Bad());
+    type -> MarkHeaderProcessed();
+    if (type -> Bad())
         return;
 
     //
-    // If the class does not have a super type then ...
+    // Special case java.lang.Object, the only class with no supertype.
     //
-    if (! class_declaration -> super_opt)
+    if (type -> Identity() == control.object_name_symbol &&
+        this_package == control.system_package && ! type -> IsNested())
     {
-        if (this_type -> Identity() != control.object_name_symbol ||
-            this_package != control.system_package || this_type -> IsNested())
-            SetObjectSuperType(this_type,
-                               class_declaration -> identifier_token);
+        if (class_declaration -> super_opt ||
+            class_declaration -> NumInterfaces() > 0)
+        {
+            ReportSemError(SemanticError::OBJECT_WITH_SUPER_TYPE,
+                           class_declaration -> LeftToken(),
+                           (class_declaration -> class_body ->
+                            left_brace_token - 1));
+            type -> MarkBad();
+        }
+        type -> MarkHeaderProcessed();
+        return;
     }
-    else
+
+    if (class_declaration -> super_opt)
     {
         TypeSymbol *super_type = MustFindType(class_declaration -> super_opt);
-
-        assert(this_type -> subtypes_closure);
         assert(! super_type -> SourcePending());
-
-        this_type -> super = super_type;
-
-        // if there is a cycle, break it and issue an error message
-        if (this_type -> subtypes_closure -> IsElement(super_type) ||
-            this_type == super_type)
+        if (! super_type -> HeaderProcessed())
         {
-            this_type -> super = control.Object();
-            this_type -> MarkCircular();
-            ReportSemError(SemanticError::CIRCULAR_CLASS,
-                           class_declaration -> identifier_token,
-                           class_declaration -> super_opt -> RightToken(),
-                           this_type -> ContainingPackage() -> PackageName(),
-                           this_type -> ExternalName());
+            AstClassDeclaration *class_decl =
+                super_type -> declaration -> ClassDeclarationCast();
+            AstInterfaceDeclaration *interface_decl =
+                super_type -> declaration -> InterfaceDeclarationCast();
+            Semantic *sem = super_type -> semantic_environment -> sem;
+            if (class_decl)
+                sem -> ProcessTypeHeaders(class_decl);
+            else if (interface_decl)
+                sem -> ProcessTypeHeaders(interface_decl);
+            else assert(false && "supertype not processed");
         }
-        else if (super_type -> ACC_INTERFACE())
+        if (control.option.deprecation && state_stack.Size() == 0 &&
+            super_type -> IsDeprecated() && ! type -> IsDeprecated())
+        {
+            ReportSemError(SemanticError::DEPRECATED_TYPE,
+                           class_declaration -> super_opt -> LeftToken(),
+                           class_declaration -> super_opt -> RightToken(),
+                           super_type -> ContainingPackage() -> PackageName(),
+                           super_type -> ExternalName());
+        }
+        if (super_type -> ACC_INTERFACE())
         {
             ReportSemError(SemanticError::NOT_A_CLASS,
                            class_declaration -> super_opt -> LeftToken(),
                            class_declaration -> super_opt -> RightToken(),
                            super_type -> ContainingPackage() -> PackageName(),
                            super_type -> ExternalName());
-
-            SetObjectSuperType(this_type,
-                               class_declaration -> identifier_token);
         }
         else if (super_type -> ACC_FINAL())
         {
-             ReportSemError(SemanticError::SUPER_IS_FINAL,
-                            class_declaration -> super_opt -> LeftToken(),
-                            class_declaration -> super_opt -> RightToken(),
-                            super_type -> ContainingPackage() -> PackageName(),
-                            super_type -> ExternalName());
+            ReportSemError(SemanticError::SUPER_IS_FINAL,
+                           class_declaration -> super_opt -> LeftToken(),
+                           class_declaration -> super_opt -> RightToken(),
+                           super_type -> ContainingPackage() -> PackageName(),
+                           super_type -> ExternalName());
+        }
+        else if (super_type -> Bad())
+            ; // ignore
+        else
+        {
+            super_type -> subtypes -> AddElement(type);
+            type -> super = super_type;
+            while (super_type)
+            {
+                type -> supertypes_closure -> AddElement(super_type);
+                type -> supertypes_closure -> Union(*super_type ->
+                                                    supertypes_closure);
+                if (super_type -> owner -> TypeCast())
+                    super_type = super_type -> ContainingType();
+                else super_type = NULL;
+            }
         }
     }
+    if (! type -> super)
+    {
+        type -> super = control.Object();
+        type -> supertypes_closure -> AddElement(control.Object());
+        control.Object() -> subtypes -> AddElement(type);
+    }
+    AddDependence(type, type -> super);
 
     for (int i = 0; i < class_declaration -> NumInterfaces(); i++)
-        ProcessInterface(this_type, class_declaration -> Interface(i));
+        ProcessInterface(type, class_declaration -> Interface(i));
 
-    this_type -> MarkHeaderProcessed();
+    // if there is a cycle, break it and issue an error message
+    if (type -> supertypes_closure -> IsElement(type))
+    {
+        type -> super = control.Object();
+        type -> ResetInterfaces();
+        type -> MarkCircular();
+        ReportSemError(SemanticError::CIRCULAR_CLASS,
+                       class_declaration -> identifier_token,
+                       class_declaration -> class_body -> LeftToken() - 1,
+                       type -> ContainingPackage() -> PackageName(),
+                       type -> ExternalName());
+    }
 }
 
 
 void Semantic::ProcessTypeHeader(AstInterfaceDeclaration *interface_declaration)
 {
-    TypeSymbol *this_type =
-        interface_declaration -> semantic_environment -> Type();
+    TypeSymbol *type = interface_declaration -> semantic_environment -> Type();
 
-    assert(! this_type -> HeaderProcessed() || this_type -> Bad());
+    assert(! type -> HeaderProcessed() || type -> Bad());
+    type -> MarkHeaderProcessed();
 
-    SetObjectSuperType(this_type, interface_declaration -> identifier_token);
+    //
+    // Although interfaces do not have a superclass in source code, in
+    // bytecode they are treated as subclasses of Object.
+    //
+    type -> super = control.Object();
+    AddDependence(type, control.Object());
     for (int k = 0; k < interface_declaration -> NumExtendsInterfaces(); k++)
-        ProcessInterface(this_type,
-                         interface_declaration -> ExtendsInterface(k));
+        ProcessInterface(type, interface_declaration -> ExtendsInterface(k));
 
-    assert(this_type -> subtypes_closure);
-
-    for (int i = 0; i < this_type -> NumInterfaces(); i++)
+    if (type -> supertypes_closure -> IsElement(type))
     {
-        if (this_type -> subtypes_closure ->
-            IsElement(this_type -> Interface(i)))
-        {
-            //
-            // Remove all the interfaces if a loop is detected. The error will
-            // be reported later.
-            //
-            this_type -> ResetInterfaces();
-            this_type -> MarkCircular();
-            ReportSemError(SemanticError::CIRCULAR_INTERFACE,
-                           interface_declaration -> identifier_token,
-                           interface_declaration -> ExtendsInterface(interface_declaration -> NumExtendsInterfaces() - 1) -> RightToken(),
-                           this_type -> ContainingPackage() -> PackageName(),
-                           this_type -> ExternalName());
-            break;
-        }
+        //
+        // Remove all the interfaces if a loop is detected.
+        //
+        type -> ResetInterfaces();
+        type -> MarkCircular();
+        ReportSemError(SemanticError::CIRCULAR_INTERFACE,
+                       interface_declaration -> identifier_token,
+                       interface_declaration -> left_brace_token - 1,
+                       type -> ContainingPackage() -> PackageName(),
+                       type -> ExternalName());
     }
-
-    this_type -> MarkHeaderProcessed();
 }
 
 
-//
-// Marked type and all other types that are nested inside it "circular"
-//
-void Semantic::MarkCircularNest(TypeSymbol *type)
+void Semantic::ProcessInterface(TypeSymbol *base_type, AstExpression *name)
 {
-    if (type -> Circular())
-        return;
+    TypeSymbol *interf = MustFindType(name);
 
-    //
-    // Mark the type as circular
-    //
-    type -> MarkCircular();
-    type -> super = control.Object();
-    type -> ResetInterfaces();
-
-    //
-    // Recursively, process any nested type...
-    //
-    AstClassDeclaration *class_declaration =
-        type -> declaration -> ClassDeclarationCast();
-    if (class_declaration)
+    assert(! interf -> SourcePending());
+    if (! interf -> HeaderProcessed())
     {
-        AstClassBody *class_body = class_declaration -> class_body;
-        for (int i = 0; i < class_body -> NumNestedClasses(); i++)
-            MarkCircularNest(class_body -> NestedClass(i) ->
-                             semantic_environment -> Type());
-        for (int k = 0; k < class_body -> NumNestedInterfaces(); k++)
-            MarkCircularNest(class_body -> NestedInterface(k) ->
-                             semantic_environment -> Type());
+        AstClassDeclaration *class_decl =
+            interf -> declaration -> ClassDeclarationCast();
+        AstInterfaceDeclaration *interface_decl =
+            interf -> declaration -> InterfaceDeclarationCast();
+        Semantic *sem = interf -> semantic_environment -> sem;
+        if (class_decl)
+            sem -> ProcessTypeHeaders(class_decl);
+        else if (interface_decl)
+            sem -> ProcessTypeHeaders(interface_decl);
+        else assert(false && "supertype not processed");
+    }
+
+    if (control.option.deprecation && state_stack.Size() == 0 &&
+        interf -> IsDeprecated() && ! base_type -> IsDeprecated())
+    {
+        ReportSemError(SemanticError::DEPRECATED_TYPE,
+                       name -> LeftToken(),
+                       name -> RightToken(),
+                       interf -> ContainingPackage() -> PackageName(),
+                       interf -> ExternalName());
+    }
+    if (! interf -> ACC_INTERFACE())
+    {
+        if (! interf -> Bad())
+        {
+            ReportSemError(SemanticError::NOT_AN_INTERFACE,
+                           name -> LeftToken(),
+                           name -> RightToken(),
+                           interf -> ContainingPackage() -> PackageName(),
+                           interf -> ExternalName());
+        }
+
+        name -> symbol = NULL;
     }
     else
     {
-        AstInterfaceDeclaration *interface_declaration =
-            (AstInterfaceDeclaration *) type -> declaration;
-        for (int i = 0; i < interface_declaration -> NumNestedClasses(); i++)
-            MarkCircularNest(interface_declaration -> NestedClass(i) ->
-                             semantic_environment -> Type());
-        for (int k = 0; k < interface_declaration -> NumNestedInterfaces(); k++)
-            MarkCircularNest(interface_declaration -> NestedInterface(k) ->
-                             semantic_environment -> Type());
-    }
-}
-
-
-//
-// Compute the set of super types associated with this outer-level type
-// and check for circularity.
-//
-void Semantic::ProcessSuperTypesOfOuterType(TypeSymbol *type)
-{
-    assert((! type -> IsNested()) || type -> owner -> MethodCast());
-
-    if (type -> super)
-    {
-        type -> supertypes_closure -> AddElement(type -> super ->
-                                                 outermost_type);
-        type -> supertypes_closure -> Union(*type -> super -> outermost_type ->
-                                            supertypes_closure);
-    }
-
-    for (int k = 0; k < type -> NumInterfaces(); k++)
-    {
-        type -> supertypes_closure -> AddElement(type -> Interface(k) ->
-                                                 outermost_type);
-        type -> supertypes_closure -> Union(*type -> Interface(k) ->
-                                            outermost_type -> supertypes_closure);
-    }
-
-    SymbolSet &inner_types = *(type -> innertypes_closure);
-    for (TypeSymbol *inner_type = (TypeSymbol *) inner_types.FirstElement();
-                     inner_type;
-                     inner_type = (TypeSymbol *) inner_types.NextElement())
-    {
-        TypeSymbol *super_type = inner_type -> super;
-        for (int k = 0; super_type;
-             super_type = (TypeSymbol *) (k < inner_type -> NumInterfaces()
-                                          ? inner_type -> Interface(k++)
-                                          : NULL))
+        for (int k = 0; k < base_type -> NumInterfaces(); k++)
         {
-            if (super_type -> outermost_type != type)
+            if (base_type -> Interface(k) == interf)
             {
-                type -> supertypes_closure -> AddElement(super_type ->
-                                                         outermost_type);
-                type -> supertypes_closure -> Union(*super_type ->
-                                                    outermost_type -> supertypes_closure);
+                ReportSemError(SemanticError::DUPLICATE_INTERFACE,
+                               name -> LeftToken(),
+                               name -> RightToken(),
+                               interf -> ContainingPackage() -> PackageName(),
+                               interf -> ExternalName(),
+                               base_type -> ExternalName());
+
+                name -> symbol = NULL;
+
+                return;
             }
         }
-    }
-
-    bool circular = type -> supertypes_closure -> IsElement(type) ||
-                    type -> subtypes_closure -> Intersects(*type ->
-                                                           supertypes_closure);
-    if (circular)
-    {
-        //
-        // If the type is already marked circular, an error message has
-        // already been issued. Remove the circular mark, so that we can
-        // remark the whole "nest".
-        if (type -> Circular())
-            type -> MarkNonCircular();
-        else
+        name -> symbol = interf; // save type name in ast.
+        base_type -> AddInterface(interf);
+        interf -> subtypes -> AddElement(base_type);
+        AddDependence(base_type, interf);
+        while (interf)
         {
-            if (type -> ACC_INTERFACE())
-            {
-                AstInterfaceDeclaration *interface_declaration =
-                    (AstInterfaceDeclaration *) type -> declaration;
-                int right_token_index =
-                    interface_declaration -> NumExtendsInterfaces() - 1;
-
-                ReportSemError(SemanticError::CIRCULAR_INTERFACE,
-                               interface_declaration -> identifier_token,
-                               (interface_declaration -> NumExtendsInterfaces() > 0
-                                ? interface_declaration -> ExtendsInterface(right_token_index) -> RightToken()
-                                : interface_declaration -> identifier_token),
-                               type -> ContainingPackage() -> PackageName(),
-                               type -> ExternalName());
-            }
-            else
-            {
-                AstClassDeclaration *class_declaration =
-                    (AstClassDeclaration *) type -> declaration;
-                int right_token_index =
-                    class_declaration -> NumInterfaces() - 1;
-
-                ReportSemError(SemanticError::CIRCULAR_CLASS,
-                               class_declaration -> identifier_token,
-                               (class_declaration -> NumInterfaces() > 0
-                                ? class_declaration -> Interface(right_token_index) -> RightToken()
-                                : (class_declaration -> super_opt
-                                   ? class_declaration -> super_opt -> RightToken()
-                                   : class_declaration -> identifier_token)),
-                               type -> ContainingPackage() -> PackageName(),
-                               type -> ExternalName());
-
-                SetObjectSuperType(type, class_declaration -> identifier_token);
-
-                assert(type -> Identity() != control.object_name_symbol ||
-                       type -> ContainingPackage() != control.system_package);
-            }
+            base_type -> supertypes_closure -> AddElement(interf);
+            base_type -> supertypes_closure -> Union(*interf ->
+                                                     supertypes_closure);
+            if (interf -> owner -> TypeCast())
+                interf = interf -> ContainingType();
+            else interf = NULL;
         }
-
-        MarkCircularNest(type);
-    }
-}
-
-
-//
-// The array partially_ordered_types contains a list of inner types. For
-// each of these types, compute the set of super types associated with it
-// and check for circularity.
-//
-void Semantic::ProcessSuperTypesOfInnerType(TypeSymbol *type,
-                                            Tuple<TypeSymbol *> &partially_ordered_types)
-{
-    for (int l = 0; l < partially_ordered_types.Length(); l++)
-    {
-        TypeSymbol *inner_type = partially_ordered_types[l];
-
-        SymbolSet &nested_types = *(inner_type -> innertypes_closure);
-        nested_types.AddElement(inner_type); // Compute reflexive transitive closure
-        for (TypeSymbol *nested_type = (TypeSymbol *) nested_types.FirstElement();
-             nested_type;
-             nested_type = (TypeSymbol *) nested_types.NextElement())
-        {
-            TypeSymbol *super_type = nested_type -> super;
-            for (int k = 0; super_type;
-                 super_type = (TypeSymbol *) (k < nested_type -> NumInterfaces()
-                                              ? nested_type -> Interface(k++)
-                                              : NULL))
-            {
-                for ( ; super_type;
-                      super_type = super_type -> owner -> TypeCast())
-                {
-                    if (type -> innertypes_closure -> IsElement(super_type))
-                        break;
-                }
-
-                if (super_type && super_type != inner_type)
-                {
-                    inner_type -> supertypes_closure -> AddElement(super_type);
-                    inner_type -> supertypes_closure -> Union(*super_type ->
-                                                              supertypes_closure);
-                }
-            }
-        }
-
-        bool circular =
-            inner_type -> supertypes_closure -> IsElement(inner_type) ||
-            inner_type -> subtypes_closure -> Intersects(*inner_type ->
-                                                         supertypes_closure);
-
-        if (circular)
-        {
-            MarkCircularNest(inner_type);
-
-            if (inner_type -> ACC_INTERFACE())
-            {
-                AstInterfaceDeclaration *interface_declaration =
-                    (AstInterfaceDeclaration *) inner_type -> declaration;
-                ReportSemError(SemanticError::CIRCULAR_INTERFACE,
-                               interface_declaration -> identifier_token,
-                               (interface_declaration -> NumExtendsInterfaces() > 0
-                                ? interface_declaration -> ExtendsInterface(interface_declaration -> NumExtendsInterfaces() - 1) -> RightToken()
-                                : interface_declaration -> identifier_token),
-                               inner_type -> ContainingPackage() -> PackageName(),
-                               inner_type -> ExternalName());
-            }
-            else
-            {
-                AstClassDeclaration *class_declaration =
-                    (AstClassDeclaration *) inner_type -> declaration;
-                ReportSemError(SemanticError::CIRCULAR_CLASS,
-                               class_declaration -> identifier_token,
-                               (class_declaration -> NumInterfaces() > 0
-                                ? class_declaration -> Interface(class_declaration -> NumInterfaces() - 1) -> RightToken()
-                                : (class_declaration -> super_opt
-                                   ? class_declaration -> super_opt -> RightToken()
-                                   : class_declaration -> identifier_token)),
-                               inner_type -> ContainingPackage() -> PackageName(),
-                               inner_type -> ExternalName());
-            }
-        }
-    }
-
-    //
-    // At this point the innertypes_closure set contains only the
-    // immediate inner types.
-    //
-    if (partially_ordered_types.Length() > 1) // inner_types set has more than one element?
-    {
-        SymbolSet &inner_types = *(type -> innertypes_closure);
-
-        assert(partially_ordered_types.Length() == inner_types.Size());
-
-        TopologicalSort *topological_sorter =
-            new TopologicalSort(inner_types, partially_ordered_types);
-        topological_sorter -> Sort();
-        delete topological_sorter;
-    }
-
-    //
-    // Now, complete the closure set of inner types.
-    //
-    for (int i = 0; i < partially_ordered_types.Length(); i++)
-    {
-        TypeSymbol *inner_type = partially_ordered_types[i];
-        type -> AddNestedType(inner_type);
-        type -> innertypes_closure -> Union(*(inner_type ->
-                                              innertypes_closure));
     }
 }
 
 
 void Semantic::ProcessTypeHeaders(AstClassDeclaration *class_declaration)
 {
-    TypeSymbol *this_type = class_declaration -> semantic_environment -> Type();
+    TypeSymbol *type = class_declaration -> semantic_environment -> Type();
 
-    // Not a nested type or a immediately local type.
-    assert(state_stack.Size() == 0 || this_type -> owner -> MethodCast());
-
+    if (type -> HeaderProcessed())
+        return; // Possible if a subclass was declared in the same file.
     ProcessTypeHeader(class_declaration);
-    ProcessNestedTypeHeaders(this_type, class_declaration -> class_body);
-    ProcessSuperTypesOfOuterType(this_type);
-
-    //
-    // Note that if we are processing an outermost type, no environment is set
-    // before we invoke ProcessTypeHeader to process its super types.
-    // Therefore, the dependence map is not updated with the super type
-    // information. In that case, we do so here.
-    //
-    if (state_stack.Size() == 0)
+    state_stack.Push(class_declaration -> semantic_environment);
+    AstClassBody *class_body = class_declaration -> class_body;
+    for (int i = 0; i < class_body -> NumNestedClasses(); i++)
     {
-        if (this_type -> super)
-        {
-            AddDependence(this_type,
-                          this_type -> super,
-                          (class_declaration -> super_opt
-                           ? class_declaration -> super_opt -> LeftToken()
-                           : class_declaration -> identifier_token));
-       }
-
-        for (int i = 0; i < class_declaration -> NumInterfaces(); i++)
-        {
-            if (class_declaration -> Interface(i) -> Type())
-                AddDependence(this_type,
-                              class_declaration -> Interface(i) -> Type(),
-                              class_declaration -> Interface(i) -> LeftToken());
-        }
+        AstClassDeclaration *nested_class = class_body -> NestedClass(i);
+        ProcessTypeHeaders(nested_class);
+        type -> AddNestedType(nested_class -> semantic_environment -> Type());
     }
+    for (int j = 0; j < class_body -> NumNestedInterfaces(); j++)
+    {
+        AstInterfaceDeclaration *nested_interface =
+            class_body -> NestedInterface(j);
+        ProcessTypeHeaders(nested_interface);
+        type -> AddNestedType(nested_interface -> semantic_environment ->
+                              Type());
+    }
+    state_stack.Pop();
 }
 
 
 void Semantic::ProcessTypeHeaders(AstInterfaceDeclaration *interface_declaration)
 {
-    TypeSymbol *this_type =
-        interface_declaration -> semantic_environment -> Type();
+    TypeSymbol *type = interface_declaration -> semantic_environment -> Type();
 
-    assert(state_stack.Size() == 0); // Not a nested type
-
+    if (type -> HeaderProcessed())
+        return; // Possible if a subclass was declared in the same file.
     ProcessTypeHeader(interface_declaration);
-    ProcessNestedTypeHeaders(interface_declaration);
-    ProcessSuperTypesOfOuterType(interface_declaration ->
-                                 semantic_environment -> Type());
-
-    //
-    // Note that no environment is set before we invoke ProcessTypeHeader to
-    // process the super types of this_type. As a result, the dependence map
-    // is not updated with that information. We do so here.
-    //
-    for (int i = 0; i < interface_declaration -> NumExtendsInterfaces(); i++)
+    state_stack.Push(interface_declaration -> semantic_environment);
+    for (int i = 0; i < interface_declaration -> NumNestedClasses(); i++)
     {
-        if (interface_declaration -> ExtendsInterface(i) -> Type())
-            AddDependence(this_type,
-                          interface_declaration -> ExtendsInterface(i) -> Type(),
-                          interface_declaration -> ExtendsInterface(i) -> LeftToken());
+        AstClassDeclaration *nested_class =
+            interface_declaration -> NestedClass(i);
+        ProcessTypeHeaders(nested_class);
+        type -> AddNestedType(nested_class -> semantic_environment -> Type());
     }
+    for (int j = 0; j < interface_declaration -> NumNestedInterfaces(); j++)
+    {
+        AstInterfaceDeclaration *nested_interface =
+            interface_declaration -> NestedInterface(j);
+        ProcessTypeHeaders(nested_interface);
+        type -> AddNestedType(nested_interface -> semantic_environment ->
+                              Type());
+    }
+    state_stack.Pop();
+}
+
+
+void Semantic::ProcessTypeHeaders(TypeSymbol *anon_type, AstClassBody *body)
+{
+    anon_type -> MarkHeaderProcessed();
+    state_stack.Push(anon_type -> semantic_environment);
+    for (int i = 0; i < body -> NumNestedClasses(); i++)
+    {
+        AstClassDeclaration *nested_class = body -> NestedClass(i);
+        ProcessTypeHeaders(nested_class);
+        anon_type -> AddNestedType(nested_class -> semantic_environment ->
+                                   Type());
+    }
+    for (int j = 0; j < body -> NumNestedInterfaces(); j++)
+    {
+        AstInterfaceDeclaration *nested_interface = body -> NestedInterface(j);
+        ProcessTypeHeaders(nested_interface);
+        anon_type -> AddNestedType(nested_interface -> semantic_environment ->
+                              Type());
+    }
+    state_stack.Pop();
 }
 
 
@@ -1278,11 +1054,15 @@ void Semantic::ReportTypeInaccessible(LexStream::TokenIndex left_tok,
 }
 
 
+//
+// Finds an accessible member type named identifier_token within type, or
+// returns NULL. Issues an error if there are multiple ambiguous types. The
+// caller is responsible for searching for inaccessible member types.
+//
 TypeSymbol *Semantic::FindNestedType(TypeSymbol *type,
                                      LexStream::TokenIndex identifier_token)
 {
-    if (type == control.null_type || type == control.no_type ||
-        type -> Primitive())
+    if (type == control.null_type || type -> Bad() || type -> Primitive())
     {
         return NULL;
     }
@@ -1296,295 +1076,50 @@ TypeSymbol *Semantic::FindNestedType(TypeSymbol *type,
 
     return (type_shadow_symbol
             ? FindTypeInShadow(type_shadow_symbol, identifier_token)
-            : type -> FindTypeSymbol(name_symbol));
+            : (TypeSymbol *) NULL);
 }
 
 
+//
+// Finds a nested type named name within the enclosing type, and establishes
+// a dependence relation. This also searches for inaccessible types, and
+// reports an error before returning the inaccessible type. For any other error,
+// the return is control.no_type.
+//
 TypeSymbol *Semantic::MustFindNestedType(TypeSymbol *type, Ast *name)
 {
-    AstSimpleName *simple_name = name -> SimpleNameCast();
-    LexStream::TokenIndex identifier_token =
-        (simple_name ? simple_name -> identifier_token
-         : ((AstFieldAccess *) name) -> identifier_token);
-
+    LexStream::TokenIndex identifier_token = name -> RightToken();
     TypeSymbol *inner_type = FindNestedType(type, identifier_token);
-    if (inner_type)
-         TypeAccessCheck(name, inner_type);
-    else inner_type = GetBadNestedType(type, identifier_token);
-
-    return inner_type;
-}
-
-
-//
-// The Ast name is a qualified name (simple name or a field access). The
-// function FindTypeInLayer searches for the first subname that is the name of
-// a type contained in the set inner_types. If such a type is found, it is
-// returned. Otherwise, the whole qualified name is resolved to a symbol that
-// is returned.
-//
-TypeSymbol *Semantic::FindTypeInLayer(Ast *name, SymbolSet &inner_types)
-{
-    //
-    // Unwind all the field accesses until we get to a base that is a simple
-    // name
-    //
-    Tuple<AstFieldAccess *> field;
-    for (AstFieldAccess *field_access = name -> FieldAccessCast();
-         field_access;
-         field_access = field_access -> base -> FieldAccessCast())
+    if (! inner_type)
     {
-        field.Next() = field_access;
-        name = field_access -> base;
-    }
-
-    //
-    // If the simple_name base is a type that is an element in the inner_types
-    // set return it. Otherwise, assume it is a package name...
-    //
-    AstSimpleName *simple_name = name -> SimpleNameCast();
-
-    assert(simple_name);
-
-    PackageSymbol *package = NULL;
-    TypeSymbol *type = FindType(simple_name -> identifier_token);
-    if (type)
-    {
-        if (inner_types.IsElement(type))
-            return type;
-    }
-    else // If the simple_name is not a type, assume it is a package
-    {
-        NameSymbol *name_symbol =
-            lex_stream -> NameSymbol(simple_name -> identifier_token);
-        package = control.external_table.FindPackageSymbol(name_symbol);
-        if (! package)
-            package = control.external_table.InsertPackageSymbol(name_symbol,
-                                                                 NULL);
-        control.FindPathsToDirectory(package);
-    }
-
-    //
-    // We now go through the field access in order until we either encounter a
-    // type that is an element of inner_types,
-    // in which case, we return the type. Otherwise, we return NULL.
-    //
-    //
-    for (int i = field.Length() - 1; i >= 0; i--)
-    {
-        AstFieldAccess *field_access = field[i];
-
-        if (type) // The base name is a type that is not contained in the inner_types set?
+        //
+        // Before failing completely, check whether or not the user is trying
+        // to access an inaccessible nested type.
+        //
+        NameSymbol *name_symbol = lex_stream -> NameSymbol(identifier_token);
+        for (TypeSymbol *super_type = type -> super;
+             super_type && ! super_type -> Bad();
+             super_type = super_type -> super)
         {
-            // resolve the next type...
-            type = FindNestedType(type, field_access -> identifier_token);
-            if (! type)
+            assert(super_type -> expanded_type_table);
+
+            TypeShadowSymbol *type_shadow_symbol = super_type ->
+                expanded_type_table -> FindTypeShadowSymbol(name_symbol);
+            if (type_shadow_symbol)
+            {
+                inner_type = FindTypeInShadow(type_shadow_symbol,
+                                              identifier_token);
                 break;
-            if (inner_types.IsElement(type))
-                return type;
-        }
-        else
-        {
-            NameSymbol *name_symbol =
-                lex_stream -> NameSymbol(field_access -> identifier_token);
-            type = package -> FindTypeSymbol(name_symbol);
-            if (! type)
-            {
-                FileSymbol *file_symbol =
-                    Control::GetFile(control, package, name_symbol);
-                if (file_symbol)
-                    type = ReadType(file_symbol, package, name_symbol,
-                                    field_access -> identifier_token);
-            }
-            else if (type -> SourcePending())
-                 control.ProcessHeaders(type -> file_symbol);
-
-            //
-            //
-            //
-            if (type)
-            {
-                if (inner_types.IsElement(type))
-                    return type;
-            }
-            else // If the field access was not resolved to a type assume it is a package
-            {
-                NameSymbol *name_symbol =
-                    lex_stream -> NameSymbol(field_access -> identifier_token);
-                PackageSymbol *subpackage =
-                    package -> FindPackageSymbol(name_symbol);
-                if (! subpackage)
-                    subpackage = package -> InsertPackageSymbol(name_symbol);
-                control.FindPathsToDirectory(subpackage);
-                package = subpackage;
-            }
-        }
-    }
-
-    return NULL;
-}
-
-
-void Semantic::ProcessNestedSuperTypes(TypeSymbol *type)
-{
-    int num_inner_types = type -> innertypes_closure -> Size();
-
-    if (num_inner_types > 0)
-    {
-        SymbolSet &inner_types = *(type -> innertypes_closure);
-
-        for (TypeSymbol *inner_type = (TypeSymbol *) inner_types.FirstElement();
-             inner_type;
-             inner_type = (TypeSymbol *) inner_types.NextElement())
-        {
-            if (inner_type -> ACC_INTERFACE())
-            {
-                AstInterfaceDeclaration *inner_interface_declaration =
-                    (AstInterfaceDeclaration *) inner_type -> declaration;
-
-                for (int l = 0;
-                     l < inner_interface_declaration -> NumExtendsInterfaces();
-                     l++)
-                {
-                    AstExpression *interface_name =
-                        inner_interface_declaration -> ExtendsInterface(l);
-                    TypeSymbol *super_type = FindTypeInLayer(interface_name,
-                                                             inner_types);
-                    if (super_type)
-                        super_type -> subtypes -> AddElement(inner_type);
-                }
-            }
-            else
-            {
-                AstClassDeclaration *inner_class_declaration =
-                    (AstClassDeclaration *) inner_type -> declaration;
-
-                if (inner_class_declaration -> super_opt)
-                {
-                    TypeSymbol *super_type =
-                        FindTypeInLayer(inner_class_declaration -> super_opt,
-                                        inner_types);
-                    if (super_type)
-                        super_type -> subtypes -> AddElement(inner_type);
-                }
-
-                for (int l = 0;
-                     l < inner_class_declaration -> NumInterfaces(); l++)
-                {
-                    TypeSymbol *super_type =
-                        FindTypeInLayer(inner_class_declaration -> Interface(l),
-                                        inner_types);
-                    if (super_type)
-                        super_type -> subtypes -> AddElement(inner_type);
-                }
             }
         }
 
-        //
-        // Create a partial order or the inner types. If there are cycles,
-        // then the order is arbitrary.
-        //
-        Tuple<TypeSymbol *> partially_ordered_types;
-
-        if (num_inner_types > 0) // inner_types set is not empty?
-        {
-            TypeCycleChecker *cycle_checker =
-                new TypeCycleChecker(partially_ordered_types);
-            cycle_checker -> PartialOrder(inner_types);
-            delete cycle_checker;
-        }
-
-        for (int k = 0; k < partially_ordered_types.Length(); k++)
-        {
-            TypeSymbol *inner_type = partially_ordered_types[k];
-            if (inner_type -> ACC_INTERFACE())
-            {
-                AstInterfaceDeclaration *inner_interface_declaration =
-                    (AstInterfaceDeclaration *) inner_type -> declaration;
-                ProcessTypeHeader(inner_interface_declaration);
-                ProcessNestedTypeHeaders(inner_interface_declaration);
-            }
-            else
-            {
-                AstClassDeclaration *inner_class_declaration =
-                    (AstClassDeclaration *) inner_type -> declaration;
-                ProcessTypeHeader(inner_class_declaration);
-                ProcessNestedTypeHeaders(inner_class_declaration -> semantic_environment -> Type(),
-                                        inner_class_declaration -> class_body);
-            }
-        }
-
-        ProcessSuperTypesOfInnerType(type, partially_ordered_types);
-    }
-}
-
-
-void Semantic::ProcessNestedTypeHeaders(TypeSymbol *type,
-                                        AstClassBody *class_body)
-{
-    if (type -> expanded_type_table &&
-        (type -> super != control.Object() || type -> NumInterfaces() > 0))
-    {
-        delete type -> expanded_type_table;
-        type -> expanded_type_table = NULL;
+        if (inner_type)
+            ReportTypeInaccessible(name -> LeftToken(),
+                                   name -> RightToken(), inner_type);
+        else inner_type = GetBadNestedType(type, identifier_token);
     }
 
-    if (! type -> expanded_type_table)
-        ComputeTypesClosure(type, class_body -> left_brace_token);
-
-    state_stack.Push(type -> semantic_environment);
-
-    type -> innertypes_closure = new SymbolSet;
-
-    for (int i = 0; i < class_body -> NumNestedClasses(); i++)
-    {
-        if (class_body -> NestedClass(i) -> semantic_environment)
-            type -> innertypes_closure -> AddElement(class_body -> NestedClass(i) -> semantic_environment -> Type());
-    }
-
-    for (int j = 0; j < class_body -> NumNestedInterfaces(); j++)
-    {
-        if (class_body -> NestedInterface(j) -> semantic_environment)
-            type -> innertypes_closure -> AddElement(class_body -> NestedInterface(j) -> semantic_environment -> Type());
-    }
-
-    ProcessNestedSuperTypes(type);
-
-    state_stack.Pop();
-}
-
-
-void Semantic::ProcessNestedTypeHeaders(AstInterfaceDeclaration *interface_declaration)
-{
-    TypeSymbol *type = interface_declaration -> semantic_environment -> Type();
-    if (type -> expanded_type_table && type -> NumInterfaces() > 0)
-    {
-        delete type -> expanded_type_table;
-        type  -> expanded_type_table = NULL;
-    }
-
-    if (! type -> expanded_type_table)
-        ComputeTypesClosure(type, interface_declaration -> identifier_token);
-
-    state_stack.Push(interface_declaration -> semantic_environment);
-
-    type -> innertypes_closure = new SymbolSet;
-
-    for (int i = 0; i < interface_declaration -> NumNestedClasses(); i++)
-    {
-        if (interface_declaration -> NestedClass(i) -> semantic_environment)
-            type -> innertypes_closure -> AddElement(interface_declaration -> NestedClass(i) -> semantic_environment -> Type());
-    }
-
-    for (int j = 0; j < interface_declaration -> NumNestedInterfaces(); j++)
-    {
-        if (interface_declaration -> NestedInterface(j) -> semantic_environment)
-            type -> innertypes_closure -> AddElement(interface_declaration -> NestedInterface(j) -> semantic_environment -> Type());
-    }
-
-    ProcessNestedSuperTypes(type);
-
-    state_stack.Pop();
+    return inner_type -> Bad() ? control.no_type : inner_type;
 }
 
 
@@ -1608,7 +1143,7 @@ inline void Semantic::ProcessConstructorMembers(AstClassBody *class_body)
             ProcessConstructorDeclaration(class_body -> Constructor(k));
     }
     else if (! this_type -> Anonymous())
-         AddDefaultConstructor(this_type);
+        AddDefaultConstructor(this_type);
 
     this_type -> MarkConstructorMembersProcessed();
 }
@@ -1660,11 +1195,11 @@ void Semantic::ProcessMembers(SemanticEnvironment *environment,
     {
         for (int i = 0; i < class_body -> NumStaticInitializers(); i++)
         {
-             ReportSemError(SemanticError::STATIC_INITIALIZER_IN_INNER_CLASS,
-                            class_body -> StaticInitializer(i) -> LeftToken(),
-                            class_body -> StaticInitializer(i) -> RightToken(),
-                            this_type -> Name(),
-                            this_type -> FileLoc());
+            ReportSemError(SemanticError::STATIC_INITIALIZER_IN_INNER_CLASS,
+                           class_body -> StaticInitializer(i) -> LeftToken(),
+                           class_body -> StaticInitializer(i) -> RightToken(),
+                           this_type -> Name(),
+                           this_type -> FileLoc());
         }
     }
 
@@ -1786,52 +1321,58 @@ void Semantic::CompleteSymbolTable(SemanticEnvironment *environment,
     if (! this_type -> expanded_method_table)
         ComputeMethodsClosure(this_type, identifier_token);
 
-    ExpandedMethodTable &expanded_table = *(this_type -> expanded_method_table);
-    if (this_type -> super && ! this_type -> ACC_ABSTRACT() &&
-        ! this_type -> Bad())
+    if (this_type -> super && ! this_type -> Bad())
     {
-        //
-        // Check that every abstract method that is inherited is overridden.
-        // Exploit the fact that the method table is built with the first
-        // element being from a superclass; all conflicts are inherited
-        // from interfaces and are necessarily abstract.
-        //
-        for (int i = 0; i < expanded_table.symbol_pool.Length(); i++)
+        if (! this_type -> ACC_ABSTRACT())
         {
-            MethodSymbol *method =
-                expanded_table.symbol_pool[i] -> method_symbol;
-
-            if (method -> ACC_ABSTRACT())
+            //
+            // We already checked that this class does not declare abstract
+            // methods. Now see that there are no unimplemented abstract
+            // methods in any of the superclasses or superinterfaces. Exploit
+            // the fact that the method table is built with the first element
+            // being from a superclass; all conflicts are inherited from
+            // interfaces and are necessarily abstract.
+            //
+            ExpandedMethodTable *expanded_table =
+                this_type -> expanded_method_table;
+            for (int i = 0; i < expanded_table -> symbol_pool.Length(); i++)
             {
-                TypeSymbol *containing_type = method -> containing_type;
-                if (containing_type != this_type)
-                {
-                    if (! method -> IsTyped())
-                        method -> ProcessMethodSignature(this,
-                                                         identifier_token);
+                MethodSymbol *method =
+                    expanded_table -> symbol_pool[i] -> method_symbol;
 
-                    ReportSemError(SemanticError::NON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD,
-                                   identifier_token,
-                                   identifier_token,
-                                   method -> Header(),
-                                   containing_type -> ContainingPackage() -> PackageName(),
-                                   containing_type -> ExternalName(),
-                                   this_type -> ContainingPackage() -> PackageName(),
-                                   this_type -> ExternalName());
+                if (method -> ACC_ABSTRACT())
+                {
+                    TypeSymbol *containing_type = method -> containing_type;
+                    if (containing_type != this_type)
+                    {
+                        if (! method -> IsTyped())
+                            method -> ProcessMethodSignature(this,
+                                                             identifier_token);
+
+                        ReportSemError(SemanticError::NON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD,
+                                       identifier_token,
+                                       identifier_token,
+                                       method -> Header(),
+                                       containing_type -> ContainingPackage() -> PackageName(),
+                                       containing_type -> ExternalName(),
+                                       this_type -> ContainingPackage() -> PackageName(),
+                                       this_type -> ExternalName());
+                    }
                 }
             }
         }
 
         //
-        // If any super class of this_type is abstract and is contained in a
+        // If any superclass of this_type is abstract and is contained in a
         // different package, check to see if its members include abstract
-        // methods with default access. If so, we must issue error messages
-        // for them also as they cannot be overridden. However, this can be
-        // tricky: suppose abstract p1.A declares abstract foo(), abstract
-        // p2.B extends p1.A, abstract p1.C extends p2.B and implements foo().
-        // Then, p2.B does not inherit foo() and thus neither does p1.C, but
-        // p1.C DOES override foo() with a valid implementation. And thus,
-        // p2.D extends p1.C need not be abstract.
+        // methods with default access. If so, this class must be abstract,
+        // as it cannot override them. And if this class has a protected or
+        // public method with a conflicting signature, then it is cannot be
+        // implemented. However, this can be tricky: suppose abstract p1.A
+        // declares abstract foo(), abstract p2.B extends p1.A, abstract p1.C
+        // extends p2.B and implements foo(). Then, p2.B does not inherit foo()
+        // and thus neither does p1.C, but p1.C DOES override foo() with a
+        // valid implementation. And thus, p2.D extends p1.C may be concrete.
         //
         PackageSymbol *package = this_type -> ContainingPackage();
         for (TypeSymbol *super_type = this_type -> super;
@@ -1842,55 +1383,96 @@ void Semantic::CompleteSymbolTable(SemanticEnvironment *environment,
                 continue;
 
             package = super_type -> ContainingPackage();
-            ExpandedMethodTable &super_expanded_table =
-                *(super_type -> expanded_method_table);
-            for (int i = 0; i < super_expanded_table.symbol_pool.Length(); i++)
+            ExpandedMethodTable *super_expanded_table =
+                super_type -> expanded_method_table;
+            for (int i = 0;
+                 i < super_expanded_table -> symbol_pool.Length(); i++)
             {
                 MethodSymbol *method =
-                    super_expanded_table.symbol_pool[i] -> method_symbol;
+                    super_expanded_table -> symbol_pool[i] -> method_symbol;
 
                 //
-                // Remember that abstract methods cannot be private.
+                // Remember that abstract methods cannot be private, and that
+                // non-default methods were inherited.
                 //
-                if (method -> ACC_ABSTRACT() &&
-                    ! method -> ACC_PUBLIC() &&
-                    ! method -> ACC_PROTECTED())
+                if (! method -> ACC_ABSTRACT() || method -> ACC_PUBLIC() ||
+                    method -> ACC_PROTECTED())
                 {
-                    TypeSymbol *containing_type = method -> containing_type;
+                    continue;
+                }
+                TypeSymbol *containing_type = method -> containing_type;
+                if (! method -> IsTyped())
+                    method -> ProcessMethodSignature(this, identifier_token);
 
-                    if (! method -> IsTyped())
-                        method -> ProcessMethodSignature(this,
-                                                         identifier_token);
-
-                    //
-                    // Search all intermediate superclasses in the same package
-                    // as the current super_class for an override of the
-                    // abstract method in question.
-                    //
-                    TypeSymbol *intermediate;
-                    for (intermediate = this_type;
-                         intermediate != super_type;
-                         intermediate = intermediate -> super)
+                //
+                // Search all intermediate superclasses in the same package
+                // as the current super_class for an override of the abstract
+                // method in question. Also report any protected or public
+                // methods outside super's package that cause this class
+                // to be uninstantiable.
+                //
+                TypeSymbol *intermediate;
+                MethodSymbol *method_clash = NULL;
+                for (intermediate = this_type;
+                     intermediate != super_type;
+                     intermediate = intermediate -> super)
+                {
+                    MethodShadowSymbol *shadow = intermediate ->
+                        expanded_method_table ->
+                        FindOverloadMethodShadow(method, this,
+                                                 identifier_token);
+                    if (! shadow)
+                        continue;
+                    if (intermediate -> ContainingPackage() != package)
                     {
-                        if (intermediate -> ContainingPackage() != package)
-                            continue;
-                        MethodShadowSymbol *shadow = intermediate ->
-                            expanded_method_table ->
-                            FindOverloadMethodShadow(method, this,
-                                                     identifier_token);
-                        if (shadow && shadow -> method_symbol -> containing_type == intermediate)
-                            break;
+                        if ((shadow -> method_symbol -> ACC_PUBLIC() ||
+                             shadow -> method_symbol -> ACC_PROTECTED()) &&
+                            (shadow -> method_symbol -> Type() !=
+                             method -> Type()))
+                        {
+                            //
+                            // No need to repeat the warning for subclasses of
+                            // where the problem originally occurred.
+                            //
+                            if (method_clash == shadow -> method_symbol)
+                                method_clash = NULL;
+                            else method_clash = shadow -> method_symbol;
+                        }
                     }
+                    else if (shadow -> method_symbol -> containing_type ==
+                             intermediate)
+                    {
+                        break;
+                    }
+                }
 
-                    if (intermediate == super_type)
-                        ReportSemError(SemanticError::NON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD,
-                                       identifier_token,
-                                       identifier_token,
-                                       method -> Header(),
-                                       containing_type -> ContainingPackage() -> PackageName(),
-                                       containing_type -> ExternalName(),
-                                       this_type -> ContainingPackage() -> PackageName(),
-                                       this_type -> ExternalName());
+                if (intermediate == super_type && ! this_type -> ACC_ABSTRACT())
+                {
+                    ReportSemError((this_type -> Anonymous()
+                                    ? SemanticError::ANONYMOUS_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD
+                                    : SemanticError::NON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD),
+                                   identifier_token,
+                                   identifier_token,
+                                   method -> Header(),
+                                   containing_type -> ContainingPackage() -> PackageName(),
+                                   containing_type -> ExternalName(),
+                                   this_type -> ContainingPackage() -> PackageName(),
+                                   this_type -> ExternalName());
+                }
+                if (method_clash)
+                {
+                    TypeSymbol *base_type = method_clash -> containing_type;
+                    ReportSemError(SemanticError::UNIMPLEMENTABLE_CLASS,
+                                   identifier_token,
+                                   identifier_token,
+                                   this_type -> ContainingPackage() -> PackageName(),
+                                   this_type -> ExternalName(),
+                                   method_clash -> Header(),
+                                   base_type -> ContainingPackage() -> PackageName(),
+                                   base_type -> ExternalName(),
+                                   method -> Header(),
+                                   containing_type -> ContainingPackage() -> PackageName(),
+                                   containing_type -> ExternalName());
                 }
             }
         }
@@ -2010,10 +1592,10 @@ void Semantic::CleanUp()
                 break;
             }
             case Ast::EMPTY_DECLARATION:
-                 break;
+                break;
             default:
-                 assert(false);
-                 break;
+                assert(false);
+                break;
         }
 
         if (type)
@@ -2084,59 +1666,59 @@ TypeSymbol *Semantic::ReadType(FileSymbol *file_symbol,
                            type -> ExternalName());
         }
     }
-    else // Read class file.
+    else if (file_symbol)
     {
+        // Read class file.
         type = package -> InsertOuterTypeSymbol(name_symbol);
         type -> outermost_type = type;
         type -> supertypes_closure = new SymbolSet;
         type -> subtypes = new SymbolSet;
         type -> SetOwner(package);
         type -> SetSignature(control);
+        type -> file_symbol = file_symbol;
+        type -> SetLocation();
 
-        if (file_symbol)
+        file_symbol -> package = package;
+        file_symbol -> types.Next() = type;
+
+        ReadClassFile(type, tok);
+        assert (! type -> IsNested());
+        control.input_class_file_set.AddElement(file_symbol);
+    }
+    else
+    {
+        //
+        // No file found. See if a package by the same name exists, otherwise
+        // create a placeholder type to avoid errors when the type name is
+        // subsequently used.
+        //
+        PackageSymbol *subpackage = package -> FindPackageSymbol(name_symbol);
+        if (! subpackage)
+            subpackage = package -> InsertPackageSymbol(name_symbol);
+        control.FindPathsToDirectory(subpackage);
+        if (subpackage -> directory.Length())
         {
-            type -> file_symbol = file_symbol;
-            type -> SetLocation();
-
-            file_symbol -> package = package;
-            file_symbol -> types.Next() = type;
-
-            ReadClassFile(type, tok);
-
-            assert (! type -> IsNested());
-
-            control.input_class_file_set.AddElement(file_symbol);
+            if (package -> directory.Length())
+                ReportSemError(SemanticError::PACKAGE_NOT_TYPE,
+                               tok,
+                               tok,
+                               subpackage -> PackageName());
+            type = control.no_type;
         }
         else
         {
+            type = package -> InsertOuterTypeSymbol(name_symbol);
+            type -> outermost_type = type;
+            type -> SetOwner(package);
+            type -> SetSignature(control);
             control.ProcessBadType(type);
             type -> MarkBad();
-            if (type != control.Object())
-                type -> super = (type == control.Throwable()
-                                 ? control.Object() : control.Throwable());
-            AddDefaultConstructor(type);
-
-            ReportSemError(SemanticError::TYPE_NOT_FOUND,
-                           tok,
-                           tok,
-                           type -> ContainingPackage() -> PackageName(),
-                           type -> ExternalName());
-
-            if (package == control.unnamed_package)
-            {
-                TypeSymbol *old_type = (TypeSymbol *) control.
-                    unnamed_package_types.Image(type -> Identity());
-                if (! old_type)
-                    control.unnamed_package_types.AddElement(type);
-                else
-                {
-                    ReportSemError(SemanticError::DUPLICATE_TYPE_DECLARATION,
-                                   tok,
-                                   tok,
-                                   type -> Name(),
-                                   old_type -> FileLoc());
-                }
-            }
+            if (package -> directory.Length())
+                ReportSemError(SemanticError::TYPE_NOT_FOUND,
+                               tok,
+                               tok,
+                               type -> ContainingPackage() -> PackageName(),
+                               type -> ExternalName());
         }
     }
 
@@ -2169,20 +1751,14 @@ TypeSymbol *Semantic::GetBadNestedType(TypeSymbol *type,
     inner_type -> subtypes = new SymbolSet;
     inner_type -> SetExternalIdentity(control.FindOrInsertName(external_name,
                                                                length));
-    inner_type -> semantic_environment =
-        new SemanticEnvironment(this, inner_type,
-                                type -> semantic_environment);
     inner_type -> super = control.Object();
     inner_type -> SetOwner(type);
-    inner_type -> SetSignature(control);
-
-    AddDefaultConstructor(inner_type);
-
-    ReportSemError(SemanticError::TYPE_NOT_FOUND,
-                   identifier_token,
-                   identifier_token,
-                   inner_type -> ContainingPackage() -> PackageName(),
-                   inner_type -> ExternalName());
+    if (! type -> Bad())
+        ReportSemError(SemanticError::TYPE_NOT_FOUND,
+                       identifier_token,
+                       identifier_token,
+                       inner_type -> ContainingPackage() -> PackageName(),
+                       inner_type -> ExternalName());
 
     delete [] external_name;
 
@@ -2203,26 +1779,24 @@ void Semantic::ProcessImportQualifiedName(AstExpression *name)
             lex_stream -> NameSymbol(field_access -> identifier_token);
         if (type) // The base name is a type
         {
-            TypeSymbol *inner_type = NULL;
-            if (type == control.no_type) // Avoid chain-reaction errors.
+            if (type -> Bad()) // Avoid chain-reaction errors.
             {
                 field_access -> symbol = control.no_type;
                 return;
             }
             if (! type -> expanded_type_table)
                 ComputeTypesClosure(type, field_access -> identifier_token);
+            TypeSymbol *inner_type = NULL;
             TypeShadowSymbol *type_shadow_symbol = type ->
                 expanded_type_table -> FindTypeShadowSymbol(name_symbol);
+            //
+            // Only canonical names may be used in import statements, so we
+            // don't worry about ambiguous names (which are necessarily
+            // inherited and hence non-canonical). But we do need an extra
+            // filter on the containing type being correct.
+            //
             if (type_shadow_symbol)
-            {
-                //
-                // Only canonical names may be used in import statements, hence
-                // the extra filter on the containing type being correct.
-                //
-                inner_type = FindTypeInShadow(type_shadow_symbol,
-                                              field_access -> identifier_token);
-            }
-
+                inner_type = type_shadow_symbol -> type_symbol;
             if (! inner_type)
                 inner_type = control.no_type;
             else if (type != inner_type -> owner)
@@ -2240,8 +1814,7 @@ void Semantic::ProcessImportQualifiedName(AstExpression *name)
             {
                 ReportTypeInaccessible(field_access, inner_type);
             }
-            type = inner_type;
-            field_access -> symbol = type; // save the type to which this expression was resolved for later use...
+            field_access -> symbol = inner_type;
         }
         else
         {
@@ -2326,6 +1899,12 @@ void Semantic::ProcessImportQualifiedName(AstExpression *name)
 }
 
 
+//
+// Processes a package-or-type name. If an accessible type exists, it is chosen.
+// Next, if a package exists, it is chosen. Then, an error is issued, but a
+// check for an inaccessible type is made before inventing a package. The result
+// is stored in name->symbol.
+//
 void Semantic::ProcessPackageOrType(AstExpression *name)
 {
     AstFieldAccess *field_access = name -> FieldAccessCast();
@@ -2337,11 +1916,11 @@ void Semantic::ProcessPackageOrType(AstExpression *name)
         TypeSymbol *type = symbol -> TypeCast();
         if (type) // The base name is a type
         {
-            type = MustFindNestedType(type, field_access);
-            field_access -> symbol = type; // save the type to which this expression was resolved for later use...
+            field_access -> symbol = MustFindNestedType(type, field_access);
         }
         else
         {
+            // Base name is package. Search for type, then subpackage.
             PackageSymbol *package = symbol -> PackageCast();
             NameSymbol *name_symbol =
                 lex_stream -> NameSymbol(field_access -> identifier_token);
@@ -2355,14 +1934,15 @@ void Semantic::ProcessPackageOrType(AstExpression *name)
                                     field_access -> identifier_token);
             }
             else if (type -> SourcePending())
-                 control.ProcessHeaders(type -> file_symbol);
+                control.ProcessHeaders(type -> file_symbol);
 
             //
             // If the field access was resolved into a type, then save it.
             // Otherwise, assume it is a package
             //
             if (type)
-                 field_access -> symbol = type; // save the type to which this expression was resolved for later use...
+                // save the resolved type of this expression for later use...
+                field_access -> symbol = type;
             else
             {
                 NameSymbol *name_symbol =
@@ -2373,19 +1953,24 @@ void Semantic::ProcessPackageOrType(AstExpression *name)
                     subpackage = package -> InsertPackageSymbol(name_symbol);
                 control.FindPathsToDirectory(subpackage);
                 field_access -> symbol = subpackage;
+                if (subpackage -> directory.Length() == 0)
+                {
+                    ReportSemError(SemanticError::PACKAGE_NOT_FOUND,
+                                   field_access -> identifier_token,
+                                   field_access -> identifier_token,
+                                   subpackage -> PackageName());
+                }
             }
         }
     }
     else
     {
         AstSimpleName *simple_name = name -> SimpleNameCast();
-
         assert(simple_name);
 
         TypeSymbol *type = FindType(simple_name -> identifier_token);
         if (type)
         {
-            TypeAccessCheck(simple_name, type);
             simple_name -> symbol = type;
         }
         else
@@ -2398,7 +1983,48 @@ void Semantic::ProcessPackageOrType(AstExpression *name)
                 package = control.external_table.
                     InsertPackageSymbol(name_symbol, NULL);
             control.FindPathsToDirectory(package);
-            simple_name -> symbol = package;
+            if (package -> directory.Length() == 0)
+            {
+                //
+                // If there is no package, see if the user is trying to access
+                // an inaccessible nested type before giving up.
+                //
+                if (state_stack.Size() > 0)
+                {
+                    NameSymbol *name_symbol = lex_stream ->
+                        NameSymbol(simple_name -> identifier_token);
+                    for (TypeSymbol *super_type = ThisType() -> super;
+                         super_type; super_type = super_type -> super)
+                    {
+                        assert(super_type -> expanded_type_table);
+
+                        TypeShadowSymbol *type_shadow_symbol =
+                            super_type -> expanded_type_table ->
+                            FindTypeShadowSymbol(name_symbol);
+                        if (type_shadow_symbol)
+                        {
+                            type = type_shadow_symbol -> type_symbol;
+                            break;
+                        }
+                    }
+                }
+                if (type)
+                {
+                    ReportTypeInaccessible(simple_name -> identifier_token,
+                                           simple_name -> identifier_token,
+                                           type);
+                    simple_name -> symbol = type;
+                }
+                else
+                {
+                    ReportSemError(SemanticError::PACKAGE_NOT_FOUND,
+                                   simple_name -> identifier_token,
+                                   simple_name -> identifier_token,
+                                   package -> PackageName());
+                    simple_name -> symbol = package;
+                }
+            }
+            else simple_name -> symbol = package;
         }
     }
 }
@@ -2451,75 +2077,6 @@ void Semantic::ProcessTypeImportOnDemandDeclaration(AstImportDeclaration *import
 }
 
 
-//
-// The Ast name is a name expression (either a qualified or simple name).
-// FindFirstType traverses the name tree and returns the first subtree that it
-// finds that matches a type. As a side-effect, each subtree that matches a
-// package or a type has that package or type recorded in its "symbol" field.
-//
-AstExpression *Semantic::FindFirstType(Ast *name)
-{
-    AstExpression *name_expression = NULL;
-
-    AstFieldAccess *field_access = name -> FieldAccessCast();
-    if (field_access)
-    {
-        AstExpression *expr = FindFirstType(field_access -> base);
-
-        if (expr -> symbol -> TypeCast()) // A subexpression has been found, pass it up
-            name_expression = expr;
-        else
-        {
-            PackageSymbol *package = expr -> symbol -> PackageCast();
-
-            assert(package);
-
-            name_expression = field_access; // The relevant subexpression might be this field access...
-
-            NameSymbol *name_symbol =
-                lex_stream -> NameSymbol(field_access -> identifier_token);
-            TypeSymbol *type = package -> FindTypeSymbol(name_symbol);
-            if (type)
-            {
-                if (type -> SourcePending())
-                    control.ProcessHeaders(type -> file_symbol);
-                field_access -> symbol = type;
-            }
-            else
-            {
-                FileSymbol *file_symbol =
-                    Control::GetFile(control, package, name_symbol);
-                if (file_symbol)
-                    field_access -> symbol = ReadType(file_symbol, package,
-                                                      name_symbol,
-                                                      field_access -> identifier_token);
-                else
-                {
-                    PackageSymbol *subpackage =
-                        package -> FindPackageSymbol(name_symbol);
-                    if (! subpackage)
-                        subpackage =
-                            package -> InsertPackageSymbol(name_symbol);
-                    control.FindPathsToDirectory(subpackage);
-                    field_access -> symbol = subpackage;
-                }
-            }
-        }
-    }
-    else
-    {
-        AstSimpleName *simple_name = name -> SimpleNameCast();
-
-        assert(simple_name);
-
-        ProcessPackageOrType(simple_name);
-        name_expression = simple_name;
-    }
-
-    return name_expression;
-}
-
-
 TypeSymbol *Semantic::FindSimpleNameType(PackageSymbol *package,
                                          LexStream::TokenIndex identifier_token)
 {
@@ -2528,7 +2085,7 @@ TypeSymbol *Semantic::FindSimpleNameType(PackageSymbol *package,
     if (type)
     {
         if (type -> SourcePending())
-             control.ProcessHeaders(type -> file_symbol);
+            control.ProcessHeaders(type -> file_symbol);
     }
     else
     {
@@ -2551,10 +2108,14 @@ void Semantic::ProcessSingleTypeImportDeclaration(AstImportDeclaration *import_d
     ProcessImportQualifiedName(import_declaration -> name);
     Symbol *symbol = import_declaration -> name -> symbol;
     PackageSymbol *package = symbol -> PackageCast();
+    TypeSymbol *type = symbol -> TypeCast();
+
     //
     // Technically, the JLS grammar forbids "import foo;". However, our
     // grammar parses it, and will either find or create the package foo, so
-    // we can give a better message than "expected '.'".
+    // we can give a better message than "expected '.'". If a non-type is
+    // imported, we create a place-holder type so that the use of the
+    // unqualified type name won't cause cascading errors elsewhere in the file.
     //
     if (package)
     {
@@ -2562,16 +2123,20 @@ void Semantic::ProcessSingleTypeImportDeclaration(AstImportDeclaration *import_d
                        import_declaration -> name -> LeftToken(),
                        import_declaration -> name -> RightToken(),
                        package -> PackageName());
-        return;
+        NameSymbol *name_symbol = lex_stream ->
+            NameSymbol(import_declaration -> name -> RightToken());
+        type = package -> InsertOuterTypeSymbol(name_symbol);
+        type -> MarkBad();
+        type -> super = control.no_type;
+        type -> outermost_type = control.no_type;
     }
-
-    TypeSymbol *type = symbol -> TypeCast();
 
     //
     // If two single-type-import declarations in the same compilation unit
     // attempt to import types with the same simple name, then a compile-time
     // error occurs, unless the two types are the same type, in which case the
     // duplicate declaration is ignored.
+    // TODO: Give pedantic warnings about duplicate type declarations.
     //
     for (int i = 0; i < single_type_imports.Length(); i++)
     {
@@ -2630,8 +2195,8 @@ void Semantic::ProcessSingleTypeImportDeclaration(AstImportDeclaration *import_d
         }
         else
         {
-            ReportSemError(SemanticError::DUPLICATE_TYPE_DECLARATION,
-                           import_declaration -> name -> LeftToken(),
+            ReportSemError(SemanticError::DUPLICATE_IMPORT_NAME,
+                           import_declaration -> name -> RightToken(),
                            import_declaration -> name -> RightToken(),
                            lex_stream -> NameString(import_declaration -> name -> RightToken()),
                            old_type -> FileLoc());
@@ -2662,8 +2227,8 @@ void Semantic::ProcessSingleTypeImportDeclaration(AstImportDeclaration *import_d
         {
             FileLocation file_location(lex_stream,
                                        compilation_unit -> ImportDeclaration(i) -> LeftToken());
-            ReportSemError(SemanticError::DUPLICATE_TYPE_DECLARATION,
-                           import_declaration -> name -> LeftToken(),
+            ReportSemError(SemanticError::DUPLICATE_IMPORT_NAME,
+                           import_declaration -> name -> RightToken(),
                            import_declaration -> name -> RightToken(),
                            lex_stream -> NameString(import_declaration -> name -> RightToken()),
                            file_location.location);
@@ -2730,10 +2295,15 @@ void Semantic::ProcessFieldDeclaration(AstFieldDeclaration *field_declaration)
     }
 
     //
-    //
+    // To avoid deprecated type warnings when processing a deprecated field
+    // declaration, we must temporarily mark this type as deprecated, because
+    // the field variable symbol(s) do not yet exist.
     //
     bool deprecated_declarations = lex_stream ->
         IsDeprecated(lex_stream -> Previous(field_declaration -> LeftToken()));
+    bool deprecated_type = this_type -> IsDeprecated();
+    if (deprecated_declarations)
+        this_type -> MarkDeprecated();
     AstArrayType *array_type = field_declaration -> type -> ArrayTypeCast();
     TypeSymbol *field_type;
     {
@@ -2743,6 +2313,8 @@ void Semantic::ProcessFieldDeclaration(AstFieldDeclaration *field_declaration)
         field_type = (primitive_type ? FindPrimitiveType(primitive_type)
                       : MustFindType(actual_type));
     }
+    if (! deprecated_type && deprecated_declarations)
+        this_type -> ResetDeprecated();
 
     for (int i = 0; i < field_declaration -> NumVariableDeclarators(); i++)
     {
@@ -2769,7 +2341,7 @@ void Semantic::ProcessFieldDeclaration(AstFieldDeclaration *field_declaration)
                 (array_type ? array_type -> NumBrackets() : 0) +
                 name -> NumBrackets();
             if (num_dimensions == 0)
-                 variable -> SetType(field_type);
+                variable -> SetType(field_type);
             else variable -> SetType(field_type ->
                                      GetArrayType(this, num_dimensions));
             variable -> SetFlags(access_flags);
@@ -3049,22 +2621,17 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                                    MethodSymbol *hidden_method,
                                    TypeSymbol *base_type)
 {
-    assert(! hidden_method -> ACC_PRIVATE());           
-
-    if (hidden_method == method)
-        return;
+    assert(! hidden_method -> ACC_PRIVATE());
 
     //
-    // Based on the order we built the method table, hidden_method should
-    // always be declared in an interface. But this includes the methods of
-    // Object, which all interfaces inherit. So, when hidden_method is declared
-    // by Object, but base_type inherits an override from its supertype,
-    // we have already checked that the override is acceptable.
+    // If we inherit the same method from multiple paths (including methods
+    // of Object via interfaces), we already know the result.
     //
-    if (method -> containing_type != base_type &&
-        ! (hidden_method -> ACC_PUBLIC() && hidden_method -> ACC_ABSTRACT()))
+    if (hidden_method == method ||
+        (method -> containing_type -> ACC_INTERFACE() &&
+         method -> containing_type != base_type &&
+         hidden_method -> containing_type == control.Object()))
     {
-        assert (hidden_method -> containing_type == control.Object());
         return;
     }
 
@@ -3109,7 +2676,24 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
     //
     if (hidden_method -> Type() != method -> Type())
     {
-        if (method -> containing_type == base_type)
+        //
+        // We support covariant return types when loading from .class files,
+        // even though this is not strictly legal in JLS2 (according to binary
+        // compatibility, changing the return type need not be supported).
+        // This is done in anticipation of JDK 1.5, when covariance is likely
+        // to be introduced. The resultant effect is that the subclass must
+        // conform to the narrower return type. Note that we currently only
+        // support Object->Object covariance (and not primitive->primitive,
+        // void->primitive, or void->Object). When loading from .java files,
+        // however, we enforce exact return type matching.
+        //
+        if (method -> containing_type -> file_symbol -> IsClass() &&
+            hidden_method -> Type() -> IsSubtype(control.Object()) &&
+            method -> Type() -> IsSubtype(hidden_method -> Type()))
+        {
+            // Silent acceptance. TODO: Should we add a pedantic warning?
+        }
+        else if (method -> containing_type == base_type)
         {
             if (base_type -> ACC_INTERFACE() &&
                 hidden_method -> containing_type == control.Object())
@@ -3119,15 +2703,25 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                 // 4479715, which explains our current stance of allowing
                 // int clone() throws MyException; or Object finalize();.
                 //
-                ReportSemError((hidden_method -> ACC_PUBLIC()
-                                ? SemanticError::MISMATCHED_IMPLICIT_METHOD
-                                : SemanticError::UNIMPLEMENTABLE_INTERFACE),
-                               left_tok,
-                               right_tok,
-                               method -> Header(),
-                               hidden_method -> Header());
                 if (hidden_method -> ACC_PUBLIC())
+                {
+                    ReportSemError(SemanticError::MISMATCHED_IMPLICIT_METHOD,
+                                   left_tok,
+                                   right_tok,
+                                   method -> Header(),
+                                   hidden_method -> Header());
                     base_type -> MarkBad();
+                }
+                else
+                {
+                    ReportSemError(SemanticError::UNIMPLEMENTABLE_INTERFACE,
+                                   left_tok,
+                                   right_tok,
+                                   base_type -> ContainingPackage() -> PackageName(),
+                                   base_type -> ExternalName(),
+                                   method -> Header(),
+                                   hidden_method -> Header());
+                }
             }
             else
             {
@@ -3165,7 +2759,6 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
     //
     if (method -> containing_type == base_type &&
         (hidden_method -> ACC_FINAL() ||
-         hidden_method -> ACC_PRIVATE() ||
          hidden_method -> containing_type -> ACC_FINAL()))
     {
         if (base_type -> ACC_INTERFACE())
@@ -3243,6 +2836,7 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                                StringConstant::US_public,
                                hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
                                hidden_method -> containing_type -> ExternalName());
+                base_type -> MarkBad();
             }
             else if (! method -> ACC_ABSTRACT())
             {
@@ -3258,8 +2852,8 @@ void Semantic::CheckMethodOverride(MethodSymbol *method,
                                StringConstant::US_public,
                                hidden_method -> containing_type -> ContainingPackage() -> PackageName(),
                                hidden_method -> containing_type -> ExternalName());
+                base_type -> MarkBad();
             }
-            base_type -> MarkBad();
         }
     }
     else if (hidden_method -> ACC_PROTECTED())
@@ -3532,23 +3126,29 @@ void Semantic::AddInheritedMethods(TypeSymbol *base_type,
         return;
     }
 
-    ExpandedMethodTable &base_expanded_table = *(base_type -> expanded_method_table),
-                        &super_expanded_table = *(super_type -> expanded_method_table);
+    ExpandedMethodTable *base_expanded_table =
+        base_type -> expanded_method_table;
+    ExpandedMethodTable *super_expanded_table =
+        super_type -> expanded_method_table;
+    PackageSymbol *base_package = base_type -> ContainingPackage();
+    int i;
 
-    for (int i = 0; i < super_expanded_table.symbol_pool.Length(); i++)
+    for (i = 0; i < super_expanded_table -> symbol_pool.Length(); i++)
     {
         MethodShadowSymbol *method_shadow_symbol =
-            super_expanded_table.symbol_pool[i];
+            super_expanded_table -> symbol_pool[i];
         MethodSymbol *method = method_shadow_symbol -> method_symbol;
 
         //
         // We have to special case interfaces, since they implicitly declare
         // the public methods of Object. In ComputeMethodsClosure, we add all
-        // methods from Object after adding those from interfaces.
+        // methods from Object after adding those from interfaces. Also, since
+        // user code cannot invoke synthetic methods, we ignore those.
         //
-        if (base_type -> ACC_INTERFACE() &&
-            super_type -> ACC_INTERFACE() &&
-            method -> containing_type == control.Object())
+        if ((base_type -> ACC_INTERFACE() &&
+             super_type -> ACC_INTERFACE() &&
+             method -> containing_type == control.Object()) ||
+            method -> IsSynthetic())
         {
             continue;
         }
@@ -3556,19 +3156,14 @@ void Semantic::AddInheritedMethods(TypeSymbol *base_type,
         //
         // Note that since all methods in an interface are implicitly
         // public, all other methods encountered here are enclosed in a
-        // type that is a super class of base_type. Since synthetic methods
-        // cannot be called in user code, we can safely ignore them here.
+        // type that is a super class of base_type.
         //
-        if (method -> ACC_PUBLIC() ||
-            method -> ACC_PROTECTED() ||
+        if (method -> ACC_PUBLIC() || method -> ACC_PROTECTED() ||
             (! method -> ACC_PRIVATE() &&
-             super_type -> ContainingPackage() ==
-             base_type -> ContainingPackage()) &&
-            ! method -> IsSynthetic())
+             super_type -> ContainingPackage() == base_package))
         {
-            MethodShadowSymbol *shadow =
-                base_expanded_table.FindOverloadMethodShadow(method, this,
-                                                             tok);
+            MethodShadowSymbol *shadow = base_expanded_table ->
+                FindOverloadMethodShadow(method, this, tok);
 
             //
             // Check that method is compatible with every method it
@@ -3588,7 +3183,7 @@ void Semantic::AddInheritedMethods(TypeSymbol *base_type,
                 shadow -> method_symbol -> containing_type != base_type)
             {
                 if (! shadow)
-                    shadow = base_expanded_table.Overload(method);
+                    shadow = base_expanded_table -> Overload(method);
                 else shadow -> AddConflict(method);
 
                 assert(method -> containing_type != super_type ||
@@ -3603,12 +3198,10 @@ void Semantic::AddInheritedMethods(TypeSymbol *base_type,
         // necessarily public methods from interfaces) are still inherited in
         // the base_type.
         //
-        else if (! method -> ACC_PRIVATE() &&
-                 ! method -> IsSynthetic())
+        else if (! method -> ACC_PRIVATE())
         {
-            MethodShadowSymbol *shadow =
-                base_expanded_table.FindOverloadMethodShadow(method, this,
-                                                             tok);
+            MethodShadowSymbol *shadow = base_expanded_table ->
+                FindOverloadMethodShadow(method, this, tok);
             if (method_shadow_symbol -> NumConflicts() > 0)
             {
                 assert(method -> containing_type != super_type);
@@ -3626,7 +3219,7 @@ void Semantic::AddInheritedMethods(TypeSymbol *base_type,
                 }
                 else
                 {
-                    shadow = base_expanded_table.
+                    shadow = base_expanded_table ->
                         Overload(method_shadow_symbol -> Conflict(0));
 
                     for (int l = 1;
@@ -3637,15 +3230,13 @@ void Semantic::AddInheritedMethods(TypeSymbol *base_type,
                     }
                 }
             }
-            else if (shadow && ! method -> ACC_STATIC())
+            else if (shadow && control.option.pedantic)
             {
                 //
-                // The base_type declares a method by the same name as an
-                // instance method in the superclass, but the new method does
-                // not override the old. Warn the user about this fact,
-                // although it is usually not an error. (This is never a
-                // problem with fields, nested types, or static methods,
-                // since they are just hidden, not overridden.)
+                // The base_type declares a method by the same name as a
+                // method in the superclass, but the new method does not
+                // override or hide the old. Warn the user about this fact,
+                // although it is usually not an error.
                 //
                 assert(shadow -> method_symbol -> containing_type == base_type);
                 LexStream::TokenIndex left_tok,
@@ -3692,14 +3283,62 @@ void Semantic::AddInheritedMethods(TypeSymbol *base_type,
                 if (! method -> IsTyped())
                     method -> ProcessMethodSignature(this, tok);
 
-                ReportSemError(SemanticError::DEFAULT_METHOD_NOT_OVERRIDDEN,
-                               left_tok,
-                               right_tok,
-                               method -> Header(),
-                               base_type -> ContainingPackage() -> PackageName(),
-                               base_type -> ExternalName(),
-                               super_type -> ContainingPackage() -> PackageName(),
-                               super_type -> ExternalName());
+                //
+                // We filter here, because CompleteSymbolTable gives a different
+                // warning for unimplementable abstract classes.
+                //
+                if (! method -> ACC_ABSTRACT() ||
+                    method -> Type() == shadow -> method_symbol -> Type() ||
+                    (! shadow -> method_symbol -> ACC_PUBLIC() &&
+                     ! shadow -> method_symbol -> ACC_PROTECTED()))
+                {
+                    ReportSemError(SemanticError::DEFAULT_METHOD_NOT_OVERRIDDEN,
+                                   left_tok,
+                                   right_tok,
+                                   method -> Header(),
+                                   base_type -> ContainingPackage() -> PackageName(),
+                                   base_type -> ExternalName(),
+                                   super_type -> ContainingPackage() -> PackageName(),
+                                   super_type -> ExternalName());
+                }
+            }
+        }
+    }
+    //
+    // Now, we must ensure that any time the inheritance tree left and
+    // reentered the package, the non-inherited default methods were
+    // correctly overridden or hidden if redeclared in this class. A method
+    // is non-inherited only if a class C is in the package, it's subclass
+    // is not, and there is no interface method also inherited into C.
+    //
+    while (super_type -> super)
+    {
+        TypeSymbol *prev = super_type;
+        super_type = super_type -> super;
+        if (prev -> ContainingPackage() == base_package ||
+            super_type -> ContainingPackage() != base_package)
+        {
+            continue;
+        }
+        super_expanded_table = super_type -> expanded_method_table;
+        for (i = 0; i < super_expanded_table -> symbol_pool.Length(); i++)
+        {
+            MethodShadowSymbol *method_shadow_symbol =
+                super_expanded_table -> symbol_pool[i];
+            MethodSymbol *method = method_shadow_symbol -> method_symbol;
+            if (! method -> ACC_PUBLIC() && ! method -> ACC_PROTECTED() &&
+                ! method -> ACC_PRIVATE() && ! method -> IsSynthetic() &&
+                method_shadow_symbol -> NumConflicts() == 0)
+            {
+                // found a non-inherited package scope method
+                MethodShadowSymbol *shadow = base_expanded_table ->
+                    FindOverloadMethodShadow(method, this, tok);
+                if (shadow &&
+                    shadow -> method_symbol -> containing_type == base_type)
+                {
+                    CheckMethodOverride(shadow -> method_symbol, method,
+                                        base_type);
+                }
             }
         }
     }
@@ -3708,6 +3347,19 @@ void Semantic::AddInheritedMethods(TypeSymbol *base_type,
 
 void Semantic::ComputeTypesClosure(TypeSymbol *type, LexStream::TokenIndex tok)
 {
+    if (! type -> HeaderProcessed())
+    {
+        AstClassDeclaration *class_decl =
+            type -> declaration -> ClassDeclarationCast();
+        AstInterfaceDeclaration *interface_decl =
+            type -> declaration -> InterfaceDeclarationCast();
+        Semantic *sem = type -> semantic_environment -> sem;
+        if (class_decl)
+            sem -> ProcessTypeHeaders(class_decl);
+        else if (interface_decl)
+            sem -> ProcessTypeHeaders(interface_decl);
+        else assert(false && "type not processed");
+    }
     type -> expanded_type_table = new ExpandedTypeTable();
 
     TypeSymbol *super_class = type -> super;
@@ -3864,7 +3516,7 @@ void Semantic::ProcessFormalParameters(BlockSymbol *block,
         int num_dimensions = (array_type ? array_type -> NumBrackets() : 0) +
             name -> NumBrackets();
         if (num_dimensions == 0)
-             symbol -> SetType(parm_type);
+            symbol -> SetType(parm_type);
         else symbol -> SetType(parm_type -> GetArrayType(this, num_dimensions));
         symbol -> SetFlags(access_flags);
         symbol -> MarkComplete();
@@ -3915,8 +3567,17 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration *method_declaration
     }
 
     //
+    // To avoid deprecated type warnings when processing a deprecated method
+    // declaration, we must temporarily mark this type as deprecated, because
+    // the method symbol does not yet exist. We fix it after formal parameter
+    // processing.
     //
-    //
+    bool deprecated_method = lex_stream ->
+        IsDeprecated(lex_stream -> Previous(method_declaration ->
+                                            LeftToken()));
+    bool deprecated_type = this_type -> IsDeprecated();
+    if (deprecated_method)
+        this_type -> MarkDeprecated();
     AstArrayType *array_type = method_declaration -> type -> ArrayTypeCast();
     Ast *actual_type = (array_type ? array_type -> type
                         : method_declaration -> type);
@@ -3930,9 +3591,9 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration *method_declaration
     if (method_declarator -> NumBrackets() > 0)
     {
         if (method_type == control.void_type)
-             ReportSemError(SemanticError::VOID_ARRAY,
-                            method_declaration -> type -> LeftToken(),
-                            method_declarator -> RightToken());
+            ReportSemError(SemanticError::VOID_ARRAY,
+                           method_declaration -> type -> LeftToken(),
+                           method_declarator -> RightToken());
         else ReportSemError(SemanticError::OBSOLESCENT_BRACKETS,
                             method_declarator -> LeftToken(),
                             method_declarator -> RightToken());
@@ -3958,6 +3619,8 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration *method_declaration
         new BlockSymbol(method_declarator -> NumFormalParameters());
     block_symbol -> max_variable_index = (access_flags.ACC_STATIC() ? 0 : 1);
     ProcessFormalParameters(block_symbol, method_declarator);
+    if (! deprecated_type && deprecated_method)
+        this_type -> ResetDeprecated();
 
     MethodSymbol *method = this_type -> FindMethodSymbol(name_symbol);
 
@@ -3984,7 +3647,7 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration *method_declaration
                           : (array_type ? array_type -> NumBrackets() : 0))
                          + method_declarator -> NumBrackets();
     if (num_dimensions == 0)
-         method -> SetType(method_type);
+        method -> SetType(method_type);
     else method -> SetType(method_type -> GetArrayType(this, num_dimensions));
 
     //
@@ -4020,7 +3683,7 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration *method_declaration
 
     method_declaration -> method_symbol = method; // save for processing bodies later.
 
-    if (method -> ACC_ABSTRACT() && (! this_type -> ACC_ABSTRACT()))
+    if (method -> ACC_ABSTRACT() && ! this_type -> ACC_ABSTRACT())
     {
         ReportSemError(SemanticError::NON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD,
                        method_declaration -> LeftToken(),
@@ -4029,51 +3692,56 @@ void Semantic::ProcessMethodDeclaration(AstMethodDeclaration *method_declaration
                        this_type -> Name());
     }
 
-    if (lex_stream -> IsDeprecated(lex_stream -> Previous(method_declaration -> LeftToken())))
+    if (deprecated_method)
         method -> MarkDeprecated();
 }
 
 
 //
-// Search for simple identifier which is supposed to be a type.
-// If it is not found, issue an error message.
+// Return the type corresponding to a primitive type keyword.
 //
 TypeSymbol *Semantic::FindPrimitiveType(AstPrimitiveType *primitive_type)
 {
     switch (primitive_type -> kind)
     {
-        case Ast::INT:
-             return control.int_type;
-        case Ast::DOUBLE:
-             return control.double_type;
-        case Ast::CHAR:
-             return control.char_type;
-        case Ast::LONG:
-             return control.long_type;
-        case Ast::FLOAT:
-             return control.float_type;
-        case Ast::BYTE:
-             return control.byte_type;
-        case Ast::SHORT:
-             return control.short_type;
-        case Ast::BOOLEAN:
-             return control.boolean_type;
-        default:
-             break;
+    case Ast::INT:
+        return control.int_type;
+    case Ast::DOUBLE:
+        return control.double_type;
+    case Ast::CHAR:
+        return control.char_type;
+    case Ast::LONG:
+        return control.long_type;
+    case Ast::FLOAT:
+        return control.float_type;
+    case Ast::BYTE:
+        return control.byte_type;
+    case Ast::SHORT:
+        return control.short_type;
+    case Ast::BOOLEAN:
+        return control.boolean_type;
+    default:
+        break;
     }
 
     return control.void_type;
 }
 
 
+//
+// Search the import-on-demand locations for a type with the given name. This
+// returns inaccessible types if found, with no error message, but favors
+// accessible ones. It will issue an error if the only way an accessible type
+// was found is non-canonical. If no type is found, NULL is returned.
+//
 TypeSymbol *Semantic::ImportType(LexStream::TokenIndex identifier_token,
                                  NameSymbol *name_symbol)
 {
     //
-    // Inaccessible types are ignored. However, for a nicer error message, we
-    // keep track of the first inaccessible type found, while leaving location
-    // as NULL, in case we don't find an accessible type. Once location is set,
-    // we are guaranteed an accessible type, and start looking for duplicates.
+    // To keep track of inaccessible types, we note the first one we find,
+    // while leaving the location as NULL. Once we find an accessible type, we
+    // set location, so that we know that future types are duplicates. We
+    // pre-filtered duplicate import-on-demands, as well as adding java.lang.*.
     //
     TypeSymbol *type = NULL;
     PackageSymbol *location = NULL;
@@ -4110,11 +3778,14 @@ TypeSymbol *Semantic::ImportType(LexStream::TokenIndex identifier_token,
             {
                 //
                 // Only canonical names may be used in import statements, hence
-                // the extra filter on the containing type being correct.
+                // the extra filter on the containing type being correct. If
+                // we encounter conflicts, they are necessarily accessible
+                // inherited types from interfaces (and hence non-canonical).
                 //
-                possible_type = FindTypeInShadow(type_shadow_symbol,
-                                                 identifier_token);
-                if (possible_type && ! possible_type -> ACC_PRIVATE() &&
+                possible_type = (type_shadow_symbol -> NumConflicts()
+                                 ? type_shadow_symbol -> Conflict(0)
+                                 : type_shadow_symbol -> type_symbol);
+                if (! possible_type -> ACC_PRIVATE() &&
                     import_type == possible_type -> owner)
                 {
                     import_package = import_type -> ContainingPackage();
@@ -4138,33 +3809,33 @@ TypeSymbol *Semantic::ImportType(LexStream::TokenIndex identifier_token,
             {
                 type = possible_type;
                 if (type -> ACC_PUBLIC() || import_package == this_package)
-                    location = import_package;
+                    location = import_package; // may be NULL
             }
         }
     }
 
-    if (type && ! location)
+    if (type && ! location && ! type -> ACC_PRIVATE() &&
+        (type -> ACC_PUBLIC() || type -> ContainingPackage() == this_package))
     {
-        if (! type -> ACC_PRIVATE() &&
-            (type -> ACC_PUBLIC() ||
-             type -> ContainingPackage() == this_package))
-        {
-            ReportSemError(SemanticError::IMPORT_NOT_CANONICAL,
-                           identifier_token, identifier_token,
-                           type -> Name(),
-                           type -> ContainingPackage() -> PackageName(),
-                           type -> ExternalName());
-        }
-        else ReportTypeInaccessible(identifier_token, identifier_token, type);
+        ReportSemError(SemanticError::IMPORT_NOT_CANONICAL,
+                       identifier_token, identifier_token,
+                       type -> Name(),
+                       type -> ContainingPackage() -> PackageName(),
+                       type -> ExternalName());
     }
     return type;
 }
 
 
+//
+// Finds an accessible type by the name located at identifier_token, or returns
+// NULL. If there are ambiguous accessible types, this issues an error in the
+// process. Note that inaccessible types are skipped - if the caller wishes
+// to use an inaccessible type, they must search for it.
+//
 TypeSymbol *Semantic::FindType(LexStream::TokenIndex identifier_token)
 {
     TypeSymbol *type;
-
     NameSymbol *name_symbol = lex_stream -> NameSymbol(identifier_token);
 
     SemanticEnvironment *env = NULL;
@@ -4172,14 +3843,12 @@ TypeSymbol *Semantic::FindType(LexStream::TokenIndex identifier_token)
         env = state_stack.Top();
     for ( ; env; env = env -> previous)
     {
+        // Search for local types, which are always accessible.
         type = env -> symbol_table.FindTypeSymbol(name_symbol);
         if (type)
             break;
-
+        // Search for declared or inherited member types.
         type = env -> Type();
-        if (name_symbol == type -> Identity()) // Recall that a type may not have the same name as one of its enclosing types.
-            break;
-
         if (! type -> expanded_type_table)
             ComputeTypesClosure(type, identifier_token);
         TypeShadowSymbol *type_shadow_symbol =
@@ -4187,25 +3856,59 @@ TypeSymbol *Semantic::FindType(LexStream::TokenIndex identifier_token)
         if (type_shadow_symbol)
         {
             type = FindTypeInShadow(type_shadow_symbol, identifier_token);
-            break;
+            if (type)
+                break;
         }
     }
 
     if (env) // The type was found in some enclosing environment?
     {
         //
-        // If the type is an inherited type, make sure that there is not a
+        // If the type was inherited, give a warning if it shadowed another
         // type of the same name within an enclosing lexical scope.
         //
         if (type -> owner -> TypeCast() && type -> owner != env -> Type())
         {
-            for (SemanticEnvironment *env2 = env -> previous; env2;
-                 env2 = env2 -> previous)
+            TypeSymbol *supertype = (TypeSymbol *) type -> owner;
+            for ( ; env; env = env -> previous)
             {
-                TypeSymbol *outer_type =
-                    env2 -> symbol_table.FindTypeSymbol(name_symbol); // check local type
-                if (! outer_type) // if local type not found, check inner type...
+                //
+                // First, check the enclosing type name - this is a caution,
+                // because this behavior is opposite C++ when a type inherits
+                // a membertype with the same name.
+                //
+                if (name_symbol == env -> Type() -> Identity() &&
+                    env -> Type() != type)
                 {
+                    ReportSemError(SemanticError::INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_TYPE,
+                                   identifier_token,
+                                   identifier_token,
+                                   lex_stream -> NameString(identifier_token),
+                                   type -> ContainingPackage() -> PackageName(),
+                                   type -> ExternalName(),
+                                   env -> Type() -> ContainingPackage() -> PackageName(),
+                                   env -> Type() -> ExternalName());
+                    break;
+                }
+                if (env -> previous && control.option.pedantic)
+                {
+                    // Next, in pedantic mode, check local type
+                    SemanticEnvironment *env2 = env -> previous;
+                    TypeSymbol *outer_type =
+                        env2 -> symbol_table.FindTypeSymbol(name_symbol);
+                    if (outer_type)
+                    {
+                        assert(outer_type -> owner -> MethodCast());
+                        ReportSemError(SemanticError::INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL,
+                                       identifier_token,
+                                       identifier_token,
+                                       lex_stream -> NameString(identifier_token),
+                                       supertype -> ContainingPackage() -> PackageName(),
+                                       supertype -> ExternalName(),
+                                       ((MethodSymbol *) outer_type -> owner) -> Name());
+                        break;
+                    }
+                    // If local type not found, check inner type.
                     if (! env2 -> Type() -> expanded_type_table)
                         ComputeTypesClosure(env2 -> Type(), identifier_token);
                     TypeShadowSymbol *type_shadow_symbol =
@@ -4214,29 +3917,8 @@ TypeSymbol *Semantic::FindType(LexStream::TokenIndex identifier_token)
                     if (type_shadow_symbol)
                         outer_type = FindTypeInShadow(type_shadow_symbol,
                                                       identifier_token);
-                }
-
-                //
-                // If a different type of the same name was found in an
-                // enclosing scope.
-                //
-                TypeSymbol *supertype = type -> owner -> TypeCast();
-                if (outer_type && outer_type != type)
-                {
-                    MethodSymbol *method = outer_type -> owner -> MethodCast();
-
-                    if (method)
-                    {
-                        ReportSemError(SemanticError::INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL,
-                                       identifier_token,
-                                       identifier_token,
-                                       lex_stream -> NameString(identifier_token),
-                                       supertype -> ContainingPackage() -> PackageName(),
-                                       supertype -> ExternalName(),
-                                       method -> Name());
-                        break;
-                    }
-                    else
+                    if (outer_type && outer_type != type &&
+                        outer_type -> owner == env2 -> Type())
                     {
                         ReportSemError(SemanticError::INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER,
                                        identifier_token,
@@ -4256,9 +3938,8 @@ TypeSymbol *Semantic::FindType(LexStream::TokenIndex identifier_token)
     }
 
     //
-    // check whether or not the type is in the current compilation unit
-    // either because it was declared as a class or interface or it was
-    // imported by a single-type-import declaration.
+    // Search for the type in the current compilation unit if it was declared as
+    // a class or interface or imported by a single-type-import declaration.
     //
     for (int i = 0; i < single_type_imports.Length(); i++)
     {
@@ -4268,29 +3949,23 @@ TypeSymbol *Semantic::FindType(LexStream::TokenIndex identifier_token)
     }
 
     //
-    // If a package was specified in this file (the one we are compiling),
-    // we look for the type requested inside the package in question.
-    // Otherwise, we look for the type requested in the unnamed package.
-    // If we don't find the type or we find a bad type we check to see
-    // if the type can be imported.
+    // Search for another file in the current package, and if that fails, check
+    // for an accessible import-on-demand.
     //
-    PackageSymbol *package = (compilation_unit -> package_declaration_opt
-                              ? this_package : control.unnamed_package);
-    type = FindSimpleNameType(package, identifier_token);
+    type = FindSimpleNameType(this_package, identifier_token);
     TypeSymbol *imported_type = (! type || type -> Bad()
                                  ? ImportType(identifier_token, name_symbol)
                                  : (TypeSymbol *) NULL);
 
     //
-    // If a valid type can be imported on demand, chose that type.
+    // If a valid type can be imported on demand, choose that type.
     // Otherwise, if a type was found at all, do some final checks on it.
     //
     // Note that a type T contained in a package P is always accessible to all
     // other types contained in P. I.e., we do not need to perform access check
     // for type...
     //
-    //
-    if (imported_type)
+    if (imported_type && TypeAccessCheck(imported_type))
         type = imported_type;
     else if (type)
     {
@@ -4318,74 +3993,65 @@ TypeSymbol *Semantic::FindType(LexStream::TokenIndex identifier_token)
 
 
 //
-//
+// Finds a type by the given name, and add the dependence information. If one
+// exists, but is not accessible, it is returned after an error. After other
+// errors, control.no_type is returned.
 //
 TypeSymbol *Semantic::MustFindType(Ast *name)
 {
     TypeSymbol *type;
-    LexStream::TokenIndex identifier_token;
+    LexStream::TokenIndex identifier_token = name -> RightToken();
+    NameSymbol *name_symbol = lex_stream -> NameSymbol(identifier_token);
 
     AstSimpleName *simple_name = name -> SimpleNameCast();
     if (simple_name)
     {
-        identifier_token = simple_name -> identifier_token;
         type = FindType(identifier_token);
 
         //
-        // If the type was not found, try to read it again to generate an
-        // appropriate error message.
+        // If the type was not found, generate an appropriate error message.
         //
         if (! type)
         {
-            NameSymbol *name_symbol =
-                lex_stream -> NameSymbol(identifier_token);
-            PackageSymbol *package =
-                (compilation_unit -> package_declaration_opt ? this_package
-                 : control.unnamed_package);
-            FileSymbol *file_symbol =
-                Control::GetFile(control, package, name_symbol);
-
-            //
-            // If there is no file associated with the name of the type then
-            // the type does not exist. Before invoking ReadType to issue a
-            // "type not found" error message, check whether or not the user is
-            // not attempting to access an inaccessible private type.
-            //
-            if ((! file_symbol) && state_stack.Size() > 0)
+            // Check for inaccessible member type.
+            if (state_stack.Size() > 0)
             {
                 for (TypeSymbol *super_type = ThisType() -> super;
                      super_type; super_type = super_type -> super)
                 {
                     assert(super_type -> expanded_type_table);
-
-                    TypeShadowSymbol *type_shadow_symbol =
-                        super_type -> expanded_type_table -> FindTypeShadowSymbol(name_symbol);
+                    TypeShadowSymbol *type_shadow_symbol = super_type ->
+                        expanded_type_table -> FindTypeShadowSymbol(name_symbol);
                     if (type_shadow_symbol)
                     {
-                        type = FindTypeInShadow(type_shadow_symbol,
-                                                identifier_token);
+                        type = type_shadow_symbol -> type_symbol;
                         break;
                     }
                 }
             }
-
+            // Check for an inaccessible import.
+            if (! type)
+                type = ImportType(identifier_token, name_symbol);
+            // Report the error.
             if (type)
-                 ReportTypeInaccessible(name -> LeftToken(),
-                                        name -> RightToken(), type);
-            else type = ReadType(file_symbol, package, name_symbol,
-                                 identifier_token);
-        }
-        else
-        {
-             TypeAccessCheck(name, type);
+                ReportTypeInaccessible(name -> LeftToken(),
+                                       name -> RightToken(), type);
+            else
+            {
+                // Try reading the file again, to force an error.
+                NameSymbol *name_symbol =
+                    lex_stream -> NameSymbol(identifier_token);
+                FileSymbol *file_symbol =
+                    Control::GetFile(control, this_package, name_symbol);
+                type = ReadType(file_symbol, this_package, name_symbol,
+                                identifier_token);
+            }
         }
     }
     else
     {
         AstFieldAccess *field_access = name -> FieldAccessCast();
-
         assert(field_access);
-
         identifier_token = field_access -> identifier_token;
 
         ProcessPackageOrType(field_access -> base);
@@ -4394,21 +4060,11 @@ TypeSymbol *Semantic::MustFindType(Ast *name)
         type = symbol -> TypeCast();
         if (type)
         {
-            TypeNestAccessCheck(field_access -> base);
             type = MustFindNestedType(type, field_access);
         }
         else
         {
             PackageSymbol *package = symbol -> PackageCast();
-            if (package -> directory.Length() == 0)
-            {
-                ReportSemError(SemanticError::PACKAGE_NOT_FOUND,
-                               field_access -> base -> LeftToken(),
-                               field_access -> base -> RightToken(),
-                               package -> PackageName());
-            }
-            NameSymbol *name_symbol =
-                lex_stream -> NameSymbol(identifier_token);
             type = package -> FindTypeSymbol(name_symbol);
             if (! type)
             {
@@ -4417,12 +4073,11 @@ TypeSymbol *Semantic::MustFindType(Ast *name)
                 type = ReadType(file_symbol, package, name_symbol,
                                 identifier_token);
             }
-            else
-            {
-                if (type -> SourcePending())
-                    control.ProcessHeaders(type -> file_symbol);
-                TypeAccessCheck(name, type);
-            }
+            else if (type -> SourcePending())
+                control.ProcessHeaders(type -> file_symbol);
+            if (! TypeAccessCheck(type))
+                ReportTypeInaccessible(name -> LeftToken(), identifier_token,
+                                       type);
         }
     }
 
@@ -4432,65 +4087,19 @@ TypeSymbol *Semantic::MustFindType(Ast *name)
     // processing the type header of an outermost type.
     //
     if (state_stack.Size() > 0)
-        AddDependence(ThisType(), type, identifier_token);
-
-    //
-    //
-    //
-    if (control.option.deprecation && type -> IsDeprecated() &&
-        type -> file_symbol != source_file_symbol)
     {
-        ReportSemError(SemanticError::DEPRECATED_TYPE,
-                       name -> LeftToken(),
-                       name -> RightToken(),
-                       type -> ContainingPackage() -> PackageName(),
-                       type -> ExternalName());
-    }
-
-    return type;
-}
-
-
-void Semantic::ProcessInterface(TypeSymbol *base_type, AstExpression *name)
-{
-    TypeSymbol *interf = MustFindType(name);
-
-    assert(! interf -> SourcePending());
-
-    if (! interf -> ACC_INTERFACE())
-    {
-        if (! interf -> Bad())
+        AddDependence(ThisType(), type);
+        if (control.option.deprecation && type -> IsDeprecated() &&
+            ! InDeprecatedContext())
         {
-            ReportSemError(SemanticError::NOT_AN_INTERFACE,
+            ReportSemError(SemanticError::DEPRECATED_TYPE,
                            name -> LeftToken(),
                            name -> RightToken(),
-                           interf -> ContainingPackage() -> PackageName(),
-                           interf -> ExternalName());
+                           type -> ContainingPackage() -> PackageName(),
+                           type -> ExternalName());
         }
-
-        name -> symbol = NULL;
     }
-    else
-    {
-        for (int k = 0; k < base_type -> NumInterfaces(); k++)
-        {
-            if (base_type -> Interface(k) == interf)
-            {
-                ReportSemError(SemanticError::DUPLICATE_INTERFACE,
-                               name -> LeftToken(),
-                               name -> RightToken(),
-                               interf -> ContainingPackage() -> PackageName(),
-                               interf -> ExternalName(),
-                               base_type -> ExternalName());
-
-                name -> symbol = NULL;
-
-                return;
-            }
-        }
-        name -> symbol = interf; // save type name in ast.
-        base_type -> AddInterface(interf);
-    }
+    return type -> Bad() ? control.no_type : type;
 }
 
 
@@ -4629,11 +4238,16 @@ MethodSymbol *Semantic::GetStaticInitializerMethod(int estimate)
     block -> block_symbol = block_symbol;
     block -> AllocateBlockStatements(estimate);
 
+    // The return type (void).
+    AstSimpleName *return_type = ast_pool -> GenSimpleName(loc);
+    return_type -> symbol = control.void_type;
+
     // The method declaration. We leave some fields uninitialized, because
     // they are not needed in bytecode.cpp.
     AstMethodDeclaration *declaration = ast_pool -> GenMethodDeclaration();
     MethodSymbol *init_method =
         this_type -> InsertMethodSymbol(control.clinit_name_symbol);
+    declaration -> type = return_type;
     declaration -> method_symbol = init_method;
     declaration -> method_body = block;
 
@@ -4789,11 +4403,16 @@ void Semantic::ProcessInstanceInitializers(AstClassBody *class_body)
     block -> right_brace_token = loc;
     block -> block_symbol = block_symbol;
 
+    // The return type (void).
+    AstSimpleName *return_type = ast_pool -> GenSimpleName(loc);
+    return_type -> symbol = control.void_type;
+
     // The method declaration. We leave some fields uninitialized, because
     // they are not needed in bytecode.cpp.
     AstMethodDeclaration *declaration = ast_pool -> GenMethodDeclaration();
     MethodSymbol *init_method =
         this_type -> InsertMethodSymbol(control.block_init_name_symbol);
+    declaration -> type = return_type;
     declaration -> method_symbol = init_method;
     declaration -> method_body = block;
 

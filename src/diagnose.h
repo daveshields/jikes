@@ -1,4 +1,4 @@
-// $Id: diagnose.h,v 1.14 2001/09/14 05:31:33 ericb Exp $ -*- c++ -*-
+// $Id: diagnose.h,v 1.16 2002/08/02 21:29:44 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -33,55 +33,50 @@ struct StateInfo
 class ParseErrorInfo: public JikesError
 {
     friend class ParseError;
-    
- public:
-    
+public:
     virtual const wchar_t *getErrorMessage();
     virtual const wchar_t *getErrorReport();
-    
+
     virtual JikesErrorSeverity getSeverity();
     virtual const char *getFileName();
-    
-    virtual int getLeftLineNo      ();
-    virtual int getLeftColumnNo    ();
-    virtual int getRightLineNo     ();
-    virtual int getRightColumnNo   ();
 
- protected:        
+    virtual int getLeftLineNo();
+    virtual int getLeftColumnNo();
+    virtual int getRightLineNo();
+    virtual int getRightColumnNo();
 
- private:
-    
-    int left_line_no    ;
-    int left_column_no  ;
-    int right_line_no   ;
-    int right_column_no ;
-    
+private:
+    int left_line_no;
+    int left_column_no;
+    int right_line_no;
+    int right_column_no;
+
     static bool emacs_style_report;
     LexStream *lex_stream;
-    
+
     void Initialize(LexStream *);
 
-    wchar_t *regularErrorString ();
-    wchar_t *emacsErrorString   ();
-    
-    LexStream::TokenIndex left_token  ;
-    LexStream::TokenIndex right_token ;
-    
-    int                   name_index;   
-    int                   right_string_length;
-    int                   num;
-    unsigned char         msg_level;
-    ParseErrorCode        msg_code;
-    unsigned              scope_name_index;
+    wchar_t *regularErrorString();
+    wchar_t *emacsErrorString();
+
+    LexStream::TokenIndex left_token;
+    LexStream::TokenIndex right_token;
+
+    int name_index;
+    int num;
+    unsigned char msg_level;
+    ParseErrorCode msg_code;
+    unsigned scope_name_index;
 };
 
 
 class ParseError : public javaprs_table
 {
- public:
+public:
 
     void Report(int msg_level, ParseErrorCode, int name_index,
-                LexStream::TokenIndex left_token, LexStream::TokenIndex right_token,
+                LexStream::TokenIndex left_token,
+                LexStream::TokenIndex right_token,
                 int scope_name_index = 0);
 
     void SortMessages();
@@ -96,9 +91,7 @@ private:
 
     Tuple<ParseErrorInfo> errors;
 
-    void PrintPrimaryMessage   (int k);
-    void PrintSecondaryMessage (int k);
-    
+    void PrintMessage(int k);
 };
 
 

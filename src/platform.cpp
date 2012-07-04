@@ -1,4 +1,4 @@
-// $Id: platform.cpp,v 1.33 2002/05/22 06:56:45 ericb Exp $
+// $Id: platform.cpp,v 1.34 2002/07/30 16:30:02 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -73,7 +73,7 @@ return
 #endif
 
 #ifdef HAVE_MAC_MKDIR
- mkdir(dirname,0);
+ mkdir(dirname, 0);
 #endif
 
 }
@@ -1574,8 +1574,8 @@ char StringConstant::U8S_LP_RP_String[] = {
     U_LP, U_RP, U_L, U_j, U_a, U_v, U_a, U_SL, U_l, U_a, U_n, U_g, U_SL,
     U_S, U_t, U_r, U_i, U_n, U_g, U_SC, U_NU}; // "()Ljava/lang/String;"
 char StringConstant::U8S_LP_RP_V[] = {U_LP, U_RP, U_V, U_NU}; // "()V"
-char StringConstant::U8S_LP_RP_Z[] = {U_LP,U_RP,U_Z,U_NU}; // "()Z"
-char StringConstant::U8S_LP_Z_RP_V[] = {U_LP,U_Z,U_RP,U_V,U_NU}; // "(Z)V"
+char StringConstant::U8S_LP_RP_Z[] = {U_LP, U_RP, U_Z, U_NU}; // "()Z"
+char StringConstant::U8S_LP_Z_RP_V[] = {U_LP, U_Z, U_RP, U_V, U_NU}; // "(Z)V"
 char StringConstant::U8S_LineNumberTable[] = {
     U_L, U_i, U_n, U_e, U_N, U_u, U_m, U_b, U_e, U_r,
     U_T, U_a, U_b, U_l, U_e, U_NU}; // "LineNumberTable"

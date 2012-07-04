@@ -1,4 +1,4 @@
-// $Id: set.h,v 1.22 2002/07/05 02:03:44 ericb Exp $ -*- c++ -*-
+// $Id: set.h,v 1.24 2002/08/28 16:39:29 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -374,7 +374,7 @@ public:
 // class Key must implement a hashing function:
 //   unsigned HashCode();
 //
-template <class Key, class Value>
+template <typename Key, typename Value>
 class Map
 {
 public:
@@ -433,10 +433,8 @@ private:
     Element **base;
     unsigned hash_size;
 
-    static unsigned primes[];
-    unsigned prime_index;
-
     void Rehash();
+    void Resize();
 };
 
 
@@ -810,8 +808,8 @@ public:
     //
     // Other useful constructors.
     //
-    inline DefinitePair(unsigned size) : da_set(size, BitSet::EMPTY),
-                                         du_set(size, BitSet::UNIVERSE)
+    inline DefinitePair(unsigned size = 0) : da_set(size, BitSet::EMPTY),
+                                             du_set(size, BitSet::UNIVERSE)
     {}
 
     inline DefinitePair(unsigned size, int init) : da_set(size, init),
@@ -1009,19 +1007,10 @@ public:
 };
 
 
-template<class Key, class Value>
-unsigned Map<Key, Value>::primes[] = {DEFAULT_HASH_SIZE, 101, 401,
-                                          MAX_HASH_SIZE};
-
-
-template<class Key, class Value>
+template<typename Key, typename Value>
 void Map<Key, Value>::Rehash()
 {
-    hash_size = primes[++prime_index];
-
-    delete [] base;
-    base = (Element **) memset(new Element *[hash_size], 0,
-                               hash_size * sizeof(Element *));
+    Resize();
 
     for (int i = 0; i < symbol_pool.Length(); i++)
     {
@@ -1033,7 +1022,7 @@ void Map<Key, Value>::Rehash()
 }
 
 
-template<class Key, class Value>
+template<typename Key, typename Value>
 void Map<Key, Value>::Add(Key *key, Value *value)
 {
     assert(key);
@@ -1080,19 +1069,26 @@ void Map<Key, Value>::Add(Key *key, Value *value)
 }
 
 
-template<class Key, class Value>
+template<typename Key, typename Value>
 Map<Key, Value>::Map(unsigned hash_size_)
 {
     hash_size = (hash_size_ <= 0 ? 1 : hash_size_);
+    base = NULL;
+    Resize();
+}
 
-    prime_index = -1;
-    do
+
+template<typename Key, typename Value>
+void Map<Key, Value>::Resize()
+{
+    static int prime_index = -1;
+    static const unsigned primes[] = {DEFAULT_HASH_SIZE, 101, 401,
+                                      MAX_HASH_SIZE};
+    while (hash_size >= primes[prime_index + 1] && hash_size < MAX_HASH_SIZE)
     {
-        if (hash_size < primes[prime_index + 1])
-            break;
-        prime_index++;
-    } while (primes[prime_index] < MAX_HASH_SIZE);
-
+        hash_size = primes[++prime_index];
+    }
+    delete [] base;
     base = (Element **) memset(new Element *[hash_size], 0,
                                hash_size * sizeof(Element *));
 }

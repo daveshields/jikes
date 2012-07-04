@@ -1,4 +1,4 @@
-// $Id: segment.cpp,v 1.10 2001/09/14 05:31:34 ericb Exp $
+// $Id: segment.cpp,v 1.11 2002/08/05 23:56:28 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -14,7 +14,7 @@
 namespace Jikes { // Open namespace Jikes block
 #endif
 
-u2 &PairSegment::Image(u2 target)
+u2 &PairSegment::Image(int target)
 {
     if (array == NULL)
     {
@@ -44,7 +44,7 @@ u2 &PairSegment::Image(u2 target)
 }
 
 
-u2 &Pair::operator[](const u2 target)
+u2 &Pair::operator[](const int target)
 {
     int k = ((unsigned) target) >> PairSegment::LOG_BLKSIZE;
 
@@ -66,7 +66,8 @@ u2 &Pair::operator[](const u2 target)
             delete [] old_base;
         }
 
-        memset(&base[old_base_size], 0, (base_size - old_base_size) * sizeof(PairSegment *));
+        memset(&base[old_base_size], 0,
+               (base_size - old_base_size) * sizeof(PairSegment *));
     }
 
     if (! base[k])
@@ -76,7 +77,7 @@ u2 &Pair::operator[](const u2 target)
 }
 
 
-Pair &TripletSegment::Image(u2 target)
+Pair &TripletSegment::Image(int target)
 {
     if (array == NULL)
     {
@@ -94,18 +95,20 @@ Pair &TripletSegment::Image(u2 target)
         }
 
         unsigned offset = ((unsigned) target) & MASK;
-        array = (Pair **) memset(new Pair*[BLKSIZE], 0, BLKSIZE * sizeof(Pair *));
+        array = (Pair **) memset(new Pair*[BLKSIZE], 0,
+                                 BLKSIZE * sizeof(Pair *));
         array -= offset;
 
         for (int j = 0; j < top; j++)
             array[list[j].target] = list[j].value;
     }
 
-    return *(array[target] ? array[target] : array[target] = segment_pool.AllocatePair());
+    return *(array[target] ? array[target]
+             : array[target] = segment_pool.AllocatePair());
 }
 
 
-u2 &Triplet::Image(const u2 target, const u2 target2)
+u2 &Triplet::Image(const int target, const int target2)
 {
     int k = ((unsigned) target) >> TripletSegment::LOG_BLKSIZE;
 
@@ -123,7 +126,8 @@ u2 &Triplet::Image(const u2 target, const u2 target2)
             delete [] old_base;
         }
 
-        memset(&base[old_base_size], 0, (base_size - old_base_size) * sizeof(TripletSegment *));
+        memset(&base[old_base_size], 0,
+               (base_size - old_base_size) * sizeof(TripletSegment *));
     }
 
     if (! base[k])

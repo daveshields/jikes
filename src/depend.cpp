@@ -1,4 +1,4 @@
-// $Id: depend.cpp,v 1.30 2002/06/18 04:06:55 cabbey Exp $
+// $Id: depend.cpp,v 1.32 2002/07/30 16:30:01 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -103,6 +103,11 @@ void TypeCycleChecker::ProcessSubtypes(TypeSymbol *type)
          subtype;
          subtype = (TypeSymbol *) type -> subtypes -> NextElement())
     {
+        //
+        // Only worry about top-level types.
+        //
+        if (subtype -> outermost_type != subtype)
+            continue;
         if (subtype -> index == OMEGA)
              ProcessSubtypes(subtype);
         type -> index = Min(type -> index, subtype -> index);
@@ -336,7 +341,7 @@ void TypeDependenceChecker::OutputMake(FileSymbol *file_symbol)
         DirectorySymbol *dir_symbol = file_symbol -> OutputDirectory();
         char *dir_name = dir_symbol -> DirectoryName();
         int dir_length = strlen(dir_name);
-        
+
         buf = new char[length + FileSymbol::class_suffix_length + dir_length +
                       2];
         strcpy(buf, dir_name);

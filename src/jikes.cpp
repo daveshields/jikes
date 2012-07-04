@@ -1,4 +1,4 @@
-// $Id: jikes.cpp,v 1.89 2002/05/12 03:19:42 ericb Exp $
+// $Id: jikes.cpp,v 1.92 2002/07/31 21:05:24 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -20,11 +20,11 @@ int main(int argc, char *argv[])
     // Here we are creating instance of default API
     JikesAPI *compiler = new JikesAPI();
 
-    int    return_code;    
+    int return_code;
     char **files;
 
     files = compiler -> parseOptions(argc, argv);
-    
+
     if (compiler -> getOptions() -> help)
     {
         printf("%s%s", StringConstant::U8S_help_header,
@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
                "-debug              no effect (ignored for compatibility)\n"
                "-depend | -Xdepend  recompile all used classes\n"
                "-deprecation        report uses of deprecated features\n"
-#if defined(HAVE_LIBICU_UC) || defined(HAVE_ICONV_H)
+#if defined(HAVE_ENCODING)
                "-encoding encoding  use specified encoding to read source files\n"
 # if defined(HAVE_LIBICU_UC)
                "                    this binary requires the ICU library\n"
@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
                "+OLDCSO             perform original Jikes classpath order for compatibility\n"
                "+P                  pedantic compilation - issues lots of warnings\n"
                "+Pno-modifier-order disable pedantic warnings about modifier order\n"
-               "+Td...d             set value of tab d...d spaces; each d is a decimal digit\n"
+               "+T=n                set value of tab to n spaces, defaults to 8\n"
                "+U                  do full dependence check including Zip and Jar files\n"
                "+Z                  treat cautions as errors\n"
 #ifdef JIKES_DEBUG

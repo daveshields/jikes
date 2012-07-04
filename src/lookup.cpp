@@ -1,4 +1,4 @@
-// $Id: lookup.cpp,v 1.44 2002/06/21 04:30:29 cabbey Exp $
+// $Id: lookup.cpp,v 1.46 2002/08/06 20:52:41 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -21,68 +21,57 @@ namespace Jikes { // Open namespace Jikes block
 
 PackageSymbol *Symbol::PackageCast()
 {
-    return DYNAMIC_CAST<PackageSymbol *, Symbol *>
-        (_kind == PACKAGE ? this : NULL);
+    return DYNAMIC_CAST<PackageSymbol *> (_kind == PACKAGE ? this : NULL);
 }
 
 TypeSymbol *Symbol::TypeCast()
 {
-    return DYNAMIC_CAST<TypeSymbol *, Symbol *>
-        (_kind == TYPE ? this : NULL);
+    return DYNAMIC_CAST<TypeSymbol *> (_kind == TYPE ? this : NULL);
 }
 
 MethodSymbol *Symbol::MethodCast()
 {
-    return DYNAMIC_CAST<MethodSymbol *, Symbol *>
-        (_kind == METHOD ? this : NULL);
+    return DYNAMIC_CAST<MethodSymbol *> (_kind == METHOD ? this : NULL);
 }
 
 BlockSymbol *Symbol::BlockCast()
 {
-    return DYNAMIC_CAST<BlockSymbol *, Symbol *>
-        (_kind == BLOCK ? this : NULL);
+    return DYNAMIC_CAST<BlockSymbol *> (_kind == BLOCK ? this : NULL);
 }
 
 VariableSymbol *Symbol::VariableCast()
 {
-    return DYNAMIC_CAST<VariableSymbol *, Symbol *>
-        (_kind == VARIABLE ? this : NULL);
+    return DYNAMIC_CAST<VariableSymbol *> (_kind == VARIABLE ? this : NULL);
 }
 
 LabelSymbol *Symbol::LabelCast()
 {
-    return DYNAMIC_CAST<LabelSymbol *, Symbol *>
-        (_kind == LABEL ? this : NULL);
+    return DYNAMIC_CAST<LabelSymbol *> (_kind == LABEL ? this : NULL);
 }
 
 LiteralSymbol *Symbol::LiteralCast()
 {
-    return DYNAMIC_CAST<LiteralSymbol *, Symbol *>
-        (_kind == LITERAL ? this : NULL);
+    return DYNAMIC_CAST<LiteralSymbol *> (_kind == LITERAL ? this : NULL);
 }
 
 NameSymbol *Symbol::NameCast()
 {
-    return DYNAMIC_CAST<NameSymbol *, Symbol *>
-        (_kind == NAME ? this : NULL);
+    return DYNAMIC_CAST<NameSymbol *> (_kind == NAME ? this : NULL);
 }
 
 PathSymbol *Symbol::PathCast()
 {
-    return DYNAMIC_CAST<PathSymbol *, Symbol *>
-        (_kind == PATH ? this : NULL);
+    return DYNAMIC_CAST<PathSymbol *> (_kind == PATH ? this : NULL);
 }
 
 DirectorySymbol *Symbol::DirectoryCast()
 {
-    return DYNAMIC_CAST<DirectorySymbol *, Symbol *>
-        (_kind == _DIRECTORY ? this : NULL);
+    return DYNAMIC_CAST<DirectorySymbol *> (_kind == _DIRECTORY ? this : NULL);
 }
 
 FileSymbol *Symbol::FileCast()
 {
-    return DYNAMIC_CAST<FileSymbol *, Symbol *>
-        (_kind == _FILE ? this : NULL);
+    return DYNAMIC_CAST<FileSymbol *> (_kind == _FILE ? this : NULL);
 }
 
 int SystemTable::primes[] = {DEFAULT_HASH_SIZE, 101, 401, MAX_HASH_SIZE};
@@ -178,39 +167,6 @@ DirectoryTable::DirectoryTable(int estimate) : entry_pool(estimate),
 
 DirectoryTable::~DirectoryTable()
 {
-/*
-int n;
-int num_slots = 0;
-int total = 0;
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (Symbol *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-{
-num_slots++;
-total += num;
-}
-}
-
-if (num_slots > 0)
-{
-Coutput << "\nDestroying the Name table with " << total
-        << " elements and base size " << hash_size << " containing "
-        << num_slots << " non-empty slots\n";
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (Symbol *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-Coutput << "    slot " << n << " contains " << num << " element(s)\n";
-}
-}
-if (hash_size < total)
-    total = total;
-*/
     for (int i = 0; i < entry_pool.Length(); i++)
         delete entry_pool[i];
     delete [] base;
@@ -223,8 +179,8 @@ DirectoryEntry *DirectoryTable::FindEntry(char *str, int len)
     DirectoryEntry *entry;
     for (entry = base[k]; entry; entry = entry -> next)
     {
-        if (len == entry -> length && memcmp(entry -> name, str,
-                                             len * sizeof(char)) == 0)
+        if (len == entry -> length &&
+            memcmp(entry -> name, str, len * sizeof(char)) == 0)
         {
             return (entry -> IsDummy() ? (DirectoryEntry *) NULL : entry);
         }
@@ -259,9 +215,11 @@ DirectoryEntry *DirectoryTable::InsertEntry(DirectorySymbol *directory_symbol,
     DirectoryEntry *entry;
     for (entry = base[k]; entry; entry = entry -> next)
     {
-        if (len == entry -> length && memcmp(entry -> name, str,
-                                             len * sizeof(char)) == 0)
+        if (len == entry -> length &&
+            memcmp(entry -> name, str, len * sizeof(char)) == 0)
+        {
             return entry;
+        }
     }
 
     entry = new DirectoryEntry();
@@ -311,9 +269,11 @@ void DirectoryTable::InsertCaseInsensitiveEntry(DirectoryEntry *image)
     DirectoryEntry *entry;
     for (entry = base[k]; entry; entry = entry -> next)
     {
-        if (length == entry -> length && memcmp(entry -> name, lower_name,
-                                                length * sizeof(char)) == 0)
+        if (length == entry -> length &&
+            memcmp(entry -> name, lower_name, length * sizeof(char)) == 0)
+        {
             break;
+        }
     }
 
     if (! entry)
@@ -340,7 +300,7 @@ void DirectoryTable::InsertCaseInsensitiveEntry(DirectoryEntry *image)
 
     delete [] lower_name;
 }
-#endif
+#endif // WIN32_FILE_SYSTEM
 
 
 time_t DirectoryEntry::Mtime()
@@ -357,7 +317,7 @@ time_t DirectoryEntry::Mtime()
         strcat(file_name, this -> name);
 
         struct stat status;
-        if (JikesAPI::getInstance()->stat(file_name, &status) == 0)
+        if (JikesAPI::getInstance() -> stat(file_name, &status) == 0)
              mtime_ = status.st_mtime;
         else assert(false && "Cannot compute system time stamp\n");
 
@@ -372,9 +332,10 @@ int NameLookupTable::primes[] = {
     DEFAULT_HASH_SIZE, 8191, 16411, MAX_HASH_SIZE
 };
 
-NameLookupTable::NameLookupTable(int estimate) : symbol_pool(estimate),
-                                                 hash_size(primes[0]),
-                                                 prime_index(0)
+NameLookupTable::NameLookupTable(int estimate)
+    : symbol_pool(estimate),
+      hash_size(primes[0]),
+      prime_index(0)
 {
     base = (NameSymbol **) memset(new NameSymbol *[hash_size], 0,
                                   hash_size * sizeof(NameSymbol *));
@@ -382,39 +343,6 @@ NameLookupTable::NameLookupTable(int estimate) : symbol_pool(estimate),
 
 NameLookupTable::~NameLookupTable()
 {
-/*
-int n;
-int num_slots = 0;
-int total = 0;
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (Symbol *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-{
-num_slots++;
-total += num;
-}
-}
-
-if (num_slots > 0)
-{
-Coutput << "\nDestroying the Name table with " << total
-        << " elements and base size " << hash_size << " containing "
-        << num_slots << " non-empty slots\n";
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (Symbol *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-Coutput << "    slot " << n << " contains " << num << " element(s)\n";
-}
-}
-if (hash_size < total)
-    total = total;
-*/
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -446,7 +374,8 @@ NameSymbol *NameLookupTable::FindOrInsertName(wchar_t *str, size_t len)
     NameSymbol *symbol;
     for (symbol = base[k]; symbol; symbol = (NameSymbol *) symbol -> next)
     {
-        if (len == symbol -> NameLength() &&
+        if (hash_address == symbol -> hash_address &&
+            len == symbol -> NameLength() &&
             memcmp(symbol -> Name(), str, len * sizeof(wchar_t)) == 0)
         {
             return symbol;
@@ -478,9 +407,10 @@ int TypeLookupTable::primes[] = {
     DEFAULT_HASH_SIZE, 8191, 16411, MAX_HASH_SIZE
 };
 
-TypeLookupTable::TypeLookupTable(int estimate) : symbol_pool(estimate),
-                                                 hash_size(primes[0]),
-                                                 prime_index(0)
+TypeLookupTable::TypeLookupTable(int estimate)
+    : symbol_pool(estimate),
+      hash_size(primes[0]),
+      prime_index(0)
 {
     base = (TypeSymbol **) memset(new TypeSymbol *[hash_size], 0,
                                   hash_size * sizeof(TypeSymbol *));
@@ -489,40 +419,6 @@ TypeLookupTable::TypeLookupTable(int estimate) : symbol_pool(estimate),
 
 TypeLookupTable::~TypeLookupTable()
 {
-/*
-int n;
-int num_slots = 0;
-int total = 0;
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (TypeSymbol *s = base[n]; s; s = s -> next_type)
-    num++;
-if (num > 0)
-{
-num_slots++;
-total += num;
-}
-}
-
-if (num_slots > 0)
-{
-Coutput << "\nDestroying the Type table with " << total
-        << " elements and base size " << hash_size << " containing "
-        << num_slots << " non-empty slots\n";
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (TypeSymbol *s = base[n]; s; s = s -> next_type)
-    num++;
-if (num > 0)
-Coutput << "    slot " << n << " contains " << num << " element(s)\n";
-}
-}
-if (hash_size < total)
-    total = total;
-*/
-
     delete [] base;
 }
 
@@ -625,40 +521,6 @@ IntLiteralTable::IntLiteralTable(LiteralValue *bad_value_)
 
 IntLiteralTable::~IntLiteralTable()
 {
-/*
-int n;
-int num_slots = 0;
-int total = 0;
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (LiteralValue *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-{
-num_slots++;
-total += num;
-}
-}
-
-if (num_slots > 0)
-{
-Coutput << "\nDestroying the integer table with " << total
-        << " elements and base size " << hash_size << " containing "
-        << num_slots << " non-empty slots\n";
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (LiteralValue *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-Coutput << "    slot " << n << " contains " << num << " element(s)\n";
-}
-}
-if (hash_size < total)
-    total = total;
-*/
-
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -667,10 +529,10 @@ if (hash_size < total)
 
 LiteralValue *IntLiteralTable::FindOrInsertChar(LiteralSymbol *literal)
 {
-    wchar_t *name = literal -> Name();
-    int len = literal -> NameLength();
+    wchar_t *name = literal -> Name() + 1;
+    int len = literal -> NameLength() - 2; // discard ''
 
-    if (len == 0) // An isolated quote.
+    if (len <= 0) // An isolated or unterminated quote.
         return literal -> value = bad_value;
     if (len == 1) // A regular character.
         return literal -> value = FindOrInsert((int) name[0]);
@@ -734,8 +596,8 @@ LiteralValue *IntLiteralTable::FindOrInsertHexInt(LiteralSymbol *literal)
 
     for (int i = 0; i < 32 && tail > head; i += 4, tail--)
     {
-        u4 d = *tail - (Code::IsDigit(*tail) ? U_0 : (Code::IsLower(*tail)
-                                                      ? U_a : U_A) - 10);
+        u4 d = *tail - (Code::IsDigit(*tail) ? U_0
+                        : ((Code::IsLower(*tail) ? U_a : U_A) - 10));
         uvalue |= (d << i);
     }
 
@@ -929,40 +791,6 @@ LongLiteralTable::LongLiteralTable(LiteralValue *bad_value_)
 
 LongLiteralTable::~LongLiteralTable()
 {
-/*
-int n;
-int num_slots = 0;
-int total = 0;
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (LiteralValue *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-{
-num_slots++;
-total += num;
-}
-}
-
-if (num_slots > 0)
-{
-Coutput << "\nDestroying the long table with " << total
-        << " elements and base size " << hash_size << " containing "
-        << num_slots << " non-empty slots\n";
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (LiteralValue *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-Coutput << "    slot " << n << " contains " << num << " element(s)\n";
-}
-}
-if (hash_size < total)
-    total = total;
-*/
-
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -984,8 +812,8 @@ LiteralValue *LongLiteralTable::FindOrInsertHexLong(LiteralSymbol *literal)
 
     for (int i = 0; i < 32 && tail > head; i += 4, tail--)
     {
-        u4 d = *tail - (Code::IsDigit(*tail) ? U_0 : (Code::IsLower(*tail)
-                                                      ? U_a : U_A) - 10);
+        u4 d = *tail - (Code::IsDigit(*tail) ? U_0
+                        : ((Code::IsLower(*tail) ? U_a : U_A) - 10));
         low |= (d << i);
     }
 
@@ -1174,40 +1002,6 @@ FloatLiteralTable::FloatLiteralTable(LiteralValue *bad_value_)
 
 FloatLiteralTable::~FloatLiteralTable()
 {
-/*
-int n;
-int num_slots = 0;
-int total = 0;
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (LiteralValue *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-{
-num_slots++;
-total += num;
-}
-}
-
-if (num_slots > 0)
-{
-Coutput << "\nDestroying the float table with " << total
-        << " elements and base size " << hash_size << " containing "
-        << num_slots << " non-empty slots\n";
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (LiteralValue *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-Coutput << "    slot " << n << " contains " << num << " element(s)\n";
-}
-}
-if (hash_size < total)
-    total = total;
-*/
-
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -1308,39 +1102,6 @@ DoubleLiteralTable::DoubleLiteralTable(LiteralValue *bad_value_)
 
 DoubleLiteralTable::~DoubleLiteralTable()
 {
-/*
-int n;
-int num_slots = 0;
-int total = 0;
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (LiteralValue *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-{
-num_slots++;
-total += num;
-}
-}
-
-if (num_slots > 0)
-{
-Coutput << "\nDestroying the double table with " << total
-        << " elements and base size " << hash_size << " containing "
-        << num_slots << " non-empty slots\n";
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (LiteralValue *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-Coutput << "    slot " << n << " contains " << num << " element(s)\n";
-}
-}
-if (hash_size < total)
-    total = total;
-*/
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -1426,9 +1187,8 @@ DoubleLiteralValue *DoubleLiteralTable::FindOrInsert(IEEEdouble value)
 
 LiteralValue *Utf8LiteralTable::FindOrInsertString(LiteralSymbol *literal)
 {
-    wchar_t *name = literal -> Name();
-
-    int literal_length = literal -> NameLength();
+    wchar_t *name = literal -> Name() + 1;
+    int literal_length = literal -> NameLength() - 2; // discard ""
 
     // Big enough for the worst case: 3 bytes/char + \0.
     char *value = new char[literal_length * 3 + 1];
@@ -1588,39 +1348,6 @@ Utf8LiteralTable::Utf8LiteralTable(LiteralValue *bad_value_)
 
 Utf8LiteralTable::~Utf8LiteralTable()
 {
-/*
-int n;
-int num_slots = 0;
-int total = 0;
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (LiteralValue *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-{
-num_slots++;
-total += num;
-}
-}
-
-if (num_slots > 0)
-{
-Coutput << "\nDestroying the Utf8 table with " << total
-        << " elements and base size " << hash_size << " containing "
-        << num_slots << " non-empty slots\n";
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (LiteralValue *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-Coutput << "    slot " << n << " contains " << num << " element(s)\n";
-}
-}
-if (hash_size < total)
-    total = total;
-*/
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -1635,10 +1362,11 @@ Utf8LiteralValue *Utf8LiteralTable::FindOrInsert(const char *str, int len)
     Utf8LiteralValue *lit;
     for (lit = base[k]; lit; lit = (Utf8LiteralValue *) lit -> next)
     {
-        if (len == lit -> length)
+        if (hash_address == lit -> hash_address &&
+            len == lit -> length &&
+            memcmp(lit -> value, str, len * sizeof(char)) == 0)
         {
-            if (memcmp(lit -> value, str, len * sizeof(char)) == 0)
-                 return lit;
+            return lit;
         }
     }
 
@@ -1849,39 +1577,6 @@ LiteralLookupTable::LiteralLookupTable() : symbol_pool(16384),
 
 LiteralLookupTable::~LiteralLookupTable()
 {
-/*
-int n;
-int num_slots = 0;
-int total = 0;
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (Symbol *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-{
-num_slots++;
-total += num;
-}
-}
-
-if (num_slots > 0)
-{
-Coutput << "\nDestroying the Literal table with " << total
-        << " elements and base size " << hash_size << " containing "
-        << num_slots << " non-empty slots\n";
-for (n = 0; n < hash_size; n++)
-{
-int num = 0;
-for (Symbol *s = base[n]; s; s = s -> next)
-    num++;
-if (num > 0)
-Coutput << "    slot " << n << " contains " << num << " element(s)\n";
-}
-}
-if (hash_size < total)
-    total = total;
-*/
     for (int i = 0; i < symbol_pool.Length(); i++)
         delete symbol_pool[i];
     delete [] base;
@@ -1914,7 +1609,8 @@ LiteralSymbol *LiteralLookupTable::FindOrInsertLiteral(wchar_t *str,
     LiteralSymbol *symbol;
     for (symbol = base[k]; symbol; symbol = (LiteralSymbol *) symbol -> next)
     {
-        if (len == symbol -> NameLength() &&
+        if (hash_address == symbol -> hash_address &&
+            len == symbol -> NameLength() &&
             memcmp(symbol -> Name(), str, len * sizeof(wchar_t)) == 0)
         {
             return symbol;

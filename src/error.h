@@ -1,4 +1,4 @@
-// $Id: error.h,v 1.65 2002/07/09 08:14:33 cabbey Exp $ -*- c++ -*-
+// $Id: error.h,v 1.75 2002/09/11 17:06:00 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -30,9 +30,8 @@ class SemanticError;
 class ErrorInfo : public JikesError
 {
     friend class SemanticError;
-    
- public:
-    
+
+public:
     virtual const wchar_t *getErrorMessage();
     virtual const wchar_t *getErrorReport();
 
@@ -47,17 +46,15 @@ class ErrorInfo : public JikesError
     ErrorInfo();
     virtual ~ErrorInfo();
 
- protected:
-
- private:
+private:
     int left_line_no;
     int left_column_no;
     int right_line_no;
     int right_column_no;
-    
+
     LexStream::TokenIndex left_token;
     LexStream::TokenIndex right_token;
-    
+
     wchar_t *insert1,
         *insert2,
         *insert3,
@@ -71,7 +68,6 @@ class ErrorInfo : public JikesError
     wchar_t *msg;
     unsigned num;
     short msg_code;
-    short right_string_length;
     JikesErrorSeverity severity;
 
     static bool emacs_style_report;
@@ -79,9 +75,6 @@ class ErrorInfo : public JikesError
 
     wchar_t *regularErrorString();
     wchar_t *emacsErrorString();
-
-    void PrintLargeSource(ErrorString &s);
-    void PrintSmallSource(ErrorString &s);
 
     void Initialize(LexStream *, wchar_t *, JikesErrorSeverity);
 };
@@ -91,7 +84,7 @@ class SemanticError
     friend class ErrorInfo;
     friend class JikesAPI;
 
- public:
+public:
     enum SemanticErrorKind
     {
         BAD_ERROR,
@@ -120,7 +113,6 @@ class SemanticError
         CODE_OVERFLOW,
         NEGATIVE_ARRAY_SIZE,
         UNNECESSARY_PARENTHESIS,
-        CANNOT_COMPUTE_COLUMNS,
         EMPTY_DECLARATION,
         REDUNDANT_MODIFIER,
         RECOMMENDED_MODIFIER_ORDER,
@@ -135,6 +127,7 @@ class SemanticError
         REFERENCE_TO_TYPE_IN_MISMATCHED_FILE,
         DUPLICATE_INNER_TYPE_NAME,
         DUPLICATE_TYPE_DECLARATION,
+        DUPLICATE_IMPORT_NAME,
         UNNECESSARY_TYPE_IMPORT,
         DUPLICATE_ACCESS_MODIFIER,
         DUPLICATE_MODIFIER,
@@ -153,6 +146,7 @@ class SemanticError
         INVALID_CONSTANT_MODIFIER,
         UNINITIALIZED_FIELD,
         RECOMPILATION,
+        PACKAGE_NOT_TYPE,
         TYPE_NOT_FOUND,
         IMPORT_FROM_UNNAMED_PACKAGE,
         DUPLICATE_ON_DEMAND_IMPORT,
@@ -170,6 +164,7 @@ class SemanticError
         MISMATCHED_INHERITED_METHOD,
         MISMATCHED_IMPLICIT_METHOD,
         UNIMPLEMENTABLE_INTERFACE,
+        UNIMPLEMENTABLE_CLASS,
         MISMATCHED_INHERITED_METHOD_EXTERNALLY,
         DUPLICATE_FORMAL_PARAMETER,
         MISSPELLED_CONSTRUCTOR_NAME,
@@ -204,6 +199,7 @@ class SemanticError
         AMBIGUOUS_METHOD_INVOCATION,
         CONSTRUCTOR_NOT_FOUND,
         METHOD_FOUND_FOR_CONSTRUCTOR,
+        CONSTRUCTOR_OVERLOAD_NOT_FOUND,
         ABSTRACT_TYPE_CREATION,
         INVALID_INSTANCEOF_CONVERSION,
         INVALID_CAST_CONVERSION,
@@ -213,18 +209,18 @@ class SemanticError
         INCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION,
         INCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION,
         VOID_ARRAY,
+        DUPLICATE_THROWS_CLAUSE_CLASS,
+        REDUNDANT_THROWS_CLAUSE_CLASS,
+        UNCHECKED_THROWS_CLAUSE_CLASS,
         TYPE_NOT_THROWABLE,
-        TYPE_NOT_PRIMITIVE,
         TYPE_NOT_INTEGRAL,
         TYPE_NOT_NUMERIC,
         TYPE_NOT_INTEGER,
         TYPE_NOT_BOOLEAN,
         TYPE_NOT_ARRAY,
         TYPE_NOT_REFERENCE,
-        TYPE_NOT_VALID_FOR_SWITCH,
         TYPE_IS_VOID,
         VALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE,
-        TYPE_NOT_CONVERTIBLE_TO_SWITCH_TYPE,
         DUPLICATE_CASE_VALUE,
         MISPLACED_THIS_EXPRESSION,
         MISPLACED_SUPER_EXPRESSION,
@@ -258,6 +254,7 @@ class SemanticError
         NON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD,
         NON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD,
         NON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD,
+        ANONYMOUS_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD,
         DUPLICATE_INTERFACE,
         UNKNOWN_AMBIGUOUS_NAME,
         CIRCULAR_INTERFACE,
@@ -336,6 +333,7 @@ class SemanticError
         INNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE,
         INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL,
         INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER,
+        INHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_TYPE,
         ILLEGAL_THIS_FIELD_ACCESS,
         CONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS,
         ENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION,
@@ -375,7 +373,8 @@ class SemanticError
         num_warnings;
 
     void EnteringClone() { clone_count++; }
-    void ExitingClone()  { clone_count--; }
+    void ExitingClone() { clone_count--; }
+    bool InClone() { return clone_count > 0; }
 
     int PrintMessages();
 
@@ -427,7 +426,6 @@ private:
     static wchar_t *PrintCODE_OVERFLOW(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintNEGATIVE_ARRAY_SIZE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintUNNECESSARY_PARENTHESIS(ErrorInfo &, LexStream *, Control &);
-    static wchar_t *PrintCANNOT_COMPUTE_COLUMNS(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintEMPTY_DECLARATION(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintREDUNDANT_MODIFIER(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintRECOMMENDED_MODIFIER_ORDER(ErrorInfo &, LexStream *, Control &);
@@ -442,6 +440,7 @@ private:
     static wchar_t *PrintREFERENCE_TO_TYPE_IN_MISMATCHED_FILE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintDUPLICATE_INNER_TYPE_NAME(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintDUPLICATE_TYPE_DECLARATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_IMPORT_NAME(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintUNNECESSARY_TYPE_IMPORT(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintDUPLICATE_ACCESS_MODIFIER(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintDUPLICATE_MODIFIER(ErrorInfo &, LexStream *, Control &);
@@ -460,6 +459,7 @@ private:
     static wchar_t *PrintINVALID_CONSTANT_MODIFIER(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintUNINITIALIZED_FIELD(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintRECOMPILATION(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintPACKAGE_NOT_TYPE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintTYPE_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintIMPORT_FROM_UNNAMED_PACKAGE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintDUPLICATE_ON_DEMAND_IMPORT(ErrorInfo &, LexStream *, Control &);
@@ -477,6 +477,7 @@ private:
     static wchar_t *PrintMISMATCHED_INHERITED_METHOD(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintMISMATCHED_IMPLICIT_METHOD(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintUNIMPLEMENTABLE_INTERFACE(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNIMPLEMENTABLE_CLASS(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintMISMATCHED_INHERITED_METHOD_EXTERNALLY(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintDUPLICATE_FORMAL_PARAMETER(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintMISSPELLED_CONSTRUCTOR_NAME(ErrorInfo &, LexStream *, Control &);
@@ -511,6 +512,7 @@ private:
     static wchar_t *PrintAMBIGUOUS_METHOD_INVOCATION(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintCONSTRUCTOR_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintMETHOD_FOUND_FOR_CONSTRUCTOR(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintCONSTRUCTOR_OVERLOAD_NOT_FOUND(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintABSTRACT_TYPE_CREATION(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintINVALID_INSTANCEOF_CONVERSION(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintINVALID_CAST_CONVERSION(ErrorInfo &, LexStream *, Control &);
@@ -520,18 +522,18 @@ private:
     static wchar_t *PrintINCOMPATIBLE_TYPE_FOR_BINARY_EXPRESSION(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintINCOMPATIBLE_TYPE_FOR_CONDITIONAL_EXPRESSION(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintVOID_ARRAY(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintDUPLICATE_THROWS_CLAUSE_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintREDUNDANT_THROWS_CLAUSE_CLASS(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintUNCHECKED_THROWS_CLAUSE_CLASS(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintTYPE_NOT_THROWABLE(ErrorInfo &, LexStream *, Control &);
-    static wchar_t *PrintTYPE_NOT_PRIMITIVE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintTYPE_NOT_INTEGRAL(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintTYPE_NOT_NUMERIC(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintTYPE_NOT_INTEGER(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintTYPE_NOT_BOOLEAN(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintTYPE_NOT_ARRAY(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintTYPE_NOT_REFERENCE(ErrorInfo &, LexStream *, Control &);
-    static wchar_t *PrintTYPE_NOT_VALID_FOR_SWITCH(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintTYPE_IS_VOID(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintVALUE_NOT_REPRESENTABLE_IN_SWITCH_TYPE(ErrorInfo &, LexStream *, Control &);
-    static wchar_t *PrintTYPE_NOT_CONVERTIBLE_TO_SWITCH_TYPE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintDUPLICATE_CASE_VALUE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintMISPLACED_THIS_EXPRESSION(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintMISPLACED_SUPER_EXPRESSION(ErrorInfo &, LexStream *, Control &);
@@ -565,6 +567,7 @@ private:
     static wchar_t *PrintNON_ABSTRACT_TYPE_CONTAINS_ABSTRACT_METHOD(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintNON_ABSTRACT_TYPE_INHERITS_ABSTRACT_METHOD(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintNON_ABSTRACT_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintANONYMOUS_TYPE_CANNOT_OVERRIDE_DEFAULT_ABSTRACT_METHOD(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintDUPLICATE_INTERFACE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintUNKNOWN_AMBIGUOUS_NAME(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintCIRCULAR_INTERFACE(ErrorInfo &, LexStream *, Control &);
@@ -638,6 +641,7 @@ private:
     static wchar_t *PrintINNER_CLASS_REFERENCE_TO_NON_FINAL_LOCAL_VARIABLE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_LOCAL(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_MEMBER(ErrorInfo &, LexStream *, Control &);
+    static wchar_t *PrintINHERITANCE_AND_LEXICAL_SCOPING_CONFLICT_WITH_TYPE(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintILLEGAL_THIS_FIELD_ACCESS(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintCONSTRUCTOR_FOUND_IN_ANONYMOUS_CLASS(ErrorInfo &, LexStream *, Control &);
     static wchar_t *PrintENCLOSING_INSTANCE_ACCESS_FROM_CONSTRUCTOR_INVOCATION(ErrorInfo &, LexStream *, Control &);

@@ -1,4 +1,4 @@
-// $Id: zip.cpp,v 1.21 2001/12/14 06:52:12 ericb Exp $
+// $Id: zip.cpp,v 1.22 2002/07/30 16:30:03 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -479,7 +479,7 @@ Zip::Zip(Control &control_, char *zipfile_name) : control(control_),
                 holdbuffer[2] = tmpbuffer[2];
             }
 
-            delete [] tmpbuffer; 
+            delete [] tmpbuffer;
             delete [] holdbuffer;
         }
 #elif defined(WIN32_FILE_SYSTEM)
@@ -492,7 +492,7 @@ Zip::Zip(Control &control_, char *zipfile_name) : control(control_),
             for ( ; buffer_ptr >= zipbuffer; buffer_ptr--)
             {
                 if (*buffer_ptr == 'P')
-                {                
+                {
                     sig = GetU4();
                     if (sig == END_SIG)
                     {

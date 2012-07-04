@@ -1,4 +1,4 @@
-// $Id: long.cpp,v 1.25 2001/10/17 18:24:26 ericb Exp $
+// $Id: long.cpp,v 1.26 2002/07/30 16:30:02 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -317,8 +317,6 @@ void BaseLong::Divide(const BaseLong &dividend, const BaseLong &divisor,
     }
 
     quotient = BaseLong(high, low);
-
-    return;
 #endif // HAVE_64BIT_TYPES
 }
 
@@ -524,7 +522,7 @@ LongInt LongInt::operator>> (int op) const
 
     if (n == 0)
         return *this;
-    
+
     i4 hi = HighWord();
     u4 shift = (hi & SIGN_BIT) ? 0xffffffff : 0;
 

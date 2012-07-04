@@ -1,4 +1,4 @@
-// $Id: tuple.h,v 1.16 2001/09/14 05:31:34 ericb Exp $ -*- c++ -*-
+// $Id: tuple.h,v 1.17 2002/07/30 16:30:03 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -416,7 +416,8 @@ public:
 
     inline bool WriteToFile(char *file_name)
     {
-        JikesAPI::FileWriter *file = JikesAPI::getInstance()->write(file_name,buffer.top);
+        JikesAPI::FileWriter *file
+          = JikesAPI::getInstance() -> write(file_name, buffer.top);
 
         if (file == NULL) // NB if file was invalid it would already have been destroyed by write()
             return false;
@@ -432,7 +433,7 @@ public:
         file->write(buffer.base[n] + size, (buffer.top - size));
 
         delete file;
-       
+
         return true;
     }
 

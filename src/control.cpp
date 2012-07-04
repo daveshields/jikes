@@ -1,4 +1,4 @@
-// $Id: control.cpp,v 1.59 2002/06/24 18:48:01 ericb Exp $
+// $Id: control.cpp,v 1.61 2002/08/02 21:29:44 ericb Exp $
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -954,7 +954,7 @@ void Control::ProcessNewInputFiles(SymbolSet &file_set, char **arguments)
                 name[i] = (file_name[i] != U_BACKSLASH ? file_name[i]
                            : (wchar_t) U_SLASH); // Change '\' to '/'.
             name[file_name_length] = U_NULL;
-            
+
             //
             // File must be of the form xxx.java where xxx is a
             // character string consisting of at least one character.
@@ -969,7 +969,7 @@ void Control::ProcessNewInputFiles(SymbolSet &file_set, char **arguments)
                 FileSymbol *file_symbol =
                     FindOrInsertJavaInputFile(name,
                                               file_name_length - FileSymbol::java_suffix_length);
-                
+
                 if (! file_symbol)
                     unreadable_input_filenames.Next() = name;
                 else
@@ -1348,13 +1348,14 @@ void Control::ProcessBodies(TypeSymbol *type)
                 if (! parser -> BodyParse(sem -> lex_stream,
                                           class_declaration -> class_body))
                     // Mark that syntax errors were detected.
-                    sem -> compilation_unit -> kind = Ast::BAD_COMPILATION; 
+                    sem -> compilation_unit -> kind = Ast::BAD_COMPILATION;
 
                 else type -> ProcessExecutableBodies();
             }
         }
 
         if (sem -> NumErrors() == 0 &&
+            sem -> lex_stream -> NumBadTokens() == 0 &&
             ! sem -> compilation_unit -> BadCompilationUnitCast())
         {
             Tuple<TypeSymbol *> *types = new Tuple<TypeSymbol *>(1024);

@@ -1,4 +1,4 @@
-// $Id: semantic.h,v 1.60 2002/07/09 07:28:43 cabbey Exp $ -*- c++ -*-
+// $Id: semantic.h,v 1.70 2002/09/09 22:52:58 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -29,7 +29,8 @@ class cp_info;
 class TypeShadowSymbol;
 
 //
-//
+// Maintains a stack of symbol tables, for storing the different variables
+// which are in scope in a method.
 //
 class SymbolTableStack
 {
@@ -100,7 +101,8 @@ private:
 
 
 //
-//
+// Maintain a stack of exceptions, which tracks the checked exceptions possible
+// and thus the reachability of catch blocks and necessity of throws clauses.
 //
 class ExceptionTableStack
 {
@@ -120,7 +122,7 @@ private:
 
 
 //
-//
+// A stack of statements.
 //
 class StatementStack
 {
@@ -141,7 +143,7 @@ private:
 
 
 //
-//
+// A stack of integers, denoting the nesting level of a block.
 //
 class NestingLevelStack
 {
@@ -163,7 +165,7 @@ private:
 
 
 //
-//
+// A stack of blocks, and their associated data.
 //
 class BlockStack
 {
@@ -213,7 +215,7 @@ private:
 
 
 //
-//
+// A stack of expressions where assignment occurred to a final variable.
 //
 class DefiniteFinalAssignmentStack
 {
@@ -233,42 +235,7 @@ private:
 
 
 //
-//
-//
-class DefinitePairs
-{
-public:
-    DefinitePairs(int set_size) : break_pair(set_size),
-                                  continue_pair(set_size),
-                                  return_pair(set_size),
-                                  throw_pair(set_size)
-    {}
-
-    DefinitePair break_pair,
-                 continue_pair,
-                 return_pair,
-                 throw_pair;
-
-    void UniverseInit()
-    {
-        break_pair.SetUniverse();
-        continue_pair.SetUniverse();
-        return_pair.SetUniverse();
-        throw_pair.SetUniverse();
-    }
-
-    void EmptyInit()
-    {
-        break_pair.SetEmpty();
-        continue_pair.SetEmpty();
-        return_pair.SetEmpty();
-        throw_pair.SetEmpty();
-    }
-};
-
-
-//
-//
+// A stack of blocks, and related data for definite assignment analysis.
 //
 class DefiniteBlockStack
 {
@@ -276,36 +243,16 @@ public:
 
     void Push(AstBlock *block_)
     {
-        definite_pairs[top_index] -> UniverseInit();
+        break_pairs[top_index].SetUniverse();
+        continue_pairs[top_index].SetUniverse();
 
-        if (locally_defined_variables)
-        {
-            if (top_index == 0)
-            {
-                memset(local_variables[top_index], 0,
-                       (locally_defined_variables[top_index] -> Size() *
-                        sizeof(VariableSymbol *)));
-                locally_defined_variables[top_index] -> SetEmpty();
-            }
-            else
-            {
-                memmove(local_variables[top_index],
-                        local_variables[top_index - 1],
-                        (locally_defined_variables[top_index] -> Size() *
-                         sizeof(VariableSymbol *)));
-                *locally_defined_variables[top_index] =
-                    *locally_defined_variables[top_index - 1];
-            }
-        }
-
-        block[top_index] = block_;
-        top_index++;
+        block[top_index++] = block_;
     }
 
     void Pop()
     {
         if (top_index > 0)
-             top_index--;
+            top_index--;
         else assert(false);
     }
 
@@ -317,179 +264,62 @@ public:
         return block[top_index - 1];
     }
 
-    VariableSymbol **TopLocalVariables()
-    {
-        assert(top_index > 0 && local_variables);
-        return local_variables[top_index - 1];
-    }
-    BitSet *TopLocallyDefinedVariables()
-    {
-        assert(top_index > 0 && locally_defined_variables);
-        return locally_defined_variables[top_index - 1];
-    }
-
     DefinitePair &BreakPair(int i)
     {
-        return definite_pairs[i] -> break_pair;
+        return break_pairs[i];
     }
     DefinitePair &ContinuePair(int i)
     {
-        return definite_pairs[i] -> continue_pair;
-    }
-    DefinitePair &ReturnPair(int i)
-    {
-        return definite_pairs[i] -> return_pair;
-    }
-    DefinitePair &ThrowPair(int i)
-    {
-        return definite_pairs[i] -> throw_pair;
+        return continue_pairs[i];
     }
 
     DefinitePair &TopBreakPair()
     {
         assert(top_index > 0);
-        return definite_pairs[top_index - 1] -> break_pair;
+        return break_pairs[top_index - 1];
     }
     DefinitePair &TopContinuePair()
     {
         assert(top_index > 0);
-        return definite_pairs[top_index - 1] -> continue_pair;
-    }
-    DefinitePair &TopReturnPair()
-    {
-        assert(top_index > 0);
-        return definite_pairs[top_index - 1] -> return_pair;
-    }
-    DefinitePair &TopThrowPair()
-    {
-        assert(top_index > 0);
-        return definite_pairs[top_index - 1] -> throw_pair;
+        return continue_pairs[top_index - 1];
     }
 
-    DefinitePair &TopExitPair(DefinitePair &start_pair)
+    DefinitePair &ReturnPair()
     {
-        assert(top_index > 0);
-
-        exit_pair  = start_pair;
-        exit_pair *= TopBreakPair();
-        exit_pair *= TopContinuePair();
-        exit_pair *= TopReturnPair();
-        exit_pair *= TopThrowPair();
-
-        return exit_pair;
+        return return_pair;
     }
 
     DefiniteBlockStack(Control &control, int stack_size_, int set_size)
         : stack_size(stack_size_),
           top_index(0),
-          exit_pair(set_size)
+          return_pair(set_size, BitSet::UNIVERSE)
     {
         block = new AstBlock*[stack_size];
-        definite_pairs = new DefinitePairs*[stack_size];
-        local_variables =
-            (VariableSymbol ***) ((control.option.g & JikesOption::VARS)
-                                  ? new VariableSymbol**[stack_size] : NULL);
-        locally_defined_variables =
-            (BitSet **) ((control.option.g & JikesOption::VARS)
-                         ? new BitSet*[stack_size] : NULL);
+        break_pairs = new DefinitePair[stack_size];
+        continue_pairs = new DefinitePair[stack_size];
 
         for (int i = 0; i < stack_size; i++)
         {
-            definite_pairs[i] = new DefinitePairs(set_size);
-            if (local_variables)
-            {
-                local_variables[i] = new VariableSymbol*[set_size];
-                locally_defined_variables[i] = new BitSet(set_size);
-            }
+            break_pairs[i].Resize(set_size);
+            continue_pairs[i].Resize(set_size);
         }
     }
 
     ~DefiniteBlockStack()
     {
-        for (int i = 0; i < stack_size; i++)
-        {
-            delete definite_pairs[i];
-            if (local_variables)
-            {
-                delete [] local_variables[i];
-                delete locally_defined_variables[i];
-            }
-        }
-
         delete [] block;
-        delete [] definite_pairs;
-        delete [] local_variables;
-        delete [] locally_defined_variables;
+        delete [] break_pairs;
+        delete [] continue_pairs;
     }
 
 private:
-
     int stack_size,
         top_index;
     AstBlock **block;
 
-    DefinitePairs **definite_pairs;
-
-    BitSet **locally_defined_variables;
-    VariableSymbol ***local_variables;
-
-    DefinitePair exit_pair;
-};
-
-
-//
-//
-//
-class DefiniteTryStack
-{
-public:
-
-    void Push(AstTryStatement *try_statement_)
-    {
-        this -> try_statement[top_index] = try_statement_;
-        top_index++;
-    }
-
-    void Pop()
-    {
-        if (top_index > 0)
-             top_index--;
-        else assert(false);
-    }
-
-    int Size() { return top_index; }
-    AstTryStatement *TryStatement(int i) { return try_statement[i]; }
-    AstBlock *Block(int i) { return block[i]; }
-    AstBlock *TopBlock()
-    {
-        assert(top_index > 0);
-        return block[top_index - 1];
-    }
-    void SetTopBlock(AstBlock *block_)
-    {
-        assert(top_index > 0);
-        block[top_index - 1] = block_;
-    }
-
-    DefiniteTryStack(int stack_size_) : stack_size(stack_size_),
-                                        top_index(0)
-    {
-        block = new AstBlock*[stack_size];
-        try_statement = new AstTryStatement*[stack_size];
-    }
-
-    ~DefiniteTryStack()
-    {
-        delete [] block;
-        delete [] try_statement;
-    }
-
-private:
-
-    int stack_size,
-        top_index;
-    AstBlock **block;
-    AstTryStatement **try_statement;
+    DefinitePair *break_pairs;
+    DefinitePair *continue_pairs;
+    DefinitePair return_pair;
 };
 
 
@@ -534,11 +364,10 @@ public:
     //
     DefinitePair *definitely_assigned_variables,
                  *universe;
-    BitSet *blank_finals;
+    BitSet *blank_finals,
+           *reachable_assignments;
     DefiniteBlockStack *definite_block_stack;
-    DefiniteTryStack *definite_try_stack;
     DefiniteFinalAssignmentStack *definite_final_assignment_stack;
-    SymbolSet *definite_visible_variables;
     Tuple<VariableSymbol *> *final_fields;
     bool processing_simple_assignment;
 
@@ -553,10 +382,9 @@ public:
           definitely_assigned_variables(NULL),
           universe(NULL),
           blank_finals(NULL),
+          reachable_assignments(NULL),
           definite_block_stack(NULL),
-          definite_try_stack(NULL),
           definite_final_assignment_stack(NULL),
-          definite_visible_variables(NULL),
           final_fields(NULL),
           processing_simple_assignment(false),
           type(type_),
@@ -612,7 +440,7 @@ private:
 
 
 //
-//
+// A stack of semantic environments.
 //
 class SemanticEnvironmentStack
 {
@@ -640,32 +468,25 @@ private:
 };
 
 
+//
+// A semantic object is associated with each compilation unit (ie. each .java
+// file). It is subdivided into SemanticEnvironments, which detail the
+// compilation state of the current class or interface.
+//
 class Semantic
 {
 public:
-    //
-    //
-    //
-    Control &control;
-    FileSymbol *source_file_symbol;
-    LexStream *lex_stream;
-    AstCompilationUnit *compilation_unit;
-    DirectorySymbol *directory_symbol;
+    Control &control; // The control object performing the compilation
+    FileSymbol *source_file_symbol; // The source file name
+    LexStream *lex_stream; // The source file contents
+    AstCompilationUnit *compilation_unit; // The syntax tree
+    DirectorySymbol *directory_symbol; // The source file location
 
     SymbolSet types_to_be_processed;
 
     int return_code;
 
-    PackageSymbol *Package() { return this_package; }
-
-    void CheckPackage();
-    void ProcessTypeNames();
-    void ProcessImports();
-    void ProcessSuperTypeDependences(AstClassDeclaration *);
-    void ProcessSuperTypeDependences(AstInterfaceDeclaration *);
-
-    void ComputeFinalValue(VariableSymbol *);
-
+    // The constructor
     Semantic(Control &control_, FileSymbol *file_symbol_)
         : control(control_),
           source_file_symbol(file_symbol_),
@@ -713,8 +534,6 @@ public:
         ProcessExprOrStmt[Ast::PRE_UNARY] =
             &Semantic::ProcessPreUnaryExpression;
         ProcessExprOrStmt[Ast::CAST] = &Semantic::ProcessCastExpression;
-        ProcessExprOrStmt[Ast::CHECK_AND_CAST] =
-            &Semantic::ProcessCastExpression;
         ProcessExprOrStmt[Ast::BINARY] = &Semantic::ProcessBinaryExpression;
         ProcessExprOrStmt[Ast::TYPE] = &Semantic::ProcessTypeExpression;
         ProcessExprOrStmt[Ast::CONDITIONAL] =
@@ -792,7 +611,6 @@ public:
         DefiniteExpr[Ast::POST_UNARY] = &Semantic::DefinitePostUnaryExpression;
         DefiniteExpr[Ast::PRE_UNARY] = &Semantic::DefinitePreUnaryExpression;
         DefiniteExpr[Ast::CAST] = &Semantic::DefiniteCastExpression;
-        DefiniteExpr[Ast::CHECK_AND_CAST] = &Semantic::DefiniteCastExpression;
         DefiniteExpr[Ast::BINARY] = &Semantic::DefiniteBinaryExpression;
         DefiniteExpr[Ast::CONDITIONAL] =
             &Semantic::DefiniteConditionalExpression;
@@ -923,6 +741,7 @@ public:
 
     ~Semantic() { delete error; }
 
+    // Report a semantic warning or error
     void ReportSemError(SemanticError::SemanticErrorKind kind,
                         LexStream::TokenIndex ltok,
                         LexStream::TokenIndex rtok,
@@ -986,15 +805,27 @@ public:
         error = NULL;
     }
 
-    TypeSymbol *ProcessSignature(TypeSymbol *, const char *,
-                                 LexStream::TokenIndex);
+    PackageSymbol *Package() { return this_package; }
+
+    // Implemented in decl.cpp - performs first pass over .java file.
+    void CheckPackage();
+    void ProcessTypeNames();
+    void ProcessImports();
     TypeSymbol *ReadType(FileSymbol *, PackageSymbol *, NameSymbol *,
                          LexStream::TokenIndex);
+
+    // Implemented in init.cpp - determines values of final fields.
+    void ComputeFinalValue(VariableSymbol *);
+
+    // Implemented in getclass.cpp - reads in a .class file.
+    TypeSymbol *ProcessSignature(TypeSymbol *, const char *,
+                                 LexStream::TokenIndex);
     TypeSymbol *ReadTypeFromSignature(TypeSymbol *, const char *, int,
                                       LexStream::TokenIndex);
     TypeSymbol *ProcessNestedType(TypeSymbol *, NameSymbol *,
                                   LexStream::TokenIndex);
 
+    // Evaluate constant expressions
     inline bool IsConstantTrue(AstExpression *expr)
     {
         return expr -> IsConstant() &&
@@ -1017,39 +848,35 @@ private:
 
     SemanticError *error;
 
+    // Implemented in decl.cpp - clean up after parsing
     void CleanUp();
     void CleanUpType(TypeSymbol *);
 
-    void SetDefaultSuperType(AstClassDeclaration *);
-    void SetDefaultSuperType(AstInterfaceDeclaration *);
+    // Implemented in decl.cpp - process a .java file for declarations
     void ProcessTypeHeader(AstClassDeclaration *);
-    void MarkCircularNest(TypeSymbol *);
-    void ProcessSuperTypesOfOuterType(TypeSymbol *);
-    void ProcessSuperTypesOfInnerType(TypeSymbol *, Tuple<TypeSymbol *> &);
-    void ProcessTypeHeaders(AstClassDeclaration *);
-    TypeSymbol *FindTypeInLayer(Ast *, SymbolSet &);
-    void ProcessNestedSuperTypes(TypeSymbol *);
-    void ProcessNestedTypeHeaders(TypeSymbol *, AstClassBody *);
     void ProcessTypeHeader(AstInterfaceDeclaration *);
+    void ProcessTypeHeaders(AstClassDeclaration *);
     void ProcessTypeHeaders(AstInterfaceDeclaration *);
-    void ProcessNestedTypeHeaders(AstInterfaceDeclaration *);
+    void ProcessTypeHeaders(TypeSymbol *, AstClassBody *);
     void ProcessConstructorMembers(AstClassBody *);
     void ProcessMethodMembers(AstClassBody *);
     void ProcessFieldMembers(AstClassBody *);
     void ProcessMembers(SemanticEnvironment *, AstClassBody *);
     void CompleteSymbolTable(SemanticEnvironment *, LexStream::TokenIndex,
                              AstClassBody *);
-    void ProcessExecutableBodies(SemanticEnvironment *, AstClassBody *);
-    void ProcessExecutableBodies(AstInterfaceDeclaration *);
-
     void ProcessMethodMembers(AstInterfaceDeclaration *);
     void ProcessFieldMembers(AstInterfaceDeclaration *);
     void ProcessMembers(AstInterfaceDeclaration *);
     void CompleteSymbolTable(AstInterfaceDeclaration *);
 
+    // Implemented in body.cpp - process method bodies and field initializers
+    void ProcessExecutableBodies(SemanticEnvironment *, AstClassBody *);
+    void ProcessExecutableBodies(AstInterfaceDeclaration *);
+
     friend class TypeSymbol;
     friend class VariableSymbol;
 
+    // Used in the handling of imports - see decl.cpp
     Tuple<Symbol *> import_on_demand_packages;
     Tuple<TypeSymbol *> single_type_imports;
 
@@ -1058,6 +885,12 @@ private:
     //
     PackageSymbol *this_package;
 
+    // Look at state associated with the current type
+    bool InDeprecatedContext() {
+        return ThisType() -> IsDeprecated() ||
+            (ThisMethod() && ThisMethod() -> IsDeprecated()) ||
+            (ThisVariable() && ThisVariable() -> IsDeprecated());
+    }
     TypeSymbol *ThisType() { return state_stack.Top() -> Type(); }
     MethodSymbol *&ThisMethod() { return state_stack.Top() -> this_method; }
     VariableSymbol *&ThisVariable()
@@ -1111,21 +944,17 @@ private:
     }
     DefinitePair *&Universe() { return state_stack.Top() -> universe; }
     BitSet *&BlankFinals() { return state_stack.Top() -> blank_finals; }
+    BitSet *&ReachableAssignments()
+    {
+        return state_stack.Top() -> reachable_assignments;
+    }
     DefiniteBlockStack *&DefiniteBlocks()
     {
         return state_stack.Top() -> definite_block_stack;
     }
-    DefiniteTryStack *&DefiniteTrys()
-    {
-        return state_stack.Top() -> definite_try_stack;
-    }
     DefiniteFinalAssignmentStack *&DefiniteFinalAssignments()
     {
         return state_stack.Top() -> definite_final_assignment_stack;
-    }
-    SymbolSet *&DefiniteVisibleVariables()
-    {
-        return state_stack.Top() -> definite_visible_variables;
     }
     Tuple<VariableSymbol *> *&FinalFields()
     {
@@ -1136,10 +965,13 @@ private:
         return state_stack.Top() -> processing_simple_assignment;
     }
 
+    // A stack to allow nested type processing
     SemanticEnvironmentStack state_stack;
 
+    // Implemented in expr.cpp - semantic checks of expressions
     bool IsIntValueRepresentableInType(AstExpression *, TypeSymbol *);
 
+    // Implemented in decl.cpp - nested class processing
     void CheckClassMembers(TypeSymbol *, AstClassBody *);
     void CheckNestedTypeDuplication(SemanticEnvironment *,
                                     LexStream::TokenIndex);
@@ -1160,9 +992,10 @@ private:
     void ProcessImportQualifiedName(AstExpression *);
     void ProcessPackageOrType(AstExpression *);
     void ProcessTypeImportOnDemandDeclaration(AstImportDeclaration *);
-    AstExpression *FindFirstType(Ast *);
     TypeSymbol *FindSimpleNameType(PackageSymbol *, LexStream::TokenIndex);
     void ProcessSingleTypeImportDeclaration(AstImportDeclaration *);
+
+    // Implemented in modifier.cpp - process declaration modifiers
     AccessFlags ProcessClassModifiers(AstClassDeclaration *);
     AccessFlags ProcessLocalClassModifiers(AstClassDeclaration *);
     AccessFlags ProcessNestedClassModifiers(AstClassDeclaration *);
@@ -1177,6 +1010,8 @@ private:
     AccessFlags ProcessConstructorModifiers(AstConstructorDeclaration *);
     AccessFlags ProcessInterfaceFieldModifiers(AstFieldDeclaration *);
     AccessFlags ProcessInterfaceMethodModifiers(AstMethodDeclaration *);
+
+    // Implemented in body.cpp - process method bodies
     void AddDefaultConstructor(TypeSymbol *);
     void ProcessConstructorDeclaration(AstConstructorDeclaration *);
     void ProcessMethodDeclaration(AstMethodDeclaration *);
@@ -1189,12 +1024,14 @@ private:
     TypeSymbol *MustFindType(Ast *);
     void ProcessInterface(TypeSymbol *, AstExpression *);
 
+    // Implemented in decl.cpp - process initializers
     void InitializeVariable(AstFieldDeclaration *, MethodSymbol *);
     void ProcessInitializer(AstMethodBody *, MethodSymbol *);
     void ProcessStaticInitializers(AstClassBody *);
     void ProcessInstanceInitializers(AstClassBody *);
     MethodSymbol *GetStaticInitializerMethod(int estimate = 0);
 
+    // Implemented in expr.cpp - expression processing
     bool CanWideningPrimitiveConvert(TypeSymbol *, TypeSymbol *);
     bool CanNarrowingPrimitiveConvert(TypeSymbol *, TypeSymbol *);
     bool CanCastConvert(TypeSymbol *, TypeSymbol *,
@@ -1208,11 +1045,13 @@ private:
     void BinaryNumericPromotion(AstAssignmentExpression *);
     void BinaryNumericPromotion(AstBinaryExpression *);
     void BinaryNumericPromotion(AstConditionalExpression *);
+    TypeSymbol *BinaryNumericPromotion(AstExpression *&, AstExpression *&);
 
+    // Implemented in definite.cpp - definite (un)assignment analysis
     void (Semantic::*DefiniteStmt[Ast::_num_kinds])(Ast *);
     inline void DefiniteStatement(Ast *);
 
-    void DefiniteLoopBody(BitSet *);
+    void DefiniteLoopBody(BitSet &);
 
     void DefiniteBlock(Ast *);
     void DefiniteLocalVariableDeclarationStatement(Ast *);
@@ -1294,14 +1133,17 @@ private:
     void DefiniteSetup();
     void DefiniteCleanUp();
 
+    // Implemented in body.cpp - method bodies and statements
     void ProcessBlockStatements(AstBlock *);
     void ProcessThisCall(AstThisCall *);
     void ProcessSuperCall(AstSuperCall *);
-    void CheckThrow(AstExpression *);
+    void CheckThrow(AstExpression *, Tuple<AstExpression *> *);
     void ProcessMethodBody(AstMethodDeclaration *);
     void ProcessConstructorBody(AstConstructorDeclaration *);
     bool UncaughtException(TypeSymbol *);
     wchar_t *UncaughtExceptionContext();
+
+    // Implemented in expr.cpp - expression processing
     void ReportConstructorNotFound(Ast *, TypeSymbol *);
     void ReportMethodNotFound(AstMethodInvocation *, TypeSymbol *);
     MethodSymbol *FindConstructor(TypeSymbol *, Ast *,
@@ -1310,17 +1152,19 @@ private:
     bool MoreSpecific(MethodSymbol *, MethodSymbol *);
     bool MoreSpecific(MethodSymbol *, Tuple<MethodSymbol *> &);
     bool NoMethodMoreSpecific(Tuple<MethodSymbol *> &, MethodSymbol *);
-    void FindMethodInEnvironment(Tuple<MethodSymbol *> &,
+    bool MoreSpecific(MethodSymbol *, Tuple<MethodShadowSymbol *> &);
+    bool NoMethodMoreSpecific(Tuple<MethodShadowSymbol *> &, MethodSymbol *);
+    void FindMethodInEnvironment(Tuple<MethodShadowSymbol *> &,
                                  SemanticEnvironment *&,
                                  SemanticEnvironment *, AstMethodInvocation *);
     MethodSymbol *FindMisspelledMethodName(TypeSymbol *,
                                            AstMethodInvocation *,
                                            NameSymbol *);
-    MethodSymbol *FindMethodInEnvironment(SemanticEnvironment *&,
-                                          SemanticEnvironment *,
-                                          AstMethodInvocation *);
-    MethodSymbol *FindMethodInType(TypeSymbol *, AstMethodInvocation *,
-                                   NameSymbol * = NULL);
+    MethodShadowSymbol *FindMethodInEnvironment(SemanticEnvironment *&,
+                                                SemanticEnvironment *,
+                                                AstMethodInvocation *);
+    MethodShadowSymbol *FindMethodInType(TypeSymbol *, AstMethodInvocation *,
+                                         NameSymbol * = NULL);
 
     void ReportVariableNotFound(AstExpression *, TypeSymbol *);
     void FindVariableInEnvironment(Tuple<VariableSymbol *> &,
@@ -1340,11 +1184,9 @@ private:
     void CreateAccessToScopedVariable(AstSimpleName *, TypeSymbol *);
     void CreateAccessToScopedMethod(AstMethodInvocation *, TypeSymbol *);
 
-    bool TypeAccessCheck(Ast *, TypeSymbol *);
-    void TypeNestAccessCheck(AstExpression *);
+    bool TypeAccessCheck(TypeSymbol *);
     bool ConstructorAccessCheck(Ast *, MethodSymbol *);
     bool MemberAccessCheck(AstFieldAccess *, TypeSymbol *, Symbol *);
-    void SimpleNameAccessCheck(AstSimpleName *, TypeSymbol *, Symbol *);
     bool ProtectedAccessCheck(TypeSymbol *);
 
     void (Semantic::*ProcessPreUnaryExpr[AstPreUnaryExpression::_num_kinds])(AstPreUnaryExpression *);
@@ -1376,7 +1218,7 @@ private:
     void ProcessMOD(AstBinaryExpression *);
     void ProcessINSTANCEOF(AstBinaryExpression *);
 
-    void FindMethodMember(TypeSymbol *, AstMethodInvocation *);
+    MethodShadowSymbol *FindMethodMember(TypeSymbol *, AstMethodInvocation *);
     void ProcessMethodName(AstMethodInvocation *);
 
     //
@@ -1409,6 +1251,7 @@ private:
             control.Utf8_pool.CheckStringConstant(expr);
     }
 
+    // Implemented in body.cpp - statement processing
     void ProcessLocalVariableDeclarationStatement(Ast *);
     void ProcessBlock(Ast *);
     void ProcessForStatement(Ast *);
@@ -1438,6 +1281,7 @@ private:
     TypeSymbol *GetLocalType(AstClassDeclaration *);
     void ProcessClassDeclaration(Ast *);
 
+    // Implemented in expr.cpp - expression processing
     void CheckSimpleName(AstSimpleName *, SemanticEnvironment *where_found);
     void ProcessSimpleName(Ast *);
     void FindVariableMember(TypeSymbol *, AstFieldAccess *);
@@ -1475,6 +1319,7 @@ private:
     void ProcessVariableInitializer(AstVariableDeclarator *);
     void ProcessArrayInitializer(AstArrayInitializer *, TypeSymbol *);
 
+    // Implemented in decl.cpp - inheritance of declared members
     void CheckMethodOverride(MethodSymbol *, MethodSymbol *, TypeSymbol *);
     void AddInheritedTypes(TypeSymbol *, TypeSymbol *);
     void AddInheritedFields(TypeSymbol *, TypeSymbol *);
@@ -1512,6 +1357,7 @@ private:
 
 public:
 
+    // Implemented in getclass.cpp - class processing from .class files
     static inline u1 GetU1(const char *);
     static inline u2 GetU2(const char *);
     static inline u4 GetU4(const char *);
@@ -1521,63 +1367,50 @@ public:
     static inline u4 GetAndSkipU4(const char *&);
     static inline void Skip(const char *&, int);
 
-    inline void AddDependence(TypeSymbol *, TypeSymbol *,
-                              LexStream::TokenIndex, bool = false);
-    inline void SetObjectSuperType(TypeSymbol *, LexStream::TokenIndex);
-    inline void AddStringConversionDependence(TypeSymbol *,
-                                              LexStream::TokenIndex);
+    inline void AddDependence(TypeSymbol *, TypeSymbol *, bool = false);
+    inline void AddStringConversionDependence(TypeSymbol *);
 };
 
 
 inline void Semantic::AddDependence(TypeSymbol *base_type,
                                     TypeSymbol *parent_type,
-                                    LexStream::TokenIndex tok,
                                     bool static_access)
 {
-    if (base_type != control.no_type)
-    {
-        base_type = base_type -> outermost_type;
-        parent_type = parent_type -> outermost_type;
+    if (base_type -> Bad() || parent_type -> Bad())
+        return;
+    base_type = base_type -> outermost_type;
+    parent_type = parent_type -> outermost_type;
 
-        parent_type -> dependents -> AddElement(base_type);
-        if (static_access)
-             base_type -> static_parents -> AddElement(parent_type);
-        else base_type -> parents -> AddElement(parent_type);
+    parent_type -> dependents -> AddElement(base_type);
+    if (static_access)
+        base_type -> static_parents -> AddElement(parent_type);
+    else base_type -> parents -> AddElement(parent_type);
 
-        //
-        // It is not possible to import from the unnamed package, and without
-        // imports, it is impossible to reference a class in the unnamed
-        // package from a package.
-        //
-        assert(parent_type -> ContainingPackage() != control.unnamed_package ||
-               base_type -> ContainingPackage() == control.unnamed_package);
-    }
+    //
+    // It is not possible to import from the unnamed package, and without
+    // imports, it is impossible to reference a class in the unnamed
+    // package from a package.
+    //
+    assert(parent_type -> ContainingPackage() != control.unnamed_package ||
+           base_type -> ContainingPackage() == control.unnamed_package);
 }
 
-inline void Semantic::SetObjectSuperType(TypeSymbol *type,
-                                         LexStream::TokenIndex tok)
-{
-    type -> super = control.Object();
-    AddDependence(type, type -> super, tok);
-}
-
-inline void Semantic::AddStringConversionDependence(TypeSymbol *type,
-                                                    LexStream::TokenIndex tok)
+inline void Semantic::AddStringConversionDependence(TypeSymbol *type)
 {
     if (type == control.null_type)
          ;
     else if (type == control.boolean_type)
-         AddDependence(ThisType(), control.Boolean(), tok);
+         AddDependence(ThisType(), control.Boolean());
     else if (type == control.char_type)
-         AddDependence(ThisType(), control.Character(), tok);
+         AddDependence(ThisType(), control.Character());
     else if (type == control.int_type)
-         AddDependence(ThisType(), control.Integer(), tok);
+         AddDependence(ThisType(), control.Integer());
     else if (type == control.long_type)
-         AddDependence(ThisType(), control.Long(), tok);
+         AddDependence(ThisType(), control.Long());
     else if (type == control.float_type)
-         AddDependence(ThisType(), control.Float(), tok);
+         AddDependence(ThisType(), control.Float());
     else // (type == control.double_type)
-         AddDependence(ThisType(), control.Double(), tok);
+         AddDependence(ThisType(), control.Double());
 }
 
 #ifdef HAVE_JIKES_NAMESPACE

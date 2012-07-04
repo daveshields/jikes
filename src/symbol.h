@@ -1,4 +1,4 @@
-// $Id: symbol.h,v 1.60 2002/07/09 15:05:02 ericb Exp $ -*- c++ -*-
+// $Id: symbol.h,v 1.65 2002/09/11 17:06:02 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -446,28 +446,6 @@ public:
     MethodSymbol *next_method;
     Utf8LiteralValue *signature;
 
-    //
-    // If this method is a method that is generated in order to process
-    // initializer blocks contained in the body of a class, it needs to know
-    // the set of constructors that might invoke it in order to figure out
-    // which exceptions can be safely thrown within an initializer block.
-    //
-    int NumInitializerConstructors()
-    {
-        return (initializer_constructors
-                ? initializer_constructors -> Length() : 0);
-    }
-    MethodSymbol *InitializerConstructor(int i)
-    {
-        return (*initializer_constructors)[i];
-    }
-    void AddInitializerConstructor(MethodSymbol *method)
-    {
-        if (! initializer_constructors)
-            initializer_constructors = new Tuple<MethodSymbol *>(8);
-        initializer_constructors -> Next() = method;
-    }
-
     int max_block_depth;
 
     //
@@ -508,7 +486,6 @@ public:
           formal_parameters(NULL),
           throws(NULL),
           throws_signatures(NULL),
-          initializer_constructors(NULL),
           local_constructor(NULL)
     {
         Symbol::_kind = METHOD;
@@ -651,7 +628,6 @@ private:
     Tuple<VariableSymbol *> *formal_parameters;
     Tuple<TypeSymbol *> *throws;
     Tuple<char *> *throws_signatures;
-    Tuple<MethodSymbol *> *initializer_constructors;
 
     //
     // If the method in question is a constructor of a local type, we may need
@@ -707,7 +683,7 @@ public:
     // This variable is used in TypeCycleChecker to determine if this type
     // forms an inter-type cycle in its "extends" or "implements" relationship.
     int index;
-    
+
     // This variable is used in TypeCycleChecker to check if this type
     // forms an intra-type cycle in its "extends" or "implements" relationship;
     int unit_index;
@@ -942,21 +918,13 @@ public:
 
     VariableSymbol *InsertThis0();
 
-    TypeSymbol *FindOrInsertClassLiteralClass(LexStream::TokenIndex);
-    TypeSymbol *ClassLiteralClass()
-    {
-        return class_literal_class;
-    }
+    TypeSymbol *FindOrInsertClassLiteralClass();
     MethodSymbol *FindOrInsertClassLiteralMethod(Control &);
     MethodSymbol *ClassLiteralMethod()
     {
         return class_literal_method;
     }
     Utf8LiteralValue *FindOrInsertClassLiteralName(Control &);
-    Utf8LiteralValue *ClassLiteralName()
-    {
-        return class_literal_name;
-    }
     VariableSymbol *FindOrInsertClassLiteral(TypeSymbol *);
     VariableSymbol *FindOrInsertLocalShadow(VariableSymbol *);
     VariableSymbol *FindOrInsertAssertVariable();
@@ -1012,7 +980,8 @@ public:
     bool HasProtectedAccessTo(TypeSymbol *);
 
     //
-    // Note that this test considers a class a subclass of itself.
+    // Note that this test considers a class a subclass of itself, and also
+    // interfaces are a subclass of Object. See also IsSubtype.
     //
     bool IsSubclass(TypeSymbol *super_class)
     {
@@ -1023,7 +992,8 @@ public:
     }
 
     //
-    // Note that this test considers an interface a subtype of itself.
+    // Note that this test considers an interface a subtype of itself, but
+    // does not work for classes. See also IsSubtype.
     //
     bool IsSubinterface(TypeSymbol *super_interface)
     {
@@ -1037,6 +1007,9 @@ public:
         return false;
     }
 
+    //
+    // This test works for classes, but not for interfaces. See also IsSubtype.
+    //
     bool Implements(TypeSymbol *inter)
     {
         for (int i = 0; i < NumInterfaces(); i++)
@@ -1045,6 +1018,30 @@ public:
                 return true;
         }
         return super && super -> Implements(inter);
+    }
+
+    //
+    // The most generic subtype relation. This correctly checks a class's
+    // superclasses and superinterfaces, an interfaces's superinterfaces and
+    // Object, and an array's compatible types (smaller dimensions of Object,
+    // Cloneable, Serializable, and all equal dimension arrays where the
+    // element type is a subtype). For simplicity, a type subtypes itself.
+    //
+    bool IsSubtype(TypeSymbol *type)
+    {
+        if (ACC_INTERFACE())
+            return (type -> ACC_INTERFACE() && IsSubinterface(type)) ||
+                super == type;
+        if (num_dimensions)
+        {
+            TypeSymbol *base = type -> base_type ? type -> base_type : type;
+            return (num_dimensions > type -> num_dimensions &&
+                    ((base -> ACC_INTERFACE() && Implements(base)) ||
+                     super == base)) ||
+                (num_dimensions == type -> num_dimensions &&
+                 base_type -> IsSubtype(base));
+        }
+        return type -> ACC_INTERFACE() ? Implements(type) : IsSubclass(type);
     }
 
     wchar_t *FileLoc()
@@ -1060,7 +1057,7 @@ public:
 
     TypeSymbol *ArraySubtype()
     {
-        return this -> base_type -> Array(this -> num_dimensions - 1);
+        return base_type -> Array(num_dimensions - 1);
     }
 
     void SetSignature(Control &);
@@ -1150,66 +1147,29 @@ public:
         return (status & LOCAL_CLASS_PROCESSING_COMPLETED) != 0;
     }
 
-    void MarkSourcePending()
-    {
-        status |= SOURCE_PENDING;
-    }
-    void MarkSourceNoLongerPending()
-    {
-        status &= ~ SOURCE_PENDING;
-    }
-    bool SourcePending()
-    {
-        return (status & SOURCE_PENDING) != 0;
-    }
+    void MarkSourcePending() { status |= SOURCE_PENDING; }
+    void MarkSourceNoLongerPending() { status &= ~ SOURCE_PENDING; }
+    bool SourcePending() { return (status & SOURCE_PENDING) != 0; }
 
-    void MarkAnonymous()
-    {
-        status |= ANONYMOUS;
-    }
-    bool Anonymous()
-    {
-        return (status & ANONYMOUS) != 0;
-    }
+    void MarkAnonymous() { status |= ANONYMOUS; }
+    bool Anonymous() { return (status & ANONYMOUS) != 0; }
 
-    void MarkHeaderProcessed()
-    {
-        status |= HEADER_PROCESSED;
-    }
-    bool HeaderProcessed()
-    {
-        return (status & HEADER_PROCESSED) != 0;
-    }
+    void MarkHeaderProcessed() { status |= HEADER_PROCESSED; }
+    bool HeaderProcessed() { return (status & HEADER_PROCESSED) != 0; }
 
-    void MarkPrimitive()
-    {
-        status |= PRIMITIVE;
-    }
-    bool Primitive()
-    {
-        return (status & PRIMITIVE) != 0;
-    }
+    void MarkPrimitive() { status |= PRIMITIVE; }
+    bool Primitive() { return (status & PRIMITIVE) != 0; }
 
-    void MarkDeprecated()
-    {
-        status |= DEPRECATED;
-    }
-    bool IsDeprecated()
-    {
-        return (status & DEPRECATED) != 0;
-    }
+    void MarkDeprecated() { status |= DEPRECATED; }
+    void ResetDeprecated() { status &= ~DEPRECATED; }
+    bool IsDeprecated() { return (status & DEPRECATED) != 0; }
 
     void MarkBad()
     {
         SetACC_PUBLIC();
-
-        status |= BAD;
-
-        MarkHeaderProcessed();
-        MarkConstructorMembersProcessed();
-        MarkMethodMembersProcessed();
-        MarkFieldMembersProcessed();
-        MarkLocalClassProcessingCompleted();
+        status |= (BAD | HEADER_PROCESSED | CONSTRUCTOR_MEMBERS_PROCESSED |
+                   METHOD_MEMBERS_PROCESSED | FIELD_MEMBERS_PROCESSED |
+                   LOCAL_CLASS_PROCESSING_COMPLETED);
         MarkSourceNoLongerPending();
     }
     bool Bad() { return (status & BAD) != 0; }
@@ -1300,7 +1260,6 @@ private:
 
     void SetClassName();
 
-    TypeSymbol *class_literal_class;
     MethodSymbol *class_literal_method;
     Utf8LiteralValue *class_literal_name;
 
@@ -1901,7 +1860,7 @@ inline DirectorySymbol *DirectorySymbol::InsertDirectorySymbol(NameSymbol *name_
                                                                bool source_dir)
 {
     DirectorySymbol *subdirectory_symbol = Table() -> InsertDirectorySymbol(name_symbol, this, source_dir);
-    this -> subdirectories.Next() = subdirectory_symbol;
+    subdirectories.Next() = subdirectory_symbol;
 
     return subdirectory_symbol;
 }
@@ -2274,8 +2233,8 @@ inline MethodSymbol *SymbolTable::InsertConstructorSymbol(NameSymbol *name_symbo
 {
     assert(! constructor);
 
-    this -> constructor = InsertMethodSymbol(name_symbol);
-    return this -> constructor;
+    constructor = InsertMethodSymbol(name_symbol);
+    return constructor;
 }
 
 
@@ -2316,7 +2275,7 @@ inline void SymbolTable::InsertConstructorSymbol(MethodSymbol *method_symbol)
 {
     assert(! constructor);
 
-    this -> constructor = method_symbol;
+    constructor = method_symbol;
     InsertMethodSymbol(method_symbol);
 }
 
@@ -2355,7 +2314,7 @@ inline MethodSymbol *TypeSymbol::FindMethodSymbol(NameSymbol *name_symbol)
 
 inline MethodSymbol *SymbolTable::FindConstructorSymbol()
 {
-    return this -> constructor;
+    return constructor;
 }
 
 inline MethodSymbol *TypeSymbol::FindConstructorSymbol()

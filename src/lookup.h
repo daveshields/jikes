@@ -1,4 +1,4 @@
-// $Id: lookup.h,v 1.30 2002/02/08 22:37:35 ericb Exp $ -*- c++ -*-
+// $Id: lookup.h,v 1.31 2002/08/06 20:52:41 ericb Exp $ -*- c++ -*-
 //
 // This software is subject to the terms of the IBM Jikes Compiler
 // License Agreement available at the following URL:
@@ -64,15 +64,9 @@ public:
     //
     inline static unsigned Function(wchar_t *head, int len)
     {
-        unsigned long hash_value = head[len >> 1]; // start with center (or unique) letter
-        wchar_t *tail = &head[len - 1];
-
-        for (int i = 0; i < 5 && head < tail; i++)
-        {
-            unsigned k = *tail--;
-            hash_value += ((k << 7) + *head++);
-        }
-
+        unsigned hash_value = 0;
+        while (--len >= 0)
+            hash_value = (hash_value << 5) - hash_value + *head++;
         return hash_value;
     }
 
@@ -81,15 +75,9 @@ public:
     //
     inline static unsigned Function(const char *head, int len)
     {
-        unsigned long hash_value = head[len >> 1]; // start with center (or unique) letter
-        const char *tail = &head[len - 1];
-
-        for (int i = 0; i < 5 && head < tail; i++)
-        {
-            unsigned k = *tail--;
-            hash_value += ((k << 7) + *head++);
-        }
-
+        unsigned hash_value = 0;
+        while (--len >= 0)
+            hash_value = (hash_value << 5) - hash_value + *head++;
         return hash_value;
     }
 
@@ -132,15 +120,14 @@ public:
     }
 
 
-    inline void Initialize(DirectorySymbol *directory_, char *name_, int length_)
+    inline void Initialize(DirectorySymbol *directory_, char *name_,
+                           int length_)
     {
         directory = directory_;
         length = length_;
         name = new char[length + 1];
         memmove(name, name_, length * sizeof(char));
         name[length] = U_NULL;
-
-        return;
     }
 
     inline void Initialize(DirectoryEntry *entry, char *name_, int length_)
@@ -172,7 +159,10 @@ protected:
 class FoldedDirectoryEntry : public DirectoryEntry
 {
 public:
-    FoldedDirectoryEntry(DirectoryEntry *image_) { DirectoryEntry::image = image_; }
+    FoldedDirectoryEntry(DirectoryEntry *image_)
+    {
+        DirectoryEntry::image = image_;
+    }
     virtual ~FoldedDirectoryEntry() {}
 
     virtual DirectoryEntry *Image() { return image; }
@@ -200,9 +190,11 @@ private:
     class Element
     {
     public:
-        Element(dev_t device_, ino_t inode_, DirectorySymbol *directory_symbol_) : device(device_),
-                                                                                   inode(inode_),
-                                                                                   directory_symbol(directory_symbol_)
+        Element(dev_t device_, ino_t inode_,
+                DirectorySymbol *directory_symbol_)
+            : device(device_),
+              inode(inode_),
+              directory_symbol(directory_symbol_)
         {}
 
         Element *next;
@@ -257,7 +249,10 @@ private:
     static int primes[];
     int prime_index;
 
-    inline static unsigned Hash(const char *head, int len) { return Hash::Function(head, len); }
+    inline static unsigned Hash(const char *head, int len)
+    {
+        return Hash::Function(head, len);
+    }
 
     void Rehash();
 };
@@ -401,7 +396,8 @@ public:
         delete [] value;
     }
 
-    void Initialize(const char *value_, int length_, unsigned hash_address_, int index_)
+    void Initialize(const char *value_, int length_, unsigned hash_address_,
+                    int index_)
     {
         length = length_;
         value = new char[length + 1];
@@ -429,8 +425,14 @@ public:
     virtual wchar_t *Name()   { return name_; }
     virtual size_t NameLength() { return length; }
     virtual NameSymbol *Identity() { return this; }
-    char *Utf8Name() { return (char *) (Utf8_literal ? Utf8_literal -> value : NULL); }
-    int Utf8NameLength() { return (Utf8_literal ? Utf8_literal -> length : 0); }
+    char *Utf8Name()
+    {
+        return (char *) (Utf8_literal ? Utf8_literal -> value : NULL);
+    }
+    int Utf8NameLength()
+    {
+        return (Utf8_literal ? Utf8_literal -> length : 0);
+    }
 
     NameSymbol() : name_(NULL)
     {}
@@ -440,7 +442,8 @@ public:
         delete [] name_;
     }
 
-    inline void Initialize(wchar_t *str, int length_, unsigned hash_address_, int index_)
+    inline void Initialize(wchar_t *str, int length_, unsigned hash_address_,
+                           int index_)
     {
         Symbol::_kind = NAME;
 
@@ -453,8 +456,6 @@ public:
         name_[length] = U_NULL;
 
         Utf8_literal = NULL;
-
-        return;
     }
 
 private:
@@ -490,7 +491,10 @@ private:
     static int primes[];
     int prime_index;
 
-    inline static unsigned Hash(wchar_t *head, int len) { return Hash::Function(head, len); }
+    inline static unsigned Hash(wchar_t *head, int len)
+    {
+        return Hash::Function(head, len);
+    }
 
     void Rehash();
 };
@@ -521,7 +525,10 @@ private:
     static int primes[];
     int prime_index;
 
-    inline static unsigned Hash(const char *head, int len) { return Hash::Function(head, len); }
+    inline static unsigned Hash(const char *head, int len)
+    {
+        return Hash::Function(head, len);
+    }
 
     void Rehash();
 };
@@ -591,7 +598,10 @@ private:
     static int primes[];
     int prime_index;
 
-    inline static unsigned Hash(wchar_t *head, int len) { return Hash::Function(head, len); }
+    inline static unsigned Hash(wchar_t *head, int len)
+    {
+        return Hash::Function(head, len);
+    }
 
     void Rehash();
 };
@@ -625,8 +635,8 @@ public:
     // Since the return type is wrong, compilation will fail !
     //
     void FindOrInsert(LongInt) {}
-    void FindOrInsert(float)   {}
-    void FindOrInsert(double)  {}
+    void FindOrInsert(float) {}
+    void FindOrInsert(double) {}
 #endif
 
 private:
@@ -669,8 +679,8 @@ public:
     //
     // To prevent arithmentic conversion to allow illegal calls inadvertently.
     //
-    void FindOrInsert(int)    {}
-    void FindOrInsert(float)  {}
+    void FindOrInsert(int) {}
+    void FindOrInsert(float) {}
     void FindOrInsert(double) {}
 #endif
 
@@ -714,9 +724,9 @@ public:
     //
     // To prevent arithmentic conversion to allow illegal calls inadvertently.
     //
-    void FindOrInsert(int)     {}
+    void FindOrInsert(int) {}
     void FindOrInsert(LongInt) {}
-    void FindOrInsert(double)  {}
+    void FindOrInsert(double) {}
 #endif
 
 private:
@@ -735,7 +745,10 @@ private:
 
     LiteralValue *bad_value;
 
-    inline static unsigned Hash(IEEEfloat value) { return Hash::Function(value); }
+    inline static unsigned Hash(IEEEfloat value)
+    {
+        return Hash::Function(value);
+    }
 
     void Rehash();
 };
@@ -757,9 +770,9 @@ public:
     //
     // To prevent arithmentic conversion to allow illegal calls inadvertently.
     //
-    void FindOrInsert(int)     {}
+    void FindOrInsert(int) {}
     void FindOrInsert(LongInt) {}
-    void FindOrInsert(float)   {}
+    void FindOrInsert(float) {}
 #endif
 
 private:
@@ -778,7 +791,10 @@ private:
 
     LiteralValue *bad_value;
 
-    inline static unsigned Hash(IEEEdouble value) { return Hash::Function(value); }
+    inline static unsigned Hash(IEEEdouble value)
+    {
+        return Hash::Function(value);
+    }
 
     void Rehash();
 };
@@ -820,7 +836,10 @@ private:
 
     LiteralValue *bad_value;
 
-    inline static unsigned Hash(const char *head, int len) { return Hash::Function(head, len); }
+    inline static unsigned Hash(const char *head, int len)
+    {
+        return Hash::Function(head, len);
+    }
 
     void Rehash();
 };

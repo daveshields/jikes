@@ -1,4 +1,4 @@
-// $Id: javaprs.h,v 1.23 2002/05/22 06:56:45 ericb Exp $
+// $Id: javaprs.h,v 1.24 2002/07/30 16:30:02 ericb Exp $
 // DO NOT MODIFY THIS FILE - it is generated using jikespg on java.g.
 //
 // This software is subject to the terms of the IBM Jikes Compiler Open
@@ -31,28 +31,28 @@ public:
     static int nasi(int state) { return nasb[original_state(state)]; }
     static int in_symbol(int state) { return in_symb[original_state(state)]; }
 
-    static const unsigned char  rhs[];
-    static const   signed short check_table[];
-    static const   signed short *base_check;
+    static const unsigned char rhs[];
+    static const signed short check_table[];
+    static const signed short *base_check;
     static const unsigned short lhs[];
     static const unsigned short *base_action;
-    static const unsigned char  term_check[];
+    static const unsigned char term_check[];
     static const unsigned short term_action[];
 
     static const unsigned short asb[];
-    static const unsigned char  asr[];
+    static const unsigned char asr[];
     static const unsigned short nasb[];
     static const unsigned short nasr[];
     static const unsigned short name_start[];
-    static const unsigned char  name_length[];
-    static const          char  string_buffer[];
+    static const unsigned char name_length[];
+    static const char string_buffer[];
     static const unsigned short terminal_index[];
     static const unsigned short non_terminal_index[];
     static const unsigned short scope_prefix[];
     static const unsigned short scope_suffix[];
     static const unsigned short scope_lhs[];
-    static const unsigned char  scope_la[];
-    static const unsigned char  scope_state_set[];
+    static const unsigned char scope_la[];
+    static const unsigned char scope_state_set[];
     static const unsigned short scope_rhs[];
     static const unsigned short scope_state[];
     static const unsigned short in_symb[];
@@ -81,7 +81,7 @@ public:
                act = term_action[term_check[i] == sym ? i : act];
                if (act <= LA_STATE_OFFSET)
                    break;
-            } 
+            }
         }
 
         return act;
