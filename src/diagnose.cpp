@@ -1,12 +1,3 @@
-// $Id: diagnose.cpp,v 1.37 2004/04/11 18:37:14 elliott-oss Exp $
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #include "diagnose.h"
 #include "control.h"
 #include "semantic.h"

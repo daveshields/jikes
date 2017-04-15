@@ -1,12 +1,3 @@
-// $Id: depend.cpp,v 1.42 2004/04/07 13:08:20 ericb Exp $
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #include "depend.h"
 #include "control.h"
 #include "ast.h"

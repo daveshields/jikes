@@ -1,13 +1,3 @@
-// $Id: getclass.cpp,v 1.37 2002/10/07 22:06:16 ericb Exp $
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #include "getclass.h"
 #include "control.h"
 #include "semantic.h"

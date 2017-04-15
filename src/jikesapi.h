@@ -1,13 +1,3 @@
-// $Id: jikesapi.h,v 1.19 2004/02/28 17:09:45 elliott-oss Exp $ -*- c++ -*-
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #ifndef JIKES_API_H_FLAG_
 #define JIKES_API_H_FLAG_
 

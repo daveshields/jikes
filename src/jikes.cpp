@@ -104,9 +104,9 @@ int main(int argc, char *argv[])
     else if (compiler -> getOptions() -> version)
     {
         printf("%s", StringConstant::U8S_help_header);
-        printf("Originally written by Philippe Charles and David Shields of IBM Research,\n"
-               "Jikes is now maintained and refined by the Jikes Project at:\n"
-               "<http://ibm.com/developerworks/opensource/jikes>\n"
+        printf("Originally written by Philippe Charles and Dave Shields of IBM Research\n"
+               "in 1996-1999, Jikes is once again maintained by Dave Shields at:\n"
+               "<http://github.com/daveshields/jikes>\n"
                "Please consult this URL for more information and for reporting problems.\n");
 
         return_code = 0;

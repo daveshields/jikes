@@ -1,12 +1,3 @@
-// $Id: ast.cpp,v 1.60 2004/03/31 13:56:32 ericb Exp $
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #include "ast.h"
 #include "symbol.h"
 #ifdef JIKES_DEBUG

@@ -1,13 +1,3 @@
-// $Id: code.h,v 1.22 2004/02/17 13:29:11 ericb Exp $ -*- c++ -*-
-// DO NOT MODIFY THIS FILE - it is generated using gencode.java.
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1999, 2004 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #include "platform.h"
 
 #ifdef HAVE_JIKES_NAMESPACE

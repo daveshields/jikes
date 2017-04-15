@@ -1,12 +1,3 @@
-// $Id: init.cpp,v 1.28 2004/05/03 21:20:23 elliott-oss Exp $
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #include "platform.h"
 #include "semantic.h"
 #include "control.h"

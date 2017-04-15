@@ -1,13 +1,3 @@
-// $Id: set.cpp,v 1.17 2002/12/11 00:55:04 ericb Exp $
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #include "set.h"
 
 #ifdef HAVE_JIKES_NAMESPACE

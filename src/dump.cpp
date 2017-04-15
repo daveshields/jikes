@@ -1,12 +1,3 @@
-// $Id: dump.cpp,v 1.32 2004/01/23 12:07:01 ericb Exp $
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #include "platform.h"
 #include "javasym.h"
 #include "control.h"

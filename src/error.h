@@ -1,12 +1,3 @@
-// $Id: error.h,v 1.107 2004/09/26 22:40:41 elliott-oss Exp $ -*- c++ -*-
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #ifndef error_INCLUDED
 #define error_INCLUDED
 

@@ -1,17 +1,6 @@
-// $Id: double.h,v 1.30 2004/06/02 11:26:22 elliott-oss Exp $ -*- c++ -*-
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2003 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-//
 // NOTES: The IEEE 754 emulation code in double.h and double.cpp within
 // Jikes are adapted from code written by Alan M. Webb of IBM's Hursley
 // lab in porting the Sun JDK to System/390.
-//
-//
 //
 // In addition, the code for emulating the remainder operator, %, is
 // adapted from e_fmod.c, part of fdlibm, the Freely Distributable Math
@@ -27,8 +16,6 @@
 // software is freely granted, provided that this notice
 // is preserved.
 // ====================================================
-//
-//
 //
 // Likewise, the code for accurate conversions between floating point
 // and decimal strings, in double.h, double.cpp, platform.h, and

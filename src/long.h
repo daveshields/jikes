@@ -1,12 +1,3 @@
-// $Id: long.h,v 1.25 2004/02/17 10:34:43 elliott-oss Exp $ -*- c++ -*-
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2003 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #ifndef long_INCLUDED
 #define long_INCLUDED
 

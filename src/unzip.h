@@ -1,5 +1,3 @@
-// $Id: unzip.h,v 1.9 2002/07/30 16:30:03 ericb Exp $
-
 #ifndef unzip_INCLUDED
 #define unzip_INCLUDED
 

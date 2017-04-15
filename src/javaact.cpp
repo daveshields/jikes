@@ -1,14 +1,3 @@
-#line 792 "java.g"
-// $Id: javaact.cpp,v 1.52 2004/03/25 13:32:27 ericb Exp $
-// DO NOT MODIFY THIS FILE - it is generated using jikespg on java.g.
-//
-// This software is subject to the terms of the IBM Jikes Compiler Open
-// Source License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #include "platform.h"
 #include "parser.h"
 #include "ast.h"

@@ -1,6 +1,3 @@
-// $Id: unzip.cpp,v 1.12 2002/11/27 00:18:32 ericb Exp $
-
-//
 // NOTE: Jikes incorporates compression code from the Info-ZIP
 // group. There are no extra charges or costs due to the use of
 // this code, and the original compression sources are freely

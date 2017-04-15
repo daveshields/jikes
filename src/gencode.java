@@ -1,12 +1,3 @@
-// $Id: gencode.java,v 1.14 2004/02/17 12:58:45 ericb Exp $
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://www.ibm.com/research/jikes.
-// Copyright (C) 1999, 2004 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 import java.io.*;
 import java.util.*;
 

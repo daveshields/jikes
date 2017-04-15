@@ -1,13 +1,3 @@
-// $Id: option.h,v 1.42 2002/11/27 17:34:59 ericb Exp $ -*- c++ -*-
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 1998, 1999, 2000, 2001, 2002 International Business
-// Machines Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
-
 #ifndef option_INCLUDED
 #define option_INCLUDED
 

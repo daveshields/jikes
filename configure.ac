@@ -15,9 +15,9 @@ AC_DEFINE(JIKES_VERSION_STRING,
 dnl AC_CACHE_LOAD
 
 AC_CONFIG_HEADERS([src/config.h])
-AH_TOP([/* This software is subject to the terms of the IBM Jikes
-Compiler License Agreement available at the following URL:
-http://ibm.com/developerworks/opensource/jikes.
+AH_TOP([/* This software is subject to the terms of the IBM Public
+License available at the following URL:
+http://opensource.com/licenses/IPL-1.0
 Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
 You must accept the terms of that agreement to use this software. */])
 

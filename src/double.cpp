@@ -1,11 +1,3 @@
-// $Id: double.cpp,v 1.35 2004/06/02 11:26:21 elliott-oss Exp $
-//
-// This software is subject to the terms of the IBM Jikes Compiler
-// License Agreement available at the following URL:
-// http://ibm.com/developerworks/opensource/jikes.
-// Copyright (C) 1996, 2004 IBM Corporation and others.  All Rights Reserved.
-// You must accept the terms of that agreement to use this software.
-//
 //
 // NOTES: The IEEE 754 emulation code in double.h and double.cpp within
 // Jikes are adapted from code written by Alan M. Webb of IBM's Hursley

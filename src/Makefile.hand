@@ -1,12 +1,3 @@
-# $Id: Makefile.hand,v 1.4 2000/01/11 02:47:33 lord Exp $
-#
-# This software is subject to the terms of the IBM Jikes Compiler Open
-# Source License Agreement available at the following URL:
-# http://www.ibm.com/research/jikes.
-# Copyright (C) 1996, 1999, International Business Machines Corporation
-# and others.  All Rights Reserved.
-# You must accept the terms of that agreement to use this software.
-
 # Symbols used:
 # O is suffix for object file. OBJECTS is list of objects file for Jikes.
 #SYSOBJECTS is list of needed system files (typically setargv for non-unix system).
